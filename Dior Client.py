@@ -548,13 +548,23 @@ class DiorClientGUI:
             self.root.geometry("1200x900")
             self.root.configure(bg="#1e1e1e")
 
-            # Assets & DB
-            self.gif_path = get_asset_path("background.jpg")
+            # --- NEU / KORRIGIERT ---
             self.init_db()
             self.char_data = self.load_chars_from_db() or {}
             self.name_cache = self.load_cache_from_db() or {}
+
+            # 1. Zuerst die Config laden
             self.config = self.load_config()
             self.overlay_config = self.config
+
+            # 2. Prüfen, ob ein Pfad gespeichert ist, sonst Standard-JPG
+            saved_bg = self.config.get("main_background_path", "")
+            if saved_bg and os.path.exists(saved_bg):
+                self.gif_path = saved_bg
+            else:
+                self.gif_path = get_asset_path("background.jpg")
+
+
 
             # Pfade
             self.ps2_dir = self.config.get("ps2_path", "")
@@ -571,6 +581,10 @@ class DiorClientGUI:
             self.was_revived = False
             self.streak_timeout = 12.0
             self.pop_history = [0] * 100
+
+            self.bg_photo = None
+            self.last_size = (1200, 900)
+            self.char_entries = []
 
             self.observer = None
             self.last_killer_name = "None"  # <--- Hier wurde der Crash verursacht
@@ -617,6 +631,7 @@ class DiorClientGUI:
             self.root.after(1000, self.update_live_graph)
             self.root.bind("<Configure>", self.on_resize)
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.root.after(100, lambda: self.update_background_view(self.root.winfo_width(), self.root.winfo_height()))
 
         except Exception as e:
             with open("crash_log.txt", "w") as f:
@@ -2812,12 +2827,18 @@ class DiorClientGUI:
         return {}
 
     def save_enforcer_config(self):
-        self.config = {
-            "watch_folder": self.folder_entry.get() if hasattr(self, 'folder_entry') else self.config.get("watch_folder", ""),
-            "email": self.email_entry.get() if hasattr(self, 'email_entry') else self.config.get("email", ""),
-            "pw": self.pw_entry.get() if hasattr(self, 'pw_entry') else self.config.get("pw", ""),
-            "ps2_path": self.ps2_dir
-        }
+        # Wir aktualisieren nur die spezifischen Werte, anstatt alles zu löschen
+        self.config["watch_folder"] = self.folder_entry.get() if hasattr(self, 'folder_entry') else self.config.get(
+            "watch_folder", "")
+        self.config["email"] = self.email_entry.get() if hasattr(self, 'email_entry') else self.config.get("email", "")
+        self.config["pw"] = self.pw_entry.get() if hasattr(self, 'pw_entry') else self.config.get("pw", "")
+        self.config["ps2_path"] = self.ps2_dir
+
+        # Jetzt die saubere Speicherfunktion nutzen
+        self.save_config()
+        self.add_log("SYS: Configuration updated (Background & Overlay preserved).")
+        self.restart_observer()
+
         with open(CONFIG_FILE, "w") as f: json.dump(self.config, f)
         self.add_log("SYS: Configuration updated.")
         self.restart_observer()
@@ -3416,11 +3437,20 @@ class DiorClientGUI:
             self.show_settings()
 
     def change_background_file(self):
-        f = filedialog.askopenfilename(filetypes=[("Images", "*.png *.gif *.jpg")])
+        # Filter für statische Bilder (JPG/PNG)
+        f = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.jpeg *.png")])
         if f:
             self.gif_path = f
+
+            # Den Pfad in das Config-Objekt schreiben
+            self.config["main_background_path"] = f
+
+            # Die Config-Datei permanent speichern
+            self.save_config()
+
+            # Die GUI sofort aktualisieren
             self.update_background_view(self.root.winfo_width(), self.root.winfo_height())
-            self.add_log(f"SYS: Background set to {os.path.basename(f)}")
+            self.add_log(f"SYS: Hintergrund dauerhaft auf {os.path.basename(f)} gesetzt.")
 
     def execute_launch(self, mode):
         if not self.ps2_dir or not os.path.exists(self.ps2_dir):

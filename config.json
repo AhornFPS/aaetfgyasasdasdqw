@@ -282,5 +282,7 @@
         "y": -419,
         "hs_icon": "headshot.png",
         "show_revives": true
-    }
+    },
+    "background_image": "C:/Users/xcedr/PycharmProjects/Better-Planetside/assets/background.jpg",
+    "main_background_path": "C:/Users/xcedr/PycharmProjects/Better-Planetside/assets/background.jpg"
 }

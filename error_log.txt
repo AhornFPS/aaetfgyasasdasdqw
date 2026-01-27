@@ -617,3 +617,23 @@ Traceback (most recent call last):
     self.tk.mainloop(n)
     ~~~~~~~~~~~~~~~~^^^
 KeyboardInterrupt
+
+--- CRASH LOG Tue Jan 27 02:42:33 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\xcedr\PycharmProjects\Better-Planetside\Dior Client.py", line 3698, in <module>
+    self.gui.add_log(f"LINK: {self.gui.last_evidence_url}")
+    
+  File "C:\Users\xcedr\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+KeyboardInterrupt
+
+--- CRASH LOG Tue Jan 27 02:42:45 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\xcedr\PycharmProjects\Better-Planetside\Dior Client.py", line 3706, in <module>
+    root.mainloop()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\xcedr\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+KeyboardInterrupt
