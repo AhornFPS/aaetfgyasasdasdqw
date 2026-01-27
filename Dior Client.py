@@ -664,22 +664,31 @@ class DiorClientGUI:
                     if is_now_running:
                         self.add_log("MONITOR: PlanetSide 2 gestartet.")
 
-                        # --- ÄNDERUNG: Prüfen ob Master-Switch AN ist ---
+                        # Prüfen ob Master-Switch AN ist
                         if self.overlay_active.get():
-                            # 1. Crosshair im Main-Thread aktivieren
+                            # 1. Crosshair an
                             self.root.after(0, self.auto_enable_overlay)
+
                             # 2. Stats-Loop starten
                             self.root.after(0, self.refresh_ingame_overlay)
+
+                            # 3. Killfeed explizit einschalten (NEU)
+                            if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
+                                self.root.after(0, self.overlay_win.feed_label.show)
+                                self.root.after(0, lambda: self.overlay_win.feed_label.setText(""))
                         else:
                             self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt inaktiv.")
 
                     else:
                         self.add_log("MONITOR: PlanetSide 2 beendet.")
-                        # Alles ausschalten (Stats + Crosshair)
+                        # Alles ausschalten (Stats + Feed)
                         self.root.after(0, self.stop_overlay_logic)
+
+                        # Crosshair & Streak explizit verstecken
                         if self.overlay_win:
-                            # Crosshair auch explizit verstecken
                             self.root.after(0, self.overlay_win.crosshair_label.hide)
+                            if hasattr(self.overlay_win, 'streak_bg_label'):
+                                self.root.after(0, self.overlay_win.streak_bg_label.hide)
 
             except:
                 pass
@@ -916,13 +925,19 @@ class DiorClientGUI:
             if getattr(self, 'ps2_running', False):
                 self.auto_enable_overlay()  # Crosshair an
                 self.refresh_ingame_overlay()  # Stats an
+
+                # Killfeed an (NEU)
+                if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
+                    self.overlay_win.feed_label.show()
         else:
             self.add_log("MASTER: Overlay deaktiviert.")
-            self.stop_overlay_logic()  # Stoppt Stats
+            self.stop_overlay_logic()  # Stoppt Stats & Feed
 
-            # Crosshair auch explizit verstecken
+            # Crosshair & Streak auch explizit verstecken
             if self.overlay_win:
                 self.overlay_win.crosshair_label.hide()
+                if hasattr(self.overlay_win, 'streak_bg_label'):
+                    self.overlay_win.streak_bg_label.hide()
 
     def save_overlay_config(self):
         """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
@@ -2050,6 +2065,12 @@ class DiorClientGUI:
         if self.overlay_win and hasattr(self.overlay_win, 'stats_bg_label'):
             self.overlay_win.stats_bg_label.hide()
             self.overlay_win.stats_text_label.hide()
+
+
+            # 2. Killfeed verstecken & leeren (NEU)
+            if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
+                self.overlay_win.feed_label.hide()
+                self.overlay_win.feed_label.setText("")
 
 
         if hasattr(self, 'ovl_status_label'):
