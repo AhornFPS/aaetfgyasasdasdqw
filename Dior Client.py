@@ -1473,49 +1473,49 @@ class DiorClientGUI:
         self.ovl_notebook.bind("<<NotebookTabChanged>>", self.on_overlay_tab_change)
 
         # =========================================================
-        # TAB 1: CROSSHAIR
+        # TAB 1: IDENTITY (Verschoben von Pos 4 auf Pos 1)
         # =========================================================
-        tab_cross = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_cross, text=" CROSSHAIR ")
+        tab_ident = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
+        self.ovl_notebook.add(tab_ident, text=" IDENTITY ")
 
-        if "crosshair" not in self.config: 
-            self.config["crosshair"] = {"file": "crosshair.png", "size": 32, "x": 0, "y": 0, "active": True}
-        c_conf = self.config["crosshair"]
+        tk.Label(tab_ident, text="ACTIVE TRACKING IDENTITY", font=("Consolas", 14, "bold"), bg="#1a1a1a",
+                 fg="#00f2ff").pack(pady=(20, 10))
+        tk.Label(tab_ident,
+                 text="Select the character you are currently playing.\nOnly events for this ID will trigger overlay effects.",
+                 bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
 
-        # 1. Bild
-        tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15, 0))
-        f_frame = tk.Frame(tab_cross, bg="#1a1a1a"); f_frame.pack(pady=5)
-        self.ent_cross_path = tk.Entry(f_frame, width=40, bg="#111", fg="#00f2ff", bd=1)
-        self.ent_cross_path.pack(side="left", padx=5)
-        self.ent_cross_path.insert(0, c_conf.get("file", "crosshair.png"))
-        tk.Button(f_frame, text="Browse", command=lambda: self.browse_file(self.ent_cross_path, "png"), bg="#333", fg="white").pack(side="left")
+        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
+        self.ovl_char_menu = tk.OptionMenu(tab_ident, self.char_var, *opts, command=self.update_active_char)
+        self.ovl_char_menu.config(bg="#333", fg="white", font=("Consolas", 11, "bold"), width=25, bd=0,
+                                  highlightthickness=0)
+        self.ovl_char_menu["menu"].config(bg="#333", fg="white", font=("Consolas", 11))
+        self.ovl_char_menu.pack(pady=5)
+        self.char_option_menus.append(self.ovl_char_menu)
 
-        # 2. Größe
-        s_frame = tk.Frame(tab_cross, bg="#1a1a1a"); s_frame.pack(pady=10)
-        tk.Label(s_frame, text="Größe (px):", bg="#1a1a1a", fg="white").pack(side="left", padx=5)
-        self.crosshair_size_entry = tk.Entry(s_frame, width=8, bg="#111", fg="#00f2ff", bd=1)
-        self.crosshair_size_entry.insert(0, str(c_conf.get("size", 32)))
-        self.crosshair_size_entry.pack(side="left")
+        tk.Button(tab_ident, text="DELETE SELECTED", bg="#440000", fg="#ff4444", font=("Consolas", 9),
+                  command=self.delete_char).pack(pady=5)
 
-        # 3. Position Sliders
-        tk.Label(tab_cross, text="Position X / Y Offset:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
-        self.scale_cx = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="X Offset")
-        self.scale_cx.set(c_conf.get("x", 0)); self.scale_cx.pack(fill="x", padx=100)
-        self.scale_cy = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="Y Offset")
-        self.scale_cy.set(c_conf.get("y", 0)); self.scale_cy.pack(fill="x", padx=100)
+        tk.Frame(tab_ident, height=2, bd=1, relief="sunken", bg="#333").pack(fill="x", padx=40, pady=20)
 
-        # 4. Buttons (Save + DragDrop)
-        tk.Button(tab_cross, text="SAVE & APPLY CROSSHAIR", bg="#00f2ff", fg="black", font=("Consolas", 11, "bold"), command=self.apply_crosshair_settings).pack(pady=15)
-        
-        # NEU: Drag & Drop Button für Crosshair
-        self.btn_edit_cross = tk.Button(tab_cross, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=30, command=self.toggle_hud_edit_mode)
-        self.btn_edit_cross.pack(pady=5)
+        tk.Label(tab_ident, text="ADD NEW CHARACTER", font=("Consolas", 11, "bold"), bg="#1a1a1a", fg="#00ff00").pack(
+            pady=(10, 5))
+        add_frame = tk.Frame(tab_ident, bg="#1a1a1a");
+        add_frame.pack()
+        self.ovl_char_entry = tk.Entry(add_frame, bg="#111", fg="#00f2ff", font=("Consolas", 11), width=20)
+        self.ovl_char_entry.pack(side="left", padx=5)
+        self.ovl_char_entry.bind("<Return>", lambda e: self.add_char())
+        tk.Button(add_frame, text="ADD", bg="#004400", fg="white", font=("Consolas", 10, "bold"),
+                  command=self.add_char).pack(side="left")
 
-        # Master Switch
-        sep = tk.Frame(tab_cross, height=2, bd=1, relief="sunken", bg="#333"); sep.pack(fill="x", padx=50, pady=10)
-        tk.Checkbutton(tab_cross, text="SYSTEM OVERLAY MASTER-SWITCH", variable=self.overlay_active,
-                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
-                       command=lambda: self.add_log(f"Overlay {'An' if self.overlay_active.get() else 'Aus'}")).pack(pady=10)
+        # --- MASTER SCHALTER (Verschoben von Crosshair Tab hierher) ---
+        sep_master = tk.Frame(tab_ident, height=2, bd=1, relief="sunken", bg="#333")
+        sep_master.pack(fill="x", padx=40, pady=20)
+
+        check_btn = tk.Checkbutton(tab_ident, text="SYSTEM OVERLAY MASTER-SWITCH", variable=self.overlay_active,
+                                   bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
+                                   command=lambda: self.add_log(
+                                       f"Overlay {'An' if self.overlay_active.get() else 'Aus'}"))
+        check_btn.pack(pady=10)
 
 
         # =========================================================
@@ -1624,27 +1624,55 @@ class DiorClientGUI:
         # Daten laden (JETZT erst aufrufen, wo ent_evt_img existiert!)
         self.load_event_ui_data("Kill")
 
-
         # =========================================================
-        # TAB 4: IDENTITY
+        # TAB 4: CROSSHAIR
         # =========================================================
-        tab_ident = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_ident, text=" IDENTITY ")
+        tab_cross = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
+        self.ovl_notebook.add(tab_cross, text=" CROSSHAIR ")
 
-        tk.Label(tab_ident, text="ACTIVE TRACKING IDENTITY", font=("Consolas", 14, "bold"), bg="#1a1a1a", fg="#00f2ff").pack(pady=(20, 10))
-        tk.Label(tab_ident, text="Select the character you are currently playing.\nOnly events for this ID will trigger overlay effects.", bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
-        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
-        self.ovl_char_menu = tk.OptionMenu(tab_ident, self.char_var, *opts, command=self.update_active_char)
-        self.ovl_char_menu.config(bg="#333", fg="white", font=("Consolas", 11, "bold"), width=25, bd=0, highlightthickness=0)
-        self.ovl_char_menu["menu"].config(bg="#333", fg="white", font=("Consolas", 11))
-        self.ovl_char_menu.pack(pady=5)
-        self.char_option_menus.append(self.ovl_char_menu)
-        tk.Button(tab_ident, text="DELETE SELECTED", bg="#440000", fg="#ff4444", font=("Consolas", 9), command=self.delete_char).pack(pady=5)
-        tk.Frame(tab_ident, height=2, bd=1, relief="sunken", bg="#333").pack(fill="x", padx=40, pady=20)
-        tk.Label(tab_ident, text="ADD NEW CHARACTER", font=("Consolas", 11, "bold"), bg="#1a1a1a", fg="#00ff00").pack(pady=(10, 5))
-        add_frame = tk.Frame(tab_ident, bg="#1a1a1a"); add_frame.pack()
-        self.ovl_char_entry = tk.Entry(add_frame, bg="#111", fg="#00f2ff", font=("Consolas", 11), width=20); self.ovl_char_entry.pack(side="left", padx=5); self.ovl_char_entry.bind("<Return>", lambda e: self.add_char())
-        tk.Button(add_frame, text="ADD", bg="#004400", fg="white", font=("Consolas", 10, "bold"), command=self.add_char).pack(side="left")
+        if "crosshair" not in self.config:
+            self.config["crosshair"] = {"file": "crosshair.png", "size": 32, "x": 0, "y": 0, "active": True}
+        c_conf = self.config["crosshair"]
+
+        # 1. Bild
+        tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15, 0))
+        f_frame = tk.Frame(tab_cross, bg="#1a1a1a");
+        f_frame.pack(pady=5)
+        self.ent_cross_path = tk.Entry(f_frame, width=40, bg="#111", fg="#00f2ff", bd=1)
+        self.ent_cross_path.pack(side="left", padx=5)
+        self.ent_cross_path.insert(0, c_conf.get("file", "crosshair.png"))
+        tk.Button(f_frame, text="Browse", command=lambda: self.browse_file(self.ent_cross_path, "png"), bg="#333",
+                  fg="white").pack(side="left")
+
+        # 2. Größe
+        s_frame = tk.Frame(tab_cross, bg="#1a1a1a");
+        s_frame.pack(pady=10)
+        tk.Label(s_frame, text="Größe (px):", bg="#1a1a1a", fg="white").pack(side="left", padx=5)
+        self.crosshair_size_entry = tk.Entry(s_frame, width=8, bg="#111", fg="#00f2ff", bd=1)
+        self.crosshair_size_entry.insert(0, str(c_conf.get("size", 32)))
+        self.crosshair_size_entry.pack(side="left")
+
+        # 3. Position Sliders
+        tk.Label(tab_cross, text="Position X / Y Offset:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
+        self.scale_cx = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
+                                 label="X Offset")
+        self.scale_cx.set(c_conf.get("x", 0));
+        self.scale_cx.pack(fill="x", padx=100)
+        self.scale_cy = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
+                                 label="Y Offset")
+        self.scale_cy.set(c_conf.get("y", 0));
+        self.scale_cy.pack(fill="x", padx=100)
+
+        # 4. Buttons (Save + DragDrop)
+        tk.Button(tab_cross, text="SAVE & APPLY CROSSHAIR", bg="#00f2ff", fg="black", font=("Consolas", 11, "bold"),
+                  command=self.apply_crosshair_settings).pack(pady=15)
+
+        # NEU: Drag & Drop Button für Crosshair
+        self.btn_edit_cross = tk.Button(tab_cross, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
+                                        width=30, command=self.toggle_hud_edit_mode)
+        self.btn_edit_cross.pack(pady=5)
+
+
 
 
         # =========================================================
