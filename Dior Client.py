@@ -497,7 +497,7 @@ PS2_EXP_DETECTION = {
     "Break Construction": ["604", "616", "628"], # Construction zerstört
     "Alert End": ["328"],
 
-    # --- COMBAT & SPECIAL ---
+    # --- COMBAT & SPECIAL ----
     "Road Kill": ["26"],                  # Bestätigter Roadkill XP
     "Domination": ["10"],                 # Domination Kill
     "Revenge": ["11"],                    # Revenge Kill
