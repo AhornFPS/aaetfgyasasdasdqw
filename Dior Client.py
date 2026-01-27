@@ -89,27 +89,27 @@ class QtOverlay(QWidget):
         self.event_center_y = (screen.height() // 2)
 
         # 3. WIDGETS
-        self.crosshair_label = QLabel(self);
+        self.crosshair_label = QLabel(self)
         self.crosshair_label.hide()
-        self.stats_bg_label = QLabel(self);
+        self.stats_bg_label = QLabel(self)
         self.stats_bg_label.hide()
-        self.stats_text_label = QLabel(self);
+        self.stats_text_label = QLabel(self)
         self.stats_text_label.hide()
 
         shadow_stats = QGraphicsDropShadowEffect()
         shadow_stats.setBlurRadius(5 * self.ui_scale)
-        shadow_stats.setXOffset(1 * self.ui_scale);
+        shadow_stats.setXOffset(1 * self.ui_scale)
         shadow_stats.setYOffset(1 * self.ui_scale)
         shadow_stats.setColor(QColor(0, 0, 0, 240))
         self.stats_text_label.setGraphicsEffect(shadow_stats)
 
-        self.streak_bg_label = QLabel(self);
+        self.streak_bg_label = QLabel(self)
         self.streak_bg_label.hide()
-        self.streak_text_label = QLabel(self);
+        self.streak_text_label = QLabel(self)
         self.streak_text_label.hide()
 
         shadow_streak = QGraphicsDropShadowEffect()
-        shadow_streak.setBlurRadius(5 * self.ui_scale);
+        shadow_streak.setBlurRadius(5 * self.ui_scale)
         shadow_streak.setColor(QColor(0, 0, 0, 255))
         self.streak_text_label.setGraphicsEffect(shadow_streak)
 
@@ -124,7 +124,7 @@ class QtOverlay(QWidget):
 
         shadow_feed = QGraphicsDropShadowEffect()
         shadow_feed.setBlurRadius(4 * self.ui_scale)
-        shadow_feed.setXOffset(1 * self.ui_scale);
+        shadow_feed.setXOffset(1 * self.ui_scale)
         shadow_feed.setYOffset(1 * self.ui_scale)
         shadow_feed.setColor(QColor(0, 0, 0, 255))
         self.feed_label.setGraphicsEffect(shadow_feed)
@@ -157,8 +157,8 @@ class QtOverlay(QWidget):
     def set_mouse_passthrough(self, enabled=True, active_targets=None):
         try:
             hwnd = self.winId().__int__()
-            GWL_EXSTYLE = -20;
-            WS_EX_LAYERED = 0x80000;
+            GWL_EXSTYLE = -20
+            WS_EX_LAYERED = 0x80000
             WS_EX_TRANSPARENT = 0x20
             extended_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
@@ -189,16 +189,16 @@ class QtOverlay(QWidget):
         if not self.edit_mode: return
         pos = event.pos()
         if "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
-            self.dragging_widget = "feed";
+            self.dragging_widget = "feed"
             self.drag_offset = pos - self.feed_label.pos()
         elif "border" in self.stats_bg_label.styleSheet() and self.stats_bg_label.geometry().contains(pos):
-            self.dragging_widget = "stats";
+            self.dragging_widget = "stats"
             self.drag_offset = pos - self.stats_bg_label.pos()
         elif "border" in self.streak_bg_label.styleSheet() and self.streak_bg_label.geometry().contains(pos):
-            self.dragging_widget = "streak";
+            self.dragging_widget = "streak"
             self.drag_offset = pos - self.streak_bg_label.pos()
         elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
-            self.dragging_widget = "crosshair";
+            self.dragging_widget = "crosshair"
             self.drag_offset = pos - self.crosshair_label.pos()
 
     def mouseMoveEvent(self, event):
@@ -222,7 +222,7 @@ class QtOverlay(QWidget):
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("streak", {})
                 tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx = new_x + (self.streak_bg_label.width() // 2);
+                cx = new_x + (self.streak_bg_label.width() // 2)
                 cy = new_y + (self.streak_bg_label.height() // 2)
                 self.safe_move(self.streak_text_label, cx + tx - (self.streak_text_label.width() // 2),
                                cy + ty - (self.streak_text_label.height() // 2))
