@@ -8,11 +8,6 @@ except Exception:
     pass
 
 
-#  TEST
-#  TEST
-#  TEST
-#  TEST
-#  TEST
 
 
 # Qt-Skalierung fixen
