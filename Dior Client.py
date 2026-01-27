@@ -3288,7 +3288,7 @@ class DiorClientGUI:
 
 
                                     
-                                    # Multi-Kill Counter
+                                    # Multi-Kill Counter comment
                                     if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
                                         self.kill_counter += 1
                                     else: self.kill_counter = 1
