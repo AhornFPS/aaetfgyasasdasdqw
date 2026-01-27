@@ -3208,18 +3208,23 @@ class DiorClientGUI:
                                 killer_id = p.get("attacker_character_id")
                                 victim_id = p.get("character_id")
                                 my_id = self.current_character_id
+                                is_hs = (p.get("is_headshot") == "1")
 
-                                if not my_id: continue
-
-                                # --- 1. STATS SOFORT UPDATEN (KD Fix) ---
+                                # --- 1. GLOBALE STATS UPDATEN (Wichtig für Dashboard!) ---
                                 if killer_id and killer_id != "0" and killer_id != victim_id:
                                     k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                                     k_obj["k"] += 1
-                                    if p.get("is_headshot") == "1": k_obj["hs"] = k_obj.get("hs", 0) + 1
-                                
+                                    # Zeitstempel für Inaktivitätsfilter setzen
+                                    k_obj["last_kill_time"] = time.time()
+                                    if is_hs: k_obj["hs"] = k_obj.get("hs", 0) + 1
+
                                 if victim_id and victim_id != "0":
                                     v_obj = get_stat_obj(victim_id, p.get("team_id"))
                                     v_obj["d"] += 1
+
+                                # --- 2. AB HIER NUR NOCH LOGIK FÜR MICH SELBST ---
+                                if not my_id: continue
+
                                 icon_html = ""
                                 if is_hs:
                                     hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
