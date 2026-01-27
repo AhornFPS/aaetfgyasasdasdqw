@@ -1,0 +1,12 @@
+--- PLANETSIDE 2 ENFORCEMENT REPORT ---
+SUSPECT NAME: BeyondTheMind
+SUSPECT ID: 5428587263553829489
+FISU LINK: https://ps2.fisu.pw/player/?name=BeyondTheMind
+HONU LINK: https://www.honu.pw/character/5428587263553829489
+EVIDENCE LINK: https://streamable.com/j9ns32
+
+VIOLATION DETAILS:
+The suspect is utilizing the following game modifications:
+* Aimbot: Automated target acquisition that unnaturally snaps the crosshair to critical hit zones.
+
+Thank you for looking into this report and keeping the game fair.

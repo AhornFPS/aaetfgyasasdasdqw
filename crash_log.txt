@@ -1,0 +1,9 @@
+Qt Init Crash: argument 1: TypeError: Don't know how to convert parameter 1
+Qt Init Crash: argument 1: TypeError: Don't know how to convert parameter 1
+Qt Init Crash: argument 1: TypeError: Don't know how to convert parameter 1
+Qt Init Crash: argument 1: TypeError: Don't know how to convert parameter 1
+Qt Init Crash: argument 1: TypeError: Don't know how to convert parameter 1
+Qt Init Crash: 'QtOverlay' object has no attribute 'update_crosshair'
+Qt Init Crash: 'QtOverlay' object has no attribute 'update_crosshair'
+Qt Init Crash: 'QtOverlay' object has no attribute 'update_crosshair'
+Qt Init Crash: 'QtOverlay' object has no attribute 'update_crosshair'
