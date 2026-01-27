@@ -2085,7 +2085,7 @@ class DiorClientGUI:
             hrs = int(dur_min // 60);
             mns = int(dur_min % 60)
 
-            # --- 3. HTML DESIGN (ALLES IN EINER ZEILE) ---
+            # --- 3. HTML DESIGN (ALLES IN EI NER ZEILE) ---
             kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
 
             html = f"""
