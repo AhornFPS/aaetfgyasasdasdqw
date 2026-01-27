@@ -3714,13 +3714,14 @@ class DiorClientGUI:
                                 VS = p.get("faction_vs")
                                 TR = p.get("faction_tr")
                                 NC = p.get("faction_nc")
+                                print()
                                 if state == "ended" and world == self.myWorldID and zone == self.currentZone:
                                     if VS > TR and VS > NC and self.myTeamId == 1:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
                                     if NC > TR and NC > VS and self.myTeamId == 2:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
                                     if TR > VS and TR > NC and self.myTeamId == 3:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
