@@ -577,7 +577,8 @@ class DiorClientGUI:
             self.ps2_dir = self.config.get("ps2_path", "")
 
             # Variablen
-            self.overlay_active = tk.BooleanVar(value=False)
+            saved_state = self.config.get("overlay_master_active", False)
+            self.overlay_active = tk.BooleanVar(value=saved_state)
             self.char_option_menus = []
             self.current_tab = "Dashboard"
             self.current_sub_tab = "Overview"
@@ -887,15 +888,20 @@ class DiorClientGUI:
             "streak": {"img": "KS_Counter.png", "x": 0, "y": 100, "scale": 1.5}
         }
 
-    def save_config(self):
-        """Speichert alle aktuellen Einstellungen in die config.json"""
-        try:
-            config_path = os.path.join(BASE_DIR, "config.json")
-            with open(config_path, "w", encoding="utf-8") as f:
-                # indent=4 macht die Datei im Editor lesbar
-                json.dump(self.config, f, indent=4)
-        except Exception as e:
-            print(f"Fehler beim Speichern der config.json: {e}")
+    def toggle_master_switch(self):
+        """Speichert den Master-Switch Zustand und aktualisiert sofort"""
+        is_active = self.overlay_active.get()
+        self.config["overlay_master_active"] = is_active
+        self.save_config()
+
+        if is_active:
+            self.add_log("MASTER: Overlay aktiviert (Warte auf PS2...)")
+            # Falls Spiel schon läuft, versuchen wir sofort zu starten
+            if getattr(self, 'ps2_running', False):
+                self.refresh_ingame_overlay()
+        else:
+            self.add_log("MASTER: Overlay deaktiviert.")
+            self.stop_overlay_logic()
 
     def save_overlay_config(self):
         """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
@@ -1544,8 +1550,7 @@ class DiorClientGUI:
 
         check_btn = tk.Checkbutton(tab_ident, text="SYSTEM OVERLAY MASTER-SWITCH", variable=self.overlay_active,
                                    bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
-                                   command=lambda: self.add_log(
-                                       f"Overlay {'An' if self.overlay_active.get() else 'Aus'}"))
+                                   command=self.toggle_master_switch)  # <--- Hier rufen wir jetzt die Speicher-Funktion auf
         check_btn.pack(pady=10)
 
         # =========================================================
@@ -2034,12 +2039,13 @@ class DiorClientGUI:
     def refresh_ingame_overlay(self):
         if not self.overlay_win: return
 
+        master_switch = self.overlay_active.get()
         game_running = getattr(self, 'ps2_running', False)
         test_active = getattr(self, 'is_stats_test', False)
         cfg = self.config.get("stats_widget", {})
 
         # Prüfen ob Overlay aktiv sein soll
-        if (game_running or test_active) and cfg.get("active", True):
+        if master_switch and (game_running or test_active) and cfg.get("active", True):
 
             # --- 1. DATEN VORBEREITEN (Unverändert) ---
             if test_active:
