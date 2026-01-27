@@ -675,3 +675,16 @@ Traceback (most recent call last):
     def __call__(self, *args):
     
 KeyboardInterrupt
+
+--- CRASH LOG Tue Jan 27 04:26:33 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\xcedr\PycharmProjects\Better-Planetside\Dior Client.py", line 3741, in <module>
+    except Exception as e: self.gui.add_log(f"ERR: {e}")
+    ^^^^^^^^^^^
+  File "C:\Users\xcedr\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\xcedr\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 2069, in __call__
+    def __call__(self, *args):
+    
+KeyboardInterrupt
