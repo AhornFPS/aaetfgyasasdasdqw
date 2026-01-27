@@ -668,11 +668,9 @@ class DiorClientGUI:
                         if self.overlay_active.get():
                             # 1. Crosshair an
                             self.root.after(0, self.auto_enable_overlay)
-
                             # 2. Stats-Loop starten
                             self.root.after(0, self.refresh_ingame_overlay)
-
-                            # 3. Killfeed explizit einschalten (NEU)
+                            # 3. Killfeed einschalten
                             if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
                                 self.root.after(0, self.overlay_win.feed_label.show)
                                 self.root.after(0, lambda: self.overlay_win.feed_label.setText(""))
@@ -681,14 +679,12 @@ class DiorClientGUI:
 
                     else:
                         self.add_log("MONITOR: PlanetSide 2 beendet.")
-                        # Alles ausschalten (Stats + Feed)
+                        # Ruft unsere neue stop_overlay_logic auf -> Versteckt Stats, Feed UND Zahl
                         self.root.after(0, self.stop_overlay_logic)
 
-                        # Crosshair & Streak explizit verstecken
+                        # Zur Sicherheit Crosshair explizit verstecken
                         if self.overlay_win:
                             self.root.after(0, self.overlay_win.crosshair_label.hide)
-                            if hasattr(self.overlay_win, 'streak_bg_label'):
-                                self.root.after(0, self.overlay_win.streak_bg_label.hide)
 
             except:
                 pass
@@ -921,23 +917,18 @@ class DiorClientGUI:
 
         if is_active:
             self.add_log("MASTER: Overlay aktiviert.")
-            # Falls Spiel schon läuft, versuchen wir sofort ALLES zu starten
             if getattr(self, 'ps2_running', False):
                 self.auto_enable_overlay()  # Crosshair an
                 self.refresh_ingame_overlay()  # Stats an
-
-                # Killfeed an (NEU)
                 if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
                     self.overlay_win.feed_label.show()
         else:
             self.add_log("MASTER: Overlay deaktiviert.")
-            self.stop_overlay_logic()  # Stoppt Stats & Feed
+            self.stop_overlay_logic()  # Versteckt Stats, Feed & Streak (Zahl + Bild)
 
-            # Crosshair & Streak auch explizit verstecken
+            # Crosshair auch explizit verstecken
             if self.overlay_win:
                 self.overlay_win.crosshair_label.hide()
-                if hasattr(self.overlay_win, 'streak_bg_label'):
-                    self.overlay_win.streak_bg_label.hide()
 
     def save_overlay_config(self):
         """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
@@ -2061,18 +2052,30 @@ class DiorClientGUI:
         self.refresh_ingame_overlay()
 
     def stop_overlay_logic(self):
-        """Versteckt die Statistik-Elemente im PyQt-Overlay"""
+        """Versteckt alle Overlay-Elemente (Stats, Crosshair, Feed, Streak)"""
+
+        # 1. Stats Widget verstecken
         if self.overlay_win and hasattr(self.overlay_win, 'stats_bg_label'):
             self.overlay_win.stats_bg_label.hide()
             self.overlay_win.stats_text_label.hide()
 
+        # 2. Killfeed verstecken & leeren
+        if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
+            self.overlay_win.feed_label.hide()
+            self.overlay_win.feed_label.setText("")
 
-            # 2. Killfeed verstecken & leeren (NEU)
-            if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
-                self.overlay_win.feed_label.hide()
-                self.overlay_win.feed_label.setText("")
+        # 3. Killstreak verstecken (Bild UND Zahl) - NEU
+        if self.overlay_win:
+            if hasattr(self.overlay_win, 'streak_bg_label'):
+                self.overlay_win.streak_bg_label.hide()
+            if hasattr(self.overlay_win, 'streak_text_label'):
+                self.overlay_win.streak_text_label.hide()  # <-- Das ist die Zahl!
 
+        # Interne Zähler resetten, damit beim Neustart nicht kurz "5" aufblitzt
+        self.killstreak_count = 0
+        self.kill_counter = 0
 
+        # 4. Status im GUI updaten
         if hasattr(self, 'ovl_status_label'):
             self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
 
