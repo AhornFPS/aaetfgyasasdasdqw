@@ -3612,6 +3612,10 @@ class DiorClientGUI:
                                 other_id = p.get("other_id")
                                 my_id = self.current_character_id
 
+                                if exp_id in ["2", "3", "371", "372"]:
+                                    a_obj = get_stat_obj(char_id, p.get("team_id"))
+                                    a_obj["a"] += 1
+
                                 # 1. PASSIV: ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
@@ -3648,9 +3652,7 @@ class DiorClientGUI:
                                             if event_name != "Revive" and exp_id in id_list:
                                                 self.root.after(0, lambda e=event_name: self.trigger_overlay_event(e))
                                                 break
-                                    if exp_id in ["2", "3", "371", "372"]:
-                                        a_obj = get_stat_obj(char_id, p.get("team_id"))
-                                        a_obj["a"] += 1
+
 
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
