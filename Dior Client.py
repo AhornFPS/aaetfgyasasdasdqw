@@ -582,6 +582,9 @@ class DiorClientGUI:
             self.was_revived = False
             self.streak_timeout = 12.0
             self.pop_history = [0] * 100
+            self.myTeamId = 0
+            self.currentZone = 0
+            self.myWorldID = 0
 
             self.bg_photo = None
             self.last_size = (1200, 900)
@@ -1525,7 +1528,7 @@ class DiorClientGUI:
             "MULTI KILL RUSH": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill", "Holy Shit"],
             "SPEZIAL EVENTS": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "Road Kill", "Roadkill Victim", "Spitfire Kill", "Gunner Kill", "Tankmine Kill", "AP-Mine Kill"],
             "SUPPORT & TEAM": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction"],
-            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist"],
+            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist","Alert End", "Alert Win"],
             "SYSTEM / LOGIN": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
 
@@ -3104,7 +3107,7 @@ class DiorClientGUI:
                         "action": "subscribe",
                         "characters": ["all"],
                         "worlds": ["10"],  # Miller
-                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout"]
+                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
                     }
                     await websocket.send(json.dumps(msg))
                     self.add_log("Websocket: Verbunden und abonniert.")
@@ -3349,6 +3352,7 @@ class DiorClientGUI:
                                 char_id = p.get("character_id"); other_id = p.get("other_id")
                                 my_id = self.current_character_id
 
+
                                 # 1. PASSIV: ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
@@ -3375,6 +3379,8 @@ class DiorClientGUI:
 
                                 # 2. AKTIV: ICH HABE ETWAS GETAN
                                 if my_id and char_id == my_id:
+                                    self.myTeamId = p.get("team_id")
+                                    self.myWorldID = p.get("world_id")
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
                                     else:
@@ -3389,6 +3395,22 @@ class DiorClientGUI:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Road Kill"))
                                     if exp_id in ["604", "616", "628"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Break Construction"))
+                                    if exp_id == "328":
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert End"))
+                            elif e_name == "MetagameEvent":
+                                state = p.get("metagame_event_state_name")
+                                world = p.get("world_id")
+                                zone = p.get("zone_id")
+                                VS = p.get("faction_vs")
+                                TR = p.get("faction_tr")
+                                NC = p.get("faction_nc")
+                                if state == "ended" and world == self.myWorldID and zone == self.currentZone:
+                                    if VS >> TR and VS >> NC and self.myTeamId == 1:
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
+                                    if NC >> TR and NC >> VS and self.myTeamId == 2:
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
+                                    if TR >> VS and TR >> NC and self.myTeamId == 3:
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
