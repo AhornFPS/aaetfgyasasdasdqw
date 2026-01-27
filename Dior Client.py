@@ -1414,7 +1414,10 @@ class DiorClientGUI:
             img_path = get_asset_path(img_name)
             if os.path.exists(img_path):
                 # WICHTIG: Hier senden wir jetzt alle 4 Parameter!
-                self.overlay_win.signals.show_image.emit(img_path, 3000, ox, oy)
+                if event_type == "Kill":
+                    self.overlay_win.signals.show_image.emit(img_path, 100, ox, oy)
+                else:
+                    self.overlay_win.signals.show_image.emit(img_path, 3000, ox, oy)
 
         # Sound abspielen (unverändert)
         if HAS_SOUND:
