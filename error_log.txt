@@ -657,3 +657,21 @@ Traceback (most recent call last):
     self.tk.mainloop(n)
     ~~~~~~~~~~~~~~~~^^^
 KeyboardInterrupt
+
+--- CRASH LOG Tue Jan 27 04:08:21 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\HornGaming\PycharmProjects\Better-Planetside\Dior Client.py", line 147, in force_update
+    def force_update(self):
+    
+KeyboardInterrupt
+
+--- CRASH LOG Tue Jan 27 04:16:13 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\HornGaming\PycharmProjects\Better-Planetside\Dior Client.py", line 3737, in <module>
+  File "C:\Users\HornGaming\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 1599, in mainloop
+    self.tk.mainloop(n)
+    ~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\HornGaming\AppData\Local\Programs\Python\Python313\Lib\tkinter\__init__.py", line 2069, in __call__
+    def __call__(self, *args):
+    
+KeyboardInterrupt

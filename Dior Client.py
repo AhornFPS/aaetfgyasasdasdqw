@@ -355,6 +355,7 @@ class QtOverlay(QWidget):
         temp_label.show()
         QTimer.singleShot(duration, temp_label.deleteLater)
 
+
     def draw_streak_ui(self, img_path, count, cfg):
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide();
@@ -1393,7 +1394,7 @@ class DiorClientGUI:
             self.drag_data["y"] = event.y
 
     def trigger_overlay_event(self, event_type):
-        """Triggert das Bild im Qt-Overlay mit Offsets"""
+        """Triggert das Bild im Qt-Overlay mit Offsets und Dauer"""
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
@@ -1402,22 +1403,21 @@ class DiorClientGUI:
         if not event_data:
             return
 
-        # Offsets auslesen (sicherstellen, dass es Ganzzahlen sind)
+        # Offsets und Dauer auslesen
         try:
             ox = int(event_data.get("x_offset", 0))
             oy = int(event_data.get("y_offset", 0))
+            # Nutzt gespeicherte Dauer, Fallback auf 3000ms
+            dur = int(event_data.get("duration", 3000))
         except (ValueError, TypeError):
-            ox, oy = 0, 0
+            ox, oy, dur = 0, 0, 3000
 
         img_name = event_data.get("img")
         if img_name:
             img_path = get_asset_path(img_name)
             if os.path.exists(img_path):
-                # WICHTIG: Hier senden wir jetzt alle 4 Parameter!
-                if event_type == "Kill":
-                    self.overlay_win.signals.show_image.emit(img_path, 100, ox, oy)
-                else:
-                    self.overlay_win.signals.show_image.emit(img_path, 3000, ox, oy)
+                # Signal senden: (Pfad, Dauer, X, Y)
+                self.overlay_win.signals.show_image.emit(img_path, dur, ox, oy)
 
         # Sound abspielen (unverändert)
         if HAS_SOUND:
@@ -1557,6 +1557,18 @@ class DiorClientGUI:
         self.scale_ex = tk.Scale(sl_frame, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="X Offset"); self.scale_ex.pack(side="left", fill="x", expand=True, padx=5)
         self.scale_ey = tk.Scale(sl_frame, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="Y Offset"); self.scale_ey.pack(side="left", fill="x", expand=True, padx=5)
         self.scale_png_size = tk.Scale(sl_frame, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="Scale"); self.scale_png_size.set(1.0); self.scale_png_size.pack(side="left", fill="x", expand=True, padx=5)
+
+        dur_frame = tk.Frame(tab_events, bg="#1a1a1a")
+        dur_frame.pack(pady=5)
+
+        tk.Label(dur_frame, text="Display Duration (ms):", bg="#1a1a1a", fg="#aaaaaa", font=("Arial", 9)).pack(
+            side="left", padx=5)
+        vcmd_num = (self.root.register(lambda P: P.isdigit() or P == ""), '%P')
+        self.ent_evt_duration = tk.Entry(dur_frame, width=8, bg="#111111", fg="white", insertbackground="white",
+                                         validate='key', validatecommand=vcmd_num)
+        # Standardwert setzen (wird beim Wechseln des Events normalerweise überschrieben)
+        self.ent_evt_duration.insert(0, "3000")
+        self.ent_evt_duration.pack(side="left", padx=5)
 
         btn_box = tk.Frame(tab_events, bg="#1a1a1a"); btn_box.pack(pady=15)
         tk.Button(btn_box, text="SAVE THIS EVENT", bg="#004400", fg="white", width=20, command=self.save_event_ui_data).pack(side="left", padx=10)
@@ -1709,16 +1721,18 @@ class DiorClientGUI:
 
     def select_event_from_grid(self, event_name):
         """Wird aufgerufen, wenn man im Grid auf einen Button klickt"""
-        # 1. Variable setzen
+        # 1. Variable setzen (damit save_event_ui_data weiß, für wen es speichert)
         self.var_event_sel.set(event_name)
 
-        # 2. Anzeige aktualisieren
+        # 2. Anzeige im UI aktualisieren (Label über den Eingabefeldern)
         if hasattr(self, 'lbl_current_edit'):
-            self.lbl_current_edit.config(text=f"EDITING: {event_name}")
+            self.lbl_current_edit.config(text=f"EDITING: {event_name.upper()}")
 
-        # 3. Daten laden (Bild, Sound etc.)
+        # 3. Alle Daten (Pfade, Slider, Duration) in die UI-Elemente füllen
         self.load_event_ui_data(event_name)
-        print(f"DEBUG: Switched edit mode to {event_name}")
+
+        # Visuelles Feedback im Log
+        self.add_log(f"UI: Switch Edit-Mode to '{event_name}'")
 
     def browse_file(self, entry_widget, type_):
         # Filter: Audio oder Bilder
@@ -1747,7 +1761,7 @@ class DiorClientGUI:
             entry_widget.insert(0, filename)
 
     def load_event_ui_data(self, event_type):
-        """Lädt die gespeicherten Daten in die Eingabefelder (angepasst an neue Logik)"""
+        """Lädt die gespeicherten Daten in die Eingabefelder inklusive Duration"""
         if not event_type or event_type.startswith("---"):
             return
 
@@ -1764,24 +1778,26 @@ class DiorClientGUI:
         snd_val = data.get("snd", "")
         self.ent_evt_snd.insert(0, get_short_name(snd_val))
 
-        # 3. Offsets laden (Nutzt jetzt x_offset und y_offset)
-        # Falls die alten Keys "x" oder "y" noch existieren, nutzen wir diese als Backup
+        # 3. Offsets laden
         off_x = data.get("x_offset", data.get("x", 0))
         off_y = data.get("y_offset", data.get("y", 0))
-
         self.scale_ex.set(int(off_x))
         self.scale_ey.set(int(off_y))
 
         # 4. Skalierung laden
-        # Da wir in save_event_ui_data durch 100 teilen (z.B. 0.5),
-        # müssen wir hier wieder mit 100 multiplizieren (z.B. 50) für den Slider.
         raw_scale = data.get("scale", 1.0)
-        if isinstance(raw_scale, (float, int)) and raw_scale <= 5.0:  # Sicherheitscheck: ist es ein Faktor?
+        if isinstance(raw_scale, (float, int)) and raw_scale <= 5.0:
             display_scale = int(raw_scale * 100)
         else:
-            display_scale = int(raw_scale)  # Falls es schon ein 0-100 Wert war
-
+            display_scale = int(raw_scale)
         self.scale_png_size.set(display_scale)
+
+        # 5. NEU: Dauer (Duration) laden
+        if hasattr(self, 'ent_evt_duration'):
+            self.ent_evt_duration.delete(0, tk.END)
+            # Standardwert 3000ms falls nichts gespeichert ist
+            dur_val = data.get("duration", 3000)
+            self.ent_evt_duration.insert(0, str(dur_val))
 
     def save_event_ui_data(self):
         """Speichert die Eingabefelder in die Config und stellt sicher, dass die Keys passen"""
@@ -1791,20 +1807,28 @@ class DiorClientGUI:
         if "events" not in self.overlay_config:
             self.overlay_config["events"] = {}
 
-        # Speichern mit den exakten Keys, die trigger_overlay_event erwartet
+        # Dauer auslesen (Default 3000ms falls leer)
+        try:
+            raw_dur = self.ent_evt_duration.get()
+            final_dur = int(raw_dur) if raw_dur else 3000
+        except ValueError:
+            final_dur = 3000
+
+        # Speichern in der Overlay-Config
         self.overlay_config["events"][etype] = {
             "img": self.ent_evt_img.get(),
             "snd": self.ent_evt_snd.get(),
-            "x_offset": int(self.scale_ex.get()),  # Umbenannt zu x_offset
-            "y_offset": int(self.scale_ey.get()),  # Umbenannt zu y_offset
-            "scale": float(self.scale_png_size.get()) / 100.0  # Als Faktor speichern (z.B. 0.5 statt 50)
+            "x_offset": int(self.scale_ex.get()),
+            "y_offset": int(self.scale_ey.get()),
+            "scale": float(self.scale_png_size.get()) / 100.0,
+            "duration": final_dur  # NEU: Speichert die Millisekunden
         }
 
-        # Synchronisiere overlay_config mit der Haupt-Config, falls nötig
+        # Synchronisiere mit der Haupt-Config
         self.config["events"] = self.overlay_config["events"]
 
         self.save_overlay_config()
-        self.add_log(f"EVENT-SYSTEM: '{etype}' erfolgreich konfiguriert.")
+        self.add_log(f"EVENT-SYSTEM: '{etype}' ({final_dur}ms) erfolgreich konfiguriert.")
 
     def save_overlay_ui_data(self):
         """Speichert Crosshair Settings"""

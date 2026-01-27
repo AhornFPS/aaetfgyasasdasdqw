@@ -163,7 +163,8 @@
             "snd": "Hitmarke.ogg",
             "x_offset": 0,
             "y_offset": 0,
-            "scale": 0.01
+            "scale": 0.01,
+            "duration": 100
         },
         "Revive Taken": {
             "img": "No file selected",
