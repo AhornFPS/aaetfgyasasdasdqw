@@ -482,7 +482,7 @@ LOADOUT_MAP = {
     "max": ["7", "14", "21", "45"]
 }
 
-# 2. Mapping für Aktionen (Experience IDs)
+# 2. Mapping für Aktionen (Experience IDs)IDs
 PS2_EXP_DETECTION = {
     # --- SUPPORT ---
     "Revive": ["7", "53"],                # Normal & Squad Revive
