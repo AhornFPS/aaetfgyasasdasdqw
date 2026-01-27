@@ -494,6 +494,8 @@ PS2_EXP_DETECTION = {
     "Point Control": ["15", "16", "272", "556", "557"], # Attack/Defend/Convert Control Point
     "Sunderer Spawn": ["233"],            # Jemand spawnt an deinem Bus (Logistics)
     "Base Capture": ["19", "598"],        # Facility Captured
+    "Break Construction": ["604", "616", "628"], # Construction zerstört
+    "Alert End": ["328"],
 
     # --- COMBAT & SPECIAL ---
     "Road Kill": ["26"],                  # Bestätigter Roadkill XP
@@ -3396,12 +3398,7 @@ class DiorClientGUI:
                                     if exp_id in ["2", "3", "371", "372"]:
                                         a_obj = get_stat_obj(char_id, p.get("team_id"))
                                         a_obj["a"] += 1
-                                    if exp_id == "26":
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Road Kill"))
-                                    if exp_id in ["604", "616", "628"]:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Break Construction"))
-                                    if exp_id == "328":
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert End"))
+
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
                                 world = p.get("world_id")
