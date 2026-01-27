@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "C:\Users\HornGaming\PycharmProjects\Better-Planetside\Dior Client.py", line 552, in __init__
-    self.gif_path = self.config.get("gui", {}).get("main_bg", get_asset_path("background.jpg"))
-                    ^^^^^^^^^^^
-AttributeError: 'DiorClientGUI' object has no attribute 'config'
