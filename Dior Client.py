@@ -749,10 +749,21 @@ class DiorClientGUI:
         try:
             # Werte aus GUI auslesen
             new_file = self.ent_cross_path.get()
-            new_size = int(self.crosshair_size_entry.get())
+
+            # Fehler abfangen, falls Größe leer oder Text ist
+            try:
+                new_size = int(self.crosshair_size_entry.get())
+            except ValueError:
+                new_size = 32  # Fallback
+
             new_x = self.scale_cx.get()
             new_y = self.scale_cy.get()
-            is_active = self.crosshair_active_var.get()
+
+            # WICHTIG: Prüfen ob Variable existiert, sonst Default True
+            if hasattr(self, 'crosshair_active_var'):
+                is_active = self.crosshair_active_var.get()
+            else:
+                is_active = True
 
             # In die Haupt-Config schreiben
             if "crosshair" not in self.config:
@@ -771,15 +782,11 @@ class DiorClientGUI:
             # Live-Update an das Qt-Fenster senden
             if self.overlay_win:
                 full_path = get_asset_path(new_file)
-                # Wir rufen die Update-Funktion im PyQt-Overlay auf
                 self.overlay_win.update_crosshair(full_path, new_size, is_active)
-                # Falls die Position im Overlay getrennt gesetzt wird:
-                # self.overlay_win.update_position(new_x, new_y)
 
-        except ValueError:
-            messagebox.showerror("Eingabefehler", "Bitte gib eine gültige Zahl für die Größe ein!")
         except Exception as e:
             self.add_log(f"Error saving crosshair: {e}")
+            traceback.print_exc()  # Hilft beim Debuggen in der Konsole
 
     def get_time_diff_str(self, past_date_str, mode="login"):
         if not past_date_str or past_date_str == "Unknown":
@@ -1699,8 +1706,14 @@ class DiorClientGUI:
             self.config["crosshair"] = {"file": "crosshair.png", "size": 32, "x": 0, "y": 0, "active": True}
         c_conf = self.config["crosshair"]
 
+        # --- NEU: AKTIVIERUNGS-CHECKBOX (Das hat gefehlt!) ---
+        self.crosshair_active_var = tk.BooleanVar(value=c_conf.get("active", True))
+        tk.Checkbutton(tab_cross, text="CROSSHAIR ANZEIGEN", variable=self.crosshair_active_var,
+                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold")).pack(
+            pady=(15, 5))
+
         # 1. Bild
-        tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15, 0))
+        tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
         f_frame = tk.Frame(tab_cross, bg="#1a1a1a");
         f_frame.pack(pady=5)
         self.ent_cross_path = tk.Entry(f_frame, width=40, bg="#111", fg="#00f2ff", bd=1)
@@ -1731,11 +1744,6 @@ class DiorClientGUI:
         # 4. Buttons (Save + DragDrop)
         tk.Button(tab_cross, text="SAVE & APPLY CROSSHAIR", bg="#00f2ff", fg="black", font=("Consolas", 11, "bold"),
                   command=self.apply_crosshair_settings).pack(pady=15)
-
-        # NEU: Drag & Drop Button für Crosshair
-        self.btn_edit_cross = tk.Button(tab_cross, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
-                                        width=30, command=self.toggle_hud_edit_mode)
-        self.btn_edit_cross.pack(pady=5)
 
         # =========================================================
         # TAB 5: SESSION STATS & KILLFEED
@@ -2210,7 +2218,7 @@ class DiorClientGUI:
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
                     # Icon ganz links
-                    icon_html = f'<img src="{hs_path}" width="20" height="20" style="vertical-align: middle;">&nbsp;'
+                    icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
 
             if t_type == "kill":
                 msg = f"""<div style="{base_style}">
@@ -2274,7 +2282,7 @@ class DiorClientGUI:
         is_editing = getattr(self, "is_hud_editing", False)
 
         if not is_editing:
-            # --- AKTIVIEREN ---
+            # --- AKTIVIEREN (Bleibt gleich) ---
             targets = self.get_current_tab_targets()
             if not targets:
                 self.add_log("INFO: In diesem Tab gibt es nichts zu verschieben.")
@@ -2287,12 +2295,11 @@ class DiorClientGUI:
             if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
             if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
 
-            # 1. WICHTIG: ZUERST Edit-Modus im Overlay einschalten!
-            # Damit set_stats_html gleich weiß: "Aha, Edit ist an, ich zeige die Box auch ohne Bild."
+            # Edit-Modus im Overlay einschalten
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
             self.add_log(f"UI: Edit-Modus für {targets} gestartet.")
 
-            # 2. DANN erst Daten aktualisieren (damit Boxen erscheinen)
+            # Dummys anzeigen
             if "streak" in targets:
                 self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
                 self.killstreak_count = 5
@@ -2300,7 +2307,7 @@ class DiorClientGUI:
 
             if "stats" in targets or "feed" in targets:
                 self.is_stats_test = True
-                self.refresh_ingame_overlay()  # Ruft jetzt das neue set_stats_html auf
+                self.refresh_ingame_overlay()
 
             if "crosshair" in targets:
                 c_conf = self.config.get("crosshair", {})
@@ -2308,8 +2315,13 @@ class DiorClientGUI:
                 self.overlay_win.update_crosshair(path, c_conf.get("size", 32), True)
 
         else:
-            # --- DEAKTIVIEREN ---
+            # --- DEAKTIVIEREN (Hier war der Fehler) ---
             self.is_hud_editing = False
+
+            # 1. WICHTIG: ZUERST den Edit-Modus im Overlay beenden!
+            # Damit verschwinden die grünen Rahmen und das Overlay weiß "Aha, keine Editierung mehr"
+            if self.overlay_win:
+                self.overlay_win.set_mouse_passthrough(True)
 
             # Buttons Blau färben
             if hasattr(self, 'btn_edit_hud'): self.btn_edit_hud.config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
@@ -2318,7 +2330,8 @@ class DiorClientGUI:
             if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="LAYOUT PER MAUS VERSCHIEBEN",
                                                                              bg="#0066ff")
 
-            # Reset
+            # 2. JETZT erst die Werte zurücksetzen
+            # Da der Edit-Mode oben schon ausgeschaltet wurde, versteckt sich die Streak-Anzeige jetzt korrekt
             if hasattr(self, 'temp_streak_backup'):
                 self.killstreak_count = self.temp_streak_backup
                 del self.temp_streak_backup
@@ -2330,11 +2343,10 @@ class DiorClientGUI:
             self.stop_overlay_logic()
 
             c_conf = self.config.get("crosshair", {})
-            self.overlay_win.update_crosshair(get_asset_path(c_conf.get("file", "")), c_conf.get("size", 32),
-                                              c_conf.get("active", True))
+            if self.overlay_win:
+                self.overlay_win.update_crosshair(get_asset_path(c_conf.get("file", "")), c_conf.get("size", 32),
+                                                  c_conf.get("active", True))
 
-            # Spiel-Modus wieder an
-            self.overlay_win.set_mouse_passthrough(True)
             self.add_log("UI: Edit-Modus AUS. Positionen gespeichert.")
             self.save_config()
 
@@ -2466,12 +2478,18 @@ class DiorClientGUI:
         self.killstreak_count = 5
         self.update_streak_display()
 
-        # Nach 3 Sekunden zurücksetzen und ausblenden (Zahl 0 oder Label hide)
+        # Nach 3 Sekunden zurücksetzen und ausblenden
         def reset_test():
+            # Wert zurücksetzen
             self.killstreak_count = old_c
-            if self.overlay_win and hasattr(self.overlay_win, 'streak_label'):
-                self.overlay_win.streak_label.hide()
-                self.overlay_win.streak_text_label.hide()
+
+            if self.overlay_win:
+                # KORREKTUR: Hier hieß es vorher 'streak_label', muss aber 'streak_bg_label' sein
+                if hasattr(self.overlay_win, 'streak_bg_label'):
+                    self.overlay_win.streak_bg_label.hide()
+
+                if hasattr(self.overlay_win, 'streak_text_label'):
+                    self.overlay_win.streak_text_label.hide()
 
         self.root.after(3000, reset_test)
 
