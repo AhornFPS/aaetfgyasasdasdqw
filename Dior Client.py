@@ -1,14 +1,12 @@
 import os
 import sys
 import ctypes
+
 # DPI Awareness erzwingen, bevor GUI-Module geladen werden
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1) # 1 = Process_System_DPI_Aware
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)  # 1 = Process_System_DPI_Aware
 except Exception:
     pass
-
-
-
 
 # Qt-Skalierung fixen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
@@ -32,7 +30,7 @@ import pyautogui
 import pydirectinput
 from ctypes import wintypes
 import sqlite3
-import tkinter.ttk as ttk # Für die Tabs im Menü
+import tkinter.ttk as ttk  # Für die Tabs im Menü
 import PyQt6
 # ... deine anderen Imports (os, sys, tkinter etc.) ...
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QGraphicsDropShadowEffect
@@ -45,9 +43,11 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def get_asset_path(filename):
     if not filename: return ""
     return os.path.join(BASE_DIR, "assets", filename)
+
 
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
@@ -355,7 +355,6 @@ class QtOverlay(QWidget):
         temp_label.show()
         QTimer.singleShot(duration, temp_label.deleteLater)
 
-
     def draw_streak_ui(self, img_path, count, cfg):
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide();
@@ -403,14 +402,17 @@ class QtOverlay(QWidget):
             cy = (self.height() // 2) - (self.crosshair_label.height() // 2) + off_y
             self.safe_move(self.crosshair_label, cx, cy);
             self.crosshair_label.show()
-            
+
+
 try:
     import pygame
+
     pygame.mixer.init()
     HAS_SOUND = True
 except ImportError:
     HAS_SOUND = False
     print("ACHTUNG: 'pygame' fehlt. Sounds werden nicht abgespielt.")
+
 
 # --- ERROR LOGGER ---
 def log_exception(exc_type, exc_value, exc_traceback):
@@ -419,12 +421,10 @@ def log_exception(exc_type, exc_value, exc_traceback):
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
 
 
-
-
-
 def get_short_name(path):
     """Gibt nur den Dateinamen ohne den kompletten Pfad zurück"""
     return os.path.basename(path) if path else "No file selected"
+
 
 sys.excepthook = log_exception
 
@@ -485,24 +485,30 @@ LOADOUT_MAP = {
 # 2. Mapping für Aktionen (Experience IDs)IDs
 PS2_EXP_DETECTION = {
     # --- SUPPORT ---
-    "Revive": ["7", "53"],                # Normal & Squad Revive
-    "Heal": ["4", "51"],                  # Heal & Squad Heal
-    "Resupply": ["34", "55"],             # Ammo Resupply
-    "Repair": ["6", "28", "31", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100", "129", "130", "131", "132", "133", "134", "135", "136", "137", "138", "139", "140", "141", "142", "276", "302", "303", "358", "359", "438", "439", "503", "505", "581", "584", "605", "606", "617", "618", "629", "630", "641", "642", "653", "656", "1375", "1378", "1451", "1452", "1481", "1482", "1545", "1549", "1562", "1571", "1638", "1639", "1740", "1743", "1806", "1809", "1871", "1873", "1991", "1994", "2153", "2156"],    # MAX, Turret, Flash Repair
+    "Revive": ["7", "53"],  # Normal & Squad Revive
+    "Heal": ["4", "51"],  # Heal & Squad Heal
+    "Resupply": ["34", "55"],  # Ammo Resupply
+    "Repair": ["6", "28", "31", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100",
+               "129", "130", "131", "132", "133", "134", "135", "136", "137", "138", "139", "140", "141", "142", "276",
+               "302", "303", "358", "359", "438", "439", "503", "505", "581", "584", "605", "606", "617", "618", "629",
+               "630", "641", "642", "653", "656", "1375", "1378", "1451", "1452", "1481", "1482", "1545", "1549",
+               "1562", "1571", "1638", "1639", "1740", "1743", "1806", "1809", "1871", "1873", "1991", "1994", "2153",
+               "2156"],  # MAX, Turret, Flash Repair
 
     # --- OBJECTIVE ---
-    "Point Control": ["15", "16", "272", "556", "557"], # Attack/Defend/Convert Control Point
-    "Sunderer Spawn": ["233"],            # Jemand spawnt an deinem Bus  (Logistics)
-    "Base Capture": ["19", "598"],        # Facility Captured
-    "Break Construction": ["604", "616", "628"], # Construction zerstört# Construction zerstört# Construction zerstört# Construction zerstört
+    "Point Control": ["15", "16", "272", "556", "557"],  # Attack/Defend/Convert Control Point
+    "Sunderer Spawn": ["233"],  # Jemand spawnt an deinem Bus  (Logistics)
+    "Base Capture": ["19", "598"],  # Facility Captured
+    "Break Construction": ["604", "616", "628"],
+    # Construction zerstört# Construction zerstört# Construction zerstört# Construction zerstört
     "Alert End": ["328"],
 
     # --- COMBAT & SPECIAL ----
-    "Road Kill": ["26"],                  # Bestätigter Roadkill XP
-    "Domination": ["10"],                 # Domination Kill
-    "Revenge": ["11"],                    # Revenge Kill
-    "Killstreak Stop": ["8"],             # "Stop the Killing"
-    "Gunner Assist": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"] # Assist XP für Piloten
+    "Road Kill": ["26"],  # Bestätigter Roadkill XP
+    "Domination": ["10"],  # Domination Kill
+    "Revenge": ["11"],  # Revenge Kill
+    "Killstreak Stop": ["8"],  # "Stop the Killing"
+    "Gunner Assist": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"]  # Assist XP für Piloten
 }
 
 # Globale Konstanten
@@ -510,7 +516,6 @@ S_ID = "s:1799912354"
 CONFIG_FILE = "config.json"
 CHAR_FILE = "characters.txt"
 PLAYER_BACKUP = "player_cache_backup.txt"
-
 
 CHEAT_OPTIONS = [
     "Aimbot", "Magic Bullet", "Hitbox Mod", "Triggerbot",
@@ -554,6 +559,7 @@ class DiorClientGUI:
             # --- NEU / KORRIGIERT ---
             self.init_db()
             self.char_data = self.load_chars_from_db() or {}
+            self.outfit_cache = {}
             self.name_cache = self.load_cache_from_db() or {}
 
             # 1. Zuerst die Config laden
@@ -566,8 +572,6 @@ class DiorClientGUI:
                 self.gif_path = saved_bg
             else:
                 self.gif_path = get_asset_path("background.jpg")
-
-
 
             # Pfade
             self.ps2_dir = self.config.get("ps2_path", "")
@@ -649,7 +653,8 @@ class DiorClientGUI:
         self.ps2_running = False
         while True:
             try:
-                output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode("cp1252", errors="ignore")
+                output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
+                    "cp1252", errors="ignore")
                 is_now_running = "PlanetSide2_x64.exe" in output
                 if is_now_running != self.ps2_running:
                     self.ps2_running = is_now_running
@@ -659,7 +664,8 @@ class DiorClientGUI:
                     else:
                         self.add_log("MONITOR: PlanetSide 2 beendet.")
                         self.root.after(0, self.stop_overlay_logic)
-            except: pass
+            except:
+                pass
             time.sleep(5)
 
     def auto_enable_overlay(self):
@@ -817,7 +823,7 @@ class DiorClientGUI:
                     if len(parts) >= 6:
                         item_id = parts[0]
                         item_name = parts[3]
-                        weapon_class = parts[1] # 'none', 'max', 'infantry', 'vehicle'
+                        weapon_class = parts[1]  # 'none', 'max', 'infantry', 'vehicle'
 
                         # Wir speichern es so, dass du später leicht darauf zugreifen kannst
                         self.item_db[item_id] = {
@@ -841,13 +847,18 @@ class DiorClientGUI:
             conn = sqlite3.connect("ps2_master.db")
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            # Hier muss character_id stehen!
-            cursor.execute("SELECT character_id, name FROM player_cache")
+            # ÄNDERUNG: Wir laden jetzt auch outfit_tag
+            cursor.execute("SELECT character_id, name, outfit_tag FROM player_cache")
             rows = cursor.fetchall()
             conn.close()
+
+            # Wir füllen direkt den Cache für Outfits
+            self.outfit_cache = {row['character_id']: row['outfit_tag'] for row in rows}
+
             return {row['character_id']: row['name'] for row in rows}
         except Exception as e:
             self.add_log(f"DB Error: {e}")
+            self.outfit_cache = {}  # Fallback
             return {}
 
     def load_config(self):
@@ -997,11 +1008,11 @@ class DiorClientGUI:
         except Exception as e:
             print(f"Fehler beim Laden des Hintergrunds: {e}")
 
-
     def setup_ui_elements(self):
         w = self.root.winfo_width() if self.root.winfo_width() > 10 else 850
         mid = w // 2
-        self.title_id = self.canvas.create_text(mid, 50, text="PLANETSIDE 2 MASTER CONTROL", fill="#00f2ff", font=("Arial", 22, "bold"))
+        self.title_id = self.canvas.create_text(mid, 50, text="PLANETSIDE 2 MASTER CONTROL", fill="#00f2ff",
+                                                font=("Arial", 22, "bold"))
 
         btn_nav_frame = tk.Frame(self.root, bg="#111")
         btn_style = {"bg": "#111", "fg": "white", "relief": "flat", "width": 14, "font": ("Arial", 10, "bold")}
@@ -1009,8 +1020,9 @@ class DiorClientGUI:
         tk.Button(btn_nav_frame, text="DASHBOARD", command=self.show_dashboard, **btn_style).pack(side="left", padx=2)
         tk.Button(btn_nav_frame, text="LAUNCHER", command=self.show_launcher, **btn_style).pack(side="left", padx=2)
         tk.Button(btn_nav_frame, text="ENFORCER", command=self.show_enforcer, **btn_style).pack(side="left", padx=2)
-        #tk.Button(btn_nav_frame, text="NSO TELEPORTER", command=self.show_nso_teleporter, **btn_style).pack(side="left", padx=2)
-        tk.Button(btn_nav_frame, text="Ingame Overlay", command=self.show_ingame_overlay_tab, **btn_style).pack(side="left", padx=2)
+        # tk.Button(btn_nav_frame, text="NSO TELEPORTER", command=self.show_nso_teleporter, **btn_style).pack(side="left", padx=2)
+        tk.Button(btn_nav_frame, text="Ingame Overlay", command=self.show_ingame_overlay_tab, **btn_style).pack(
+            side="left", padx=2)
 
         # --- CHARACTERS BUTTON MIT HOVER BINDING (KORRIGIERT) ---
         char_btn = tk.Button(btn_nav_frame, text="CHARACTERS",
@@ -1028,7 +1040,8 @@ class DiorClientGUI:
 
     def setup_char_sub_menu(self):
         # Das Frame für das Untermenü
-        self.sub_menu_frame = tk.Frame(self.root, bg="#0a141d", bd=1, relief="solid", highlightbackground="#00f2ff", highlightthickness=1)
+        self.sub_menu_frame = tk.Frame(self.root, bg="#0a141d", bd=1, relief="solid", highlightbackground="#00f2ff",
+                                       highlightthickness=1)
 
         self.sub_items = [
             "Overview", "Weapon stats", "Vehicle stats", "Sessions",
@@ -1052,11 +1065,12 @@ class DiorClientGUI:
     def animate_api_light(self, canvas, light_id, color_type, step=0):
         import math
         brightness = (math.sin(step) + 1) / 4 + 0.5
-        color_hex = f'#{0 if color_type=="green" else int(255*brightness):02x}{int(255*brightness) if color_type=="green" else 0:02x}00'
+        color_hex = f'#{0 if color_type == "green" else int(255 * brightness):02x}{int(255 * brightness) if color_type == "green" else 0:02x}00'
         try:
             canvas.itemconfig(light_id, fill=color_hex, outline="#333")
             self.root.after(50, lambda: self.animate_api_light(canvas, light_id, color_type, step + 0.1))
-        except: pass
+        except:
+            pass
 
     def show_dashboard(self):
         # 1. Zuerst IMMER aufräumen
@@ -1075,14 +1089,16 @@ class DiorClientGUI:
         dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
         self.dash_widgets = {"frame": dash_frame, "factions": {}}
 
-        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a", fg="#00f2ff").pack(pady=15)
+        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a",
+                 fg="#00f2ff").pack(pady=15)
 
         # 3. Größeres Canvas für den Graphen
         g_canvas = tk.Canvas(dash_frame, width=800, height=200, bg="#050505", highlightthickness=0)
         g_canvas.pack(pady=10, padx=20)
         self.dash_widgets["canvas"] = g_canvas
 
-        self.total_players_label = tk.Label(dash_frame, text="Total Players: 0", font=("Consolas", 22, "bold"), bg="#1a1a1a", fg="#00f2ff")
+        self.total_players_label = tk.Label(dash_frame, text="Total Players: 0", font=("Consolas", 22, "bold"),
+                                            bg="#1a1a1a", fg="#00f2ff")
         self.total_players_label.pack(pady=10)
 
         # 4. Fraktionen Grid
@@ -1093,23 +1109,26 @@ class DiorClientGUI:
             f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
             f_box.pack(side="left", expand=True, fill="both", padx=5)
 
-            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5,0))
+            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
             p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
 
             # Balken
             bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=10); bar_bg.pack_propagate(False)
+            bar_bg.pack(pady=10);
+            bar_bg.pack_propagate(False)
             bar = tk.Frame(bar_bg, bg=color, height=8)
             bar.place(x=0, y=0, width=0)
 
-            tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(pady=(15,0))
+            tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
+                pady=(15, 0))
 
             # --- TABELLEN-HEADER ---
             list_frame = tk.Frame(f_box, bg="#1a1a1a")
             list_frame.pack(fill="x", padx=5, pady=5)
 
-            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5), ("KDA", 6, 5)]
+            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
+                       ("KDA", 6, 5)]
             for text, col, width in headers:
                 h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
                                  bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
@@ -1156,7 +1175,7 @@ class DiorClientGUI:
             points = []
             if len(self.pop_history) > 1:
                 for idx, val in enumerate(self.pop_history):
-                    x = off_l + (idx * (draw_w / (len(self.pop_history)-1)))
+                    x = off_l + (idx * (draw_w / (len(self.pop_history) - 1)))
                     y = (total_h - off_b) - (val * (draw_h / max_pop))
                     y = max(off_t, min(y, total_h - off_b))
                     points.extend([x, y])
@@ -1169,8 +1188,10 @@ class DiorClientGUI:
                     x_p = off_l + (i * (draw_w / 100))
                     sec_display = 100 - i
                     time_text = "NOW" if sec_display == 0 else f"-{sec_display}s"
-                    canvas.create_text(x_p, off_t - 5, text=time_text, fill="#00f2ff", font=("Arial", 7, "bold"), anchor="s")
-                canvas.create_polygon([off_l, total_h - off_b] + points + [total_w - off_r, total_h - off_b], fill="#001a1a")
+                    canvas.create_text(x_p, off_t - 5, text=time_text, fill="#00f2ff", font=("Arial", 7, "bold"),
+                                       anchor="s")
+                canvas.create_polygon([off_l, total_h - off_b] + points + [total_w - off_r, total_h - off_b],
+                                      fill="#001a1a")
                 canvas.create_line(points, fill="#00f2ff", width=2, smooth=True)
                 canvas.create_line(off_l, off_t, off_l, total_h - off_b, fill="#333")
                 canvas.create_line(off_l, total_h - off_b, total_w - off_r, total_h - off_b, fill="#333")
@@ -1190,7 +1211,7 @@ class DiorClientGUI:
             # 2. Filter: Wer soll in die Liste? (10 Min Inaktivitäts-Check)
             active_players = []
             for p in self.session_stats.values():
-                if isinstance(p, dict): # NUR wenn es ein Dictionary ist (kein int!)
+                if isinstance(p, dict):  # NUR wenn es ein Dictionary ist (kein int!)
                     last_active = p.get("last_kill_time")
                     if last_active is None or (now - last_active) < 600:
                         active_players.append(p)
@@ -1212,7 +1233,8 @@ class DiorClientGUI:
                     # Wir behalten nur Reihe 0 (den Header)
                     try:
                         if int(child.grid_info()["row"]) > 0: child.destroy()
-                    except: pass
+                    except:
+                        pass
 
                 # Spieler dieser Fraktion sortieren
                 f_players = [p for p in active_players if p.get("faction") == name]
@@ -1248,7 +1270,7 @@ class DiorClientGUI:
 
                     # Die Liste der Daten für die Labels
                     row_data = [
-                        (display_name[:32], 32, "w", "#ccc"), # Hier nutzen wir den geupdateten Namen
+                        (display_name[:32], 32, "w", "#ccc"),  # Hier nutzen wir den geupdateten Namen
                         (k, 4, "center", "white"),
                         (f"{kpm:.1f}", 5, "center", self.get_kpm_color(kpm)),
                         (d, 4, "center", "white"),
@@ -1260,7 +1282,8 @@ class DiorClientGUI:
                     # Labels zeichnen
                     for col_idx, (val, width, anchor, fg) in enumerate(row_data):
                         tk.Label(list_frame, text=val, font=("Consolas", 10),
-                                 bg=bg_col, fg=fg, anchor=anchor, width=width).grid(row=row_idx, column=col_idx, sticky="nsew", padx=1)
+                                 bg=bg_col, fg=fg, anchor=anchor, width=width).grid(row=row_idx, column=col_idx,
+                                                                                    sticky="nsew", padx=1)
 
         except Exception as e:
             print(f"DEBUG: Dashboard Update failed: {e}")
@@ -1278,7 +1301,6 @@ class DiorClientGUI:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
             print(f"Fehler beim Speichern der config.json: {e}")
-
 
     def destroy_overlay_window(self):
         if self.overlay_win:
@@ -1306,7 +1328,7 @@ class DiorClientGUI:
 
         # 2. Das aktuell gewählte Event-Bild (Kill/Death) anzeigen
         etype = self.var_event_sel.get()
-        img_path = self.ent_evt_img.get() # Pfad aus dem Textfeld lesen
+        img_path = self.ent_evt_img.get()  # Pfad aus dem Textfeld lesen
 
         if img_path and os.path.exists(img_path):
             try:
@@ -1387,7 +1409,7 @@ class DiorClientGUI:
                 self.scale_ey.set(new_y)
 
             self.dragging_item = None
-            self.save_event_ui_data() # Automatisch speichern
+            self.save_event_ui_data()  # Automatisch speichern
 
     def do_drag(self, event):
         """Verschiebt das Bild live mit der Maus"""
@@ -1434,6 +1456,7 @@ class DiorClientGUI:
                         pygame.mixer.Sound(sound_path).play()
                     except:
                         pass
+
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
         if not hasattr(self, 'ovl_canvas'): return
@@ -1465,7 +1488,8 @@ class DiorClientGUI:
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("TNotebook", background="#1e1e1e", borderwidth=0)
-        style.configure("TNotebook.Tab", background="#333", foreground="white", font=('Consolas', 10, 'bold'), padding=[10, 5])
+        style.configure("TNotebook.Tab", background="#333", foreground="white", font=('Consolas', 10, 'bold'),
+                        padding=[10, 5])
         style.map("TNotebook.Tab", background=[("selected", "#00f2ff")], foreground=[("selected", "black")])
 
         # Notebook erstellen und binden
@@ -1517,7 +1541,6 @@ class DiorClientGUI:
                                        f"Overlay {'An' if self.overlay_active.get() else 'Aus'}"))
         check_btn.pack(pady=10)
 
-
         # =========================================================
         # TAB 2: EVENTS (WIEDER EINGEFÜGT, DAMIT DER FEHLER WEG GEHT)
         # =========================================================
@@ -1527,41 +1550,63 @@ class DiorClientGUI:
         event_categories = {
             "STANDARD KILLS": ["Kill", "Headshot", "Death", "Hitmarker", "Team Kill", "Team Kill Victim"],
             "STREAK MEILENSTEINE": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
-            "MULTI KILL RUSH": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill", "Holy Shit"],
-            "SPEZIAL EVENTS": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "Road Kill", "Roadkill Victim", "Spitfire Kill", "Gunner Kill", "Tankmine Kill", "AP-Mine Kill"],
+            "MULTI KILL RUSH": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill",
+                                "Ludicrous Kill", "Holy Shit"],
+            "SPEZIAL EVENTS": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill",
+                               "Road Kill", "Roadkill Victim", "Spitfire Kill", "Gunner Kill", "Tankmine Kill",
+                               "AP-Mine Kill"],
             "SUPPORT & TEAM": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction"],
-            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist","Alert End", "Alert Win"],
+            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
+                           "Alert Win"],
             "SYSTEM / LOGIN": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
 
-        grid_frame = tk.Frame(tab_events, bg="#1a1a1a"); grid_frame.pack(fill="both", expand=True, pady=10, padx=5)
+        grid_frame = tk.Frame(tab_events, bg="#1a1a1a");
+        grid_frame.pack(fill="both", expand=True, pady=10, padx=5)
         self.var_event_sel = tk.StringVar(value="Kill")
-        self.lbl_current_edit = tk.Label(tab_events, text="EDITING: Kill", font=("Consolas", 14, "bold"), bg="#1a1a1a", fg="#00ff00"); self.lbl_current_edit.pack(pady=(0, 5))
+        self.lbl_current_edit = tk.Label(tab_events, text="EDITING: Kill", font=("Consolas", 14, "bold"), bg="#1a1a1a",
+                                         fg="#00ff00");
+        self.lbl_current_edit.pack(pady=(0, 5))
 
         for cat_name, items in event_categories.items():
-            col_frame = tk.Frame(grid_frame, bg="#222", bd=1, relief="solid"); col_frame.pack(side="left", fill="both", padx=2, expand=True)
-            tk.Label(col_frame, text=cat_name, bg="#333", fg="#00f2ff", font=("Arial", 7, "bold")).pack(fill="x", pady=(0,2))
+            col_frame = tk.Frame(grid_frame, bg="#222", bd=1, relief="solid");
+            col_frame.pack(side="left", fill="both", padx=2, expand=True)
+            tk.Label(col_frame, text=cat_name, bg="#333", fg="#00f2ff", font=("Arial", 7, "bold")).pack(fill="x",
+                                                                                                        pady=(0, 2))
             for item in items:
-                tk.Button(col_frame, text=item, bg="#1a1a1a", fg="#ccc", font=("Arial", 8), bd=0, activebackground="#00f2ff", activeforeground="black",
+                tk.Button(col_frame, text=item, bg="#1a1a1a", fg="#ccc", font=("Arial", 8), bd=0,
+                          activebackground="#00f2ff", activeforeground="black",
                           command=lambda x=item: self.select_event_from_grid(x)).pack(fill="x", pady=0)
 
         # Settings Bereich (Hier fehlten die widgets!)
-        settings_frame = tk.Frame(tab_events, bg="#1a1a1a"); settings_frame.pack(fill="x", pady=10)
-        
-        tk.Label(settings_frame, text="Image (PNG):", bg="#1a1a1a", fg="white").grid(row=0, column=0, sticky="e", padx=5)
-        self.ent_evt_img = tk.Entry(settings_frame, width=30, bg="#111", fg="#00f2ff") # <--- DAS HAT GEFEHLT
+        settings_frame = tk.Frame(tab_events, bg="#1a1a1a");
+        settings_frame.pack(fill="x", pady=10)
+
+        tk.Label(settings_frame, text="Image (PNG):", bg="#1a1a1a", fg="white").grid(row=0, column=0, sticky="e",
+                                                                                     padx=5)
+        self.ent_evt_img = tk.Entry(settings_frame, width=30, bg="#111", fg="#00f2ff")  # <--- DAS HAT GEFEHLT
         self.ent_evt_img.grid(row=0, column=1, sticky="w")
-        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_img, "png"), bg="#333", fg="white", font=("Arial", 8)).grid(row=0, column=2, padx=5)
+        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_img, "png"), bg="#333",
+                  fg="white", font=("Arial", 8)).grid(row=0, column=2, padx=5)
 
         tk.Label(settings_frame, text="Sound:", bg="#1a1a1a", fg="white").grid(row=1, column=0, sticky="e", padx=5)
         self.ent_evt_snd = tk.Entry(settings_frame, width=30, bg="#111", fg="#00f2ff")
         self.ent_evt_snd.grid(row=1, column=1, sticky="w")
-        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_snd, "audio"), bg="#333", fg="white", font=("Arial", 8)).grid(row=1, column=2, padx=5)
+        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_snd, "audio"), bg="#333",
+                  fg="white", font=("Arial", 8)).grid(row=1, column=2, padx=5)
 
-        sl_frame = tk.Frame(tab_events, bg="#1a1a1a"); sl_frame.pack(fill="x", padx=20)
-        self.scale_ex = tk.Scale(sl_frame, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="X Offset"); self.scale_ex.pack(side="left", fill="x", expand=True, padx=5)
-        self.scale_ey = tk.Scale(sl_frame, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="Y Offset"); self.scale_ey.pack(side="left", fill="x", expand=True, padx=5)
-        self.scale_png_size = tk.Scale(sl_frame, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a", fg="#00f2ff", label="Scale"); self.scale_png_size.set(1.0); self.scale_png_size.pack(side="left", fill="x", expand=True, padx=5)
+        sl_frame = tk.Frame(tab_events, bg="#1a1a1a");
+        sl_frame.pack(fill="x", padx=20)
+        self.scale_ex = tk.Scale(sl_frame, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
+                                 label="X Offset");
+        self.scale_ex.pack(side="left", fill="x", expand=True, padx=5)
+        self.scale_ey = tk.Scale(sl_frame, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
+                                 label="Y Offset");
+        self.scale_ey.pack(side="left", fill="x", expand=True, padx=5)
+        self.scale_png_size = tk.Scale(sl_frame, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
+                                       fg="#00f2ff", label="Scale");
+        self.scale_png_size.set(1.0);
+        self.scale_png_size.pack(side="left", fill="x", expand=True, padx=5)
 
         dur_frame = tk.Frame(tab_events, bg="#1a1a1a")
         dur_frame.pack(pady=5)
@@ -1575,10 +1620,12 @@ class DiorClientGUI:
         self.ent_evt_duration.insert(0, "3000")
         self.ent_evt_duration.pack(side="left", padx=5)
 
-        btn_box = tk.Frame(tab_events, bg="#1a1a1a"); btn_box.pack(pady=15)
-        tk.Button(btn_box, text="SAVE THIS EVENT", bg="#004400", fg="white", width=20, command=self.save_event_ui_data).pack(side="left", padx=10)
-        tk.Button(btn_box, text="TEST PREVIEW", bg="#444", fg="white", width=20, command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left", padx=10)
-
+        btn_box = tk.Frame(tab_events, bg="#1a1a1a");
+        btn_box.pack(pady=15)
+        tk.Button(btn_box, text="SAVE THIS EVENT", bg="#004400", fg="white", width=20,
+                  command=self.save_event_ui_data).pack(side="left", padx=10)
+        tk.Button(btn_box, text="TEST PREVIEW", bg="#444", fg="white", width=20,
+                  command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left", padx=10)
 
         # =========================================================
         # TAB 3: KILLSTREAK
@@ -1587,39 +1634,57 @@ class DiorClientGUI:
         self.ovl_notebook.add(tab_streak, text=" KILLSTREAK ")
         s_conf = self.overlay_config.get("streak", {})
 
-        tk.Label(tab_streak, text="Streak Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(10,0))
-        strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a"); strk_img_f.pack()
+        tk.Label(tab_streak, text="Streak Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(10, 0))
+        strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        strk_img_f.pack()
         self.ent_streak_img = tk.Entry(strk_img_f, width=40, bg="#111", fg="#00f2ff")
         self.ent_streak_img.pack(side="left")
         self.ent_streak_img.insert(0, get_short_name(s_conf.get("img", "KS_Counter.png")))
-        tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333", fg="white").pack(side="left")
+        tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333",
+                  fg="white").pack(side="left")
 
         tk.Label(tab_streak, text="Position BILD (Offset):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(15, 0))
-        img_pos_f = tk.Frame(tab_streak, bg="#1a1a1a"); img_pos_f.pack(fill="x", padx=50)
-        self.scale_sx = tk.Scale(img_pos_f, from_=-1000, to=1000, orient="horizontal", bg="#1a1a1a", fg="white", label="Bild X")
-        self.scale_sx.set(s_conf.get("x", 0)); self.scale_sx.pack(side="left", fill="x", expand=True)
-        self.scale_sy = tk.Scale(img_pos_f, from_=-700, to=700, orient="horizontal", bg="#1a1a1a", fg="white", label="Bild Y")
-        self.scale_sy.set(s_conf.get("y", 100)); self.scale_sy.pack(side="left", fill="x", expand=True)
+        img_pos_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        img_pos_f.pack(fill="x", padx=50)
+        self.scale_sx = tk.Scale(img_pos_f, from_=-1000, to=1000, orient="horizontal", bg="#1a1a1a", fg="white",
+                                 label="Bild X")
+        self.scale_sx.set(s_conf.get("x", 0));
+        self.scale_sx.pack(side="left", fill="x", expand=True)
+        self.scale_sy = tk.Scale(img_pos_f, from_=-700, to=700, orient="horizontal", bg="#1a1a1a", fg="white",
+                                 label="Bild Y")
+        self.scale_sy.set(s_conf.get("y", 100));
+        self.scale_sy.pack(side="left", fill="x", expand=True)
 
         tk.Label(tab_streak, text="Position ZAHL (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 0))
-        txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a"); txt_pos_f.pack(fill="x", padx=50)
-        self.scale_tx = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white", label="Zahl X Offset")
-        self.scale_tx.set(s_conf.get("tx", 0)); self.scale_tx.pack(side="left", fill="x", expand=True)
-        self.scale_ty = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white", label="Zahl Y Offset")
-        self.scale_ty.set(s_conf.get("ty", 0)); self.scale_ty.pack(side="left", fill="x", expand=True)
+        txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        txt_pos_f.pack(fill="x", padx=50)
+        self.scale_tx = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
+                                 label="Zahl X Offset")
+        self.scale_tx.set(s_conf.get("tx", 0));
+        self.scale_tx.pack(side="left", fill="x", expand=True)
+        self.scale_ty = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
+                                 label="Zahl Y Offset")
+        self.scale_ty.set(s_conf.get("ty", 0));
+        self.scale_ty.pack(side="left", fill="x", expand=True)
 
         tk.Label(tab_streak, text="Skalierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
-        self.scale_s_size = tk.Scale(tab_streak, from_=0.1, to=3.0, resolution=0.05, orient="horizontal", bg="#1a1a1a", fg="white")
-        self.scale_s_size.set(s_conf.get("scale", 1.0)); self.scale_s_size.pack(fill="x", padx=50)
+        self.scale_s_size = tk.Scale(tab_streak, from_=0.1, to=3.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
+                                     fg="white")
+        self.scale_s_size.set(s_conf.get("scale", 1.0));
+        self.scale_s_size.pack(fill="x", padx=50)
 
-        s_btn_box = tk.Frame(tab_streak, bg="#1a1a1a"); s_btn_box.pack(pady=20)
-        tk.Button(s_btn_box, text="SAVE STREAK", bg="#004400", fg="white", width=15, height=2, command=self.save_streak_settings).pack(side="left", padx=10)
-        
+        s_btn_box = tk.Frame(tab_streak, bg="#1a1a1a");
+        s_btn_box.pack(pady=20)
+        tk.Button(s_btn_box, text="SAVE STREAK", bg="#004400", fg="white", width=15, height=2,
+                  command=self.save_streak_settings).pack(side="left", padx=10)
+
         # NEU: Drag & Drop Button für Killstreak
-        self.btn_edit_streak = tk.Button(s_btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25, command=self.toggle_hud_edit_mode)
+        self.btn_edit_streak = tk.Button(s_btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
+                                         width=25, command=self.toggle_hud_edit_mode)
         self.btn_edit_streak.pack(side="left", padx=10)
-        
-        tk.Button(s_btn_box, text="TEST (5 KILLS)", bg="#444", fg="white", width=15, height=2, command=self.test_streak_visuals).pack(side="left", padx=10)
+
+        tk.Button(s_btn_box, text="TEST (5 KILLS)", bg="#444", fg="white", width=15, height=2,
+                  command=self.test_streak_visuals).pack(side="left", padx=10)
 
         # Daten laden (JETZT erst aufrufen, wo ent_evt_img existiert!)
         self.load_event_ui_data("Kill")
@@ -1672,9 +1737,6 @@ class DiorClientGUI:
                                         width=30, command=self.toggle_hud_edit_mode)
         self.btn_edit_cross.pack(pady=5)
 
-
-
-
         # =========================================================
         # TAB 5: SESSION STATS & KILLFEED
         # =========================================================
@@ -1682,52 +1744,93 @@ class DiorClientGUI:
         self.ovl_notebook.add(tab_stats, text=" SESSION STATS & FEED ")
 
         st_conf = self.overlay_config.get("stats_widget", {"active": True, "x": -500, "y": -300})
-        
-        tk.Label(tab_stats, text="--- SESSION STATS WIDGET ---", font=("Consolas", 12, "bold"), bg="#1a1a1a", fg="#00f2ff").pack(pady=(10, 5))
+
+        tk.Label(tab_stats, text="--- SESSION STATS WIDGET ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
+                 fg="#00f2ff").pack(pady=(10, 5))
         self.var_stats_active = tk.BooleanVar(value=st_conf.get("active", True))
-        tk.Checkbutton(tab_stats, text="SHOW LIVE STATS", variable=self.var_stats_active, bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack()
+        tk.Checkbutton(tab_stats, text="SHOW LIVE STATS", variable=self.var_stats_active, bg="#1a1a1a", fg="#00ff00",
+                       selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack()
 
-        tk.Label(tab_stats, text="Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5,0))
-        st_img_f = tk.Frame(tab_stats, bg="#1a1a1a"); st_img_f.pack()
-        self.ent_stats_img = tk.Entry(st_img_f, width=30, bg="#111", fg="#00f2ff"); self.ent_stats_img.pack(side="left")
+        tk.Label(tab_stats, text="Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
+        st_img_f = tk.Frame(tab_stats, bg="#1a1a1a");
+        st_img_f.pack()
+        self.ent_stats_img = tk.Entry(st_img_f, width=30, bg="#111", fg="#00f2ff");
+        self.ent_stats_img.pack(side="left")
         self.ent_stats_img.insert(0, get_short_name(st_conf.get("img", "")))
-        tk.Button(st_img_f, text="...", command=lambda: self.browse_file(self.ent_stats_img, "png"), bg="#333", fg="white", width=3).pack(side="left")
+        tk.Button(st_img_f, text="...", command=lambda: self.browse_file(self.ent_stats_img, "png"), bg="#333",
+                  fg="white", width=3).pack(side="left")
 
-        tk.Label(tab_stats, text="Widget Position (X / Y Offset):", bg="#1a1a1a", fg="#ccc").pack(pady=(10,0))
-        st_pos_f = tk.Frame(tab_stats, bg="#1a1a1a"); st_pos_f.pack(fill="x", padx=20)
-        self.scale_stx = tk.Scale(st_pos_f, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="white", label="X Offset"); self.scale_stx.set(st_conf.get("x", -500)); self.scale_stx.pack(side="left", fill="x", expand=True)
-        self.scale_sty = tk.Scale(st_pos_f, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="white", label="Y Offset"); self.scale_sty.set(st_conf.get("y", -300)); self.scale_sty.pack(side="left", fill="x", expand=True)
+        tk.Label(tab_stats, text="Widget Position (X / Y Offset):", bg="#1a1a1a", fg="#ccc").pack(pady=(10, 0))
+        st_pos_f = tk.Frame(tab_stats, bg="#1a1a1a");
+        st_pos_f.pack(fill="x", padx=20)
+        self.scale_stx = tk.Scale(st_pos_f, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="white",
+                                  label="X Offset");
+        self.scale_stx.set(st_conf.get("x", -500));
+        self.scale_stx.pack(side="left", fill="x", expand=True)
+        self.scale_sty = tk.Scale(st_pos_f, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="white",
+                                  label="Y Offset");
+        self.scale_sty.set(st_conf.get("y", -300));
+        self.scale_sty.pack(side="left", fill="x", expand=True)
 
-        tk.Label(tab_stats, text="Text Feinjustierung (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(pady=(10,0))
-        st_adj_f = tk.Frame(tab_stats, bg="#1a1a1a"); st_adj_f.pack(fill="x", padx=20)
-        self.scale_st_tx = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white", label="Text X"); self.scale_st_tx.set(st_conf.get("tx", 0)); self.scale_st_tx.pack(side="left", fill="x", expand=True)
-        self.scale_st_ty = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white", label="Text Y"); self.scale_st_ty.set(st_conf.get("ty", 0)); self.scale_st_ty.pack(side="left", fill="x", expand=True)
+        tk.Label(tab_stats, text="Text Feinjustierung (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(
+            pady=(10, 0))
+        st_adj_f = tk.Frame(tab_stats, bg="#1a1a1a");
+        st_adj_f.pack(fill="x", padx=20)
+        self.scale_st_tx = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
+                                    label="Text X");
+        self.scale_st_tx.set(st_conf.get("tx", 0));
+        self.scale_st_tx.pack(side="left", fill="x", expand=True)
+        self.scale_st_ty = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
+                                    label="Text Y");
+        self.scale_st_ty.set(st_conf.get("ty", 0));
+        self.scale_st_ty.pack(side="left", fill="x", expand=True)
 
-        tk.Label(tab_stats, text="Bild Skalierung:", bg="#1a1a1a", fg="white").pack(pady=(5,0))
-        self.scale_st_scale = tk.Scale(tab_stats, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a", fg="#00f2ff"); self.scale_st_scale.set(st_conf.get("scale", 1.0)); self.scale_st_scale.pack(fill="x", padx=100)
+        tk.Label(tab_stats, text="Bild Skalierung:", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
+        self.scale_st_scale = tk.Scale(tab_stats, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
+                                       fg="#00f2ff");
+        self.scale_st_scale.set(st_conf.get("scale", 1.0));
+        self.scale_st_scale.pack(fill="x", padx=100)
 
         kf_conf = self.overlay_config.get("killfeed", {"x": -800, "y": 200})
-        tk.Label(tab_stats, text="--- KILLFEED POSITION (OFFSET) ---", font=("Consolas", 12, "bold"), bg="#1a1a1a", fg="#ff4444").pack(pady=(20, 5))
-        kf_pos_f = tk.Frame(tab_stats, bg="#1a1a1a"); kf_pos_f.pack(fill="x", padx=20)
-        self.scale_kfx = tk.Scale(kf_pos_f, from_=-960, to=960, orient="horizontal", bg="#1a1a1a", fg="white", label="Feed X Offset"); self.scale_kfx.set(kf_conf.get("x", -800)); self.scale_kfx.pack(side="left", fill="x", expand=True)
-        self.scale_kfy = tk.Scale(kf_pos_f, from_=-540, to=540, orient="horizontal", bg="#1a1a1a", fg="white", label="Feed Y Offset"); self.scale_kfy.set(kf_conf.get("y", 200)); self.scale_kfy.pack(side="left", fill="x", expand=True)
-        
-        tk.Label(tab_stats, text="Headshot Icon (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15,0))
-        hs_img_f = tk.Frame(tab_stats, bg="#1a1a1a"); hs_img_f.pack()
-        self.ent_hs_icon = tk.Entry(hs_img_f, width=30, bg="#111", fg="#00f2ff"); self.ent_hs_icon.pack(side="left"); self.ent_hs_icon.insert(0, get_short_name(kf_conf.get("hs_icon", "headshot.png")))
-        tk.Button(hs_img_f, text="...", command=lambda: self.browse_file(self.ent_hs_icon, "png"), bg="#333", fg="white", width=3).pack(side="left")
-         
-        self.var_show_revives = tk.BooleanVar(value=kf_conf.get("show_revives", True))
-        tk.Checkbutton(tab_stats, text="Revives im Killfeed anzeigen", variable=self.var_show_revives, bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack(pady=5) 
+        tk.Label(tab_stats, text="--- KILLFEED POSITION (OFFSET) ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
+                 fg="#ff4444").pack(pady=(20, 5))
+        kf_pos_f = tk.Frame(tab_stats, bg="#1a1a1a");
+        kf_pos_f.pack(fill="x", padx=20)
+        self.scale_kfx = tk.Scale(kf_pos_f, from_=-960, to=960, orient="horizontal", bg="#1a1a1a", fg="white",
+                                  label="Feed X Offset");
+        self.scale_kfx.set(kf_conf.get("x", -800));
+        self.scale_kfx.pack(side="left", fill="x", expand=True)
+        self.scale_kfy = tk.Scale(kf_pos_f, from_=-540, to=540, orient="horizontal", bg="#1a1a1a", fg="white",
+                                  label="Feed Y Offset");
+        self.scale_kfy.set(kf_conf.get("y", 200));
+        self.scale_kfy.pack(side="left", fill="x", expand=True)
 
-        btn_box = tk.Frame(tab_stats, bg="#1a1a1a"); btn_box.pack(pady=20)
-        tk.Button(btn_box, text="SAVE ALL SETTINGS", bg="#004400", fg="white", width=20, height=2, command=self.save_stats_config).pack(side="left", padx=10)
-        
+        tk.Label(tab_stats, text="Headshot Icon (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15, 0))
+        hs_img_f = tk.Frame(tab_stats, bg="#1a1a1a");
+        hs_img_f.pack()
+        self.ent_hs_icon = tk.Entry(hs_img_f, width=30, bg="#111", fg="#00f2ff");
+        self.ent_hs_icon.pack(side="left");
+        self.ent_hs_icon.insert(0, get_short_name(kf_conf.get("hs_icon", "headshot.png")))
+        tk.Button(hs_img_f, text="...", command=lambda: self.browse_file(self.ent_hs_icon, "png"), bg="#333",
+                  fg="white", width=3).pack(side="left")
+
+        self.var_show_revives = tk.BooleanVar(value=kf_conf.get("show_revives", True))
+        tk.Checkbutton(tab_stats, text="Revives im Killfeed anzeigen", variable=self.var_show_revives, bg="#1a1a1a",
+                       fg="#00ff00", selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack(
+            pady=5)
+
+        btn_box = tk.Frame(tab_stats, bg="#1a1a1a");
+        btn_box.pack(pady=20)
+        tk.Button(btn_box, text="SAVE ALL SETTINGS", bg="#004400", fg="white", width=20, height=2,
+                  command=self.save_stats_config).pack(side="left", padx=10)
+
         # NEU: Drag & Drop Button für Stats/Feed
-        self.btn_edit_hud = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25, height=2, command=self.toggle_hud_edit_mode)
+        self.btn_edit_hud = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25,
+                                      height=2, command=self.toggle_hud_edit_mode)
         self.btn_edit_hud.pack(side="left", padx=10)
-        
-        tk.Button(btn_box, text="TEST UI", bg="#444", fg="white", width=15, height=2, command=self.test_stats_visuals).pack(side="left", padx=10)
+
+        tk.Button(btn_box, text="TEST UI", bg="#444", fg="white", width=15, height=2,
+                  command=self.test_stats_visuals).pack(side="left", padx=10)
         self.scale_st_font = tk.Scale(self.root, from_=0, to=1)
 
         # =========================================================
@@ -1736,18 +1839,34 @@ class DiorClientGUI:
         tab_voice = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
         self.ovl_notebook.add(tab_voice, text=" AUTO V0-9 ")
         v_conf = self.overlay_config.get("auto_voice", {})
-        tk.Label(tab_voice, text="AUTO VOICE MACRO CONFIG", font=("Consolas", 14, "bold"), bg="#1a1a1a", fg="#00f2ff").pack(pady=15)
-        tk.Label(tab_voice, text="Automatically presses 'V' + Number when events occur.\nKeep 'OFF' to disable specific triggers.", bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
-        v_grid = tk.Frame(tab_voice, bg="#1a1a1a"); v_grid.pack()
+        tk.Label(tab_voice, text="AUTO VOICE MACRO CONFIG", font=("Consolas", 14, "bold"), bg="#1a1a1a",
+                 fg="#00f2ff").pack(pady=15)
+        tk.Label(tab_voice,
+                 text="Automatically presses 'V' + Number when events occur.\nKeep 'OFF' to disable specific triggers.",
+                 bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
+        v_grid = tk.Frame(tab_voice, bg="#1a1a1a");
+        v_grid.pack()
         self.voice_vars = {}
-        triggers = [("I was Revived", "revived", "Use '1' for Thanks"), ("I Teamkilled someone", "tk", "Use '8' for Sorry"), ("Killed Infiltrator", "kill_infil", "Tactical Callout?"), ("Killed MAX Unit", "kill_max", "Taunt?"), ("Killed High KD Player (>2.0)", "kill_high_kd", "V6 recommended"), ("Headshot Kill", "kill_hs", "Nice Shot?")]
+        triggers = [("I was Revived", "revived", "Use '1' for Thanks"),
+                    ("I Teamkilled someone", "tk", "Use '8' for Sorry"),
+                    ("Killed Infiltrator", "kill_infil", "Tactical Callout?"),
+                    ("Killed MAX Unit", "kill_max", "Taunt?"),
+                    ("Killed High KD Player (>2.0)", "kill_high_kd", "V6 recommended"),
+                    ("Headshot Kill", "kill_hs", "Nice Shot?")]
         opts = ["OFF"] + [str(i) for i in range(10)]
         for i, (label_text, key, hint) in enumerate(triggers):
-            tk.Label(v_grid, text=label_text, font=("Consolas", 11), bg="#1a1a1a", fg="white", anchor="w", width=25).grid(row=i, column=0, pady=8, padx=5)
-            var = tk.StringVar(value=v_conf.get(key, "OFF")); self.voice_vars[key] = var
-            om = tk.OptionMenu(v_grid, var, *opts); om.config(bg="#333", fg="#00f2ff", width=5, highlightthickness=0, bd=0); om["menu"].config(bg="#333", fg="white"); om.grid(row=i, column=1, padx=10)
-            tk.Label(v_grid, text=hint, font=("Arial", 8), bg="#1a1a1a", fg="#555", anchor="w").grid(row=i, column=2, padx=5)
-        tk.Button(tab_voice, text="SAVE VOICE MACROS", bg="#004400", fg="white", width=20, height=2, command=self.save_voice_config).pack(pady=30)
+            tk.Label(v_grid, text=label_text, font=("Consolas", 11), bg="#1a1a1a", fg="white", anchor="w",
+                     width=25).grid(row=i, column=0, pady=8, padx=5)
+            var = tk.StringVar(value=v_conf.get(key, "OFF"));
+            self.voice_vars[key] = var
+            om = tk.OptionMenu(v_grid, var, *opts);
+            om.config(bg="#333", fg="#00f2ff", width=5, highlightthickness=0, bd=0);
+            om["menu"].config(bg="#333", fg="white");
+            om.grid(row=i, column=1, padx=10)
+            tk.Label(v_grid, text=hint, font=("Arial", 8), bg="#1a1a1a", fg="#555", anchor="w").grid(row=i, column=2,
+                                                                                                     padx=5)
+        tk.Button(tab_voice, text="SAVE VOICE MACROS", bg="#004400", fg="white", width=20, height=2,
+                  command=self.save_voice_config).pack(pady=30)
 
         # Notebook Packen
         self.content_ids.append(self.canvas.create_window(mid, 525, window=self.ovl_notebook, width=1100, height=700))
@@ -1910,10 +2029,10 @@ class DiorClientGUI:
         game_running = getattr(self, 'ps2_running', False)
         test_active = getattr(self, 'is_stats_test', False)
         cfg = self.config.get("stats_widget", {})
-        
+
         # Prüfen ob Overlay aktiv sein soll
         if (game_running or test_active) and cfg.get("active", True):
-            
+
             # --- 1. DATEN VORBEREITEN (Unverändert) ---
             if test_active:
                 kills, deaths, hs, start_time = 15, 5, 6, time.time() - 3600
@@ -1930,11 +2049,12 @@ class DiorClientGUI:
             hsr = (hs / kills * 100) if kills > 0 else 0
             dur_min = (time.time() - start_time) / 60
             kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
-            hrs = int(dur_min // 60); mns = int(dur_min % 60)
+            hrs = int(dur_min // 60);
+            mns = int(dur_min % 60)
 
             # --- 3. HTML DESIGN (ALLES IN EINER ZEILE) ---
             kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
-            
+
             html = f"""
             <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
                         text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
@@ -1954,13 +2074,13 @@ class DiorClientGUI:
             if raw_name:
                 # A: Wir bauen den Pfad zum assets Ordner
                 asset_path = get_asset_path(raw_name)
-                
+
                 # B: Wir prüfen, was existiert
                 if os.path.exists(asset_path):
                     final_img_path = asset_path  # Treffer im Assets Ordner!
                 elif os.path.exists(raw_name):
-                    final_img_path = raw_name    # Treffer als direkter Pfad
-                
+                    final_img_path = raw_name  # Treffer als direkter Pfad
+
                 # Debugging Ausgabe in die Konsole (damit wir sehen was passiert)
                 # print(f"DEBUG: Suche Bild '{raw_name}' -> Gefunden: '{final_img_path}'")
 
@@ -1980,11 +2100,11 @@ class DiorClientGUI:
         if "stats_widget" not in self.config: self.config["stats_widget"] = {}
         self.config["stats_widget"].update({
             "active": self.var_stats_active.get(),
-            "x": self.scale_stx.get(),    # Globale Position X
-            "y": self.scale_sty.get(),    # Globale Position Y
+            "x": self.scale_stx.get(),  # Globale Position X
+            "y": self.scale_sty.get(),  # Globale Position Y
             "img": clean_name,
-            "tx": self.scale_st_tx.get(), # Text Feinjustierung X
-            "ty": self.scale_st_ty.get(), # Text Feinjustierung Y (NEU)
+            "tx": self.scale_st_tx.get(),  # Text Feinjustierung X
+            "ty": self.scale_st_ty.get(),  # Text Feinjustierung Y (NEU)
             "scale": self.scale_st_scale.get()
         })
 
@@ -2009,7 +2129,7 @@ class DiorClientGUI:
             # Session Stats Visuals updaten
             if self.var_stats_active.get():
                 was_testing = getattr(self, 'is_stats_test', False)
-                self.is_stats_test = True # Erzwingt Refresh
+                self.is_stats_test = True  # Erzwingt Refresh
                 self.refresh_ingame_overlay()
                 self.is_stats_test = was_testing
             else:
@@ -2036,7 +2156,7 @@ class DiorClientGUI:
         # 2. Cooldown prüfen (damit er nicht spammt, z.B. bei Multi-Kills)
         now = time.time()
         last = getattr(self, "last_voice_time", 0)
-        if now - last < 2.5: # 2.5 Sekunden Pause zwischen Callouts
+        if now - last < 2.5:  # 2.5 Sekunden Pause zwischen Callouts
             return
 
         self.last_voice_time = now
@@ -2046,7 +2166,7 @@ class DiorClientGUI:
             try:
                 # V drücken
                 pydirectinput.press('v')
-                time.sleep(0.05) # Kurze Pause für das Menü
+                time.sleep(0.05)  # Kurze Pause für das Menü
                 # Zahl drücken
                 pydirectinput.press(val)
                 # Loggen für Debug
@@ -2124,7 +2244,7 @@ class DiorClientGUI:
             self.add_log("UI: Test beendet & Feed bereinigt.")
 
         self.root.after(6000, end_test)
-    
+
     def get_current_tab_targets(self):
         """Ermittelt anhand des Tabs, was editiert werden soll"""
         try:
@@ -2132,7 +2252,7 @@ class DiorClientGUI:
             idx = self.ovl_notebook.index(self.ovl_notebook.select())
             # Hole den Text des Tabs
             tab_text = self.ovl_notebook.tab(idx, "text").strip()
-            
+
             targets = []
             if "CROSSHAIR" in tab_text:
                 targets = ["crosshair"]
@@ -2140,7 +2260,7 @@ class DiorClientGUI:
                 targets = ["stats", "feed"]
             elif "KILLSTREAK" in tab_text:
                 targets = ["streak"]
-            
+
             return targets
         except:
             return []
@@ -2161,7 +2281,7 @@ class DiorClientGUI:
                 return
 
             self.is_hud_editing = True
-            
+
             # Buttons Rot färben
             if hasattr(self, 'btn_edit_hud'): self.btn_edit_hud.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
             if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
@@ -2175,12 +2295,12 @@ class DiorClientGUI:
             # 2. DANN erst Daten aktualisieren (damit Boxen erscheinen)
             if "streak" in targets:
                 self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
-                self.killstreak_count = 5 
+                self.killstreak_count = 5
                 self.update_streak_display()
 
             if "stats" in targets or "feed" in targets:
                 self.is_stats_test = True
-                self.refresh_ingame_overlay() # Ruft jetzt das neue set_stats_html auf
+                self.refresh_ingame_overlay()  # Ruft jetzt das neue set_stats_html auf
 
             if "crosshair" in targets:
                 c_conf = self.config.get("crosshair", {})
@@ -2190,11 +2310,13 @@ class DiorClientGUI:
         else:
             # --- DEAKTIVIEREN ---
             self.is_hud_editing = False
-            
+
             # Buttons Blau färben
             if hasattr(self, 'btn_edit_hud'): self.btn_edit_hud.config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
-            if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
-            if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
+            if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="LAYOUT PER MAUS VERSCHIEBEN",
+                                                                           bg="#0066ff")
+            if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="LAYOUT PER MAUS VERSCHIEBEN",
+                                                                             bg="#0066ff")
 
             # Reset
             if hasattr(self, 'temp_streak_backup'):
@@ -2206,22 +2328,23 @@ class DiorClientGUI:
 
             self.is_stats_test = False
             self.stop_overlay_logic()
-            
+
             c_conf = self.config.get("crosshair", {})
-            self.overlay_win.update_crosshair(get_asset_path(c_conf.get("file", "")), c_conf.get("size", 32), c_conf.get("active", True))
+            self.overlay_win.update_crosshair(get_asset_path(c_conf.get("file", "")), c_conf.get("size", 32),
+                                              c_conf.get("active", True))
 
             # Spiel-Modus wieder an
             self.overlay_win.set_mouse_passthrough(True)
             self.add_log("UI: Edit-Modus AUS. Positionen gespeichert.")
             self.save_config()
-            
+
     def on_overlay_tab_change(self, event):
         """Wenn Tab gewechselt wird während Edit an ist -> Edit Bereich anpassen"""
         if getattr(self, "is_hud_editing", False):
             # Wir beenden kurz den Edit Mode und starten ihn neu für den neuen Tab
-            self.toggle_hud_edit_mode() # Aus
-            self.root.after(200, self.toggle_hud_edit_mode) # An (im neuen Tab)        
-    
+            self.toggle_hud_edit_mode()  # Aus
+            self.root.after(200, self.toggle_hud_edit_mode)  # An (im neuen Tab)
+
     def update_stats_widget_position(self):
         # Wird vom Loop erledigt, dient nur als Dummy oder Trigger für sofortigen Refresh
         self.refresh_ingame_overlay()
@@ -2249,10 +2372,10 @@ class DiorClientGUI:
 
         # Sofortige Vorschau im PyQt-Overlay
         self.update_streak_display()
-    
+
     def draw_streak_ui(self, img_path, count, config):
         """Zeichnet das Killstreak-Bild und die Zahl basierend auf der Config"""
-        
+
         # 1. Wenn Count 0 ist, alles verstecken
         if count <= 0:
             self.streak_label.hide()
@@ -2267,24 +2390,25 @@ class DiorClientGUI:
                 # Skalieren
                 w = int(pixmap.width() * scale)
                 h = int(pixmap.height() * scale)
-                pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                
+                pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+
                 self.streak_label.setPixmap(pixmap)
                 self.streak_label.adjustSize()
-                
+
                 # Position Bild (Mitte + Offset)
                 scr_w = self.width()
                 scr_h = self.height()
-                
+
                 x_off = config.get("x", 0)
                 y_off = config.get("y", 100)
-                
+
                 img_x = (scr_w // 2) - (w // 2) + int(x_off)
                 img_y = (scr_h // 2) - (h // 2) + int(y_off)
-                
+
                 self.streak_label.move(img_x, img_y)
                 self.streak_label.show()
-                
+
                 # 3. Zahl positionieren (Relativ zum Bild)
                 # HTML Styling für die Zahl
                 self.streak_text_label.setText(
@@ -2292,21 +2416,21 @@ class DiorClientGUI:
                     f"text-shadow: 2px 2px 0 #000;'>{count}</span>"
                 )
                 self.streak_text_label.adjustSize()
-                
+
                 tx_off = config.get("tx", 0)
                 ty_off = config.get("ty", 0)
-                
+
                 # Mitte des Bildes berechnen
                 center_img_x = img_x + (w // 2)
                 center_img_y = img_y + (h // 2)
-                
+
                 # Zahl platzieren
                 num_x = center_img_x - (self.streak_text_label.width() // 2) + int(tx_off)
                 num_y = center_img_y - (self.streak_text_label.height() // 2) + int(ty_off)
-                
+
                 self.streak_text_label.move(num_x, num_y)
                 self.streak_text_label.show()
-    
+
     def update_streak_display(self):
         # Sicherheitscheck: Läuft das PyQt-Overlay?
         if not self.overlay_win:
@@ -2391,14 +2515,14 @@ class DiorClientGUI:
             self.sub_menu_frame.config(highlightbackground=current_color)
             # Textfarbe der Buttons animieren
             for btn in self.sub_buttons:
-                btn.config(fg=current_color if step < len(colors)-1 else "#00f2ff")
+                btn.config(fg=current_color if step < len(colors) - 1 else "#00f2ff")
 
             self.root.after(50, lambda: self.animate_fade_in(step + 1))
 
     def handle_sub_click(self, item):
         self.add_log(f"NAV: Switching to {item}...")
         self.current_sub_tab = item  # Setzt den Namen (z.B. "Weapon stats" oder "Overview")
-        self.show_characters()       # Baut die Seite neu auf
+        self.show_characters()  # Baut die Seite neu auf
         if hasattr(self, 'sub_menu_frame'):
             self.sub_menu_frame.place_forget()
 
@@ -2482,7 +2606,8 @@ class DiorClientGUI:
         dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
         self.dash_widgets = {"frame": dash_frame, "factions": {}}
 
-        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a", fg="#00f2ff").pack(pady=15)
+        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a",
+                 fg="#00f2ff").pack(pady=15)
 
         # 3. Graph Canvas
         g_canvas = tk.Canvas(dash_frame, width=800, height=180, bg="#050505", highlightthickness=0)
@@ -2507,7 +2632,7 @@ class DiorClientGUI:
             f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
             f_box.pack(side="left", expand=True, fill="both", padx=5)
 
-            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5,0))
+            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
 
             p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 18, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
@@ -2516,12 +2641,14 @@ class DiorClientGUI:
             count_lab.pack()
 
             bar_bg = tk.Frame(f_box, bg="#333", height=6, width=180)
-            bar_bg.pack(pady=8); bar_bg.pack_propagate(False)
+            bar_bg.pack(pady=8);
+            bar_bg.pack_propagate(False)
             bar = tk.Frame(bar_bg, bg=color, height=6)
             bar.place(x=0, y=0, width=0)
 
             # --- TABELLEN-STRUKTUR FÜR TOP PERFORMERS ---
-            tk.Label(f_box, text="TOP SESSION PERFORMERS", font=("Arial", 9, "bold"), bg="#1a1a1a", fg="#555").pack(pady=(15,0))
+            tk.Label(f_box, text="TOP SESSION PERFORMERS", font=("Arial", 9, "bold"), bg="#1a1a1a", fg="#555").pack(
+                pady=(15, 0))
 
             # Container für die Grid-Tabelle
             list_frame = tk.Frame(f_box, bg="#1a1a1a")
@@ -2553,7 +2680,8 @@ class DiorClientGUI:
             }
 
         # Footer
-        self.dash_widgets["footer"] = tk.Label(dash_frame, text="LOGGING STARTED...", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
+        self.dash_widgets["footer"] = tk.Label(dash_frame, text="LOGGING STARTED...", font=("Arial", 10), bg="#1a1a1a",
+                                               fg="#00f2ff")
         self.dash_widgets["footer"].pack(pady=10)
 
         # Dashboard Platzierung (Breite auf 1550 erhöht für 32-Zeichen-Tabelle)
@@ -2577,7 +2705,7 @@ class DiorClientGUI:
             canvas.itemconfig(light_id, fill=color_hex, outline="#333")
             self.root.after(50, lambda: self.animate_api_light(canvas, light_id, color_type, step + 0.1))
         except:
-            pass # Stoppt, wenn Tab gewechselt wird
+            pass  # Stoppt, wenn Tab gewechselt wird
 
     def show_launcher(self):
         self.current_tab = "launcher"
@@ -2585,22 +2713,31 @@ class DiorClientGUI:
         mid = self.root.winfo_width() // 2
         CYAN = "#00f2ff"
 
-        launcher_frame = tk.LabelFrame(self.root, text=" > GAME_START_DASHBOARD ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1, padx=20, pady=20)
+        launcher_frame = tk.LabelFrame(self.root, text=" > GAME_START_DASHBOARD ", bg="#1e1e1e", fg=CYAN,
+                                       font=("Consolas", 10), bd=1, padx=20, pady=20)
 
-        high_box = tk.LabelFrame(launcher_frame, text=" [ Vehicle  ] ", bg="#1e1e1e", fg="#00ff00", font=("Consolas", 9), bd=1, padx=10, pady=10)
+        high_box = tk.LabelFrame(launcher_frame, text=" [ Vehicle  ] ", bg="#1e1e1e", fg="#00ff00",
+                                 font=("Consolas", 9), bd=1, padx=10, pady=10)
         high_box.pack(fill="x", pady=10)
-        tk.Label(high_box, text="Load High Fidelity Assets & Maximum Visual Range", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8)).pack()
-        btn_high = tk.Button(high_box, text="INITIALIZE: High Settings", width=30, height=2, bg="#004400", fg="white", font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("high"))
+        tk.Label(high_box, text="Load High Fidelity Assets & Maximum Visual Range", bg="#1e1e1e", fg="#4a6a7a",
+                 font=("Consolas", 8)).pack()
+        btn_high = tk.Button(high_box, text="INITIALIZE: High Settings", width=30, height=2, bg="#004400", fg="white",
+                             font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("high"))
         btn_high.pack(pady=5)
 
-        low_box = tk.LabelFrame(launcher_frame, text=" [ Infantry ] ", bg="#1e1e1e", fg="#ff4444", font=("Consolas", 9), bd=1, padx=10, pady=10)
+        low_box = tk.LabelFrame(launcher_frame, text=" [ Infantry ] ", bg="#1e1e1e", fg="#ff4444", font=("Consolas", 9),
+                                bd=1, padx=10, pady=10)
         low_box.pack(fill="x", pady=10)
-        tk.Label(low_box, text="Disable Shadows & Particles for Peak Framerates & Potato", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8)).pack()
-        btn_low = tk.Button(low_box, text="INITIALIZE: Low Settings", width=30, height=2, bg="#440000", fg="white", font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("low"))
+        tk.Label(low_box, text="Disable Shadows & Particles for Peak Framerates & Potato", bg="#1e1e1e", fg="#4a6a7a",
+                 font=("Consolas", 8)).pack()
+        btn_low = tk.Button(low_box, text="INITIALIZE: Low Settings", width=30, height=2, bg="#440000", fg="white",
+                            font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("low"))
         btn_low.pack(pady=5)
 
-        info_text = "STATUS: SYSTEM_READY\nINTEGRITY: OPTIMAL\nTARGET_PATH: " + (self.ps2_dir if self.ps2_dir else "NOT_FOUND")
-        tk.Label(launcher_frame, text=info_text, bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8), justify="left").pack(fill="x", pady=10)
+        info_text = "STATUS: SYSTEM_READY\nINTEGRITY: OPTIMAL\nTARGET_PATH: " + (
+            self.ps2_dir if self.ps2_dir else "NOT_FOUND")
+        tk.Label(launcher_frame, text=info_text, bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8), justify="left").pack(
+            fill="x", pady=10)
 
         id1 = self.canvas.create_window(mid, 350, window=launcher_frame, width=450)
         self.content_ids.append(id1)
@@ -2611,32 +2748,39 @@ class DiorClientGUI:
         mid = self.root.winfo_width() // 2
         CYAN = "#00f2ff"
 
-        nso_frame = tk.LabelFrame(self.root, text=" > NSO_FRACTION_TELEPORTER ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1, padx=20, pady=20)
+        nso_frame = tk.LabelFrame(self.root, text=" > NSO_FRACTION_TELEPORTER ", bg="#1e1e1e", fg=CYAN,
+                                  font=("Consolas", 10), bd=1, padx=20, pady=20)
 
         # Fraction Selection (FIX: self.frac_var wird hier nur noch benutzt, nicht neu erstellt)
         tk.Label(nso_frame, text="SELECT FRACTION:", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 9)).pack(pady=(0, 5))
         frac_menu = tk.OptionMenu(nso_frame, self.frac_var, "TR", "VS", "NC")
-        frac_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0, activebackground="#1a2b3c", activeforeground=CYAN)
+        frac_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0,
+                         activebackground="#1a2b3c", activeforeground=CYAN)
         frac_menu["menu"].config(bg="#0a141d", fg=CYAN, font=("Consolas", 10))
         frac_menu.pack(pady=5)
 
         # Continent Selection
-        tk.Label(nso_frame, text="SELECT CONTINENT:", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 9)).pack(pady=(10, 5))
+        tk.Label(nso_frame, text="SELECT CONTINENT:", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 9)).pack(
+            pady=(10, 5))
         cont_menu = tk.OptionMenu(nso_frame, self.cont_var, "Indar", "Hossin", "Amerish", "Esamir", "Oshur")
-        cont_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0, activebackground="#1a2b3c", activeforeground=CYAN)
+        cont_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0,
+                         activebackground="#1a2b3c", activeforeground=CYAN)
         cont_menu["menu"].config(bg="#0a141d", fg=CYAN, font=("Consolas", 10))
         cont_menu.pack(pady=5)
 
         # Controls
         btn_container = tk.Frame(nso_frame, bg="#1e1e1e")
         btn_container.pack(pady=20)
-        tk.Button(btn_container, text="START", width=12, bg="#004400", fg="white", font=("Consolas", 10, "bold"), command=self.start_nso_teleport).pack(side="left", padx=10)
-        tk.Button(btn_container, text="STOP", width=12, bg="#440000", fg="white", font=("Consolas", 10, "bold"), command=self.stop_nso_teleport).pack(side="left", padx=10)
+        tk.Button(btn_container, text="START", width=12, bg="#004400", fg="white", font=("Consolas", 10, "bold"),
+                  command=self.start_nso_teleport).pack(side="left", padx=10)
+        tk.Button(btn_container, text="STOP", width=12, bg="#440000", fg="white", font=("Consolas", 10, "bold"),
+                  command=self.stop_nso_teleport).pack(side="left", padx=10)
 
         id1 = self.canvas.create_window(mid, 350, window=nso_frame, width=450)
 
         # Log area für NSO
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff", font=("Consolas", 9))
+        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff",
+                                                  font=("Consolas", 9))
         id2 = self.canvas.create_window(mid, 700, window=self.log_area)
 
         self.content_ids.extend([id1, id2])
@@ -2646,7 +2790,8 @@ class DiorClientGUI:
         self.clear_content()
         mid = self.root.winfo_width() // 2
 
-        unit_frame = tk.LabelFrame(self.root, text=" > UNIT_TRACKING ", bg="#1e1e1e", fg="#00f2ff", font=("Consolas", 10), bd=1, padx=10, pady=10)
+        unit_frame = tk.LabelFrame(self.root, text=" > UNIT_TRACKING ", bg="#1e1e1e", fg="#00f2ff",
+                                   font=("Consolas", 10), bd=1, padx=10, pady=10)
         opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
         self.char_menu = tk.OptionMenu(unit_frame, self.char_var, *opts, command=self.update_active_char)
         self.char_option_menus.append(self.char_menu)
@@ -2658,23 +2803,30 @@ class DiorClientGUI:
         tk.Button(unit_frame, text="ADD", command=self.add_char, bg="#1a2b3c", fg="#00f2ff").pack(side="left")
         id1 = self.canvas.create_window(mid, 220, window=unit_frame)
 
-        self.cache_label = tk.Label(self.root, text=f"Characters in db: {len(self.name_cache)}", fg="#4a6a7a", bg="#1e1e1e", font=("Consolas", 14, "bold"))
+        self.cache_label = tk.Label(self.root, text=f"Characters in db: {len(self.name_cache)}", fg="#4a6a7a",
+                                    bg="#1e1e1e", font=("Consolas", 14, "bold"))
         id_counter = self.canvas.create_window(mid, 270, window=self.cache_label)
 
-        self.live_killer_label = tk.Label(self.root, text=f"[ TARGET: {self.last_killer_name} ]", fg="#ff4444", bg="#1e1e1e", font=("Consolas", 16, "bold"))
+        self.live_killer_label = tk.Label(self.root, text=f"[ TARGET: {self.last_killer_name} ]", fg="#ff4444",
+                                          bg="#1e1e1e", font=("Consolas", 16, "bold"))
         id3 = self.canvas.create_window(mid, 320, window=self.live_killer_label)
 
-        rep_frame = tk.LabelFrame(self.root, text=" > INCIDENT_CLASSIFICATION ", bg="#1e1e1e", fg="#ff8c00", font=("Consolas", 10), bd=1, padx=10, pady=5)
+        rep_frame = tk.LabelFrame(self.root, text=" > INCIDENT_CLASSIFICATION ", bg="#1e1e1e", fg="#ff8c00",
+                                  font=("Consolas", 10), bd=1, padx=10, pady=5)
         cb_grid = tk.Frame(rep_frame, bg="#1e1e1e")
         for i, opt in enumerate(CHEAT_OPTIONS):
-            var = tk.BooleanVar(); self.check_vars[opt] = var
-            tk.Checkbutton(cb_grid, text=opt, variable=var, bg="#1e1e1e", fg="#7a8a9a", selectcolor="black", font=("Consolas", 8)).grid(row=i//4, column=i%4, sticky="w")
+            var = tk.BooleanVar();
+            self.check_vars[opt] = var
+            tk.Checkbutton(cb_grid, text=opt, variable=var, bg="#1e1e1e", fg="#7a8a9a", selectcolor="black",
+                           font=("Consolas", 8)).grid(row=i // 4, column=i % 4, sticky="w")
         cb_grid.pack()
-        self.btn_report = tk.Button(rep_frame, text="GENERATE REPORT", command=self.manual_save_report, bg="#1a1a1a", fg="#444", font=("Consolas", 11, "bold"), width=40, state="disabled")
+        self.btn_report = tk.Button(rep_frame, text="GENERATE REPORT", command=self.manual_save_report, bg="#1a1a1a",
+                                    fg="#444", font=("Consolas", 11, "bold"), width=40, state="disabled")
         self.btn_report.pack(pady=5)
         id4 = self.canvas.create_window(mid, 450, window=rep_frame)
 
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff", font=("Consolas", 9))
+        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff",
+                                                  font=("Consolas", 9))
         id5 = self.canvas.create_window(mid, 700, window=self.log_area)
         self.content_ids.extend([id1, id3, id4, id5, id_counter])
 
@@ -2684,13 +2836,15 @@ class DiorClientGUI:
         mid = self.root.winfo_width() // 2
         CYAN = "#00f2ff"
 
-        conf_frame = tk.LabelFrame(self.root, text=" > SOURCE_CONFIG ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1, padx=15, pady=15)
+        conf_frame = tk.LabelFrame(self.root, text=" > SOURCE_CONFIG ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10),
+                                   bd=1, padx=15, pady=15)
 
         tk.Label(conf_frame, text="OBS_VIDEO_DIR:", bg="#1e1e1e", fg="#4a6a7a").grid(row=0, column=0, sticky="w")
         self.folder_entry = tk.Entry(conf_frame, bg="#0a141d", fg=CYAN, width=35, bd=1, relief="flat")
         self.folder_entry.insert(0, self.config.get("watch_folder", ""))
         self.folder_entry.grid(row=0, column=1, padx=10)
-        tk.Button(conf_frame, text="BROWSE", command=self.browse_folder, bg="#1a2b3c", fg=CYAN, bd=0).grid(row=0, column=2)
+        tk.Button(conf_frame, text="BROWSE", command=self.browse_folder, bg="#1a2b3c", fg=CYAN, bd=0).grid(row=0,
+                                                                                                           column=2)
 
         tk.Label(conf_frame, text="STREAMABLE.IO EMAIL:", bg="#1e1e1e", fg="#4a6a7a").grid(row=1, column=0, sticky="w")
         self.email_entry = tk.Entry(conf_frame, bg="#0a141d", fg=CYAN, bd=1, relief="flat")
@@ -2702,23 +2856,28 @@ class DiorClientGUI:
         self.pw_entry.insert(0, self.config.get("pw", ""))
         self.pw_entry.grid(row=2, column=1, sticky="ew", pady=5, padx=10)
 
-        tk.Button(conf_frame, text="LOCK SETTINGS", command=self.save_enforcer_config, bg=CYAN, fg="black", font=("Consolas", 10, "bold")).grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
+        tk.Button(conf_frame, text="LOCK SETTINGS", command=self.save_enforcer_config, bg=CYAN, fg="black",
+                  font=("Consolas", 10, "bold")).grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
 
         id1 = self.canvas.create_window(mid, 250, window=conf_frame)
 
-        path_box = tk.LabelFrame(self.root, text=" > GAME_DIRECTORY ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1, padx=15, pady=15)
+        path_box = tk.LabelFrame(self.root, text=" > GAME_DIRECTORY ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10),
+                                 bd=1, padx=15, pady=15)
         path_info_frame = tk.Frame(path_box, bg="#1e1e1e")
         path_info_frame.pack(fill="x")
         tk.Label(path_info_frame, text="Pfad:", bg="#1e1e1e", fg=CYAN, font=("Consolas", 9)).pack(side="left")
-        self.ps2_path_label = tk.Label(path_info_frame, text=self.ps2_dir, bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8), wraplength=350)
+        self.ps2_path_label = tk.Label(path_info_frame, text=self.ps2_dir, bg="#1e1e1e", fg="#4a6a7a",
+                                       font=("Consolas", 8), wraplength=350)
         self.ps2_path_label.pack(side="left", padx=5)
-        tk.Button(path_box, text="ORDNER WÄHLEN", command=self.browse_ps2_folder, bg="#1a2b3c", fg=CYAN, font=("Consolas", 9, "bold")).pack(fill="x", pady=(10, 0))
+        tk.Button(path_box, text="ORDNER WÄHLEN", command=self.browse_ps2_folder, bg="#1a2b3c", fg=CYAN,
+                  font=("Consolas", 9, "bold")).pack(fill="x", pady=(10, 0))
 
         id2 = self.canvas.create_window(mid, 450, window=path_box, width=450)
 
-
-        bg_box = tk.LabelFrame(self.root, text=" > UI_VISUALS ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1, padx=15, pady=15)
-        tk.Button(bg_box, text="HINTERGRUND ÄNDERN", command=self.change_background_file, bg="#1a2b3c", fg=CYAN, font=("Consolas", 9)).pack(fill="x")
+        bg_box = tk.LabelFrame(self.root, text=" > UI_VISUALS ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1,
+                               padx=15, pady=15)
+        tk.Button(bg_box, text="HINTERGRUND ÄNDERN", command=self.change_background_file, bg="#1a2b3c", fg=CYAN,
+                  font=("Consolas", 9)).pack(fill="x")
         id3 = self.canvas.create_window(mid, 580, window=bg_box, width=450)
 
         self.content_ids.extend([id1, id2, id3])
@@ -2757,11 +2916,12 @@ class DiorClientGUI:
 
         # --- DYNAMISCHE ÜBERSCHRIFT ---
         header = self.canvas.create_text(mid, 170, text=self.current_sub_tab.upper(),
-                                        fill="#00f2ff", font=("Consolas", 18, "bold"), tags="content")
+                                         fill="#00f2ff", font=("Consolas", 18, "bold"), tags="content")
         self.content_ids.append(header)
 
         # --- LOG BEREICH (Ganz unten) ---
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=8, bg="#020508", fg="#00f2ff", font=("Consolas", 9), bd=1, relief="solid")
+        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=8, bg="#020508", fg="#00f2ff",
+                                                  font=("Consolas", 9), bd=1, relief="solid")
         log_win = self.canvas.create_window(mid, 820, window=self.log_area, tags="content")
         self.content_ids.append(log_win)
 
@@ -2772,7 +2932,7 @@ class DiorClientGUI:
             c_stats = {}
         else:
             c_stats = char_info.get('custom_stats', {})
-            print(f"DEBUG: Gefundene Stats: {list(c_stats.keys())}") # Zeigt in der Konsole an, was da ist
+            print(f"DEBUG: Gefundene Stats: {list(c_stats.keys())}")  # Zeigt in der Konsole an, was da ist
 
         # --- DIE WEICHE FÜR DIE INHALTE ---
         if self.current_sub_tab == "Overview":
@@ -2781,7 +2941,8 @@ class DiorClientGUI:
             self.char_search_entry = tk.Entry(search_frame, bg="#222", fg="white", width=25)
             self.char_search_entry.pack(side="left", padx=5)
             self.char_search_entry.bind("<Return>", lambda e: self.run_search(self.char_search_entry.get()))
-            tk.Button(search_frame, text="SEARCH", command=lambda: self.run_search(self.char_search_entry.get()), bg="#333", fg="#00f2ff").pack(side="left")
+            tk.Button(search_frame, text="SEARCH", command=lambda: self.run_search(self.char_search_entry.get()),
+                      bg="#333", fg="#00f2ff").pack(side="left")
             self.content_ids.append(self.canvas.create_window(mid, 210, window=search_frame, tags="content"))
 
             # 2. Main Stats Container
@@ -2790,12 +2951,13 @@ class DiorClientGUI:
             # LINKS: GENERAL INFORMATION
             gen_col = tk.Frame(main_container, bg="#1a1a1a", padx=10, pady=10)
             gen_col.pack(side="left", fill="both", expand=True, padx=2)
-            tk.Label(gen_col, text="GENERAL INFORMATION", fg="#00f2ff", bg="#1a1a1a", font=("Consolas", 10, "bold")).pack(anchor="w")
+            tk.Label(gen_col, text="GENERAL INFORMATION", fg="#00f2ff", bg="#1a1a1a",
+                     font=("Consolas", 10, "bold")).pack(anchor="w")
 
             # Alle General-Felder inklusive Outfit und Time Played
             fields = [
                 ("Name:", c_stats.get('name', '-')),
-                ("Faction:", {"1":"VS","2":"NC","3":"TR","4":"NSO"}.get(char_info.get('faction_id'), "-")),
+                ("Faction:", {"1": "VS", "2": "NC", "3": "TR", "4": "NSO"}.get(char_info.get('faction_id'), "-")),
                 ("Server:", c_stats.get('server', '-')),
                 ("Outfit:", c_stats.get('outfit', '-')),
                 ("Rank:", c_stats.get('rank', '-')),
@@ -2803,7 +2965,8 @@ class DiorClientGUI:
             ]
 
             for label_text, val in fields:
-                f = tk.Frame(gen_col, bg="#1a1a1a"); f.pack(fill="x", pady=2)
+                f = tk.Frame(gen_col, bg="#1a1a1a");
+                f.pack(fill="x", pady=2)
                 tk.Label(f, text=label_text, fg="#4a6a7a", bg="#1a1a1a", font=("Consolas", 9)).pack(side="left")
                 tk.Label(f, text=val, fg="white", bg="#1a1a1a", font=("Consolas", 9, "bold")).pack(side="right")
 
@@ -2840,17 +3003,21 @@ class DiorClientGUI:
                 for s_name, s_val in rows:
                     tk.Label(col, text=f"{s_name}:", fg="#4a6a7a", bg="#121212", font=("Consolas", 9)).pack(anchor="w")
                     # Hier wird der Wert aus c_stats (unserem Paket) ins Label geschrieben
-                    tk.Label(col, text=str(s_val), fg="white", bg="#121212", font=("Consolas", 11, "bold")).pack(anchor="w", pady=(0, 5))
+                    tk.Label(col, text=str(s_val), fg="white", bg="#121212", font=("Consolas", 11, "bold")).pack(
+                        anchor="w", pady=(0, 5))
 
-            self.content_ids.append(self.canvas.create_window(mid, 460, window=main_container, width=720, height=450, tags="content"))
+            self.content_ids.append(
+                self.canvas.create_window(mid, 460, window=main_container, width=720, height=450, tags="content"))
 
         elif self.current_sub_tab.lower() == "weapon stats":
             table_frame = tk.Frame(self.root, bg="#121212", bd=0)
-            head_bar = tk.Frame(table_frame, bg="#1a1a1a"); head_bar.pack(side="top", fill="x")
+            head_bar = tk.Frame(table_frame, bg="#1a1a1a");
+            head_bar.pack(side="top", fill="x")
 
             cols = [("WEAPON", 30), ("KILLS", 12), ("ACC %", 10), ("HSR %", 10)]
             for text, w_val in cols:
-                tk.Label(head_bar, text=text, fg="#00f2ff", bg="#1a1a1a", font=("Consolas", 10, "bold"), width=w_val, anchor="w", padx=10).pack(side="left")
+                tk.Label(head_bar, text=text, fg="#00f2ff", bg="#1a1a1a", font=("Consolas", 10, "bold"), width=w_val,
+                         anchor="w", padx=10).pack(side="left")
 
             canvas_area = tk.Canvas(table_frame, bg="#121212", highlightthickness=0)
             scrollbar = tk.Scrollbar(table_frame, orient="vertical", command=canvas_area.yview)
@@ -2862,24 +3029,31 @@ class DiorClientGUI:
             if stats_to_show:
                 for i, w in enumerate(sorted(stats_to_show, key=lambda x: x.get('kills', 0), reverse=True)):
                     row_bg = "#121212" if i % 2 == 0 else "#181818"
-                    row = tk.Frame(scroll_content, bg=row_bg); row.pack(fill="x", expand=True)
+                    row = tk.Frame(scroll_content, bg=row_bg);
+                    row.pack(fill="x", expand=True)
 
                     kills = w.get('kills', 0)
                     acc = (w.get('hits', 0) / w.get('shots', 1) * 100) if w.get('shots', 0) > 0 else 0
                     hsr = (w.get('hs', 0) / kills * 100) if kills > 0 else 0
 
-                    tk.Label(row, text=w.get('name','?')[:28], fg="white", bg=row_bg, font=("Consolas", 10), width=30, anchor="w", padx=10).pack(side="left")
-                    tk.Label(row, text=f"{kills:,}", fg="#00f2ff", bg=row_bg, font=("Consolas", 10, "bold"), width=12, anchor="w", padx=10).pack(side="left")
-                    tk.Label(row, text=f"{acc:.1f}%", fg="#ffcc00", bg=row_bg, font=("Consolas", 10), width=10).pack(side="left")
-                    tk.Label(row, text=f"{hsr:.1f}%", fg="#ff4444", bg=row_bg, font=("Consolas", 10), width=10).pack(side="left")
+                    tk.Label(row, text=w.get('name', '?')[:28], fg="white", bg=row_bg, font=("Consolas", 10), width=30,
+                             anchor="w", padx=10).pack(side="left")
+                    tk.Label(row, text=f"{kills:,}", fg="#00f2ff", bg=row_bg, font=("Consolas", 10, "bold"), width=12,
+                             anchor="w", padx=10).pack(side="left")
+                    tk.Label(row, text=f"{acc:.1f}%", fg="#ffcc00", bg=row_bg, font=("Consolas", 10), width=10).pack(
+                        side="left")
+                    tk.Label(row, text=f"{hsr:.1f}%", fg="#ff4444", bg=row_bg, font=("Consolas", 10), width=10).pack(
+                        side="left")
             else:
-                tk.Label(scroll_content, text="NO DATA FOUND. SEARCH AGAIN.", fg="#4a6a7a", bg="#121212", pady=50).pack()
+                tk.Label(scroll_content, text="NO DATA FOUND. SEARCH AGAIN.", fg="#4a6a7a", bg="#121212",
+                         pady=50).pack()
 
             scroll_content.update_idletasks()
             canvas_area.config(scrollregion=canvas_area.bbox("all"))
             canvas_area.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
-            self.content_ids.append(self.canvas.create_window(mid, 450, window=table_frame, width=750, height=430, tags="content"))
+            self.content_ids.append(
+                self.canvas.create_window(mid, 450, window=table_frame, width=750, height=430, tags="content"))
 
     def load_enforcer_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -3044,7 +3218,7 @@ class DiorClientGUI:
         while True:
             ids = []
             try:
-                # Sammle IDs aus der Warteschlange
+                # Sammle IDs aus der Warteschlange (wartet max 5 Sekunden auf neue IDs)
                 while len(ids) < 30:
                     ids.append(self.id_queue.get(timeout=5))
             except Empty:
@@ -3052,13 +3226,13 @@ class DiorClientGUI:
 
             if ids:
                 try:
-                    # Abfrage an Census mit allen Details
+                    # Abfrage an Census mit allen Details (inklusive Outfit!)
                     url = (f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/"
                            f"?character_id={','.join(ids)}"
                            f"&c:show=character_id,name.first,faction_id,battle_rank"
                            f"&c:resolve=outfit")
 
-                    # Erst prüfen, ob die Antwort gültig ist (gegen JSON Errors)
+                    # Erst prüfen, ob die Antwort gültig ist
                     response = requests.get(url, timeout=5)
                     if response.status_code == 200:
                         try:
@@ -3066,29 +3240,41 @@ class DiorClientGUI:
                             if 'character_list' in r:
                                 conn = sqlite3.connect("ps2_master.db")
                                 cursor = conn.cursor()
+
+                                # Sicherstellen, dass der RAM-Cache existiert
+                                if not hasattr(self, 'outfit_cache'):
+                                    self.outfit_cache = {}
+
                                 for char in r['character_list']:
                                     cid = char['character_id']
                                     name = char['name']['first']
                                     fid = char.get('faction_id', 0)
                                     rank = char.get('battle_rank', {}).get('value', 0)
+
+                                    # Hier holen wir den Outfit-Tag (Alias)
                                     tag = char.get('outfit', {}).get('alias', "")
 
-                                    # In Datenbank speichern
+                                    # 1. In Datenbank speichern (Permanent)
                                     cursor.execute('''INSERT OR REPLACE INTO player_cache 
                                                       (character_id, name, faction_id, battle_rank, outfit_tag) 
                                                       VALUES (?, ?, ?, ?, ?)''',
                                                    (cid, name, fid, rank, tag))
+
+                                    # 2. WICHTIG: Im Arbeitsspeicher (RAM) aktualisieren
+                                    # Damit der Census-Listener den Tag SOFORT findet
                                     self.name_cache[cid] = name
+                                    self.outfit_cache[cid] = tag
 
                                 conn.commit()
                                 conn.close()
 
-                                # GUI-Zähler aktualisieren: Wir zählen die echten Einträge in der DB
+                                # GUI-Zähler aktualisieren
                                 if hasattr(self, 'cache_label'):
                                     conn = sqlite3.connect("ps2_master.db")
                                     count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
                                     conn.close()
-                                    self.root.after(0, lambda c=count: self.cache_label.config(text=f"Characters in db: {c}"))
+                                    self.root.after(0, lambda c=count: self.cache_label.config(
+                                        text=f"Characters in db: {c}"))
                         except ValueError:
                             self.add_log("SYS: Census API sent invalid JSON (Server busy?)")
                     else:
@@ -3104,6 +3290,7 @@ class DiorClientGUI:
 
     def start_websocket_thread(self):
         """Startet den Census-Listener in einem eigenen Hintergrund-Thread"""
+
         def run_loop():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -3152,7 +3339,6 @@ class DiorClientGUI:
                             p = data["payload"]
                             e_name = p.get("event_name")
 
-
                             ts = p.get("timestamp")
                             char_id = p.get("character_id", "0")
                             attacker_id = p.get("attacker_character_id", "0")
@@ -3187,13 +3373,14 @@ class DiorClientGUI:
                                     try:
                                         conn = sqlite3.connect("ps2_master.db")
                                         cursor = conn.cursor()
-                                        res = cursor.execute("SELECT faction_id FROM player_cache WHERE character_id=?", (c_id,)).fetchone()
+                                        res = cursor.execute("SELECT faction_id FROM player_cache WHERE character_id=?",
+                                                             (c_id,)).fetchone()
                                         conn.close()
 
                                         if res:
                                             fid = str(res[0])
                                             # Mapping: 1=VS, 2=NC, 3=TR, 4=NSO
-                                            faction_tag = {"1":"VS", "2":"NC", "3":"TR"}.get(fid, "NSO")
+                                            faction_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(fid, "NSO")
                                     except Exception as e:
                                         print(f"Faction Lookup Error: {e}")
 
@@ -3209,13 +3396,12 @@ class DiorClientGUI:
                                     self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
                                     self.add_log("AUTO-TRACK: Charakter ausgeloggt. Warte auf Login...")
 
-
                             # --- AKTIVITÄTS-TRACKING ---
                             char_id = p.get("character_id")
                             if not char_id: char_id = p.get("attacker_character_id")
                             if char_id and char_id != "0":
                                 tid = p.get("team_id") or p.get("attacker_team_id")
-                                f_name = {"1":"VS","2":"NC","3":"TR"}.get(tid, "NSO")
+                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(tid, "NSO")
                                 self.active_players[char_id] = (time.time(), f_name)
                                 if char_id not in self.name_cache:
                                     self.id_queue.put(char_id)
@@ -3223,7 +3409,7 @@ class DiorClientGUI:
                             # --- STATS HELPER ---
                             def get_stat_obj(cid, tid):
                                 if cid not in self.session_stats:
-                                    faction_name = {"1":"VS","2":"NC","3":"TR"}.get(tid, "NSO")
+                                    faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(tid, "NSO")
                                     self.session_stats[cid] = {
                                         "name": self.name_cache.get(cid, "Searching..."),
                                         "faction": faction_name,
@@ -3268,9 +3454,11 @@ class DiorClientGUI:
                                 if my_id and killer_id == my_id and victim_id != my_id:
                                     # Duplikat-Schutz
                                     curr_time = time.time()
-                                    if getattr(self, "last_victim_id", None) == victim_id and (curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
+                                    if getattr(self, "last_victim_id", None) == victim_id and (
+                                            curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
                                         continue
-                                    self.last_victim_id = victim_id; self.last_victim_time = curr_time
+                                    self.last_victim_id = victim_id;
+                                    self.last_victim_time = curr_time
 
                                     # Teamkill Check
                                     if p.get("attacker_team_id") == p.get("team_id"):
@@ -3280,9 +3468,12 @@ class DiorClientGUI:
                                         continue
 
                                     # Killstreak Berechnung
-                                    if self.is_dead and not self.was_revived: self.killstreak_count = 1
-                                    else: self.killstreak_count += 1
-                                    self.is_dead = False; self.was_revived = False
+                                    if self.is_dead and not self.was_revived:
+                                        self.killstreak_count = 1
+                                    else:
+                                        self.killstreak_count += 1
+                                    self.is_dead = False;
+                                    self.was_revived = False
                                     self.root.after(0, self.update_streak_display)
 
                                     # --- POPUP & SOUND LOGIK (Double Kill etc.) ---
@@ -3291,10 +3482,9 @@ class DiorClientGUI:
                                     is_hs = (p.get("is_headshot") == "1")
                                     v_loadout = p.get("character_loadout_id")
 
-                                    
                                     # Auto Voice Logic
                                     kd_triggered = False
-                                    special_event = None # the final output.
+                                    special_event = None  # the final output.
 
                                     if victim_id in self.session_stats:
                                         v_stat = self.session_stats[victim_id]
@@ -3302,39 +3492,41 @@ class DiorClientGUI:
                                         v_d = v_stat.get("d", 1)
                                         if (v_k / max(1, v_d)) >= 2.0:
                                             self.trigger_auto_voice("kill_high_kd")
-                                            kd_triggered = True 
+                                            kd_triggered = True
                                     if not kd_triggered and v_loadout in LOADOUT_MAP["max"]:
                                         self.trigger_auto_voice("kill_max")
                                         kd_triggered = True
                                     if not kd_triggered and v_loadout in LOADOUT_MAP["infil"]:
                                         self.trigger_auto_voice("kill_infil")
-                                        kd_triggered = True   
-                                    if not kd_triggered and is_hs: 
+                                        kd_triggered = True
+                                    if not kd_triggered and is_hs:
                                         self.trigger_auto_voice("kill_hs")
                                     if category == "Knife": special_event = "Knife Kill"
                                     if category == "Grenade": special_event = "Nade Kill"
 
-
-                                    
                                     # Multi-Kill Counter comment
                                     if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
                                         self.kill_counter += 1
-                                    else: self.kill_counter = 1
+                                    else:
+                                        self.kill_counter = 1
                                     self.last_kill_time = curr_time
-
 
                                     if is_hs: special_event = "Headshot"
                                     # 1. Streaks (12, 24...)
-                                    streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe", 36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
-                                    if self.killstreak_count in streak_map: special_event = streak_map[self.killstreak_count]
+                                    streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
+                                                  36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
+                                    if self.killstreak_count in streak_map:
+                                        special_event = streak_map[self.killstreak_count]
                                     # 2. Multi-Kills (2, 3...)
                                     elif self.kill_counter > 1:
-                                        multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill", 5: "Ultra Kill", 6: "Monster Kill", 7: "Ludicrous Kill", 9: "Holy Shit"}
+                                        multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill", 5: "Ultra Kill",
+                                                     6: "Monster Kill", 7: "Ludicrous Kill", 9: "Holy Shit"}
                                         special_event = multi_map.get(self.kill_counter)
                                     elif self.kill_counter > 9:
                                         special_event = "Holy Shit"
-                                    
-                                    if special_event: self.root.after(0, lambda e=special_event: self.trigger_overlay_event(e))
+
+                                    if special_event: self.root.after(0, lambda
+                                        e=special_event: self.trigger_overlay_event(e))
                                     self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
 
                                     # --- KILLFEED LOGIK ---
@@ -3359,7 +3551,10 @@ class DiorClientGUI:
                                 # --------------------------------------
                                 elif my_id and victim_id == my_id:
                                     self.saved_streak = self.killstreak_count
-                                    self.killstreak_count = 0; self.kill_counter = 0; self.is_dead = True; self.was_revived = False
+                                    self.killstreak_count = 0;
+                                    self.kill_counter = 0;
+                                    self.is_dead = True;
+                                    self.was_revived = False
 
                                     if killer_id and killer_id != "0":
                                         self.last_killer_name = self.name_cache.get(killer_id, "Unknown")
@@ -3377,24 +3572,28 @@ class DiorClientGUI:
 
                                         if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                    if hasattr(self, 'ovl_canvas'): self.root.after(0, lambda: self.start_fade_out("streak_group"))
-                                    if p.get("attacker_team_id") == p.get("team_id"): self.root.after(0, lambda: self.trigger_overlay_event("Team Kill Victim"))
-                                    else: self.root.after(0, lambda: self.trigger_overlay_event("Death"))
+                                    if hasattr(self, 'ovl_canvas'): self.root.after(0, lambda: self.start_fade_out(
+                                        "streak_group"))
+                                    if p.get("attacker_team_id") == p.get("team_id"):
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Team Kill Victim"))
+                                    else:
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
                             # ==========================================
                             # EVENT: EXPERIENCE
                             # ==========================================
                             elif e_name == "GainExperience":
                                 exp_id = str(p.get("experience_id", "0"))
-                                char_id = p.get("character_id"); other_id = p.get("other_id")
+                                char_id = p.get("character_id");
+                                other_id = p.get("other_id")
                                 my_id = self.current_character_id
-
 
                                 # 1. PASSIV: ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
-                                        self.was_revived = True; self.is_dead = False
-                                        
+                                        self.was_revived = True;
+                                        self.is_dead = False
+
                                         # --- NEU: TOD IN SESSION STATS KORRIGIEREN ---
                                         if my_id in self.session_stats:
                                             if self.session_stats[my_id]["d"] > 0:
@@ -3411,7 +3610,7 @@ class DiorClientGUI:
                                                     text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
                                                     <span style="color: #00ff00;">✚ REVIVED BY </span>
                                                     <span style="color: white;">{m_name}</span></div>"""
-                                            
+
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                 # 2. AKTIV: ICH HABE ETWAS GETAN
@@ -3464,17 +3663,21 @@ class DiorClientGUI:
         with open(fn, "w", encoding="utf-8") as f:
             f.write(f"SUSPECT: {self.last_killer_name}\nEVIDENCE: {self.last_evidence_url}\nVIOLATIONS:\n")
             for c in selected: f.write(f"* {c}: {CHEAT_DESCRIPTIONS.get(c)}\n")
-        os.startfile(fn); self.add_log("SYS: Report generated.")
+        os.startfile(fn);
+        self.add_log("SYS: Report generated.")
 
     def add_log(self, msg):
         if hasattr(self, 'log_area'):
-            self.root.after(0, lambda: [self.log_area.insert(tk.END, f"> {time.strftime('%H:%M:%S')} | {msg}\n"), self.log_area.see(tk.END)])
+            self.root.after(0, lambda: [self.log_area.insert(tk.END, f"> {time.strftime('%H:%M:%S')} | {msg}\n"),
+                                        self.log_area.see(tk.END)])
 
     def restart_observer(self):
         path = self.config.get("watch_folder")
         if path and os.path.exists(path):
             if self.observer: self.observer.stop()
-            self.observer = Observer(); self.observer.schedule(EnforcerHandler(self), path, recursive=False); self.observer.start()
+            self.observer = Observer();
+            self.observer.schedule(EnforcerHandler(self), path, recursive=False);
+            self.observer.start()
 
     def load_ps2_path(self):
         s = r"C:\Program Files (x86)\Steam\steamapps\common\PlanetSide 2"
@@ -3506,13 +3709,13 @@ class DiorClientGUI:
     def refresh_tab_content(self):
         if hasattr(self, 'sub_menu_frame'): self.sub_menu_frame.place_forget()
 
-        if self.current_tab == "Dashboard": # Groß/Kleinschreibung beachten!
+        if self.current_tab == "Dashboard":  # Groß/Kleinschreibung beachten!
             self.show_dashboard()
         elif self.current_tab == "launcher":
             self.show_launcher()
         elif self.current_tab == "enforcer":
             self.show_enforcer()
-        #elif self.current_tab == "nso_teleporter":
+        # elif self.current_tab == "nso_teleporter":
         #    self.show_nso_teleporter()
         elif self.current_tab == "characters":
             self.show_characters()
@@ -3558,9 +3761,8 @@ class DiorClientGUI:
         else:
             self.add_log(f"ERR: Missing {src} in app directory!")
 
-
     def run_search(self, name):
-        def worker(): # Wir definieren einen internen Worker für den Thread
+        def worker():  # Wir definieren einen internen Worker für den Thread
             try:
                 self.add_log(f"SYNC: Initializing search for {name}...")
 
@@ -3593,20 +3795,26 @@ class DiorClientGUI:
                     entry = next((s for s in stats_history if s.get('stat_name') == stat_name), None)
                     if not entry: return 0, 0
 
-                    try: lt = int(entry.get('all_time', 0))
-                    except: lt = 0
+                    try:
+                        lt = int(entry.get('all_time', 0))
+                    except:
+                        lt = 0
 
                     recent = 0
                     raw_m = entry.get('month')
                     if raw_m and str(raw_m).strip() != "":
-                        try: recent = int(raw_m)
-                        except: pass
+                        try:
+                            recent = int(raw_m)
+                        except:
+                            pass
 
                     if recent == 0:
                         raw_w = entry.get('week')
                         if raw_w and str(raw_w).strip() != "":
-                            try: recent = int(raw_w)
-                            except: pass
+                            try:
+                                recent = int(raw_w)
+                            except:
+                                pass
 
                     if recent == 0:
                         day_data = entry.get('day')
@@ -3633,17 +3841,17 @@ class DiorClientGUI:
                     'time_played': f"{int(lt_hrs)}h",
                     'lt_kills': f"{lt_kills:,}",
                     'lt_deaths': f"{lt_deaths:,}",
-                    'lt_kd': f"{(lt_kills/lt_deaths):.2f}" if lt_deaths > 0 else "0.00",
-                    'lt_kpm': f"{(lt_kills/lt_min):.2f}",
-                    'lt_kph': f"{(lt_kills/lt_hrs):.1f}",
-                    'lt_spm': f"{int(lt_score/lt_min):,}",
+                    'lt_kd': f"{(lt_kills / lt_deaths):.2f}" if lt_deaths > 0 else "0.00",
+                    'lt_kpm': f"{(lt_kills / lt_min):.2f}",
+                    'lt_kph': f"{(lt_kills / lt_hrs):.1f}",
+                    'lt_spm': f"{int(lt_score / lt_min):,}",
                     'lt_score': f"{lt_score:,}",
                     'm30_kills': f"{m30_kills:,}",
                     'm30_deaths': f"{m30_deaths:,}",
-                    'm30_kd': f"{(m30_kills/m30_deaths):.2f}" if m30_deaths > 0 else "0.00",
-                    'm30_kpm': f"{(m30_kills/m30_min):.2f}",
-                    'm30_kph': f"{(m30_kills/m30_hrs):.1f}",
-                    'm30_spm': f"{int(m30_score/m30_min):,}",
+                    'm30_kd': f"{(m30_kills / m30_deaths):.2f}" if m30_deaths > 0 else "0.00",
+                    'm30_kpm': f"{(m30_kills / m30_min):.2f}",
+                    'm30_kph': f"{(m30_kills / m30_hrs):.1f}",
+                    'm30_spm': f"{int(m30_score / m30_min):,}",
                     'm30_score': f"{m30_score:,}"
                 }
 
@@ -3660,15 +3868,21 @@ class DiorClientGUI:
                             i_id = item.get('item_id')
                             if not i_id or i_id == "0": continue
                             if i_id not in temp_w:
-                                temp_w[i_id] = {'id': i_id, 'name': f"Item {i_id}", 'kills': 0, 'vehicle_kills': 0, 'shots': 0, 'hits': 0, 'hs': 0}
+                                temp_w[i_id] = {'id': i_id, 'name': f"Item {i_id}", 'kills': 0, 'vehicle_kills': 0,
+                                                'shots': 0, 'hits': 0, 'hs': 0}
 
                             val = int(item.get('value', 0))
                             s_name = item.get('stat_name')
-                            if s_name == 'weapon_kills': temp_w[i_id]['kills'] += val
-                            elif s_name == 'weapon_vehicle_kills': temp_w[i_id]['vehicle_kills'] += val
-                            elif s_name == 'weapon_fire_count': temp_w[i_id]['shots'] += val
-                            elif s_name == 'weapon_hit_count': temp_w[i_id]['hits'] += val
-                            elif s_name == 'weapon_headshots': temp_w[i_id]['hs'] += val
+                            if s_name == 'weapon_kills':
+                                temp_w[i_id]['kills'] += val
+                            elif s_name == 'weapon_vehicle_kills':
+                                temp_w[i_id]['vehicle_kills'] += val
+                            elif s_name == 'weapon_fire_count':
+                                temp_w[i_id]['shots'] += val
+                            elif s_name == 'weapon_hit_count':
+                                temp_w[i_id]['hits'] += val
+                            elif s_name == 'weapon_headshots':
+                                temp_w[i_id]['hs'] += val
 
                         relevant_items = [w for w in temp_w.values() if (w['kills'] + w['vehicle_kills']) >= 2]
                         relevant_items.sort(key=lambda x: x['kills'], reverse=True)
@@ -3676,13 +3890,18 @@ class DiorClientGUI:
                         top_items = relevant_items[:100]
                         if top_items:
                             id_list = ",".join([w['id'] for w in top_items])
-                            n_r = requests.get(f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/item/?item_id={id_list}&c:show=item_id,name.en", timeout=15)
-                            name_map = {i['item_id']: i.get('name', {}).get('en', 'Unknown') for i in n_r.json().get('item_list', [])}
+                            n_r = requests.get(
+                                f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/item/?item_id={id_list}&c:show=item_id,name.en",
+                                timeout=15)
+                            name_map = {i['item_id']: i.get('name', {}).get('en', 'Unknown') for i in
+                                        n_r.json().get('item_list', [])}
                             for w in top_items:
                                 if w['id'] in name_map: w['name'] = name_map[w['id']]
 
-                        ignore = ["Nano-Armor", "Repair Tool", "Medical Applicator", "Recon Device", "Shield Capacitor", "Spawn Beacon"]
-                        weapon_list = [w for w in relevant_items if not any(bad.lower() in w['name'].lower() for bad in ignore)]
+                        ignore = ["Nano-Armor", "Repair Tool", "Medical Applicator", "Recon Device", "Shield Capacitor",
+                                  "Spawn Beacon"]
+                        weapon_list = [w for w in relevant_items if
+                                       not any(bad.lower() in w['name'].lower() for bad in ignore)]
                 except Exception as e:
                     self.add_log(f"WARN: Weapons failed: {e}")
 
@@ -3725,23 +3944,26 @@ class DiorClientGUI:
 
                     st_name = s.get('stat_name')
                     val = int(s.get('value', 0))
-                    if st_name == 'weapon_kills': weapon_map[wid]['kills'] += val
-                    elif st_name == 'weapon_hit_count': weapon_map[wid]['hits'] += val
-                    elif st_name == 'weapon_fire_count': weapon_map[wid]['shots'] += val
-                    elif st_name == 'weapon_headshots': weapon_map[wid]['hs'] += val
+                    if st_name == 'weapon_kills':
+                        weapon_map[wid]['kills'] += val
+                    elif st_name == 'weapon_hit_count':
+                        weapon_map[wid]['hits'] += val
+                    elif st_name == 'weapon_fire_count':
+                        weapon_map[wid]['shots'] += val
+                    elif st_name == 'weapon_headshots':
+                        weapon_map[wid]['hs'] += val
 
                 return [v for v in weapon_map.values() if v['kills'] > 0]
         except Exception as e:
             print(f"Fetch Error: {e}")
         return []
 
-
         # --- HELFERFUNKTION FÜR METRIKEN ---
         def update_col(prefix, data):
             k = data['kills']
             d = data['deaths']
             s = data['score']
-            t = data['time'] # in Sekunden
+            t = data['time']  # in Sekunden
 
             # Berechnungen
             kd = round(k / d, 2) if d > 0 else k
@@ -3750,7 +3972,7 @@ class DiorClientGUI:
 
             kpm = round(k / play_minutes, 2) if play_minutes > 0 else 0.0
             kph = round(k / play_hours, 2) if play_hours > 0 else 0.0
-            spm = round(s / play_minutes, 2) if play_minutes > 0 else 0.0 # SPM Berechnung
+            spm = round(s / play_minutes, 2) if play_minutes > 0 else 0.0  # SPM Berechnung
 
             # Labels befüllen
             self.life_labels[f'{prefix}_kills'].config(text=f"{k:,}")
@@ -3758,7 +3980,7 @@ class DiorClientGUI:
             self.life_labels[f'{prefix}_kd'].config(text=f"{kd:.2f}", fg="#00ff00" if kd >= 1.0 else "#ff4444")
             self.life_labels[f'{prefix}_kpm'].config(text=f"{kpm:.2f}")
             self.life_labels[f'{prefix}_kph'].config(text=f"{kph:.2f}")
-            self.life_labels[f'{prefix}_spm'].config(text=f"{spm:.2f}") # SPM Anzeige
+            self.life_labels[f'{prefix}_spm'].config(text=f"{spm:.2f}")  # SPM Anzeige
             self.life_labels[f'{prefix}_score'].config(text=f"{s:,}")
 
         # --- UI UPDATE: RECHTE SPALTEN ---
@@ -3770,10 +3992,13 @@ class DiorClientGUI:
 
 
 class EnforcerHandler(FileSystemEventHandler):
-    def __init__(self, gui): self.gui = gui
+    def __init__(self, gui):
+        self.gui = gui
+
     def on_created(self, event):
         if event.src_path.lower().endswith(".mp4"):
             threading.Thread(target=self.safe_process, args=(event.src_path,), daemon=True).start()
+
     def safe_process(self, path):
         time.sleep(5)
         new_path = os.path.join(os.path.dirname(path), f"REPORT_{self.gui.last_killer_name}.mp4")
@@ -3781,13 +4006,17 @@ class EnforcerHandler(FileSystemEventHandler):
             os.rename(path, new_path)
             self.gui.add_log("UPLINK: Transmitting to Streamable...")
             with open(new_path, 'rb') as f:
-                r = requests.post('https://api.streamable.com/upload', auth=(self.gui.config['email'], self.gui.config['pw']), files={'file': f})
+                r = requests.post('https://api.streamable.com/upload',
+                                  auth=(self.gui.config['email'], self.gui.config['pw']), files={'file': f})
                 if r.status_code == 200:
                     self.gui.last_evidence_url = f"https://streamable.com/{r.json()['shortcode']}"
                     self.gui.add_log(f"LINK: {self.gui.last_evidence_url}")
                     if hasattr(self.gui, 'btn_report'):
-                        self.gui.root.after(0, lambda: self.gui.btn_report.config(state="normal", bg="#ff8c00", fg="black"))
-        except Exception as e: self.gui.add_log(f"ERR: {e}")
+                        self.gui.root.after(0, lambda: self.gui.btn_report.config(state="normal", bg="#ff8c00",
+                                                                                  fg="black"))
+        except Exception as e:
+            self.gui.add_log(f"ERR: {e}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
