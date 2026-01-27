@@ -657,14 +657,30 @@ class DiorClientGUI:
                 output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
                     "cp1252", errors="ignore")
                 is_now_running = "PlanetSide2_x64.exe" in output
+
                 if is_now_running != self.ps2_running:
                     self.ps2_running = is_now_running
+
                     if is_now_running:
                         self.add_log("MONITOR: PlanetSide 2 gestartet.")
-                        self.root.after(0, self.refresh_ingame_overlay)
+
+                        # --- ÄNDERUNG: Prüfen ob Master-Switch AN ist ---
+                        if self.overlay_active.get():
+                            # 1. Crosshair im Main-Thread aktivieren
+                            self.root.after(0, self.auto_enable_overlay)
+                            # 2. Stats-Loop starten
+                            self.root.after(0, self.refresh_ingame_overlay)
+                        else:
+                            self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt inaktiv.")
+
                     else:
                         self.add_log("MONITOR: PlanetSide 2 beendet.")
+                        # Alles ausschalten (Stats + Crosshair)
                         self.root.after(0, self.stop_overlay_logic)
+                        if self.overlay_win:
+                            # Crosshair auch explizit verstecken
+                            self.root.after(0, self.overlay_win.crosshair_label.hide)
+
             except:
                 pass
             time.sleep(5)
@@ -895,13 +911,18 @@ class DiorClientGUI:
         self.save_config()
 
         if is_active:
-            self.add_log("MASTER: Overlay aktiviert (Warte auf PS2...)")
-            # Falls Spiel schon läuft, versuchen wir sofort zu starten
+            self.add_log("MASTER: Overlay aktiviert.")
+            # Falls Spiel schon läuft, versuchen wir sofort ALLES zu starten
             if getattr(self, 'ps2_running', False):
-                self.refresh_ingame_overlay()
+                self.auto_enable_overlay()  # Crosshair an
+                self.refresh_ingame_overlay()  # Stats an
         else:
             self.add_log("MASTER: Overlay deaktiviert.")
-            self.stop_overlay_logic()
+            self.stop_overlay_logic()  # Stoppt Stats
+
+            # Crosshair auch explizit verstecken
+            if self.overlay_win:
+                self.overlay_win.crosshair_label.hide()
 
     def save_overlay_config(self):
         """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
@@ -2030,8 +2051,6 @@ class DiorClientGUI:
             self.overlay_win.stats_bg_label.hide()
             self.overlay_win.stats_text_label.hide()
 
-        if "stats_widget" in self.config:
-            self.config["stats_widget"]["active"] = False
 
         if hasattr(self, 'ovl_status_label'):
             self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
