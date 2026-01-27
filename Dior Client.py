@@ -7,6 +7,9 @@ try:
 except Exception:
     pass
 
+
+#  TEST
+
 # Qt-Skalierung fixen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
