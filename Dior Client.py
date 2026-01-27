@@ -3410,11 +3410,11 @@ class DiorClientGUI:
                                 TR = p.get("faction_tr")
                                 NC = p.get("faction_nc")
                                 if state == "ended" and world == self.myWorldID and zone == self.currentZone:
-                                    if VS >> TR and VS >> NC and self.myTeamId == 1:
+                                    if VS > TR and VS > NC and self.myTeamId == 1:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
-                                    if NC >> TR and NC >> VS and self.myTeamId == 2:
+                                    if NC > TR and NC > VS and self.myTeamId == 2:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
-                                    if TR >> VS and TR >> NC and self.myTeamId == 3:
+                                    if TR > VS and TR > NC and self.myTeamId == 3:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Alert Wind"))
 
             except Exception as e:
