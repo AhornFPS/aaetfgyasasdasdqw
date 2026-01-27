@@ -3,3 +3,4 @@ __pycache__
 error_log.txt
 ps2_master.db
 config.json
+crash_log.txt
