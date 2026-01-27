@@ -492,7 +492,7 @@ PS2_EXP_DETECTION = {
 
     # --- OBJECTIVE ---
     "Point Control": ["15", "16", "272", "556", "557"], # Attack/Defend/Convert Control Point
-    "Sunderer Spawn": ["233"],            # Jemand spawnt an deinem Bus (Logistics)
+    "Sunderer Spawn": ["233"],            # Jemand spawnt an deinem Bus  (Logistics)
     "Base Capture": ["19", "598"],        # Facility Captured
     "Break Construction": ["604", "616", "628"], # Construction zerstört
     "Alert End": ["328"],
