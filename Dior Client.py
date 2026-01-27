@@ -493,9 +493,10 @@ PS2_EXP_DETECTION = {
     # --- OBJECTIVE ---
     "Point Control": ["15", "16", "272", "556", "557"], # Attack/Defend/Convert Control Point
     "Sunderer Spawn": ["233"],            # Jemand spawnt an deinem Bus (Logistics)
-    "Base Capture": ["19", "598"],        # Facility Captured
+    "Base Capture": ["19"],               # Facility Captured
     "Break Construction": ["604", "616", "628"], # Construction zerstört
     "Alert End": ["328"],
+    "Alert Win": ["598"],
 
     # --- COMBAT & SPECIAL ---
     "Road Kill": ["26"],                  # Bestätigter Roadkill XP
