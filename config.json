@@ -256,20 +256,28 @@
             "x_offset": 0,
             "y_offset": 0,
             "scale": 0.02
+        },
+        "Revenge": {
+            "img": "Revenge_Kill.png",
+            "snd": "why-you-heff-to-be-mad-original_0xNlxWJ.ogg",
+            "x_offset": 0,
+            "y_offset": -375,
+            "scale": 0.02,
+            "duration": 3000
         }
     },
     "streak": {
         "img": "Killspree_see_through.png",
-        "x": -491,
-        "y": 600,
+        "x": -409,
+        "y": 459,
         "tx": 182,
         "ty": 0,
         "scale": 1.0
     },
     "stats_widget": {
-        "active": true,
-        "x": 588,
-        "y": -486,
+        "active": false,
+        "x": 595,
+        "y": -500,
         "img": "No file selected",
         "tx": 0,
         "ty": 0,
@@ -286,9 +294,9 @@
     },
     "overlay_active": true,
     "killfeed": {
-        "x": 705,
-        "y": -419,
-        "hs_icon": "headshot.png",
+        "x": 360,
+        "y": -393,
+        "hs_icon": "No file selected",
         "show_revives": true
     },
     "background_image": "C:/Users/xcedr/PycharmProjects/Better-Planetside/assets/background.jpg",

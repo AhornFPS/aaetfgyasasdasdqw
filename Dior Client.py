@@ -3284,6 +3284,8 @@ class DiorClientGUI:
                                     if not kd_triggered and is_hs: 
                                         self.trigger_auto_voice("kill_hs")
                                     if category == "Knife": special_event = "Knife Kill"
+                                    if category == "Grenade": special_event = "Nade Kill"
+
 
                                     
                                     # Multi-Kill Counter
