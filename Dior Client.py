@@ -3393,7 +3393,7 @@ class DiorClientGUI:
                                             if event_name != "Revive" and exp_id in id_list:
                                                 self.root.after(0, lambda e=event_name: self.trigger_overlay_event(e))
                                                 break
-                                    if exp_id in ["2", "3", "37"]:
+                                    if exp_id in ["2", "3", "371", "372"]:
                                         a_obj = get_stat_obj(char_id, p.get("team_id"))
                                         a_obj["a"] += 1
                                     if exp_id == "26":
