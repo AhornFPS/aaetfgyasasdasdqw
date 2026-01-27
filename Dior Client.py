@@ -3612,6 +3612,8 @@ class DiorClientGUI:
                                 other_id = p.get("other_id")
                                 my_id = self.current_character_id
 
+                                # Assist tracker for all
+
                                 if exp_id in ["2", "3", "371", "372"]:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
