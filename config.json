@@ -248,6 +248,13 @@
             "x": 0,
             "y": -375,
             "scale": 1.0
+        },
+        "Break Construction": {
+            "img": "No file selected",
+            "snd": "lego-breaking.ogg",
+            "x_offset": 0,
+            "y_offset": 0,
+            "scale": 0.02
         }
     },
     "streak": {
