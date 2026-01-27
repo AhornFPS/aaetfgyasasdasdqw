@@ -496,7 +496,7 @@ PS2_EXP_DETECTION = {
     "Base Capture": ["19"],               # Facility Captured
     "Break Construction": ["604", "616", "628"], # Construction zerstört
     "Alert End": ["328"],
-    "Alert Win": ["598"],
+    # "Alert Win": ["598"],
 
     # --- COMBAT & SPECIAL ---
     "Road Kill": ["26"],                  # Bestätigter Roadkill XP
