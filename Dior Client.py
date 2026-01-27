@@ -1521,7 +1521,7 @@ class DiorClientGUI:
             "STREAK MEILENSTEINE": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
             "MULTI KILL RUSH": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill", "Holy Shit"],
             "SPEZIAL EVENTS": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "Road Kill", "Roadkill Victim", "Spitfire Kill", "Gunner Kill", "Tankmine Kill", "AP-Mine Kill"],
-            "SUPPORT & TEAM": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair"],
+            "SUPPORT & TEAM": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction"],
             "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist"],
             "SYSTEM / LOGIN": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
@@ -3359,7 +3359,9 @@ class DiorClientGUI:
                                         a_obj = get_stat_obj(char_id, p.get("team_id"))
                                         a_obj["a"] += 1
                                     if exp_id == "26":
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Road Kill"))    
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Road Kill"))
+                                    if exp_id in ["604", "616", "628"]:
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Break Construction"))
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
