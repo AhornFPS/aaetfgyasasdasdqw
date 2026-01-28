@@ -3684,9 +3684,9 @@ class DiorClientGUI:
                                             k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
                                             msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
                                                         text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                        {icon_html}<span style="color: #ff4444;">KILLED BY </span>
-                                                        <span style="color: #888;">{"".join(k_tag)}</span>
-                                                        <span style="color: white;">{k_name}</span>
+                                                        {icon_html}<span style="color: #ff4444;"></span>
+                                                        <span style="color: #888;">[{"".join(k_tag)}]</span>
+                                                        <span style="color: #ff4444;">{k_name}</span>
                                                         <span style="color: #aaa; font-size: 16px;"> ({k_kd})</span></div>"""
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
