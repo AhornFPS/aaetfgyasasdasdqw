@@ -3507,6 +3507,7 @@ class DiorClientGUI:
                                         hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                                         hs_path = get_asset_path(hs_icon).replace("\\", "/")
                                         if os.path.exists(hs_path):
+                                            #headshot icon size
                                             icon_html = f'<img src="{hs_path}" width="20" height="20" style="vertical-align: middle;">&nbsp;'
 
                                     # --------------------------------------
