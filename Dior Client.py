@@ -1363,13 +1363,13 @@ class DiorClientGUI:
         menu.tk_popup(event.x_root, event.y_root)
 
     def switch_server(self, name, new_id):
-        """Wechselt den Server, löscht Daten und setzt Signal für Reconnect"""
-        if str(new_id) == str(self.current_world_id):
+        """Wechselt die Anzeige-ID und löscht lokale Stats (kein Reconnect nötig)"""
+        if str(new_id) == str(self.current_world_id) and getattr(self, "needs_reconnect", False) == False:
             return
 
-        self.add_log(f"SYSTEM: Wechsle Server zu {name} (ID: {new_id})...")
+        self.add_log(f"SYSTEM: Dashboard-Filter auf {name} (ID: {new_id}) gesetzt.")
 
-        # 1. Variablen updaten (als String erzwingen)
+        # 1. Variablen updaten
         self.current_server_name = name
         self.current_world_id = str(new_id)
 
@@ -1377,11 +1377,11 @@ class DiorClientGUI:
         self.config["world_id"] = self.current_world_id
         self.save_config()
 
-        # 3. Label im Dashboard aktualisieren
+        # 3. Label aktualisieren
         if hasattr(self, 'lbl_server_title'):
             self.lbl_server_title.config(text=f"{name.upper()} LIVE TELEMETRY ▾")
 
-        # 4. ALTE DATEN LÖSCHEN (Reset für neuen Server)
+        # 4. DATEN RESET (Damit der neue Server bei 0 anfängt)
         self.pop_history = [0] * 100
         self.session_stats = {}
         self.active_players = {}
@@ -1390,9 +1390,12 @@ class DiorClientGUI:
         if self.current_tab == "Dashboard":
             self.update_dashboard_elements()
 
-        # 5. SIGNAL ZUM NEUSTART
-        self.needs_reconnect = True
-        self.add_log("WEBSOCKET: Verbindung wird für neuen Server neu aufgebaut...")
+    def get_server_name_by_id(self, world_id):
+        """Sucht den Anzeigenamen zum Server anhand der World-ID"""
+        for name, wid in self.server_map.items():
+            if str(wid) == str(world_id):
+                return name
+        return "Unknown Server"
 
     def save_config(self):
         """Speichert die gesamte Konfiguration in die config.json"""
@@ -2715,48 +2718,55 @@ class DiorClientGUI:
             self.sub_menu_frame.place_forget()
 
     def clear_content(self):
+        """Löscht alle Inhalte vom Canvas und zerstört die dazugehörigen Widgets"""
         for item_id in self.content_ids:
+            try:
+                # Wir holen uns den Namen des Widgets, das in diesem Canvas-Fenster steckt
+                widget_path = self.canvas.itemcget(item_id, "window")
+                if widget_path:
+                    # Wir suchen das echte Widget-Objekt anhand des Namens und zerstören es
+                    widget = self.root.nametowidget(widget_path)
+                    widget.destroy()
+            except Exception:
+                # Falls das Widget bereits zerstört wurde oder kein Fenster war
+                pass
+
+            # Jetzt löschen wir das Element endgültig vom Canvas
             self.canvas.delete(item_id)
+
         self.content_ids.clear()
 
     def show_dashboard(self):
-        # 1. Zuerst IMMER aufräumen
+        # 1. Zuerst das UI komplett leeren und Widgets zerstören
         self.clear_content()
         self.current_tab = "Dashboard"
 
-        # WICHTIG: Alte Graphen-Referenzen löschen
+        # Alte Graphen-Referenzen löschen
         if hasattr(self, 'graph_line'): del self.graph_line
         if hasattr(self, 'graph_glow'): del self.graph_glow
 
-        # Fenstergröße setzen
+        # Fenstergröße setzen und Berechnung erzwingen, damit 'mid' stimmt
         self.root.geometry("1600x1000")
+        self.root.update_idletasks()
         mid = self.root.winfo_width() // 2
 
-        # 2. Haupt-Frame erstellen
+        # 2. Haupt-Frame erstellen (WICHTIG: Er wird in clear_content jetzt mit-zerstört)
         dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
         self.dash_widgets = {"frame": dash_frame, "factions": {}}
 
-        # =========================================================================
-        # INTERAKTIVER HEADER (Ersetzt das alte statische Label)
-        # =========================================================================
+        # ================= HEADER =================
         head_frame = tk.Frame(dash_frame, bg="#1a1a1a")
         head_frame.pack(pady=15)
 
-        # Name dynamisch machen: "{SERVER} LIVE TELEMETRY ▾"
-        # Wir speichern das Label in self, um den Text später ändern zu können
         header_text = f"{self.current_server_name.upper()} LIVE TELEMETRY ▾"
-
         self.lbl_server_title = tk.Label(head_frame, text=header_text,
                                          font=("Arial", 24, "bold"),
                                          bg="#1a1a1a", fg="#00f2ff",
-                                         cursor="hand2")  # Hand-Cursor signalisiert "Klickbar"
+                                         cursor="hand2")
         self.lbl_server_title.pack(side="left")
-
-        # Linksklick öffnet das Menü
         self.lbl_server_title.bind("<Button-1>", self.open_server_menu)
-        # =========================================================================
 
-        # 3. Größeres Canvas für den Graphen
+        # 3. Canvas für den Graphen
         g_canvas = tk.Canvas(dash_frame, width=800, height=200, bg="#050505", highlightthickness=0)
         g_canvas.pack(pady=10, padx=20)
         self.dash_widgets["canvas"] = g_canvas
@@ -2777,9 +2787,8 @@ class DiorClientGUI:
             p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
 
-            # Balken
             bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=10)
+            bar_bg.pack(pady=10);
             bar_bg.pack_propagate(False)
             bar = tk.Frame(bar_bg, bg=color, height=8)
             bar.place(x=0, y=0, width=0)
@@ -2787,7 +2796,6 @@ class DiorClientGUI:
             tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
                 pady=(15, 0))
 
-            # --- TABELLEN-HEADER ---
             list_frame = tk.Frame(f_box, bg="#1a1a1a")
             list_frame.pack(fill="x", padx=5, pady=5)
 
@@ -2798,19 +2806,17 @@ class DiorClientGUI:
                                  bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
                 h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
 
-            self.dash_widgets["factions"][name] = {
-                "label": p_lab,
-                "bar": bar,
-                "list_frame": list_frame
-            }
+            self.dash_widgets["factions"][name] = {"label": p_lab, "bar": bar, "list_frame": list_frame}
 
         # Footer
         self.dash_widgets["footer"] = tk.Label(dash_frame, text="", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
         self.dash_widgets["footer"].pack(pady=10)
 
-        # Frame ins Canvas setzen
-        id_dash = self.canvas.create_window(mid, 480, window=dash_frame, width=1450, height=850)
+        # Canvas-Fenster erstellen
+        id_dash = self.canvas.create_window(mid, 620, window=dash_frame, width=1450, height=850)
         self.content_ids.append(id_dash)
+
+        # Dashboard-Werte befüllen
         self.update_dashboard_elements()
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
@@ -3259,11 +3265,15 @@ class DiorClientGUI:
                 r = requests.get(url, timeout=10).json()
 
                 if r['returned'] > 0:
-                    cid = r['character_list'][0]['character_id']
-                    real_name = r['character_list'][0]['name']['first']
+                    c_list = r['character_list'][0]
+                    cid = c_list['character_id']
+                    real_name = c_list['name']['first']
+                    world_id = c_list.get('world_id', '0')  # World ID mitnehmen
 
-                    # DB
+                    # In Cache speichern, damit Auto-Switch sofort funktioniert
                     conn = sqlite3.connect("ps2_master.db")
+                    conn.execute("INSERT OR REPLACE INTO player_cache (character_id, name, world_id) VALUES (?, ?, ?)",
+                                 (cid, real_name, world_id))
                     conn.execute("INSERT OR REPLACE INTO my_chars (name, character_id) VALUES (?, ?)", (real_name, cid))
                     conn.commit()
                     conn.close()
@@ -3316,15 +3326,24 @@ class DiorClientGUI:
 
     def update_active_char(self, name):
         self.char_var.set(name)
-        self.current_character_id = self.char_data.get(name, "")
+        cid = self.char_data.get(name, "")
+        self.current_character_id = cid
         self.add_log(f"SYS: Tracking {name}")
 
-        # Modified safety check
-        if hasattr(self, 'websocket') and self.websocket and hasattr(self, 'loop') and self.loop:
-            try:
-                self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.websocket.close()))
-            except Exception as e:
-                print(f"Websocket reset error: {e}")
+        # --- AUTOMATISCHER SERVER-WECHSEL ---
+        try:
+            conn = sqlite3.connect("ps2_master.db")
+            res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
+            conn.close()
+
+            if res and res[0]:
+                new_world_id = str(res[0])
+                if new_world_id != str(self.current_world_id):
+                    s_name = self.get_server_name_by_id(new_world_id)
+                    # Wir nutzen switch_server, um Daten zu löschen und neu zu verbinden
+                    self.root.after(0, lambda n=s_name, i=new_world_id: self.switch_server(n, i))
+        except Exception as e:
+            print(f"Auto-Switch Error: {e}")
 
     def load_player_backup(self):
         c = {}
@@ -3439,21 +3458,22 @@ class DiorClientGUI:
 
                     self.websocket = websocket
 
-                    # Subscription mit der aktuell gewählten World-ID
+                    # --- GLOBAL SUBSCRIPTION ---
+                    # Wir abonnieren ALLES für ALLE Server gleichzeitig
                     msg = {
                         "service": "event",
                         "action": "subscribe",
                         "characters": ["all"],
-                        "worlds": [str(self.current_world_id)],
+                        "worlds": ["all"],
                         "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
                     }
                     await websocket.send(json.dumps(msg))
-                    self.add_log(f"Websocket: Verbunden mit {self.current_server_name} (ID: {self.current_world_id})")
+                    self.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
 
                     self.last_raw_message = None
 
                     async for message in websocket:
-                        # 1. PRÜFUNG AUF SERVERWECHSEL (Signal von switch_server)
+                        # Reconnect nur ausführen, wenn explizit gefordert (z.B. nach Error)
                         if getattr(self, "needs_reconnect", False):
                             self.needs_reconnect = False
                             await websocket.close()
@@ -3466,27 +3486,23 @@ class DiorClientGUI:
 
                         if "payload" in data:
                             p = data["payload"]
-
-                            # --- SICHERHEITS-FILTER: Nur Daten vom gewählten Server ---
-                            payload_world = str(p.get("world_id", "0"))
-                            if payload_world != "0" and payload_world != str(self.current_world_id):
-                                continue
-
                             e_name = p.get("event_name")
+                            payload_world = str(p.get("world_id", "0"))
+
                             ts = p.get("timestamp")
                             char_id = p.get("character_id", "0")
                             attacker_id = p.get("attacker_character_id", "0")
                             exp_id = p.get("experience_id", "0")
 
-                            # UID gegen Duplikate
-                            uid = f"{e_name}{ts}_{char_id}{attacker_id}{exp_id}"
+                            # UID gegen Duplikate (Global über alle Server hinweg)
+                            uid = f"{e_name}{ts}_{char_id}{attacker_id}{exp_id}{payload_world}"
                             if hasattr(self, 'last_event_uid') and self.last_event_uid == uid:
                                 continue
                             self.last_event_uid = uid
 
-                            # -------------------------------------------------
-                            # PLAYER LOGIN / LOGOUT
-                            # -------------------------------------------------
+                            # =========================================================
+                            # 1. PLAYER LOGIN / LOGOUT (Globaler Check)
+                            # =========================================================
                             if e_name == "PlayerLogin":
                                 c_id = p.get("character_id")
                                 for name, saved_id in self.char_data.items():
@@ -3495,6 +3511,16 @@ class DiorClientGUI:
                                         self.root.after(0, lambda n=name: self.char_var.set(n))
                                         self.add_log(f"AUTO-TRACK: {name} eingeloggt.")
 
+                                        # AUTO SERVER WECHSEL BEI LOGIN
+                                        if payload_world != "0" and payload_world != str(self.current_world_id):
+                                            s_name = self.get_server_name_by_id(payload_world)
+                                            self.add_log(
+                                                f"AUTO-SWITCH: Detektiert auf {s_name}. Sortiere Dashboard um...")
+                                            # switch_server setzt die Filter-ID um und leert die Listen
+                                            self.root.after(0,
+                                                            lambda n=s_name, i=payload_world: self.switch_server(n, i))
+
+                                        # Fraktion für Login-Overlay bestimmen
                                         faction_tag = "NSO"
                                         try:
                                             conn = sqlite3.connect("ps2_master.db")
@@ -3514,18 +3540,18 @@ class DiorClientGUI:
                                 if p.get("character_id") == self.current_character_id:
                                     self.current_character_id = ""
                                     self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
+                                    self.add_log("AUTO-TRACK: Charakter ausgeloggt. Warte auf Login...")
 
-                            # -------------------------------------------------
-                            # ALLGEMEINES TRACKING & STATS HELPER
-                            # -------------------------------------------------
-                            track_id = p.get("character_id") or p.get("attacker_character_id")
-                            if track_id and track_id != "0":
-                                tid = p.get("team_id") or p.get("attacker_team_id")
-                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-                                self.active_players[track_id] = (time.time(), f_name)
-                                if track_id not in self.name_cache:
-                                    self.id_queue.put(track_id)
+                            # =========================================================
+                            # 2. DER SERVER-FILTER (Sortiert Daten für das Dashboard aus)
+                            # =========================================================
+                            # Alle Kampf-Daten (Kills, XP etc.) werden hier gefiltert
+                            if payload_world != "0" and payload_world != str(self.current_world_id):
+                                continue
 
+                            # --- AB HIER: NUR NOCH LOGIK FÜR DEN AKTIVEN SERVER ---
+
+                            # Stats Helper
                             def get_stat_obj(cid, tid):
                                 if cid not in self.session_stats:
                                     faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
@@ -3536,6 +3562,17 @@ class DiorClientGUI:
                                     }
                                 return self.session_stats[cid]
 
+                            # -------------------------------------------------
+                            # ALLGEMEINES TRACKING (Population Dashboard)
+                            # -------------------------------------------------
+                            track_id = p.get("character_id") or p.get("attacker_character_id")
+                            if track_id and track_id != "0":
+                                tid = p.get("team_id") or p.get("attacker_team_id")
+                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+                                self.active_players[track_id] = (time.time(), f_name)
+                                if track_id not in self.name_cache:
+                                    self.id_queue.put(track_id)
+
                             # =========================================================
                             # EVENT: DEATH
                             # =========================================================
@@ -3545,7 +3582,6 @@ class DiorClientGUI:
                                 my_id = self.current_character_id
                                 is_hs = (p.get("is_headshot") == "1")
 
-                                # Globale Stats für Dashboard
                                 if killer_id and killer_id != "0" and killer_id != victim_id:
                                     k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                                     k_obj["k"] += 1
@@ -3579,7 +3615,6 @@ class DiorClientGUI:
                                             self.trigger_auto_voice("tk")
                                             self.root.after(0, lambda: self.trigger_overlay_event("Team Kill"))
                                         else:
-                                            # Killstreak Logik: Wenn 0 (tot/respawned), starte bei 1
                                             if self.killstreak_count == 0:
                                                 self.killstreak_count = 1
                                             else:
@@ -3589,19 +3624,16 @@ class DiorClientGUI:
                                             self.was_revived = False
                                             self.root.after(0, self.update_streak_display)
 
-                                            # Multi-Kill
                                             if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
                                                 self.kill_counter += 1
                                             else:
                                                 self.kill_counter = 1
                                             self.last_kill_time = curr_time
 
-                                            # Voice Macros & Popups
                                             v_loadout = p.get("character_loadout_id")
                                             if is_hs: self.trigger_auto_voice("kill_hs")
                                             if v_loadout in LOADOUT_MAP["max"]: self.trigger_auto_voice("kill_max")
 
-                                            # Killfeed
                                             v_name = self.name_cache.get(victim_id, "Unknown")
                                             v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
                                             tag_display = f"[{v_tag}]"
@@ -3621,8 +3653,6 @@ class DiorClientGUI:
                                         self.kill_counter = 0
                                         self.is_dead = True
                                         self.was_revived = False
-
-                                        # Sofort ausblenden
                                         self.root.after(0, self.update_streak_display)
 
                                         if killer_id and killer_id != "0":
@@ -3635,20 +3665,17 @@ class DiorClientGUI:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
                             # =========================================================
-                            # EVENT: EXPERIENCE (Revive, Assists)
+                            # EVENT: EXPERIENCE
                             # =========================================================
                             elif e_name == "GainExperience":
-                                exp_id = str(p.get("experience_id", "0"))
                                 other_id = p.get("other_id")
                                 char_id = p.get("character_id")
                                 my_id = self.current_character_id
 
-                                # Assist Tracker
                                 if exp_id in ["2", "3", "371", "372"]:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
-                                # ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
                                         self.was_revived = True
@@ -3656,10 +3683,8 @@ class DiorClientGUI:
                                         if my_id in self.session_stats and self.session_stats[my_id]["d"] > 0:
                                             self.session_stats[my_id]["d"] -= 1
 
-                                        # Streak wiederherstellen und einblenden
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.root.after(0, self.update_streak_display)
-
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
                                         self.trigger_auto_voice("revived")
 
@@ -3668,8 +3693,9 @@ class DiorClientGUI:
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                # ICH HABE ETWAS GETAN (Revive Given etc.)
                                 if my_id and char_id == my_id:
+                                    self.myTeamId = p.get("team_id")
+                                    self.myWorldID = p.get("world_id")
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
                                     else:
@@ -3679,23 +3705,14 @@ class DiorClientGUI:
                                                 break
 
                             # =========================================================
-                            # EVENT: METAGAME (Alerts)
+                            # EVENT: METAGAME
                             # =========================================================
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
                                 world = p.get("world_id")
                                 zone = p.get("zone_id")
-                                VS = p.get("faction_vs")
-                                TR = p.get("faction_tr")
-                                NC = p.get("faction_nc")
-                                print()
                                 if state == "ended" and world == self.myWorldID and zone == self.currentZone:
-                                    if VS > TR and VS > NC and self.myTeamId == 1:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
-                                    if NC > TR and NC > VS and self.myTeamId == 2:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
-                                    if TR > VS and TR > NC and self.myTeamId == 3:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
+                                    self.root.after(0, lambda: self.trigger_overlay_event("Alert End"))
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
