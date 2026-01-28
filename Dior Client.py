@@ -55,7 +55,7 @@ class OverlaySignals(QObject):
     show_image = pyqtSignal(str, int, int, int)
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
-    update_streak = pyqtSignal(str, int, dict)
+    update_streak = pyqtSignal(str, int, list, dict)
     clear_feed = pyqtSignal()
 
 
@@ -68,6 +68,9 @@ class QtOverlay(QWidget):
         self.edit_mode = False
         self.dragging_widget = None
         self.drag_offset = None
+
+        # Pool für Messer-Labels
+        self.knife_labels = []
 
         # 1. FENSTER-KONFIGURATION
         self.setWindowFlags(
@@ -355,33 +358,118 @@ class QtOverlay(QWidget):
         temp_label.show()
         QTimer.singleShot(duration, temp_label.deleteLater)
 
-    def draw_streak_ui(self, img_path, count, cfg):
+    def draw_streak_ui(self, img_path, count, factions, cfg):
+        import math
+        from PyQt6.QtGui import QTransform
+
         if count <= 0 and not self.edit_mode:
-            self.streak_bg_label.hide();
-            self.streak_text_label.hide();
+            self.streak_bg_label.hide()
+            self.streak_text_label.hide()
+            for l in self.knife_labels: l.hide()
             return
-        if count <= 0: count = 5
+
+        display_count = count if count > 0 else 10
+
         if os.path.exists(img_path):
-            pix = QPixmap(img_path);
+            pix = QPixmap(img_path)
             final_scale = cfg.get("scale", 1.0) * self.ui_scale
             if not pix.isNull():
                 pix = pix.scaled(int(pix.width() * final_scale), int(pix.height() * final_scale),
                                  Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.streak_bg_label.setPixmap(pix);
+                self.streak_bg_label.setPixmap(pix)
                 self.streak_bg_label.adjustSize()
-                bx = (self.width() // 2) + self.s(cfg.get("x", 0));
+
+                bx = (self.width() // 2) + self.s(cfg.get("x", 0))
                 by = (self.height() // 2) + self.s(cfg.get("y", 100))
+                visual_center_y = by - self.s(22)
+
                 self.safe_move(self.streak_bg_label, bx - (self.streak_bg_label.width() // 2),
                                by - (self.streak_bg_label.height() // 2))
-                self.streak_bg_label.show();
-                tx = bx + self.s(cfg.get("tx", 0));
-                ty = by + self.s(cfg.get("ty", 0))
+                self.streak_bg_label.show()
+
+                # --- KONFIGURATION FÜR REIHEN-OPTIK ---
+                # Hohe Anzahl pro Kreis, damit sie außen eng bleiben
+                knives_per_circle = 45
+                radius_step = self.s(50)
+                rx_base = (self.streak_bg_label.width() // 2)
+                ry_base = (self.streak_bg_label.height() // 2)
+
+                while len(self.knife_labels) < len(factions):
+                    lbl = QLabel(self)
+                    lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                    self.knife_labels.append(lbl)
+
+                # WICHTIG: Schleife RÜCKWÄRTS laufen lassen (Außen nach Innen)
+                # Dadurch liegt der erste Ring (Index 0) am Ende oben auf den anderen Messern
+                for i in range(len(factions) - 1, -1, -1):
+                    f_tag = factions[i]
+                    label = self.knife_labels[i]
+                    k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
+                    k_path = get_asset_path(k_file)
+
+                    if not os.path.exists(k_path):
+                        label.hide();
+                        continue
+
+                    k_pix = QPixmap(k_path)
+                    if k_pix.isNull(): continue
+
+                    circle_idx = i // knives_per_circle
+                    pos_in_circle = i % knives_per_circle
+
+                    # KEIN STAGGERING: Alle Messer liegen exakt untereinander
+                    angle = (pos_in_circle * (360 / knives_per_circle)) - 90
+                    rad = math.radians(angle)
+                    s = math.sin(rad)
+                    c = math.cos(rad)
+
+                    # Kiefer-Anpassung (REDUZIERT für "weiter raus")
+                    f_x, f_y = 1.0, 1.0
+                    if s > 0:  # Untere Hälfte
+                        # Wert von 0.48 auf 0.28 gesenkt -> Messer wandern am Kiefer weiter raus
+                        narrow_factor = 0.28
+                        f_x = 1.0 - (narrow_factor * s)
+                        f_y = 1.0 - (0.12 * s)
+                    else:  # Obere Hälfte
+                        f_x = 1.0 + (0.05 * abs(s))
+
+                    # Radien (Spitzen stecken 10px im Kopf)
+                    curr_rx = (rx_base - self.s(10) + (circle_idx * radius_step)) * f_x
+                    curr_ry = (ry_base - self.s(10) + (circle_idx * radius_step)) * f_y
+
+                    kx = bx + int(curr_rx * c)
+                    ky = visual_center_y + int(curr_ry * s)
+
+                    transform = QTransform().rotate(angle + 90)
+                    k_pix = k_pix.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+                    k_pix = k_pix.scaled(self.s(85), self.s(85), Qt.AspectRatioMode.KeepAspectRatio,
+                                         Qt.TransformationMode.SmoothTransformation)
+
+                    label.setPixmap(k_pix)
+                    label.adjustSize()
+                    self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
+                    label.show()
+                    # Jedes Messer wird nach vorne geholt, da wir von außen nach innen zeichnen,
+                    # ist das letzte (innerste) Messer am Ende ganz oben.
+                    label.raise_()
+
+                # Restliche Labels verstecken
+                for j in range(len(factions), len(self.knife_labels)):
+                    self.knife_labels[j].hide()
+
+                # --- FINALES LAYERING ---
+                # 1. Totenkopf über ALLE Messer heben
+                self.streak_bg_label.raise_()
+
+                # 2. Zahl ganz nach oben
                 self.streak_text_label.setText(
-                    f"<span style='font-size: {int(24 * final_scale)}pt; font-family: Impact; color: #ff0000; text-shadow: 2px 2px 0 #000;'>{count}</span>")
-                self.streak_text_label.adjustSize();
+                    f"<span style='font-size: {int(26 * final_scale)}pt; font-family: Impact; color: white; text-shadow: 2px 2px 0 #000;'>{display_count}</span>")
+                self.streak_text_label.adjustSize()
+                tx = bx + self.s(cfg.get("tx", 0))
+                ty = by + self.s(cfg.get("ty", 0))
                 self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
                                ty - (self.streak_text_label.height() // 2))
-                self.streak_text_label.show();
+                self.streak_text_label.show()
                 self.streak_text_label.raise_()
 
     def update_crosshair(self, path, size, enabled):
@@ -1733,14 +1821,15 @@ class DiorClientGUI:
                   command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left", padx=10)
 
         # =========================================================
-        # TAB 3: KILLSTREAK
+        # TAB 3: KILLSTREAK (Messer-Kreis-System)
         # =========================================================
         tab_streak = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
         self.ovl_notebook.add(tab_streak, text=" KILLSTREAK ")
         s_conf = self.overlay_config.get("streak", {})
 
-        tk.Label(tab_streak, text="Streak Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(10, 0))
-        strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        # --- HAUPT-BILD (SKULL) ---
+        tk.Label(tab_streak, text="Haupt-Hintergrund (Skull PNG):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(10, 0))
+        strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a")
         strk_img_f.pack()
         self.ent_streak_img = tk.Entry(strk_img_f, width=40, bg="#111", fg="#00f2ff")
         self.ent_streak_img.pack(side="left")
@@ -1748,51 +1837,69 @@ class DiorClientGUI:
         tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333",
                   fg="white").pack(side="left")
 
+        # --- MESSER-KONFIGURATION (NEU) ---
+        tk.Label(tab_streak, text="FRAKTIONS-MESSER (Für den Kreis):", font=("Consolas", 10, "bold"), bg="#1a1a1a",
+                 fg="#ffcc00").pack(pady=(15, 5))
+
+        knife_frame = tk.Frame(tab_streak, bg="#1a1a1a")
+        knife_frame.pack(pady=5)
+
+        # Messer-Setup für jede Fraktion
+        self.knife_entries = {}
+        for i, (f_name, f_col) in enumerate([("TR", "#ff4444"), ("NC", "#0066ff"), ("VS", "#9900ff")]):
+            row = tk.Frame(knife_frame, bg="#1a1a1a")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{f_name} Knife:", bg="#1a1a1a", fg=f_col, width=10, anchor="w").pack(side="left")
+
+            ent = tk.Entry(row, width=30, bg="#111", fg="white")
+            # Wert aus Config laden (Fallback auf Standardnamen)
+            saved_knife = s_conf.get(f"knife_{f_name.lower()}", f"knife_{f_name.lower()}.png")
+            ent.insert(0, get_short_name(saved_knife))
+            ent.pack(side="left", padx=5)
+            self.knife_entries[f_name.lower()] = ent
+
+            tk.Button(row, text="Browse", command=lambda e=ent: self.browse_file(e, "png"), bg="#333", fg="white",
+                      font=("Arial", 8)).pack(side="left")
+
+        # --- POSITIONIERUNG ---
         tk.Label(tab_streak, text="Position BILD (Offset):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(15, 0))
-        img_pos_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        img_pos_f = tk.Frame(tab_streak, bg="#1a1a1a")
         img_pos_f.pack(fill="x", padx=50)
         self.scale_sx = tk.Scale(img_pos_f, from_=-1000, to=1000, orient="horizontal", bg="#1a1a1a", fg="white",
                                  label="Bild X")
-        self.scale_sx.set(s_conf.get("x", 0));
+        self.scale_sx.set(s_conf.get("x", 0))
         self.scale_sx.pack(side="left", fill="x", expand=True)
         self.scale_sy = tk.Scale(img_pos_f, from_=-700, to=700, orient="horizontal", bg="#1a1a1a", fg="white",
                                  label="Bild Y")
-        self.scale_sy.set(s_conf.get("y", 100));
+        self.scale_sy.set(s_conf.get("y", 100))
         self.scale_sy.pack(side="left", fill="x", expand=True)
 
         tk.Label(tab_streak, text="Position ZAHL (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 0))
-        txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a");
+        txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a")
         txt_pos_f.pack(fill="x", padx=50)
         self.scale_tx = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Zahl X Offset")
-        self.scale_tx.set(s_conf.get("tx", 0));
+                                 label="Zahl X")
+        self.scale_tx.set(s_conf.get("tx", 0))
         self.scale_tx.pack(side="left", fill="x", expand=True)
         self.scale_ty = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Zahl Y Offset")
-        self.scale_ty.set(s_conf.get("ty", 0));
+                                 label="Zahl Y")
+        self.scale_ty.set(s_conf.get("ty", 0))
         self.scale_ty.pack(side="left", fill="x", expand=True)
 
-        tk.Label(tab_streak, text="Skalierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
+        tk.Label(tab_streak, text="Skalierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(10, 0))
         self.scale_s_size = tk.Scale(tab_streak, from_=0.1, to=3.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
                                      fg="white")
-        self.scale_s_size.set(s_conf.get("scale", 1.0));
-        self.scale_s_size.pack(fill="x", padx=50)
+        self.scale_s_size.set(s_conf.get("scale", 1.0))
+        self.scale_s_size.pack(fill="x", padx=100)
 
-        s_btn_box = tk.Frame(tab_streak, bg="#1a1a1a");
+        s_btn_box = tk.Frame(tab_streak, bg="#1a1a1a")
         s_btn_box.pack(pady=20)
         tk.Button(s_btn_box, text="SAVE STREAK", bg="#004400", fg="white", width=15, height=2,
                   command=self.save_streak_settings).pack(side="left", padx=10)
-
-        # NEU: Drag & Drop Button für Killstreak
-        self.btn_edit_streak = tk.Button(s_btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
-                                         width=25, command=self.toggle_hud_edit_mode)
-        self.btn_edit_streak.pack(side="left", padx=10)
-
-        tk.Button(s_btn_box, text="TEST (5 KILLS)", bg="#444", fg="white", width=15, height=2,
+        tk.Button(s_btn_box, text="LAYOUT EDIT", bg="#0066ff", fg="white", width=15, height=2,
+                  command=self.toggle_hud_edit_mode).pack(side="left", padx=10)
+        tk.Button(s_btn_box, text="TEST STREAK", bg="#444", fg="white", width=15, height=2,
                   command=self.test_streak_visuals).pack(side="left", padx=10)
-
-        # Daten laden (JETZT erst aufrufen, wo ent_evt_img existiert!)
-        self.load_event_ui_data("Kill")
 
         # =========================================================
         # TAB 4: CROSSHAIR
@@ -2397,7 +2504,7 @@ class DiorClientGUI:
         is_editing = getattr(self, "is_hud_editing", False)
 
         if not is_editing:
-            # --- AKTIVIEREN (Bleibt gleich) ---
+            # --- AKTIVIEREN ---
             targets = self.get_current_tab_targets()
             if not targets:
                 self.add_log("INFO: In diesem Tab gibt es nichts zu verschieben.")
@@ -2405,19 +2512,25 @@ class DiorClientGUI:
 
             self.is_hud_editing = True
 
-            # Buttons Rot färben
-            if hasattr(self, 'btn_edit_hud'): self.btn_edit_hud.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
-            if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
-            if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
+            # Buttons auf Rot setzen (Feedback für User)
+            btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak']
+            for b in btn_list:
+                if hasattr(self, b):
+                    getattr(self, b).config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
 
-            # Edit-Modus im Overlay einschalten
+            # Edit-Modus im Overlay einschalten (Maus-Events freigeben)
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
             self.add_log(f"UI: Edit-Modus für {targets} gestartet.")
 
-            # Dummys anzeigen
+            # --- DUMMYS ANZEIGEN ---
             if "streak" in targets:
+                # Alten Streak & Messer sichern
                 self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
-                self.killstreak_count = 5
+                self.temp_factions_backup = getattr(self, 'streak_factions', [])
+
+                # Dummy-Daten setzen: 5 Kills mit gemischten Messer-Farben
+                self.killstreak_count = 10
+                self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
                 self.update_streak_display()
 
             if "stats" in targets or "feed" in targets:
@@ -2430,39 +2543,46 @@ class DiorClientGUI:
                 self.overlay_win.update_crosshair(path, c_conf.get("size", 32), True)
 
         else:
-            # --- DEAKTIVIEREN (Hier war der Fehler) ---
+            # --- DEAKTIVIEREN (SPEICHERN) ---
             self.is_hud_editing = False
 
-            # 1. WICHTIG: ZUERST den Edit-Modus im Overlay beenden!
-            # Damit verschwinden die grünen Rahmen und das Overlay weiß "Aha, keine Editierung mehr"
+            # 1. ZUERST den Edit-Modus im QtOverlay beenden (Klick-Through wieder AN)
             if self.overlay_win:
                 self.overlay_win.set_mouse_passthrough(True)
 
-            # Buttons Blau färben
-            if hasattr(self, 'btn_edit_hud'): self.btn_edit_hud.config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
-            if hasattr(self, 'btn_edit_cross'): self.btn_edit_cross.config(text="LAYOUT PER MAUS VERSCHIEBEN",
-                                                                           bg="#0066ff")
-            if hasattr(self, 'btn_edit_streak'): self.btn_edit_streak.config(text="LAYOUT PER MAUS VERSCHIEBEN",
-                                                                             bg="#0066ff")
+            # Buttons zurück auf Blau setzen
+            btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak']
+            for b in btn_list:
+                if hasattr(self, b):
+                    getattr(self, b).config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
 
-            # 2. JETZT erst die Werte zurücksetzen
-            # Da der Edit-Mode oben schon ausgeschaltet wurde, versteckt sich die Streak-Anzeige jetzt korrekt
+            # 2. DUMMY-DATEN ENTFERNEN & ORIGINALE WIEDERHERSTELLEN
             if hasattr(self, 'temp_streak_backup'):
                 self.killstreak_count = self.temp_streak_backup
+                self.streak_factions = getattr(self, 'temp_factions_backup', [])
+                # Temporäre Backups löschen
                 del self.temp_streak_backup
+                if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
             else:
                 self.killstreak_count = 0
+                self.streak_factions = []
+
+            # UI mit echten Werten (oder 0) aktualisieren
             self.update_streak_display()
 
             self.is_stats_test = False
             self.stop_overlay_logic()
 
+            # Crosshair auf gespeicherten Zustand zurücksetzen
             c_conf = self.config.get("crosshair", {})
             if self.overlay_win:
-                self.overlay_win.update_crosshair(get_asset_path(c_conf.get("file", "")), c_conf.get("size", 32),
-                                                  c_conf.get("active", True))
+                self.overlay_win.update_crosshair(
+                    get_asset_path(c_conf.get("file", "")),
+                    c_conf.get("size", 32),
+                    c_conf.get("active", True)
+                )
 
-            self.add_log("UI: Edit-Modus AUS. Positionen gespeichert.")
+            self.add_log("UI: Edit-Modus AUS. Positionen wurden gesichert.")
             self.save_config()
 
     def on_overlay_tab_change(self, event):
@@ -2477,16 +2597,10 @@ class DiorClientGUI:
         self.refresh_ingame_overlay()
 
     def save_streak_settings(self):
-        # Wir holen den Pfad aus dem Eingabefeld und kürzen ihn
-        raw_path = self.ent_streak_img.get()
-        clean_name = get_short_name(raw_path)
-
-        # Speichern in der Haupt-Config
-        if "streak" not in self.config:
-            self.config["streak"] = {}
+        if "streak" not in self.config: self.config["streak"] = {}
 
         self.config["streak"].update({
-            "img": clean_name,
+            "img": get_short_name(self.ent_streak_img.get()),
             "x": self.scale_sx.get(),
             "y": self.scale_sy.get(),
             "tx": self.scale_tx.get(),
@@ -2494,10 +2608,13 @@ class DiorClientGUI:
             "scale": self.scale_s_size.get()
         })
 
-        self.save_config()  # Nutzt deine bestehende Speicher-Funktion
-        self.add_log(f"Killstreak Design gespeichert: {clean_name}")
+        # Messer-Auswahl speichern
+        if hasattr(self, 'knife_entries'):
+            for f_tag, ent in self.knife_entries.items():
+                self.config["streak"][f"knife_{f_tag}"] = get_short_name(ent.get())
 
-        # Sofortige Vorschau im PyQt-Overlay
+        self.save_config()
+        self.add_log("SYS: Killstreak & Messer-Setup gespeichert.")
         self.update_streak_display()
 
     def draw_streak_ui(self, img_path, count, config):
@@ -2559,54 +2676,39 @@ class DiorClientGUI:
                 self.streak_text_label.show()
 
     def update_streak_display(self):
-        # Sicherheitscheck: Läuft das PyQt-Overlay?
-        if not self.overlay_win:
-            return
+        """Sendet Streak-Daten sicher per Signal an das Overlay-Fenster"""
+        if not self.overlay_win: return
 
-        # 1. Daten aus der Config holen
         streak_cfg = self.config.get("streak", {})
-        img_name = streak_cfg.get("img", "KS_Counter.png")
-        img_path = get_asset_path(img_name)
+        img_path = get_asset_path(streak_cfg.get("img", "KS_Counter.png"))
 
-        # 2. Aktuellen Streak-Wert holen
         current_streak = getattr(self, 'killstreak_count', 0)
+        factions = getattr(self, 'streak_factions', [])
 
-        # 3. Parameter für das PyQt-Fenster vorbereiten
-        # Wir übergeben das komplette Config-Dict und den aktuellen Counter
-        try:
-            # Wir rufen eine neue Methode im Qt-Overlay auf (siehe unten)
-            # Falls du die Methode noch nicht im Qt-Overlay hast, wird sie hier getriggert
-            if hasattr(self.overlay_win, 'draw_streak_ui'):
-                self.overlay_win.draw_streak_ui(
-                    img_path,
-                    current_streak,
-                    streak_cfg
-                )
-        except Exception as e:
-            self.add_log(f"Fehler beim Killstreak-Update: {e}")
+        # WICHTIG: Nutze das Signal-System, um Thread-Fehler zu vermeiden
+        self.overlay_win.signals.update_streak.emit(
+            img_path,
+            current_streak,
+            factions,
+            streak_cfg
+        )
 
     def test_streak_visuals(self):
-        # Alten Wert merken
+        """Simuliert einen Streak von 100 Kills mit gemischten Fraktionen"""
         old_c = getattr(self, 'killstreak_count', 0)
+        old_f = getattr(self, 'streak_factions', [])
 
-        # Test-Streak setzen
-        self.killstreak_count = 5
+        self.add_log("UI: Teste Killstreak-Visuals (7 Kills)...")
+        self.killstreak_count = 10
+        self.streak_factions = (["TR", "NC", "VS"] * 34)[:10] # Dummy Messer
         self.update_streak_display()
 
-        # Nach 3 Sekunden zurücksetzen und ausblenden
+        # Nach 4 Sekunden alles verstecken
         def reset_test():
-            # Wert zurücksetzen
             self.killstreak_count = old_c
-
-            if self.overlay_win:
-                # KORREKTUR: Hier hieß es vorher 'streak_label', muss aber 'streak_bg_label' sein
-                if hasattr(self.overlay_win, 'streak_bg_label'):
-                    self.overlay_win.streak_bg_label.hide()
-
-                if hasattr(self.overlay_win, 'streak_text_label'):
-                    self.overlay_win.streak_text_label.hide()
-
-        self.root.after(3000, reset_test)
+            self.streak_factions = old_f
+            self.update_streak_display()
+        self.root.after(4000, reset_test)
 
     def fade_out(self, tag, alpha=255):
         if alpha > 0:
@@ -3509,10 +3611,9 @@ class DiorClientGUI:
 
                             self.event_cache.add(uid)
                             self.event_history.append(uid)
-                            if len(self.event_history) > 200:
+                            if len(self.event_history) > 500:
                                 old_uid = self.event_history.pop(0)
                                 self.event_cache.discard(old_uid)
-
 
                             # =========================================================
                             # 1. PLAYER LOGIN / LOGOUT (Globaler Check)
@@ -3525,16 +3626,12 @@ class DiorClientGUI:
                                         self.root.after(0, lambda n=name: self.char_var.set(n))
                                         self.add_log(f"AUTO-TRACK: {name} eingeloggt.")
 
-                                        # AUTO SERVER WECHSEL BEI LOGIN
                                         if payload_world != "0" and payload_world != str(self.current_world_id):
                                             s_name = self.get_server_name_by_id(payload_world)
-                                            self.add_log(
-                                                f"AUTO-SWITCH: Detektiert auf {s_name}. Sortiere Dashboard um...")
-                                            # switch_server setzt die Filter-ID um und leert die Listen
+                                            self.add_log(f"AUTO-SWITCH: Wechsel zu {s_name}...")
                                             self.root.after(0,
                                                             lambda n=s_name, i=payload_world: self.switch_server(n, i))
 
-                                        # Fraktion für Login-Overlay bestimmen
                                         faction_tag = "NSO"
                                         try:
                                             conn = sqlite3.connect("ps2_master.db")
@@ -3554,12 +3651,11 @@ class DiorClientGUI:
                                 if p.get("character_id") == self.current_character_id:
                                     self.current_character_id = ""
                                     self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
-                                    self.add_log("AUTO-TRACK: Charakter ausgeloggt. Warte auf Login...")
+                                    self.add_log("AUTO-TRACK: Charakter ausgeloggt.")
 
                             # =========================================================
-                            # 2. DER SERVER-FILTER (Sortiert Daten für das Dashboard aus)
+                            # 2. DER SERVER-FILTER
                             # =========================================================
-                            # Alle Kampf-Daten (Kills, XP etc.) werden hier gefiltert
                             if payload_world != "0" and payload_world != str(self.current_world_id):
                                 continue
 
@@ -3594,6 +3690,7 @@ class DiorClientGUI:
                                     v_obj["d"] += 1
 
                                 if my_id:
+                                    # Icon Vorbereitung (HS Icon)
                                     icon_html = ""
                                     if is_hs:
                                         hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
@@ -3601,7 +3698,7 @@ class DiorClientGUI:
                                         if os.path.exists(hs_path):
                                             icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
 
-                                    # FALL A: ICH BIN DER KILLER
+                                    # --- FALL A: ICH BIN DER KILLER ---
                                     if killer_id == my_id and victim_id != my_id:
                                         curr_time = time.time()
                                         if getattr(self, "last_victim_id", None) == victim_id and (
@@ -3614,41 +3711,45 @@ class DiorClientGUI:
                                             self.trigger_auto_voice("tk")
                                             self.root.after(0, lambda: self.trigger_overlay_event("Team Kill"))
                                         else:
-                                            # Killstreak Reset-Logic
+                                            # Killstreak Logik
                                             if self.killstreak_count == 0:
                                                 self.killstreak_count = 1
+                                                self.streak_factions = []
                                             else:
                                                 self.killstreak_count += 1
+
+                                            if not hasattr(self, 'streak_factions'): self.streak_factions = []
+                                            v_team = p.get("team_id")
+                                            v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team), "NSO")
+                                            self.streak_factions.append(v_faction)
+
                                             self.is_dead = False
                                             self.was_revived = False
                                             self.root.after(0, self.update_streak_display)
 
-                                            # --- SPEZIAL-EVENT TRIGGER ---
-                                            weapon_id = p.get("attacker_weapon_id")
-                                            w_info = self.item_db.get(weapon_id, {})
-                                            category = w_info.get("type", "Unknown")
-                                            special_event = None
-
-                                            # 1. Special IDs (Minen, Turrets)
-                                            if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
-                                                special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
-                                            # 2. Categories (Messer, Granaten)
-                                            elif category in PS2_DETECTION["CATEGORIES"]:
-                                                special_event = PS2_DETECTION["CATEGORIES"][category]
-
-                                            # Multi-Kill Logik
+                                            # Multi-Kill
                                             if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
                                                 self.kill_counter += 1
                                             else:
                                                 self.kill_counter = 1
                                             self.last_kill_time = curr_time
 
-                                            # Prioritäten-Check für Popups
+                                            # Special Events (Weapon Check)
+                                            weapon_id = p.get("attacker_weapon_id")
+                                            w_info = self.item_db.get(weapon_id, {})
+                                            category = w_info.get("type", "Unknown")
+                                            special_event = None
+
+                                            if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
+                                                special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
+                                            elif category in PS2_DETECTION["CATEGORIES"]:
+                                                special_event = PS2_DETECTION["CATEGORIES"][category]
+
                                             if is_hs:
                                                 self.trigger_auto_voice("kill_hs")
                                                 if not special_event: special_event = "Headshot"
 
-                                            # Streaks (z.B. Squad Wiper bei 12)
+                                            # Popup Trigger
                                             streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
                                                           36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
                                             if self.killstreak_count in streak_map:
@@ -3665,7 +3766,7 @@ class DiorClientGUI:
                                                                 lambda e=special_event: self.trigger_overlay_event(e))
                                             self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
 
-                                            # Voice Macros
+                                            # Voice & Killfeed
                                             v_loadout = p.get("character_loadout_id")
                                             if v_loadout in LOADOUT_MAP["max"]: self.trigger_auto_voice("kill_max")
                                             if v_loadout in LOADOUT_MAP["infil"]: self.trigger_auto_voice("kill_infil")
@@ -3678,30 +3779,36 @@ class DiorClientGUI:
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 19px;">({v_kd})</span></div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                    # FALL B: ICH BIN DAS OPFER.
+                                    # --- FALL B: ICH BIN DAS OPFER ---
                                     elif victim_id == my_id:
-                                        if self.killstreak_count > 0: self.saved_streak = self.killstreak_count
-                                        self.killstreak_count = 0;
+                                        if self.killstreak_count > 0:
+                                            self.saved_streak = self.killstreak_count
+                                            self.saved_factions = getattr(self, 'streak_factions', [])
+
+                                        self.killstreak_count = 0
+                                        self.streak_factions = []
                                         self.is_dead = True
                                         self.root.after(0, self.update_streak_display)
+
                                         if killer_id and killer_id != "0":
                                             k_name = self.name_cache.get(killer_id, "Unknown")
                                             k_tag = getattr(self, "outfit_cache", {}).get(killer_id, "")
                                             k_vic = self.session_stats.get(killer_id, {})
                                             k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
                                             msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
-                                                        text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                        {icon_html}<span style="color: #ff4444;"></span>
-                                                        <span style="color: #888;">[{"".join(k_tag)}]</span>
-                                                        <span style="color: #ff4444;">{k_name}</span>
-                                                        <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
+                                                                                                text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
+                                                                                                {icon_html}<span style="color: #ff4444;"></span>
+                                                                                                <span style="color: #888;">[{"".join(k_tag)}]</span>
+                                                                                                <span style="color: #ff4444;">{k_name}</span>
+                                                                                                <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
                             # =========================================================
-                            # EVENT: EXPERIENCE
+                            # EVENT: EXPERIENCE (Revive, Assists)
                             # =========================================================
                             elif e_name == "GainExperience":
+                                exp_id = str(p.get("experience_id", "0"))
                                 other_id = p.get("other_id")
                                 char_id = p.get("character_id")
                                 my_id = self.current_character_id
@@ -3710,17 +3817,16 @@ class DiorClientGUI:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
-                                # Revive-Korrektur für alle Spieler
                                 if exp_id in ["7", "53"]:
                                     r_obj = get_stat_obj(other_id, p.get("team_id"))
                                     if r_obj["d"] > 0: r_obj["d"] -= 1
 
-
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
-                                        self.was_revived = True;
+                                        self.was_revived = True
                                         self.is_dead = False
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
+                                        self.streak_factions = getattr(self, 'saved_factions', [])
                                         self.root.after(0, self.update_streak_display)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
                                         self.trigger_auto_voice("revived")
@@ -3731,7 +3837,7 @@ class DiorClientGUI:
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                 if my_id and char_id == my_id:
-                                    self.myTeamId = p.get("team_id");
+                                    self.myTeamId = p.get("team_id")
                                     self.myWorldID = p.get("world_id")
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
@@ -3742,7 +3848,7 @@ class DiorClientGUI:
                                                 break
 
                             # =========================================================
-                            # EVENT: METAGAME
+                            # EVENT: METAGAME (Alerts)
                             # =========================================================
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
