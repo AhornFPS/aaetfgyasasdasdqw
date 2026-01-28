@@ -3679,6 +3679,9 @@ class DiorClientGUI:
                                         self.root.after(0, self.update_streak_display)
                                         if killer_id and killer_id != "0":
                                             k_name = self.name_cache.get(killer_id, "Unknown")
+                                            k_tag = getattr(self, "outfit_cache", {}).get(killer_id, "")
+                                            k_vic = self.session_stats.get(killer_id, {})
+                                            k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: #ff4444; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(k_tag)}] </span>{k_name} <span style="color: #aaa; font-size: 16px;">({k_kd})</span></div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
