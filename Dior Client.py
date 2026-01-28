@@ -556,7 +556,7 @@ class DiorClientGUI:
             self.root.geometry("1200x900")
             self.root.configure(bg="#1e1e1e")
 
-            # --- NEU / KORRIGIERT ---
+
             self.init_db()
             self.char_data = self.load_chars_from_db() or {}
             self.outfit_cache = {}
@@ -572,6 +572,25 @@ class DiorClientGUI:
                 self.gif_path = saved_bg
             else:
                 self.gif_path = get_asset_path("background.jpg")
+
+            #Server list
+            self.server_map = {
+                "Wainwright (EU)": "10",
+                "Osprey (US)": "1",
+                "SolTech (Asia)": "40",
+                "Jaeger": "19"
+            }
+
+            # Standard ist 10 (Wainwright), falls nichts gespeichert ist
+            self.current_world_id = self.config.get("world_id", "10")
+
+            # Namen für die ID finden (für die Anzeige)
+            self.current_server_name = "Wainwright (EU)"  # Default
+            for name, sid in self.server_map.items():
+                if sid == self.current_world_id:
+                    self.current_server_name = name
+                    break
+
 
             # Pfade
             self.ps2_dir = self.config.get("ps2_path", "")
@@ -1330,6 +1349,50 @@ class DiorClientGUI:
 
         if "footer" in self.dash_widgets:
             self.dash_widgets["footer"].config(text=f"Last Update: {time.strftime('%H:%M:%S')}")
+
+    def open_server_menu(self, event):
+        """Öffnet das Popup-Menü zur Serverwahl"""
+        menu = tk.Menu(self.root, tearoff=0, bg="#1a1a1a", fg="white", activebackground="#00f2ff",
+                       activeforeground="black")
+
+        for name, s_id in self.server_map.items():
+            # Wir nutzen lambda, um name und s_id an die Funktion zu übergeben
+            menu.add_command(label=name, command=lambda n=name, i=s_id: self.switch_server(n, i))
+
+        # Menü an der Mausposition öffnen
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def switch_server(self, name, new_id):
+        """Wechselt den Server, löscht Daten und setzt Signal für Reconnect"""
+        if str(new_id) == str(self.current_world_id):
+            return
+
+        self.add_log(f"SYSTEM: Wechsle Server zu {name} (ID: {new_id})...")
+
+        # 1. Variablen updaten (als String erzwingen)
+        self.current_server_name = name
+        self.current_world_id = str(new_id)
+
+        # 2. Config speichern
+        self.config["world_id"] = self.current_world_id
+        self.save_config()
+
+        # 3. Label im Dashboard aktualisieren
+        if hasattr(self, 'lbl_server_title'):
+            self.lbl_server_title.config(text=f"{name.upper()} LIVE TELEMETRY ▾")
+
+        # 4. ALTE DATEN LÖSCHEN (Reset für neuen Server)
+        self.pop_history = [0] * 100
+        self.session_stats = {}
+        self.active_players = {}
+        self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
+
+        if self.current_tab == "Dashboard":
+            self.update_dashboard_elements()
+
+        # 5. SIGNAL ZUM NEUSTART
+        self.needs_reconnect = True
+        self.add_log("WEBSOCKET: Verbindung wird für neuen Server neu aufgebaut...")
 
     def save_config(self):
         """Speichert die gesamte Konfiguration in die config.json"""
@@ -2665,97 +2728,89 @@ class DiorClientGUI:
         if hasattr(self, 'graph_line'): del self.graph_line
         if hasattr(self, 'graph_glow'): del self.graph_glow
 
-        # Fenster für Ultra-Wide Modus vorbereiten
+        # Fenstergröße setzen
         self.root.geometry("1600x1000")
         mid = self.root.winfo_width() // 2
 
-        # 2. Haupt-Frame erstellen (Breiter für die Tabellen)
+        # 2. Haupt-Frame erstellen
         dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
         self.dash_widgets = {"frame": dash_frame, "factions": {}}
 
-        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a",
-                 fg="#00f2ff").pack(pady=15)
+        # =========================================================================
+        # INTERAKTIVER HEADER (Ersetzt das alte statische Label)
+        # =========================================================================
+        head_frame = tk.Frame(dash_frame, bg="#1a1a1a")
+        head_frame.pack(pady=15)
 
-        # 3. Graph Canvas
-        g_canvas = tk.Canvas(dash_frame, width=800, height=180, bg="#050505", highlightthickness=0)
+        # Name dynamisch machen: "{SERVER} LIVE TELEMETRY ▾"
+        # Wir speichern das Label in self, um den Text später ändern zu können
+        header_text = f"{self.current_server_name.upper()} LIVE TELEMETRY ▾"
+
+        self.lbl_server_title = tk.Label(head_frame, text=header_text,
+                                         font=("Arial", 24, "bold"),
+                                         bg="#1a1a1a", fg="#00f2ff",
+                                         cursor="hand2")  # Hand-Cursor signalisiert "Klickbar"
+        self.lbl_server_title.pack(side="left")
+
+        # Linksklick öffnet das Menü
+        self.lbl_server_title.bind("<Button-1>", self.open_server_menu)
+        # =========================================================================
+
+        # 3. Größeres Canvas für den Graphen
+        g_canvas = tk.Canvas(dash_frame, width=800, height=200, bg="#050505", highlightthickness=0)
         g_canvas.pack(pady=10, padx=20)
         self.dash_widgets["canvas"] = g_canvas
 
-        # Zentrales Total Players Label
-        self.total_players_label = tk.Label(
-            dash_frame,
-            text="Total Players: 0",
-            font=("Consolas", 20, "bold"),
-            bg="#1a1a1a",
-            fg="#00f2ff"
-        )
-        self.total_players_label.pack(pady=5)
+        self.total_players_label = tk.Label(dash_frame, text="Total Players: 0", font=("Consolas", 22, "bold"),
+                                            bg="#1a1a1a", fg="#00f2ff")
+        self.total_players_label.pack(pady=10)
 
         # 4. Fraktionen Grid
         f_frame = tk.Frame(dash_frame, bg="#111", pady=10)
-        f_frame.pack(fill="x", padx=15)
+        f_frame.pack(fill="x", padx=10)
 
         for name, color in [("TR", "#ff0000"), ("NC", "#0066ff"), ("VS", "#9900ff")]:
             f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
             f_box.pack(side="left", expand=True, fill="both", padx=5)
 
             tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
-
-            p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 18, "bold"), bg="#1a1a1a", fg="white")
+            p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
 
-            count_lab = tk.Label(f_box, text="0 Players", font=("Arial", 10), bg="#1a1a1a", fg="#888")
-            count_lab.pack()
-
-            bar_bg = tk.Frame(f_box, bg="#333", height=6, width=180)
-            bar_bg.pack(pady=8);
+            # Balken
+            bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
+            bar_bg.pack(pady=10)
             bar_bg.pack_propagate(False)
-            bar = tk.Frame(bar_bg, bg=color, height=6)
+            bar = tk.Frame(bar_bg, bg=color, height=8)
             bar.place(x=0, y=0, width=0)
 
-            # --- TABELLEN-STRUKTUR FÜR TOP PERFORMERS ---
-            tk.Label(f_box, text="TOP SESSION PERFORMERS", font=("Arial", 9, "bold"), bg="#1a1a1a", fg="#555").pack(
+            tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
                 pady=(15, 0))
 
-            # Container für die Grid-Tabelle
+            # --- TABELLEN-HEADER ---
             list_frame = tk.Frame(f_box, bg="#1a1a1a")
             list_frame.pack(fill="x", padx=5, pady=5)
 
-            # Die Definition der Spalten (Text, Index, Breite)
-            headers = [
-                ("PLAYER", 0, 32),
-                ("K", 1, 4),
-                ("KPM", 2, 5),
-                ("D", 3, 4),
-                ("A", 4, 4),
-                ("K/D", 5, 5),
-                ("KDA", 6, 5)
-            ]
-
+            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
+                       ("KDA", 6, 5)]
             for text, col, width in headers:
                 h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
-                                 bg="#141414", fg="#00f2ff",
-                                 anchor="w" if col == 0 else "center", width=width)
+                                 bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
                 h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
 
-            # Wir speichern die Referenz auf das list_frame statt auf ein einzelnes Label
             self.dash_widgets["factions"][name] = {
                 "label": p_lab,
-                "count": count_lab,
                 "bar": bar,
                 "list_frame": list_frame
             }
 
         # Footer
-        self.dash_widgets["footer"] = tk.Label(dash_frame, text="LOGGING STARTED...", font=("Arial", 10), bg="#1a1a1a",
-                                               fg="#00f2ff")
+        self.dash_widgets["footer"] = tk.Label(dash_frame, text="", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
         self.dash_widgets["footer"].pack(pady=10)
 
-        # Dashboard Platzierung (Breite auf 1550 erhöht für 32-Zeichen-Tabelle)
-        id_dash = self.canvas.create_window(mid, 600, window=dash_frame, width=1550, height=850)
+        # Frame ins Canvas setzen
+        id_dash = self.canvas.create_window(mid, 480, window=dash_frame, width=1450, height=850)
         self.content_ids.append(id_dash)
-
-        # Sofort zeichnen
         self.update_dashboard_elements()
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
@@ -3361,7 +3416,6 @@ class DiorClientGUI:
         def run_loop():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            # WICHTIG: Hier müssen Klammern hin -> ()
             loop.run_until_complete(self.census_listener())
 
         # Startet den Thread genau EINMAL
@@ -3375,7 +3429,7 @@ class DiorClientGUI:
 
         while True:
             try:
-                # Verbindung mit optimierten Timeouts
+                # Verbindung herstellen
                 async with websockets.connect(
                         uri,
                         ping_interval=20,
@@ -3385,18 +3439,26 @@ class DiorClientGUI:
 
                     self.websocket = websocket
 
+                    # Subscription mit der aktuell gewählten World-ID
                     msg = {
                         "service": "event",
                         "action": "subscribe",
                         "characters": ["all"],
-                        "worlds": ["10"],  # Miller
+                        "worlds": [str(self.current_world_id)],
                         "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
                     }
                     await websocket.send(json.dumps(msg))
-                    self.add_log("Websocket: Verbunden und abonniert.")
+                    self.add_log(f"Websocket: Verbunden mit {self.current_server_name} (ID: {self.current_world_id})")
 
                     self.last_raw_message = None
+
                     async for message in websocket:
+                        # 1. PRÜFUNG AUF SERVERWECHSEL (Signal von switch_server)
+                        if getattr(self, "needs_reconnect", False):
+                            self.needs_reconnect = False
+                            await websocket.close()
+                            break
+
                         if message == self.last_raw_message:
                             continue
                         self.last_raw_message = message
@@ -3404,83 +3466,78 @@ class DiorClientGUI:
 
                         if "payload" in data:
                             p = data["payload"]
-                            e_name = p.get("event_name")
 
-                            # Eindeutige ID für das Event erstellen (gegen Duplikate)
+                            # --- SICHERHEITS-FILTER: Nur Daten vom gewählten Server ---
+                            payload_world = str(p.get("world_id", "0"))
+                            if payload_world != "0" and payload_world != str(self.current_world_id):
+                                continue
+
+                            e_name = p.get("event_name")
                             ts = p.get("timestamp")
                             char_id = p.get("character_id", "0")
                             attacker_id = p.get("attacker_character_id", "0")
                             exp_id = p.get("experience_id", "0")
-                            uid = f"{e_name}{ts}_{char_id}{attacker_id}{exp_id}"
 
+                            # UID gegen Duplikate
+                            uid = f"{e_name}{ts}_{char_id}{attacker_id}{exp_id}"
                             if hasattr(self, 'last_event_uid') and self.last_event_uid == uid:
                                 continue
                             self.last_event_uid = uid
 
                             # -------------------------------------------------
-                            # 1. LOGIN / LOGOUT TRACKING
+                            # PLAYER LOGIN / LOGOUT
                             # -------------------------------------------------
                             if e_name == "PlayerLogin":
                                 c_id = p.get("character_id")
-                                found_name = None
                                 for name, saved_id in self.char_data.items():
                                     if saved_id == c_id:
-                                        found_name = name
+                                        self.current_character_id = c_id
+                                        self.root.after(0, lambda n=name: self.char_var.set(n))
+                                        self.add_log(f"AUTO-TRACK: {name} eingeloggt.")
+
+                                        faction_tag = "NSO"
+                                        try:
+                                            conn = sqlite3.connect("ps2_master.db")
+                                            res = conn.execute(
+                                                "SELECT faction_id FROM player_cache WHERE character_id=?",
+                                                (c_id,)).fetchone()
+                                            conn.close()
+                                            if res: faction_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(res[0]),
+                                                                                                        "NSO")
+                                        except:
+                                            pass
+                                        self.root.after(0,
+                                                        lambda e=f"Login {faction_tag}": self.trigger_overlay_event(e))
                                         break
 
-                                if found_name:
-                                    self.current_character_id = c_id
-                                    self.root.after(0, lambda n=found_name: self.char_var.set(n))
-                                    self.add_log(f"AUTO-TRACK: {found_name} eingeloggt.")
-
-                                    # Fraktion bestimmen
-                                    faction_tag = "NSO"
-                                    try:
-                                        conn = sqlite3.connect("ps2_master.db")
-                                        cursor = conn.cursor()
-                                        res = cursor.execute("SELECT faction_id FROM player_cache WHERE character_id=?",
-                                                             (c_id,)).fetchone()
-                                        conn.close()
-                                        if res:
-                                            faction_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(res[0]), "NSO")
-                                    except:
-                                        pass
-
-                                    event_name = f"Login {faction_tag}"
-                                    self.root.after(0, lambda e=event_name: self.trigger_overlay_event(e))
-
                             elif e_name == "PlayerLogout":
-                                c_id = p.get("character_id")
-                                if c_id == self.current_character_id:
+                                if p.get("character_id") == self.current_character_id:
                                     self.current_character_id = ""
                                     self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
-                                    self.add_log("AUTO-TRACK: Charakter ausgeloggt.")
 
                             # -------------------------------------------------
-                            # AKTIVITÄTS-TRACKING & STATS HELPER
+                            # ALLGEMEINES TRACKING & STATS HELPER
                             # -------------------------------------------------
-                            # (Helper Logic um aktive Spieler für den Cache zu finden)
-                            track_id = p.get("character_id")
-                            if not track_id: track_id = p.get("attacker_character_id")
+                            track_id = p.get("character_id") or p.get("attacker_character_id")
                             if track_id and track_id != "0":
                                 tid = p.get("team_id") or p.get("attacker_team_id")
-                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(tid, "NSO")
+                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
                                 self.active_players[track_id] = (time.time(), f_name)
                                 if track_id not in self.name_cache:
                                     self.id_queue.put(track_id)
 
                             def get_stat_obj(cid, tid):
                                 if cid not in self.session_stats:
-                                    faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(tid, "NSO")
+                                    faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
                                     self.session_stats[cid] = {
-                                        "name": self.name_cache.get(cid, "Searching..."),
-                                        "faction": faction_name,
-                                        "k": 0, "d": 0, "a": 0, "start": time.time()
+                                        "id": cid, "name": self.name_cache.get(cid, "Searching..."),
+                                        "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
+                                        "start": time.time(), "last_kill_time": time.time()
                                     }
                                 return self.session_stats[cid]
 
                             # =========================================================
-                            # HAUPT-EVENT: DEATH (Kills und Tode)
+                            # EVENT: DEATH
                             # =========================================================
                             if e_name == "Death":
                                 killer_id = p.get("attacker_character_id")
@@ -3488,198 +3545,119 @@ class DiorClientGUI:
                                 my_id = self.current_character_id
                                 is_hs = (p.get("is_headshot") == "1")
 
-                                # Global Stats Update
+                                # Globale Stats für Dashboard
                                 if killer_id and killer_id != "0" and killer_id != victim_id:
                                     k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                                     k_obj["k"] += 1
                                     k_obj["last_kill_time"] = time.time()
-                                    if is_hs: k_obj["hs"] = k_obj.get("hs", 0) + 1
+                                    if is_hs: k_obj["hs"] += 1
 
                                 if victim_id and victim_id != "0":
                                     v_obj = get_stat_obj(victim_id, p.get("team_id"))
                                     v_obj["d"] += 1
 
-                                # Nur weiter machen, wenn ich beteiligt bin
                                 if my_id:
-                                    # Icon vorbereiten
+                                    # Icon Vorbereitung
                                     icon_html = ""
                                     if is_hs:
                                         hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                                         hs_path = get_asset_path(hs_icon).replace("\\", "/")
                                         if os.path.exists(hs_path):
-                                            #headshot icon size
-                                            icon_html = f'<img src="{hs_path}" width="20" height="20" style="vertical-align: middle;">&nbsp;'
+                                            icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
 
-                                    # --------------------------------------
-                                    # FALL A: ICH BIN DER KILLER
-                                    # --------------------------------------
+                                    # --- FALL A: ICH BIN DER KILLER ---
                                     if killer_id == my_id and victim_id != my_id:
-                                        # Duplikat-Schutz Zeit
                                         curr_time = time.time()
                                         if getattr(self, "last_victim_id", None) == victim_id and (
                                                 curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
-                                            pass  # Skip this iteration logic handled by continue usually
+                                            continue
+
+                                        self.last_victim_id = victim_id
+                                        self.last_victim_time = curr_time
+
+                                        if p.get("attacker_team_id") == p.get("team_id"):
+                                            self.trigger_auto_voice("tk")
+                                            self.root.after(0, lambda: self.trigger_overlay_event("Team Kill"))
                                         else:
-                                            self.last_victim_id = victim_id
-                                            self.last_victim_time = curr_time
-
-                                            # Teamkill Check
-                                            if p.get("attacker_team_id") == p.get("team_id"):
-                                                self.trigger_auto_voice("tk")
-                                                self.root.after(0, lambda: self.trigger_overlay_event("Team Kill"))
-                                                self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
+                                            # Killstreak Logik: Wenn 0 (tot/respawned), starte bei 1
+                                            if self.killstreak_count == 0:
+                                                self.killstreak_count = 1
                                             else:
-                                                # --- KILLSTREAK LOGIK ---
-                                                if self.killstreak_count == 0:
-                                                    self.killstreak_count = 1
-                                                else:
-                                                    self.killstreak_count += 1
+                                                self.killstreak_count += 1
 
-                                                self.is_dead = False
-                                                self.was_revived = False
+                                            self.is_dead = False
+                                            self.was_revived = False
+                                            self.root.after(0, self.update_streak_display)
 
-                                                # Update Overlay (Anzeigen)
-                                                self.root.after(0, self.update_streak_display)
+                                            # Multi-Kill
+                                            if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
+                                                self.kill_counter += 1
+                                            else:
+                                                self.kill_counter = 1
+                                            self.last_kill_time = curr_time
 
-                                                # Sounds & Popups
-                                                weapon_id = p.get("attacker_weapon_id")
-                                                category = self.item_db.get(weapon_id, {}).get("type", "Unknown")
-                                                v_loadout = p.get("character_loadout_id")
+                                            # Voice Macros & Popups
+                                            v_loadout = p.get("character_loadout_id")
+                                            if is_hs: self.trigger_auto_voice("kill_hs")
+                                            if v_loadout in LOADOUT_MAP["max"]: self.trigger_auto_voice("kill_max")
 
-                                                kd_triggered = False
-                                                special_event = None
+                                            # Killfeed
+                                            v_name = self.name_cache.get(victim_id, "Unknown")
+                                            v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
+                                            tag_display = f"[{v_tag}]"
+                                            s_vic = self.session_stats.get(victim_id, {})
+                                            v_kd = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
 
-                                                if victim_id in self.session_stats:
-                                                    v_stat = self.session_stats[victim_id]
-                                                    v_k = v_stat.get("k", 0)
-                                                    v_d = v_stat.get("d", 1)
-                                                    if (v_k / max(1, v_d)) >= 2.0:
-                                                        self.trigger_auto_voice("kill_high_kd")
-                                                        kd_triggered = True
+                                            msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; color: white; text-align: right;">
+                                                      {icon_html}<span style="color: #888;">{tag_display} </span>{v_name} 
+                                                      <span style="color: #aaa; font-size: 16px;"> ({v_kd})</span></div>"""
+                                            if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
+                                            self.root.after(0, lambda: self.trigger_overlay_event("Kill"))
 
-                                                if not kd_triggered and v_loadout in LOADOUT_MAP["max"]:
-                                                    self.trigger_auto_voice("kill_max");
-                                                    kd_triggered = True
-                                                if not kd_triggered and v_loadout in LOADOUT_MAP["infil"]:
-                                                    self.trigger_auto_voice("kill_infil");
-                                                    kd_triggered = True
-                                                if not kd_triggered and is_hs:
-                                                    self.trigger_auto_voice("kill_hs")
-
-                                                if category == "Knife": special_event = "Knife Kill"
-                                                if category == "Grenade": special_event = "Nade Kill"
-
-                                                # Multi-Kill
-                                                if curr_time - getattr(self, "last_kill_time",
-                                                                       0) <= self.streak_timeout:
-                                                    self.kill_counter += 1
-                                                else:
-                                                    self.kill_counter = 1
-                                                self.last_kill_time = curr_time
-
-                                                if is_hs: special_event = "Headshot"
-
-                                                streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
-                                                              36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
-                                                if self.killstreak_count in streak_map:
-                                                    special_event = streak_map[self.killstreak_count]
-                                                elif self.kill_counter > 1:
-                                                    multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill",
-                                                                 5: "Ultra Kill", 6: "Monster Kill",
-                                                                 7: "Ludicrous Kill", 9: "Holy Shit"}
-                                                    special_event = multi_map.get(self.kill_counter)
-
-                                                if special_event:
-                                                    self.root.after(0,
-                                                                    lambda e=special_event: self.trigger_overlay_event(
-                                                                        e))
-                                                self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
-
-                                                # Killfeed
-                                                v_name = self.name_cache.get(victim_id, "Unknown")
-                                                v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
-                                                tag_display = f"[{v_tag}]"
-                                                s_vic = self.session_stats.get(victim_id, {})
-                                                v_kd_str = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
-
-                                                msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
-                                                            text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                            {icon_html}<span style="color: #888;">{tag_display} </span>
-                                                            <span style="color: white;">{v_name}</span>
-                                                            <span style="color: #aaa; font-size: 16px;"> ({v_kd_str})</span></div>"""
-                                                if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
-
-                                    # --------------------------------------
-                                    # FALL B: ICH BIN DAS OPFER
-                                    # --------------------------------------
+                                    # --- FALL B: ICH BIN DAS OPFER ---
                                     elif victim_id == my_id:
-                                        # 1. Streak Sichern
-                                        if self.killstreak_count > 0:
-                                            self.saved_streak = self.killstreak_count
-
-                                        # 2. Reset (Overlay ausblenden)
+                                        if self.killstreak_count > 0: self.saved_streak = self.killstreak_count
                                         self.killstreak_count = 0
                                         self.kill_counter = 0
                                         self.is_dead = True
                                         self.was_revived = False
 
+                                        # Sofort ausblenden
                                         self.root.after(0, self.update_streak_display)
 
-                                        # Killfeed Entry
                                         if killer_id and killer_id != "0":
-                                            self.last_killer_name = self.name_cache.get(killer_id, "Unknown")
+                                            k_name = self.name_cache.get(killer_id, "Unknown")
                                             k_tag = getattr(self, "outfit_cache", {}).get(killer_id, "")
-                                            tag_display = f"[{k_tag}]"
-                                            s_kil = self.session_stats.get(killer_id, {})
-                                            k_kd_str = f"{(s_kil.get('k', 0) / max(1, s_kil.get('d', 1))):.1f}"
-
-                                            msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; 
-                                                        text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                        {icon_html}<span style="color: #888;">{tag_display} </span>
-                                                        <span style="color: #ff4444;">{self.last_killer_name}</span>
-                                                        <span style="color: #aaa; font-size: 16px;"> ({k_kd_str})</span></div>"""
+                                            msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; color: #ff4444; text-align: right;">
+                                                      {icon_html}<span style="color: #888;">[{k_tag}] </span>KILLED BY {k_name}</div>"""
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                        if hasattr(self, 'ovl_canvas'):
-                                            self.root.after(0, lambda: self.start_fade_out("streak_group"))
-
-                                        if p.get("attacker_team_id") == p.get("team_id"):
-                                            self.root.after(0, lambda: self.trigger_overlay_event("Team Kill Victim"))
-                                        else:
-                                            self.root.after(0, lambda: self.trigger_overlay_event("Death"))
+                                        self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
                             # =========================================================
-                            # HAUPT-EVENT: EXPERIENCE (Revive, Assist)
+                            # EVENT: EXPERIENCE (Revive, Assists)
                             # =========================================================
                             elif e_name == "GainExperience":
                                 exp_id = str(p.get("experience_id", "0"))
-                                char_id = p.get("character_id")
                                 other_id = p.get("other_id")
+                                char_id = p.get("character_id")
                                 my_id = self.current_character_id
 
-                                # Assist counting
+                                # Assist Tracker
                                 if exp_id in ["2", "3", "371", "372"]:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
-                                # 1. PASSIV: ICH WURDE WIEDERBELEBT
+                                # ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
                                         self.was_revived = True
                                         self.is_dead = False
+                                        if my_id in self.session_stats and self.session_stats[my_id]["d"] > 0:
+                                            self.session_stats[my_id]["d"] -= 1
 
-                                        # Tod korrigieren
-                                        if my_id in self.session_stats:
-                                            if self.session_stats[my_id]["d"] > 0:
-                                                self.session_stats[my_id]["d"] -= 1
-
-                                        # Streak wiederherstellen
-                                        if hasattr(self, 'saved_streak') and self.saved_streak > 0:
-                                            self.killstreak_count = self.saved_streak
-                                        else:
-                                            self.killstreak_count = 0
-
-                                        # Overlay Update (Einblenden)
+                                        # Streak wiederherstellen und einblenden
+                                        self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.root.after(0, self.update_streak_display)
 
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
@@ -3687,26 +3665,21 @@ class DiorClientGUI:
 
                                         if self.config.get("killfeed", {}).get("show_revives", True):
                                             m_name = self.name_cache.get(char_id, "Medic")
-                                            msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
-                                                    text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                    <span style="color: #00ff00;">✚ REVIVED BY </span>
-                                                    <span style="color: white;">{m_name}</span></div>"""
+                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                # 2. AKTIV: ICH TUE WAS
+                                # ICH HABE ETWAS GETAN (Revive Given etc.)
                                 if my_id and char_id == my_id:
-                                    self.myTeamId = p.get("team_id")
-                                    self.myWorldID = p.get("world_id")
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
                                     else:
                                         for event_name, id_list in PS2_EXP_DETECTION.items():
-                                            if event_name != "Revive" and exp_id in id_list:
+                                            if exp_id in id_list:
                                                 self.root.after(0, lambda e=event_name: self.trigger_overlay_event(e))
                                                 break
 
                             # =========================================================
-                            # HAUPT-EVENT: METAGAME (Alerts)
+                            # EVENT: METAGAME (Alerts)
                             # =========================================================
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
