@@ -3325,12 +3325,14 @@ class DiorClientGUI:
                 self.add_log(f"ERR: Delete failed: {e}")
 
     def update_active_char(self, name):
-        self.char_var.set(name)
+        # UI-Check
+        if hasattr(self, 'char_var'):
+            self.char_var.set(name)
+
         cid = self.char_data.get(name, "")
         self.current_character_id = cid
-        self.add_log(f"SYS: Tracking {name}")
+        self.add_log(f"SYS: Tracking {name}")  # Nutzt jetzt das neue sichere add_log
 
-        # --- AUTOMATISCHER SERVER-WECHSEL ---
         try:
             conn = sqlite3.connect("ps2_master.db")
             res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
@@ -3340,10 +3342,10 @@ class DiorClientGUI:
                 new_world_id = str(res[0])
                 if new_world_id != str(self.current_world_id):
                     s_name = self.get_server_name_by_id(new_world_id)
-                    # Wir nutzen switch_server, um Daten zu löschen und neu zu verbinden
+                    # Sicherer Aufruf des Serverwechsels
                     self.root.after(0, lambda n=s_name, i=new_world_id: self.switch_server(n, i))
         except Exception as e:
-            print(f"Auto-Switch Error: {e}")
+            self.add_log(f"Auto-Switch Error: {e}")
 
     def load_player_backup(self):
         c = {}
@@ -3410,12 +3412,17 @@ class DiorClientGUI:
                                 conn.close()
 
                                 # GUI-Zähler aktualisieren
-                                if hasattr(self, 'cache_label'):
-                                    conn = sqlite3.connect("ps2_master.db")
-                                    count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
-                                    conn.close()
-                                    self.root.after(0, lambda c=count: self.cache_label.config(
-                                        text=f"Characters in db: {c}"))
+                                if hasattr(self, 'cache_label') and self.cache_label.winfo_exists():
+                                    try:
+                                        conn = sqlite3.connect("ps2_master.db")
+                                        count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
+                                        conn.close()
+
+
+                                        self.root.after(0, lambda c=count: self.cache_label.config(
+                                            text=f"Characters in db: {c}"))
+                                    except Exception as e:
+                                        print(f"DEBUG: Cache Label Update skipped: {e}")
                         except ValueError:
                             self.add_log("SYS: Census API sent invalid JSON (Server busy?)")
                     else:
@@ -3777,9 +3784,21 @@ class DiorClientGUI:
         self.add_log("SYS: Report generated.")
 
     def add_log(self, msg):
-        if hasattr(self, 'log_area'):
-            self.root.after(0, lambda: [self.log_area.insert(tk.END, f"> {time.strftime('%H:%M:%S')} | {msg}\n"),
-                                        self.log_area.see(tk.END)])
+        """Fügt sicher eine Nachricht zum Log hinzu, auch wenn das Widget nicht existiert"""
+        print(f"LOG: {msg}")  # Backup in der Konsole
+
+        # Prüfen, ob log_area existiert und noch "lebt"
+        if hasattr(self, 'log_area') and self.log_area.winfo_exists():
+            try:
+                self.root.after(0, lambda: self._safe_log_insert(msg))
+            except:
+                pass
+
+    def _safe_log_insert(self, msg):
+        """Interne Hilfsfunktion für sicheres Schreiben"""
+        if hasattr(self, 'log_area') and self.log_area.winfo_exists():
+            self.log_area.insert(tk.END, f"> {time.strftime('%H:%M:%S')} | {msg}\n")
+            self.log_area.see(tk.END)
 
     def restart_observer(self):
         path = self.config.get("watch_folder")
