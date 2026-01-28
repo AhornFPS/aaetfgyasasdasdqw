@@ -3676,6 +3676,10 @@ class DiorClientGUI:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
+                                if exp_id in ["7", "53"]:
+                                    r_obj = get_stat_obj(other_id, p.get("team_id"))
+                                    if r_obj["d"] > 0: r_obj["d"] -= 1
+
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
                                         self.was_revived = True
