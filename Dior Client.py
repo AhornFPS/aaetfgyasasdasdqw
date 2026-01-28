@@ -3429,6 +3429,17 @@ class DiorClientGUI:
             self.observer.stop()
         self.root.destroy()
 
+        # Stats Helper
+    def get_stat_obj(cid, tid):
+        if cid not in self.session_stats:
+            faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+            self.session_stats[cid] = {
+                "id": cid, "name": self.name_cache.get(cid, "Searching..."),
+                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
+                "start": time.time(), "last_kill_time": time.time()
+                }
+        return self.session_stats[cid]
+
     def start_websocket_thread(self):
         """Startet den Census-Listener in einem eigenen Hintergrund-Thread"""
 
@@ -3548,19 +3559,6 @@ class DiorClientGUI:
                             # Alle Kampf-Daten (Kills, XP etc.) werden hier gefiltert
                             if payload_world != "0" and payload_world != str(self.current_world_id):
                                 continue
-
-                            # --- AB HIER: NUR NOCH LOGIK FÜR DEN AKTIVEN SERVER ---
-
-                            # Stats Helper
-                            def get_stat_obj(cid, tid):
-                                if cid not in self.session_stats:
-                                    faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-                                    self.session_stats[cid] = {
-                                        "id": cid, "name": self.name_cache.get(cid, "Searching..."),
-                                        "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
-                                        "start": time.time(), "last_kill_time": time.time()
-                                    }
-                                return self.session_stats[cid]
 
                             # -------------------------------------------------
                             # ALLGEMEINES TRACKING (Population Dashboard)
@@ -3701,15 +3699,16 @@ class DiorClientGUI:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
+                                # Revive-Korrektur für alle Spieler
                                 if exp_id in ["7", "53"]:
                                     r_obj = get_stat_obj(other_id, p.get("team_id"))
                                     if r_obj["d"] > 0: r_obj["d"] -= 1
 
+
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
-                                        self.was_revived = True
+                                        self.was_revived = True;
                                         self.is_dead = False
-
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.root.after(0, self.update_streak_display)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
@@ -3721,7 +3720,7 @@ class DiorClientGUI:
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                 if my_id and char_id == my_id:
-                                    self.myTeamId = p.get("team_id")
+                                    self.myTeamId = p.get("team_id");
                                     self.myWorldID = p.get("world_id")
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
