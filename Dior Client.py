@@ -3684,8 +3684,8 @@ class DiorClientGUI:
                                     if exp_id in ["7", "53"]:
                                         self.was_revived = True
                                         self.is_dead = False
-                                        if my_id in self.session_stats and self.session_stats[my_id]["d"] > 0:
-                                            self.session_stats[my_id]["d"] -= 1
+                                        # if my_id in self.session_stats and self.session_stats[my_id]["d"] > 0:
+                                        #     self.session_stats[my_id]["d"] -= 1
 
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.root.after(0, self.update_streak_display)
