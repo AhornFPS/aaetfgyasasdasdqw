@@ -3668,7 +3668,7 @@ class DiorClientGUI:
                                             v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
                                             s_vic = self.session_stats.get(victim_id, {})
                                             v_kd = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
-                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 16px;">({v_kd})</span></div>'
+                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 19px;">({v_kd})</span></div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                     # FALL B: ICH BIN DAS OPFER.
@@ -3687,7 +3687,7 @@ class DiorClientGUI:
                                                         {icon_html}<span style="color: #ff4444;"></span>
                                                         <span style="color: #888;">[{"".join(k_tag)}]</span>
                                                         <span style="color: #ff4444;">{k_name}</span>
-                                                        <span style="color: #aaa; font-size: 16px;"> ({k_kd})</span></div>"""
+                                                        <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
