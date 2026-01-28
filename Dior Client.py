@@ -3679,7 +3679,7 @@ class DiorClientGUI:
                                         self.root.after(0, self.update_streak_display)
                                         if killer_id and killer_id != "0":
                                             k_name = self.name_cache.get(killer_id, "Unknown")
-                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: #ff4444; text-align: right;">KILLED BY {k_name}</div>'
+                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: #ff4444; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(k_tag)}] </span>{k_name} <span style="color: #aaa; font-size: 16px;">({k_kd})</span></div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Death"))
 
