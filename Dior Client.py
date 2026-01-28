@@ -3429,16 +3429,7 @@ class DiorClientGUI:
             self.observer.stop()
         self.root.destroy()
 
-        # Stats Helper
-    def get_stat_obj(cid, tid):
-        if cid not in self.session_stats:
-            faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-            self.session_stats[cid] = {
-                "id": cid, "name": self.name_cache.get(cid, "Searching..."),
-                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
-                "start": time.time(), "last_kill_time": time.time()
-                }
-        return self.session_stats[cid]
+
 
     def start_websocket_thread(self):
         """Startet den Census-Listener in einem eigenen Hintergrund-Thread"""
@@ -3457,20 +3448,16 @@ class DiorClientGUI:
         sid = S_ID
         uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={sid}"
 
+        # Initialisiere den Duplikat-Filter
+        self.event_cache = set()
+        self.event_history = []
+
         while True:
             try:
-                # Verbindung herstellen
-                async with websockets.connect(
-                        uri,
-                        ping_interval=20,
-                        ping_timeout=20,
-                        close_timeout=10
-                ) as websocket:
-
+                async with websockets.connect(uri, ping_interval=20, ping_timeout=20, close_timeout=10) as websocket:
                     self.websocket = websocket
 
-                    # --- GLOBAL SUBSCRIPTION ---
-                    # Wir abonnieren ALLES für ALLE Server gleichzeitig
+                    # GLOBAL SUBSCRIPTION
                     msg = {
                         "service": "event",
                         "action": "subscribe",
@@ -3481,35 +3468,44 @@ class DiorClientGUI:
                     await websocket.send(json.dumps(msg))
                     self.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
 
-                    self.last_raw_message = None
+                    # --- OPTIMIERUNG: HIER DEFINIERT (Einmal pro Verbindung) ---
+                    def get_stat_obj(cid, tid):
+                        if cid not in self.session_stats:
+                            faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+                            self.session_stats[cid] = {
+                                "id": cid, "name": self.name_cache.get(cid, "Searching..."),
+                                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
+                                "start": time.time(), "last_kill_time": time.time()
+                            }
+                        return self.session_stats[cid]
 
                     async for message in websocket:
-                        # Reconnect nur ausführen, wenn explizit gefordert (z.B. nach Error)
                         if getattr(self, "needs_reconnect", False):
                             self.needs_reconnect = False
                             await websocket.close()
                             break
 
-                        if message == self.last_raw_message:
-                            continue
-                        self.last_raw_message = message
                         data = json.loads(message)
-
                         if "payload" in data:
                             p = data["payload"]
                             e_name = p.get("event_name")
                             payload_world = str(p.get("world_id", "0"))
-
                             ts = p.get("timestamp")
                             char_id = p.get("character_id", "0")
                             attacker_id = p.get("attacker_character_id", "0")
                             exp_id = p.get("experience_id", "0")
 
-                            # UID gegen Duplikate (Global über alle Server hinweg)
-                            uid = f"{e_name}{ts}_{char_id}{attacker_id}{exp_id}{payload_world}"
-                            if hasattr(self, 'last_event_uid') and self.last_event_uid == uid:
+                            # ROBUSTER DUPLIKAT-FILTER
+                            uid = f"{e_name}_{ts}_{char_id}_{attacker_id}_{exp_id}_{payload_world}"
+                            if uid in self.event_cache:
                                 continue
-                            self.last_event_uid = uid
+
+                            self.event_cache.add(uid)
+                            self.event_history.append(uid)
+                            if len(self.event_history) > 200:
+                                old_uid = self.event_history.pop(0)
+                                self.event_cache.discard(old_uid)
+
 
                             # =========================================================
                             # 1. PLAYER LOGIN / LOGOUT (Globaler Check)
