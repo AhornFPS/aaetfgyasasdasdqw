@@ -2539,7 +2539,7 @@ class DiorClientGUI:
                 # 3. Zahl positionieren (Relativ zum Bild)
                 # HTML Styling für die Zahl
                 self.streak_text_label.setText(
-                    f"<span style='font-size: {int(24 * scale)}pt; font-family: Impact; color: #ff0000; "
+                    f"<span style='font-size: {int(36 * scale)}pt; font-family: Black Ops One; color: #ff0000; "
                     f"text-shadow: 2px 2px 0 #000;'>{count}</span>"
                 )
                 self.streak_text_label.adjustSize()
