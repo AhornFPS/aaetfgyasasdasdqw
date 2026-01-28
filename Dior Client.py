@@ -3671,7 +3671,7 @@ class DiorClientGUI:
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 16px;">({v_kd})</span></div>'
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
-                                    # FALL B: ICH BIN DAS OPFER
+                                    # FALL B: ICH BIN DAS OPFER.
                                     elif victim_id == my_id:
                                         if self.killstreak_count > 0: self.saved_streak = self.killstreak_count
                                         self.killstreak_count = 0;
