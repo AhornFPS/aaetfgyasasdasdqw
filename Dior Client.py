@@ -267,6 +267,10 @@ class QtOverlay(QWidget):
 
         self.set_mouse_passthrough(True)
 
+        self.pulse_timer = QTimer(self)
+        self.pulse_timer.timeout.connect(self.animate_pulse)
+        self.pulse_timer.start(40)
+
         # Repaint Timer gegen Artefakte (1 Sekunde)
         self.redraw_timer = QTimer(self)
         self.redraw_timer.timeout.connect(self.force_update)
@@ -549,10 +553,22 @@ class QtOverlay(QWidget):
         from PyQt6.QtGui import QTransform
         from PyQt6.QtCore import QPoint
 
+        # --- NEU: Sofort prüfen ob aktiv ---
+        # Wenn "active" False ist, ALLES verstecken und abbrechen
+        if not cfg.get("active", True) and not self.edit_mode:
+            self.streak_bg_label.hide()
+            self.streak_text_label.hide()
+            for l in self.knife_labels:
+                l.hide()
+            return
+
+
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide()
             self.streak_text_label.hide()
-            for l in self.knife_labels: l.hide()
+            for l in self.knife_labels:
+                l.hide()
+                l._is_active = False  # Animation für versteckte Messer stoppen
             return
 
         display_count = count if count > 0 else 100
@@ -637,6 +653,12 @@ class QtOverlay(QWidget):
                                              Qt.TransformationMode.SmoothTransformation)
                         label.setPixmap(k_pix)
                         label.adjustSize()
+
+                        # NEU: Wir speichern den Abstand zur Mitte für die Animation
+                        label._base_off_x = kx - skull_center.x()
+                        label._base_off_y = ky - skull_center.y()
+                        label._is_active = True
+
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
                         label.raise_()
@@ -685,6 +707,13 @@ class QtOverlay(QWidget):
 
                         label.setPixmap(k_pix)
                         label.adjustSize()
+
+                        # NEU: Wir speichern den Abstand zur Mitte für die Animation
+                        # skull_center ist oben in der Methode definiert
+                        label._base_off_x = kx - skull_center.x()
+                        label._base_off_y = ky - skull_center.y()
+                        label._is_active = True
+
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
                         label.raise_()
@@ -712,6 +741,54 @@ class QtOverlay(QWidget):
                     self.path_layer.setGeometry(self.rect())
                     self.path_layer.show()
                     self.path_layer.raise_()
+
+    def animate_pulse(self):
+        """Lässt die Messer rhythmisch atmen (pulsieren)"""
+        if not self.streak_bg_label.isVisible(): return
+
+        s_conf = {}
+        if self.gui_ref:
+            s_conf = self.gui_ref.config.get("streak", {})
+
+        # 1. MASTER CHECK: Wenn ganz aus -> Abbrechen
+        if not s_conf.get("active", True):
+            return
+
+        # 2. ANIMATION CHECK: Wenn Animation aus -> Positionen resetten und return
+        if not s_conf.get("anim_active", True):
+            # Wir stellen sicher, dass die Messer auf ihrer Basis-Position stehen
+            center = self.streak_bg_label.geometry().center()
+            cx, cy = center.x(), center.y()
+            for lbl in self.knife_labels:
+                if getattr(lbl, "_is_active", False):
+                    ox = getattr(lbl, "_base_off_x", 0)
+                    oy = getattr(lbl, "_base_off_y", 0)
+                    # Setze exakt auf die Ursprungsposition ohne Sinus-Welle
+                    lbl.move(cx + ox - (lbl.width() // 2), cy + oy - (lbl.height() // 2))
+            return
+
+            # 3. Wenn beides AN ist -> Pulsieren berechnen
+        try:
+            user_val = int(s_conf.get("speed", 50))
+            speed_factor = user_val / 20.0
+        except:
+            speed_factor = 2.5
+
+        import time, math
+        t = time.time()
+        pulse_scale = 1.0 + (math.sin(t * speed_factor) * 0.04)
+
+        center = self.streak_bg_label.geometry().center()
+        cx, cy = center.x(), center.y()
+
+        for lbl in self.knife_labels:
+            if getattr(lbl, "_is_active", False) and lbl.isVisible():
+                ox = getattr(lbl, "_base_off_x", 0)
+                oy = getattr(lbl, "_base_off_y", 0)
+
+                new_x = cx + int(ox * pulse_scale)
+                new_y = cy + int(oy * pulse_scale)
+                lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
 
     def update_crosshair(self, path, size, enabled):
         if (not enabled and not self.edit_mode) or not os.path.exists(path):
@@ -2137,6 +2214,34 @@ class DiorClientGUI:
         self.ovl_notebook.add(tab_streak, text=" KILLSTREAK ")
         s_conf = self.overlay_config.get("streak", {})
 
+        # --- [NEU] STEUERUNG (MASTER & ANIMATION) ---
+        ctrl_frame = tk.Frame(tab_streak, bg="#1a1a1a", bd=1, relief="solid")
+        ctrl_frame.pack(fill="x", padx=10, pady=10)
+
+        # 1. MASTER SWITCH (Macht alles an/aus)
+        self.var_streak_master = tk.BooleanVar(value=s_conf.get("active", True))
+        tk.Checkbutton(ctrl_frame, text="KILLSTREAK SYSTEM AKTIVIEREN (Master)", variable=self.var_streak_master,
+                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 11, "bold"),
+                       command=self.save_streak_settings).pack(anchor="w", padx=10, pady=(5, 0))
+
+        # 2. ANIMATION SWITCH (Nur Pulsieren an/aus)
+        self.var_streak_anim = tk.BooleanVar(value=s_conf.get("anim_active", True))
+        tk.Checkbutton(ctrl_frame, text="PULSIERENDE ANIMATION AKTIVIEREN", variable=self.var_streak_anim,
+                       bg="#1a1a1a", fg="#ffcc00", selectcolor="black", font=("Consolas", 10),
+                       command=self.save_streak_settings).pack(anchor="w", padx=30, pady=(0, 5))
+
+        # 3. GESCHWINDIGKEIT
+        speed_frame = tk.Frame(tab_streak, bg="#1a1a1a")
+        speed_frame.pack(pady=5)
+        tk.Label(speed_frame, text="Puls-Geschwindigkeit (Zahl):", bg="#1a1a1a", fg="white").pack(side="left", padx=5)
+
+        self.ent_streak_speed = tk.Entry(speed_frame, width=10, bg="#111", fg="#00f2ff")
+        self.ent_streak_speed.insert(0, str(s_conf.get("speed", 50)))
+        self.ent_streak_speed.pack(side="left")
+
+        tk.Label(speed_frame, text="(Standard: 50)", bg="#1a1a1a", fg="#888", font=("Arial", 8)).pack(side="left",
+                                                                                                      padx=5)
+
         # --- HAUPT-BILD (SKULL) ---
         tk.Label(tab_streak, text="Haupt-Hintergrund (Skull PNG):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(10, 0))
         strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a")
@@ -2147,14 +2252,13 @@ class DiorClientGUI:
         tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333",
                   fg="white").pack(side="left")
 
-        # --- MESSER-KONFIGURATION (NEU) ---
+        # --- MESSER-KONFIGURATION ---
         tk.Label(tab_streak, text="FRAKTIONS-MESSER (Für den Kreis):", font=("Consolas", 10, "bold"), bg="#1a1a1a",
                  fg="#ffcc00").pack(pady=(15, 5))
 
         knife_frame = tk.Frame(tab_streak, bg="#1a1a1a")
         knife_frame.pack(pady=5)
 
-        # Messer-Setup für jede Fraktion
         self.knife_entries = {}
         for i, (f_name, f_col) in enumerate([("TR", "#ff4444"), ("NC", "#0066ff"), ("VS", "#9900ff")]):
             row = tk.Frame(knife_frame, bg="#1a1a1a")
@@ -2162,7 +2266,6 @@ class DiorClientGUI:
             tk.Label(row, text=f"{f_name} Knife:", bg="#1a1a1a", fg=f_col, width=10, anchor="w").pack(side="left")
 
             ent = tk.Entry(row, width=30, bg="#111", fg="white")
-            # Wert aus Config laden (Fallback auf Standardnamen)
             saved_knife = s_conf.get(f"knife_{f_name.lower()}", f"knife_{f_name.lower()}.png")
             ent.insert(0, get_short_name(saved_knife))
             ent.pack(side="left", padx=5)
@@ -2202,28 +2305,35 @@ class DiorClientGUI:
         self.scale_s_size.set(s_conf.get("scale", 1.0))
         self.scale_s_size.pack(fill="x", padx=100)
 
-        s_btn_box = tk.Frame(tab_streak, bg="#1a1a1a")
-        s_btn_box.pack(pady=20)
-        tk.Button(s_btn_box, text="SAVE STREAK", bg="#004400", fg="white", width=15, height=2,
-                  command=self.save_streak_settings).pack(side="left", padx=10)
-        tk.Button(s_btn_box, text="LAYOUT EDIT", bg="#0066ff", fg="white", width=15, height=2,
-                  command=self.toggle_hud_edit_mode).pack(side="left", padx=10)
-        tk.Button(s_btn_box, text="TEST STREAK", bg="#444", fg="white", width=15, height=2,
-                  command=self.test_streak_visuals).pack(side="left", padx=10)
+        # --- ALLE BUTTONS IN EINER REIHE (KOMPAKT) ---
+        # Wir packen alle 5 Buttons in einen Frame, damit sie sicher ins Bild passen
+        action_box = tk.Frame(tab_streak, bg="#1a1a1a")
+        action_box.pack(pady=20)
 
-        # --- NEU: PFAD-EDITOR BUTTONS ---
-        path_btn_box = tk.Frame(tab_streak, bg="#1a1a1a")
-        path_btn_box.pack(pady=(0, 20))
+        # 1. SAVE
+        tk.Button(action_box, text="SAVE", bg="#004400", fg="white", width=10, height=2, font=("Consolas", 10, "bold"),
+                  command=self.save_streak_settings).pack(side="left", padx=5)
 
-        # Breite von 20 auf 35 erhöht, damit der Text "(SPACE)" Platz hat
-        self.btn_path_record = tk.Button(path_btn_box, text="START PATH RECORD", bg="#ff8c00", fg="black",
-                                         font=("Consolas", 10, "bold"), width=35, height=2,
+        # 2. EDIT UI
+        tk.Button(action_box, text="EDIT UI", bg="#0066ff", fg="white", width=10, height=2,
+                  font=("Consolas", 10, "bold"),
+                  command=self.toggle_hud_edit_mode).pack(side="left", padx=5)
+
+        # 3. TEST
+        tk.Button(action_box, text="TEST", bg="#444", fg="white", width=10, height=2, font=("Consolas", 10, "bold"),
+                  command=self.test_streak_visuals).pack(side="left", padx=5)
+
+        # 4. REC PATH (Pfad aufnehmen)
+        self.btn_path_record = tk.Button(action_box, text="REC PATH", bg="#ff8c00", fg="black",
+                                         font=("Consolas", 10, "bold"), width=26, height=2,
                                          command=self.start_path_record)
-        self.btn_path_record.pack(side="left", padx=10)
+        self.btn_path_record.pack(side="left", padx=5)
 
-        tk.Button(path_btn_box, text="CLEAR PATH", bg="#440000", fg="white",
-                  font=("Consolas", 10, "bold"), width=15, height=2,
-                  command=self.clear_path).pack(side="left", padx=10)
+        # 5. CLEAR PATH
+        tk.Button(action_box, text="CLEAR", bg="#440000", fg="white",
+                  font=("Consolas", 10, "bold"), width=10, height=2,
+                  command=self.clear_path).pack(side="left", padx=5)
+
 
         # =========================================================
         # TAB 4: CROSSHAIR
@@ -2923,18 +3033,21 @@ class DiorClientGUI:
     def save_streak_settings(self):
         if "streak" not in self.config: self.config["streak"] = {}
 
-        # 1. Pfad vom Overlay in die Config übernehmen
+        try:
+            raw_speed = int(self.ent_streak_speed.get())
+        except ValueError:
+            raw_speed = 50
+
+        # Pfad-Modus beenden beim Speichern
         if self.overlay_win:
             self.config["streak"]["custom_path"] = getattr(self.overlay_win, 'custom_path', [])
             self.overlay_win.path_edit_active = False
             self.overlay_win.set_mouse_passthrough(True)
-            self.overlay_win.update()  # Löscht die gezeichnete Linie
-
-            # Button zurücksetzen
+            self.overlay_win.update()
             if hasattr(self, 'btn_path_record'):
                 self.btn_path_record.config(text="START PATH RECORD", bg="#ff8c00", fg="black")
 
-        # 2. Dummies entfernen und echte Daten (oder 0) wiederherstellen
+        # Dummies entfernen
         if hasattr(self, 'temp_streak_backup'):
             self.killstreak_count = self.temp_streak_backup
             self.streak_factions = getattr(self, 'temp_factions_backup', [])
@@ -2944,8 +3057,12 @@ class DiorClientGUI:
             self.killstreak_count = 0
             self.streak_factions = []
 
-        # 3. Restliche Werte wie gewohnt speichern
+        # WICHTIG: Hier speichern wir jetzt BEIDE Checkboxen
         self.config["streak"].update({
+            "active": self.var_streak_active.get() if hasattr(self, 'var_streak_active') else True, # Fallback falls Fehler
+            "active": self.var_streak_master.get(),  # DER NEUE MASTER SWITCH
+            "anim_active": self.var_streak_anim.get(), # DER NEUE ANIMATION SWITCH
+            "speed": raw_speed,
             "img": get_short_name(self.ent_streak_img.get()),
             "x": self.scale_sx.get(),
             "y": self.scale_sy.get(),
@@ -2954,13 +3071,13 @@ class DiorClientGUI:
             "scale": self.scale_s_size.get()
         })
 
-        # Messer-Auswahl speichern
         if hasattr(self, 'knife_entries'):
             for f_tag, ent in self.knife_entries.items():
                 self.config["streak"][f"knife_{f_tag}"] = get_short_name(ent.get())
 
         self.save_config()
-        self.update_streak_display()  # Aktualisiert (und versteckt) das UI
+        self.update_streak_display()
+        self.add_log(f"STREAK: Gespeichert (Master: {self.var_streak_master.get()}, Anim: {self.var_streak_anim.get()})")
 
     def draw_streak_ui(self, img_path, count, config):
         """Zeichnet das Killstreak-Bild und die Zahl basierend auf der Config"""
@@ -4055,6 +4172,11 @@ class DiorClientGUI:
 
                                     # --- FALL A: ICH BIN DER KILLER ---
                                     if killer_id == my_id and victim_id != my_id:
+
+                                        # [NEU] Check: Ist Killstreak überhaupt aktiviert?
+                                        if not self.config.get("streak", {}).get("active", True):
+                                            continue  # Wenn aus, ignoriere den Kill für Streaks
+
                                         curr_time = time.time()
                                         if getattr(self, "last_victim_id", None) == victim_id and (
                                                 curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
