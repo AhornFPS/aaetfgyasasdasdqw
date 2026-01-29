@@ -4227,7 +4227,6 @@ class DiorClientGUI:
                                                 special_event = PS2_DETECTION["NAMES"][weapon_name]
 
                                             if is_hs:
-                                                self.trigger_auto_voice("kill_hs")
                                                 if not special_event: special_event = "Headshot"
 
                                             # Popup Trigger
@@ -4247,10 +4246,26 @@ class DiorClientGUI:
                                                                 lambda e=special_event: self.trigger_overlay_event(e))
                                             self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
 
-                                            # Voice & Killfeed
+
+
+                                            # Auto Voice Logic
+                                            kd_triggered = False
                                             v_loadout = p.get("character_loadout_id")
-                                            if v_loadout in LOADOUT_MAP["max"]: self.trigger_auto_voice("kill_max")
-                                            if v_loadout in LOADOUT_MAP["infil"]: self.trigger_auto_voice("kill_infil")
+                                            if victim_id in self.session_stats:
+                                                v_stat = self.session_stats[victim_id]
+                                                v_k = v_stat.get("k", 0)
+                                                v_d = v_stat.get("d", 1)
+                                                if (v_k / max(1, v_d)) >= 2.0:
+                                                    self.trigger_auto_voice("kill_high_kd")
+                                                    kd_triggered = True
+                                            if not kd_triggered and v_loadout in LOADOUT_MAP["max"]:
+                                                self.trigger_auto_voice("kill_max")
+                                                kd_triggered = True
+                                            if not kd_triggered and v_loadout in LOADOUT_MAP["infil"]:
+                                                self.trigger_auto_voice("kill_infil")
+                                                kd_triggered = True
+                                            if not kd_triggered and is_hs:
+                                                self.trigger_auto_voice("kill_hs")
 
                                             # Killfeed
                                             v_name = self.name_cache.get(victim_id, "Unknown")
@@ -4351,7 +4366,7 @@ class DiorClientGUI:
                                     continue  # Datenmüll von der API ignorieren
 
                                 # Debugging aktivieren, damit du siehst was passiert
-                                # print(f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}, WinnerCheck: VS={VS}, TR={TR}, NC={NC}")
+                                print(f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}, WinnerCheck: VS={VS}, TR={TR}, NC={NC}")
 
                                 if state == "ended" and world == getattr(self, 'myWorldID',
                                                                          0) and zone == getattr(self,
