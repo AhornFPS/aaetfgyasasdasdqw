@@ -32,10 +32,28 @@ from ctypes import wintypes
 import sqlite3
 import tkinter.ttk as ttk  # Für die Tabs im Menü
 import PyQt6
-# ... deine anderen Imports (os, sys, tkinter etc.) ...
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QGraphicsDropShadowEffect
-from PyQt6.QtGui import QPixmap, QColor
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer
+from PyQt6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QVBoxLayout,
+    QGraphicsDropShadowEffect
+)
+from PyQt6.QtGui import (
+    QPixmap,
+    QColor,
+    QPainter,  # Neu: Für das Zeichnen der Linie
+    QPen,      # Neu: Für die Linien-Dicke und Farbe
+    QBrush,    # Neu: Zum Ausfüllen der Kreise/Punkte
+    QTransform # Neu: Zum Rotieren der Messer am Pfad
+)
+from PyQt6.QtCore import (
+    Qt,
+    pyqtSignal,
+    QObject,
+    QTimer,
+    QPoint     # Neu: Für die Koordinaten-Punkte
+)
 
 # Ermittelt den Ordner, in dem die EXE oder das Skript liegt
 if getattr(sys, 'frozen', False):
@@ -49,6 +67,81 @@ def get_asset_path(filename):
     return os.path.join(BASE_DIR, "assets", filename)
 
 
+class PathDrawingLayer(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        # WICHTIG: Klicks abfangen erlauben
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.parent_ovl = parent
+
+    def mousePressEvent(self, event):
+        if self.parent_ovl.path_edit_active:
+            pos = event.pos()
+            # Wir holen das Zentrum vom Skull-Label
+            label_rect = self.parent_ovl.streak_bg_label.geometry()
+            center = label_rect.center()
+
+            # Offset berechnen
+            off_x = pos.x() - center.x()
+            off_y = pos.y() - center.y()
+
+            self.parent_ovl.custom_path.append((off_x, off_y))
+            self.parent_ovl.signals.path_points_updated.emit(self.parent_ovl.custom_path)
+            self.update()
+        else:
+            event.ignore()
+
+    def paintEvent(self, event):
+        if not self.parent_ovl.path_edit_active: return
+
+        from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
+        from PyQt6.QtCore import QPoint
+
+        painter = QPainter(self)
+
+        # --- DER FIX FÜR "KLICKEN AUSERHALB" ---
+        # Wir malen den ganzen Bildschirm mit Alpha 1 (fast unsichtbar) aus.
+        # Dadurch denkt Windows, hier ist ein Fenster, und lässt uns klicken.
+        painter.setBrush(QColor(0, 0, 0, 1))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(self.rect())
+        # ---------------------------------------
+
+        if len(self.parent_ovl.custom_path) == 0: return
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cyan_color = QColor(0, 242, 255)
+        line_pen = QPen(cyan_color, 2, Qt.PenStyle.DashLine)
+        point_brush = QBrush(cyan_color)
+        point_pen = QPen(QColor(255, 255, 255), 1)
+
+        skull_center = self.parent_ovl.streak_bg_label.geometry().center()
+
+        # 1. LINIEN
+        if len(self.parent_ovl.custom_path) > 1:
+            painter.setPen(line_pen)
+            for i in range(len(self.parent_ovl.custom_path) - 1):
+                p1 = skull_center + QPoint(int(self.parent_ovl.custom_path[i][0]),
+                                           int(self.parent_ovl.custom_path[i][1]))
+                p2 = skull_center + QPoint(int(self.parent_ovl.custom_path[i + 1][0]),
+                                           int(self.parent_ovl.custom_path[i + 1][1]))
+                painter.drawLine(p1, p2)
+
+            # Kreis schließen
+            p_last = skull_center + QPoint(int(self.parent_ovl.custom_path[-1][0]),
+                                           int(self.parent_ovl.custom_path[-1][1]))
+            p_first = skull_center + QPoint(int(self.parent_ovl.custom_path[0][0]),
+                                            int(self.parent_ovl.custom_path[0][1]))
+            painter.drawLine(p_last, p_first)
+
+        # 2. PUNKTE
+        painter.setPen(point_pen)
+        painter.setBrush(point_brush)
+        for pt_data in self.parent_ovl.custom_path:
+            center = skull_center + QPoint(int(pt_data[0]), int(pt_data[1]))
+            painter.drawEllipse(center, 6, 6)
+
+
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 class OverlaySignals(QObject):
@@ -56,6 +149,7 @@ class OverlaySignals(QObject):
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
     update_streak = pyqtSignal(str, int, list, dict)
+    path_points_updated = pyqtSignal(list)
     clear_feed = pyqtSignal()
 
 
@@ -64,12 +158,9 @@ class QtOverlay(QWidget):
     def __init__(self, config=None):
         super().__init__()
         self.gui_ref = None
-
         self.edit_mode = False
         self.dragging_widget = None
         self.drag_offset = None
-
-        # Pool für Messer-Labels
         self.knife_labels = []
 
         # 1. FENSTER-KONFIGURATION
@@ -79,7 +170,6 @@ class QtOverlay(QWidget):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-
         screen = QApplication.primaryScreen().geometry()
         self.setGeometry(screen)
 
@@ -87,13 +177,21 @@ class QtOverlay(QWidget):
         self.base_height = 1080.0
         self.ui_scale = screen.height() / self.base_height
         self.ui_scale = max(0.8, self.ui_scale)
-
         self.event_center_x = screen.width() // 2
         self.event_center_y = (screen.height() // 2)
+
+
+        #Transparente Ebene für die Pfad-Zeichnung (Ganz oben)
+
+        # Initialisiere die Zeichen-Ebene
+        self.path_layer = PathDrawingLayer(self)
+        self.path_layer.setGeometry(self.rect())  # Füllt das ganze Fenster
+        self.path_layer.show()
 
         # 3. WIDGETS
         self.crosshair_label = QLabel(self)
         self.crosshair_label.hide()
+
         self.stats_bg_label = QLabel(self)
         self.stats_bg_label.hide()
         self.stats_text_label = QLabel(self)
@@ -101,16 +199,16 @@ class QtOverlay(QWidget):
 
         shadow_stats = QGraphicsDropShadowEffect()
         shadow_stats.setBlurRadius(5 * self.ui_scale)
+        shadow_stats.setColor(QColor(0, 0, 0, 240))
+
         shadow_stats.setXOffset(1 * self.ui_scale)
         shadow_stats.setYOffset(1 * self.ui_scale)
-        shadow_stats.setColor(QColor(0, 0, 0, 240))
         self.stats_text_label.setGraphicsEffect(shadow_stats)
 
         self.streak_bg_label = QLabel(self)
         self.streak_bg_label.hide()
         self.streak_text_label = QLabel(self)
         self.streak_text_label.hide()
-
         shadow_streak = QGraphicsDropShadowEffect()
         shadow_streak.setBlurRadius(5 * self.ui_scale)
         shadow_streak.setColor(QColor(0, 0, 0, 255))
@@ -125,12 +223,20 @@ class QtOverlay(QWidget):
         self.feed_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         self.feed_label.setStyleSheet("background: transparent;")
 
+
         shadow_feed = QGraphicsDropShadowEffect()
         shadow_feed.setBlurRadius(4 * self.ui_scale)
         shadow_feed.setXOffset(1 * self.ui_scale)
         shadow_feed.setYOffset(1 * self.ui_scale)
         shadow_feed.setColor(QColor(0, 0, 0, 255))
         self.feed_label.setGraphicsEffect(shadow_feed)
+
+        # --- ZEICHEN-EBENE (WICHTIG: ALS LETZTES ERSTELLEN) ---
+        self.path_edit_active = False
+        self.custom_path = []
+        self.path_layer = PathDrawingLayer(self)
+        self.path_layer.setGeometry(self.rect())  # Einmalig setzen
+        self.path_layer.hide()  # Standardmäßig aus
 
         # 4. SIGNALE
         self.signals = OverlaySignals()
@@ -147,8 +253,16 @@ class QtOverlay(QWidget):
         self.redraw_timer.timeout.connect(self.force_update)
         self.redraw_timer.start(1000)
 
+    def resizeEvent(self, event):
+        if hasattr(self, 'path_layer'):
+            self.path_layer.setGeometry(self.rect())
+        super().resizeEvent(event)
+
     def force_update(self):
         self.repaint()
+        # Falls Edit an ist, Layer immer nach vorne holen
+        if self.path_edit_active:
+             self.path_layer.raise_()
 
     def s(self, value):
         return int(float(value) * self.ui_scale)
@@ -187,8 +301,13 @@ class QtOverlay(QWidget):
         except Exception as e:
             print(f"Passthrough Error: {e}")
 
-    # --- DRAG & DROP LOGIK ---
+    # In der QtOverlay Klasse:
     def mousePressEvent(self, event):
+        # Falls wir im Pfad-Edit Modus sind, macht die PathDrawingLayer jetzt die Arbeit!
+        if self.path_edit_active:
+            return
+
+        # Normaler Drag & Drop Modus (unverändert)
         if not self.edit_mode: return
         pos = event.pos()
         if "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
@@ -203,6 +322,43 @@ class QtOverlay(QWidget):
         elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
             self.dragging_widget = "crosshair"
             self.drag_offset = pos - self.crosshair_label.pos()
+
+    def paintEvent(self, event):
+        # Wir nutzen ein internes Zeichnen auf dem path_layer, falls aktiv
+        if getattr(self, "path_edit_active", False) and len(self.custom_path) > 0:
+            from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
+            from PyQt6.QtCore import QPoint
+
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            cyan_color = QColor(0, 242, 255)
+            line_pen = QPen(cyan_color, 2, Qt.PenStyle.DashLine)
+            point_brush = QBrush(cyan_color)
+            point_pen = QPen(QColor(255, 255, 255), 1)
+
+            # Mitte des Schädels als Nullpunkt für die Offsets
+            skull_center = self.streak_bg_label.geometry().center()
+
+            # 1. LINIEN ZEICHNEN
+            if len(self.custom_path) > 1:
+                painter.setPen(line_pen)
+                for i in range(len(self.custom_path) - 1):
+                    p1 = skull_center + QPoint(int(self.custom_path[i][0]), int(self.custom_path[i][1]))
+                    p2 = skull_center + QPoint(int(self.custom_path[i + 1][0]), int(self.custom_path[i + 1][1]))
+                    painter.drawLine(p1, p2)
+
+                # Kreis schließen (letzter zu erstem)
+                p_last = skull_center + QPoint(int(self.custom_path[-1][0]), int(self.custom_path[-1][1]))
+                p_first = skull_center + QPoint(int(self.custom_path[0][0]), int(self.custom_path[0][1]))
+                painter.drawLine(p_last, p_first)
+
+            # 2. PUNKTE ZEICHNEN (Immer ganz oben)
+            painter.setPen(point_pen)
+            painter.setBrush(point_brush)
+            for pt_data in self.custom_path:
+                center = skull_center + QPoint(int(pt_data[0]), int(pt_data[1]))
+                painter.drawEllipse(center, 5, 5)  # Etwas größere Punkte
 
     def mouseMoveEvent(self, event):
         if not self.edit_mode or not self.dragging_widget or not self.drag_offset: return
@@ -361,6 +517,7 @@ class QtOverlay(QWidget):
     def draw_streak_ui(self, img_path, count, factions, cfg):
         import math
         from PyQt6.QtGui import QTransform
+        from PyQt6.QtCore import QPoint
 
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide()
@@ -368,7 +525,7 @@ class QtOverlay(QWidget):
             for l in self.knife_labels: l.hide()
             return
 
-        display_count = count if count > 0 else 10
+        display_count = count if count > 0 else 100
 
         if os.path.exists(img_path):
             pix = QPixmap(img_path)
@@ -379,98 +536,152 @@ class QtOverlay(QWidget):
                 self.streak_bg_label.setPixmap(pix)
                 self.streak_bg_label.adjustSize()
 
+                # Position des Schädels
                 bx = (self.width() // 2) + self.s(cfg.get("x", 0))
                 by = (self.height() // 2) + self.s(cfg.get("y", 100))
-                visual_center_y = by - self.s(22)
-
                 self.safe_move(self.streak_bg_label, bx - (self.streak_bg_label.width() // 2),
                                by - (self.streak_bg_label.height() // 2))
                 self.streak_bg_label.show()
 
-                # --- KONFIGURATION FÜR REIHEN-OPTIK ---
-                # Hohe Anzahl pro Kreis, damit sie außen eng bleiben
-                knives_per_circle = 45
-                radius_step = self.s(50)
-                rx_base = (self.streak_bg_label.width() // 2)
-                ry_base = (self.streak_bg_label.height() // 2)
+                skull_center = self.streak_bg_label.geometry().center()
+                path_data = cfg.get("custom_path", [])
 
+                # Sicherstellen, dass genug Labels da sind
                 while len(self.knife_labels) < len(factions):
                     lbl = QLabel(self)
                     lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
                     self.knife_labels.append(lbl)
 
-                # WICHTIG: Schleife RÜCKWÄRTS laufen lassen (Außen nach Innen)
-                # Dadurch liegt der erste Ring (Index 0) am Ende oben auf den anderen Messern
-                for i in range(len(factions) - 1, -1, -1):
-                    f_tag = factions[i]
-                    label = self.knife_labels[i]
-                    k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
-                    k_path = get_asset_path(k_file)
+                # ==========================================
+                # MODUS 1: CUSTOM PATH (Falls Pfad existiert)
+                # ==========================================
+                if len(path_data) > 2:
+                    # Pfad-Länge berechnen
+                    segments = []
+                    total_l = 0
+                    pts = [QPoint(int(p[0]), int(p[1])) for p in path_data]
+                    for i in range(len(pts)):
+                        p1, p2 = pts[i], pts[(i + 1) % len(pts)]
+                        d = math.sqrt((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2)
+                        segments.append((p1, p2, d, total_l))
+                        total_l += d
 
-                    if not os.path.exists(k_path):
-                        label.hide();
-                        continue
+                    # Definition für Pfad-Verteilung (damit es nicht crasht)
+                    knives_per_ring_path = 50
 
-                    k_pix = QPixmap(k_path)
-                    if k_pix.isNull(): continue
+                    # Messer zeichnen (Von Außen nach Innen für Layering)
+                    for i in range(len(factions) - 1, -1, -1):
+                        label = self.knife_labels[i]
 
-                    circle_idx = i // knives_per_circle
-                    pos_in_circle = i % knives_per_circle
+                        # --- HIER WAR DER FEHLER: ---
+                        f_tag = factions[i]  # Diese Zeile hat gefehlt!
+                        # ----------------------------
 
-                    # KEIN STAGGERING: Alle Messer liegen exakt untereinander
-                    angle = (pos_in_circle * (360 / knives_per_circle)) - 90
-                    rad = math.radians(angle)
-                    s = math.sin(rad)
-                    c = math.cos(rad)
+                        k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
+                        k_path = get_asset_path(k_file)
+                        if not os.path.exists(k_path): label.hide(); continue
 
-                    # Kiefer-Anpassung (REDUZIERT für "weiter raus")
-                    f_x, f_y = 1.0, 1.0
-                    if s > 0:  # Untere Hälfte
-                        # Wert von 0.48 auf 0.28 gesenkt -> Messer wandern am Kiefer weiter raus
-                        narrow_factor = 0.28
-                        f_x = 1.0 - (narrow_factor * s)
-                        f_y = 1.0 - (0.12 * s)
-                    else:  # Obere Hälfte
-                        f_x = 1.0 + (0.05 * abs(s))
+                        ring_idx = i // knives_per_ring_path
+                        pos_in_ring = i % knives_per_ring_path
 
-                    # Radien (Spitzen stecken 10px im Kopf)
-                    curr_rx = (rx_base - self.s(10) + (circle_idx * radius_step)) * f_x
-                    curr_ry = (ry_base - self.s(10) + (circle_idx * radius_step)) * f_y
+                        # Dichte Skalierung (0.12 statt 0.35 für Schild-Effekt)
+                        ring_scale = 1.0 + (ring_idx * 0.28)
 
-                    kx = bx + int(curr_rx * c)
-                    ky = visual_center_y + int(curr_ry * s)
+                        target_dist = (pos_in_ring / knives_per_ring_path) * total_l
 
-                    transform = QTransform().rotate(angle + 90)
-                    k_pix = k_pix.transformed(transform, Qt.TransformationMode.SmoothTransformation)
-                    k_pix = k_pix.scaled(self.s(85), self.s(85), Qt.AspectRatioMode.KeepAspectRatio,
-                                         Qt.TransformationMode.SmoothTransformation)
+                        # Interpoliere Position auf Pfad
+                        kx_off, ky_off = 0, 0
+                        for p1, p2, seg_d, start_l in segments:
+                            if start_l <= target_dist <= start_l + seg_d:
+                                t = (target_dist - start_l) / seg_d
+                                kx_off = (p1.x() + t * (p2.x() - p1.x())) * ring_scale
+                                ky_off = (p1.y() + t * (p2.y() - p1.y())) * ring_scale
+                                break
 
-                    label.setPixmap(k_pix)
-                    label.adjustSize()
-                    self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
-                    label.show()
-                    # Jedes Messer wird nach vorne geholt, da wir von außen nach innen zeichnen,
-                    # ist das letzte (innerste) Messer am Ende ganz oben.
-                    label.raise_()
+                        kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
+                        angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
 
+                        k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle),
+                                                            Qt.TransformationMode.SmoothTransformation)
+                        k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+                        label.setPixmap(k_pix)
+                        label.adjustSize()
+                        self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
+                        label.show()
+                        label.raise_()
+
+                # ==========================================
+                # MODUS 2: SCHILD-KRANZ (Falls KEIN Pfad)
+                # ==========================================
+                else:
+                    knives_per_circle = 50  # Dicht gepackt
+                    radius_step = self.s(22)  # Enger Abstand für Schild-Effekt
+
+                    start_radius_x = (self.streak_bg_label.width() // 2) - self.s(15)
+                    start_radius_y = (self.streak_bg_label.height() // 2) - self.s(15)
+
+                    for i in range(len(factions) - 1, -1, -1):
+                        label = self.knife_labels[i]
+                        f_tag = factions[i]
+                        k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
+                        k_path = get_asset_path(k_file)
+
+                        if not os.path.exists(k_path): label.hide(); continue
+
+                        ring_idx = i // knives_per_circle
+                        pos_in_ring = i % knives_per_circle
+
+                        angle = (pos_in_ring * (360 / knives_per_circle)) - 90
+                        rad = math.radians(angle)
+
+                        # Leichte Oval-Form
+                        s_val = math.sin(rad)
+                        jaw_narrowing = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
+
+                        curr_rx = (start_radius_x + (ring_idx * radius_step)) * jaw_narrowing
+                        curr_ry = (start_radius_y + (ring_idx * radius_step))
+
+                        kx = bx + int(curr_rx * math.cos(rad))
+                        ky = (by - self.s(20)) + int(curr_ry * math.sin(rad))
+
+                        transform = QTransform().rotate(angle + 90)
+                        k_pix = QPixmap(k_path)
+                        if k_pix.isNull(): continue
+
+                        k_pix = k_pix.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+                        k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+
+                        label.setPixmap(k_pix)
+                        label.adjustSize()
+                        self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
+                        label.show()
+                        label.raise_()
+
+                # --- FINALES AUFRÄUMEN FÜR BEIDE MODI ---
                 # Restliche Labels verstecken
-                for j in range(len(factions), len(self.knife_labels)):
-                    self.knife_labels[j].hide()
+                for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
 
-                # --- FINALES LAYERING ---
-                # 1. Totenkopf über ALLE Messer heben
+                # Totenkopf & Text nach oben
                 self.streak_bg_label.raise_()
 
-                # 2. Zahl ganz nach oben
                 self.streak_text_label.setText(
                     f"<span style='font-size: {int(26 * final_scale)}pt; font-family: Impact; color: white; text-shadow: 2px 2px 0 #000;'>{display_count}</span>")
                 self.streak_text_label.adjustSize()
+
                 tx = bx + self.s(cfg.get("tx", 0))
                 ty = by + self.s(cfg.get("ty", 0))
                 self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
                                ty - (self.streak_text_label.height() // 2))
                 self.streak_text_label.show()
                 self.streak_text_label.raise_()
+
+                # Edit-Layer ganz nach oben, falls an
+                if self.path_edit_active:
+                    self.path_layer.setGeometry(self.rect())
+                    self.path_layer.show()
+                    self.path_layer.raise_()
 
     def update_crosshair(self, path, size, enabled):
         if (not enabled and not self.edit_mode) or not os.path.exists(path):
@@ -796,6 +1007,61 @@ class DiorClientGUI:
             except:
                 pass
             time.sleep(5)
+
+    def start_path_edit(self):
+        """Aktiviert den Klick-Modus für die Messer-Linie"""
+        if self.overlay_win:
+            # 1. Path-Modus im Overlay einschalten
+            self.overlay_win.path_edit_active = True
+            # 2. Maus-Durchlässigkeit ausschalten, damit Klicks registriert werden
+            self.overlay_win.set_mouse_passthrough(False)
+            # 3. Alten Pfad für neue Aufnahme leeren
+            self.overlay_win.custom_path = []
+            self.add_log("PATH-EDIT: Klicke jetzt um den Schädel. Beende mit 'SAVE STREAK'.")
+
+    def start_path_record(self):
+        if not self.overlay_win: return
+
+        is_recording = getattr(self.overlay_win, "path_edit_active", False)
+
+        if not is_recording:
+            # --- START ---
+            self.overlay_win.path_edit_active = True
+
+            # 1. Overlay durchklickbar machen (außer unsere Layer)
+            self.overlay_win.set_mouse_passthrough(False)
+            self.overlay_win.custom_path = []
+
+            # 2. Die Zeichen-Ebene sichtbar, anklickbar und ganz nach oben machen
+            self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            self.overlay_win.path_layer.setGeometry(self.overlay_win.rect())  # Sichergehen
+            self.overlay_win.path_layer.show()
+            self.overlay_win.path_layer.raise_()  # GANZ WICHTIG! Über das PNG heben
+
+            self.btn_path_record.config(text="STOP PATH RECORD", bg="#ff0000", fg="white")
+
+            # Dummy-Streak anzeigen (10 Messer), damit man weiß wohin man klickt
+            self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
+            self.temp_factions_backup = getattr(self, 'streak_factions', [])
+            self.killstreak_count = 10
+            self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
+            self.update_streak_display()
+
+            self.add_log("PATH: Modus AN. Klicke ÜBERALL (auch außerhalb des Bildes).")
+        else:
+            # --- STOP ---
+            # Ebene wieder durchsichtig für Klicks machen und verstecken
+            self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            self.overlay_win.path_layer.hide()  # Verstecken
+            self.save_streak_settings()
+
+    def clear_path(self):
+        if "streak" in self.config:
+            self.config["streak"]["custom_path"] = []
+            if self.overlay_win: self.overlay_win.custom_path = []
+            self.save_config()
+            self.update_streak_display()
+            self.add_log("PATH: Pfad gelöscht.")
 
     def auto_enable_overlay(self):
         """Wird aufgerufen, wenn PlanetSide2_x64.exe gefunden wird."""
@@ -1901,6 +2167,19 @@ class DiorClientGUI:
         tk.Button(s_btn_box, text="TEST STREAK", bg="#444", fg="white", width=15, height=2,
                   command=self.test_streak_visuals).pack(side="left", padx=10)
 
+        # --- NEU: PFAD-EDITOR BUTTONS ---
+        path_btn_box = tk.Frame(tab_streak, bg="#1a1a1a")
+        path_btn_box.pack(pady=(0, 20))
+
+        self.btn_path_record = tk.Button(path_btn_box, text="START PATH RECORD", bg="#ff8c00", fg="black",
+                                         font=("Consolas", 10, "bold"), width=20, height=2,
+                                         command=self.start_path_record)
+        self.btn_path_record.pack(side="left", padx=10)
+
+        tk.Button(path_btn_box, text="CLEAR PATH", bg="#440000", fg="white",
+                  font=("Consolas", 10, "bold"), width=15, height=2,
+                  command=self.clear_path).pack(side="left", padx=10)
+
         # =========================================================
         # TAB 4: CROSSHAIR
         # =========================================================
@@ -2599,6 +2878,28 @@ class DiorClientGUI:
     def save_streak_settings(self):
         if "streak" not in self.config: self.config["streak"] = {}
 
+        # 1. Pfad vom Overlay in die Config übernehmen
+        if self.overlay_win:
+            self.config["streak"]["custom_path"] = getattr(self.overlay_win, 'custom_path', [])
+            self.overlay_win.path_edit_active = False
+            self.overlay_win.set_mouse_passthrough(True)
+            self.overlay_win.update()  # Löscht die gezeichnete Linie
+
+            # Button zurücksetzen
+            if hasattr(self, 'btn_path_record'):
+                self.btn_path_record.config(text="START PATH RECORD", bg="#ff8c00", fg="black")
+
+        # 2. Dummies entfernen und echte Daten (oder 0) wiederherstellen
+        if hasattr(self, 'temp_streak_backup'):
+            self.killstreak_count = self.temp_streak_backup
+            self.streak_factions = getattr(self, 'temp_factions_backup', [])
+            del self.temp_streak_backup
+            if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
+        else:
+            self.killstreak_count = 0
+            self.streak_factions = []
+
+        # 3. Restliche Werte wie gewohnt speichern
         self.config["streak"].update({
             "img": get_short_name(self.ent_streak_img.get()),
             "x": self.scale_sx.get(),
@@ -2614,8 +2915,7 @@ class DiorClientGUI:
                 self.config["streak"][f"knife_{f_tag}"] = get_short_name(ent.get())
 
         self.save_config()
-        self.add_log("SYS: Killstreak & Messer-Setup gespeichert.")
-        self.update_streak_display()
+        self.update_streak_display()  # Aktualisiert (und versteckt) das UI
 
     def draw_streak_ui(self, img_path, count, config):
         """Zeichnet das Killstreak-Bild und die Zahl basierend auf der Config"""
@@ -2674,6 +2974,9 @@ class DiorClientGUI:
 
                 self.streak_text_label.move(num_x, num_y)
                 self.streak_text_label.show()
+                if self.path_edit_active:
+                    self.path_layer.show()
+                    self.path_layer.raise_()
 
     def update_streak_display(self):
         """Sendet Streak-Daten sicher per Signal an das Overlay-Fenster"""
@@ -2699,8 +3002,8 @@ class DiorClientGUI:
         old_f = getattr(self, 'streak_factions', [])
 
         self.add_log("UI: Teste Killstreak-Visuals (7 Kills)...")
-        self.killstreak_count = 10
-        self.streak_factions = (["TR", "NC", "VS"] * 34)[:10] # Dummy Messer
+        self.killstreak_count = 100
+        self.streak_factions = (["TR", "NC", "VS"] * 34)[:1000] # Dummy Messer
         self.update_streak_display()
 
         # Nach 4 Sekunden alles verstecken
