@@ -167,7 +167,7 @@ class OverlaySignals(QObject):
     show_image = pyqtSignal(str, int, int, int)
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
-    update_streak = pyqtSignal(str, int, list, dict)
+    update_streak = pyqtSignal(str, int, list, dict, list)
     path_points_updated = pyqtSignal(list)
     clear_feed = pyqtSignal()
 
@@ -548,7 +548,7 @@ class QtOverlay(QWidget):
         temp_label.show()
         QTimer.singleShot(duration, temp_label.deleteLater)
 
-    def draw_streak_ui(self, img_path, count, factions, cfg):
+    def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         import math
         import time  # Wichtig für den Zeitstempel
         from PyQt6.QtGui import QTransform
@@ -623,8 +623,13 @@ class QtOverlay(QWidget):
                         k_path = get_asset_path(k_file)
                         if not os.path.exists(k_path): label.hide(); continue
 
-                        ring_idx = i // knives_per_ring_path
-                        pos_in_ring = i % knives_per_ring_path
+                        if slot_map and i < len(slot_map):
+                            slot_idx = slot_map[i]
+                        else:
+                            slot_idx = i  # Fallback falls Liste leer
+
+                        ring_idx = slot_idx // knives_per_ring_path  # <--- Ein 'r' entfernen
+                        pos_in_ring = slot_idx % knives_per_ring_path
                         ring_scale = 1.0 + (ring_idx * 0.28)
                         target_dist = (pos_in_ring / knives_per_ring_path) * total_l
 
@@ -680,8 +685,13 @@ class QtOverlay(QWidget):
 
                         if not os.path.exists(k_path): label.hide(); continue
 
-                        ring_idx = i // knives_per_circle
-                        pos_in_ring = i % knives_per_circle
+                        if slot_map and i < len(slot_map):
+                            slot_idx = slot_map[i]
+                        else:
+                            slot_idx = i
+
+                        ring_idx = slot_idx // knives_per_circle
+                        pos_in_ring = slot_idx % knives_per_circle
                         angle = (pos_in_ring * (360 / knives_per_circle)) - 90
                         rad = math.radians(angle)
 
@@ -3163,6 +3173,29 @@ class DiorClientGUI:
                     self.path_layer.show()
                     self.path_layer.raise_()
 
+    def _get_random_slot(self):
+        import random
+        # Falls die Liste noch nicht existiert
+        if not hasattr(self, 'streak_slot_map'): self.streak_slot_map = []
+
+        knives_per_ring = 50
+        current_ring = len(self.streak_slot_map) // knives_per_ring
+
+        # Welche Plätze in diesem Ring sind schon belegt?
+        used_in_ring = [s % knives_per_ring for s in self.streak_slot_map if s // knives_per_ring == current_ring]
+
+        # Alle freien Plätze finden (0 bis 49)
+        available = [x for x in range(knives_per_ring) if x not in used_in_ring]
+
+        if not available:
+            return len(self.streak_slot_map)  # Fallback (sollte nie passieren)
+
+        # Zufälligen freien Platz wählen
+        chosen = random.choice(available)
+
+        # Rückgabe: Ring-Offset + Zufallsplatz
+        return (current_ring * knives_per_ring) + chosen
+
     def update_streak_display(self):
         """Sendet Streak-Daten sicher per Signal an das Overlay-Fenster"""
         if not self.overlay_win: return
@@ -3173,29 +3206,42 @@ class DiorClientGUI:
         current_streak = getattr(self, 'killstreak_count', 0)
         factions = getattr(self, 'streak_factions', [])
 
+        slot_map = getattr(self, 'streak_slot_map', [])
+
         # WICHTIG: Nutze das Signal-System, um Thread-Fehler zu vermeiden
         self.overlay_win.signals.update_streak.emit(
             img_path,
             current_streak,
             factions,
-            streak_cfg
+            streak_cfg,
+            slot_map
         )
 
     def test_streak_visuals(self):
-        """Simuliert einen Streak von 100 Kills mit gemischten Fraktionen"""
         old_c = getattr(self, 'killstreak_count', 0)
         old_f = getattr(self, 'streak_factions', [])
+        old_s = getattr(self, 'streak_slot_map', [])  # Backup
 
-        self.add_log("UI: Teste Killstreak-Visuals (7 Kills)...")
+        self.add_log("UI: Teste Killstreak-Visuals...")
         self.killstreak_count = 100
-        self.streak_factions = (["TR", "NC", "VS"] * 34)[:1000] # Dummy Messer
+        self.streak_factions = (["TR", "NC", "VS"] * 34)[:100]
+
+        # Fake Random Slots erzeugen
+        self.streak_slot_map = []
+        import random
+        # Einfach 0-49 mischen und verdoppeln für den Test
+        slots = list(range(50)) + list(range(50, 100))
+        random.shuffle(slots)
+        self.streak_slot_map = slots
+
         self.update_streak_display()
 
-        # Nach 4 Sekunden alles verstecken
         def reset_test():
             self.killstreak_count = old_c
             self.streak_factions = old_f
+            self.streak_slot_map = old_s  # Restore
             self.update_streak_display()
+
         self.root.after(4000, reset_test)
 
     def fade_out(self, tag, alpha=255):
@@ -4215,13 +4261,18 @@ class DiorClientGUI:
                                             if self.killstreak_count == 0:
                                                 self.killstreak_count = 1
                                                 self.streak_factions = []
+                                                self.streak_slot_map = []
                                             else:
                                                 self.killstreak_count += 1
 
                                             if not hasattr(self, 'streak_factions'): self.streak_factions = []
+                                            if not hasattr(self, 'streak_slot_map'): self.streak_slot_map = []
                                             v_team = p.get("team_id")
                                             v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team), "NSO")
                                             self.streak_factions.append(v_faction)
+
+                                            new_slot = self._get_random_slot()
+                                            self.streak_slot_map.append(new_slot)
 
                                             self.is_dead = False
                                             self.was_revived = False
@@ -4306,6 +4357,7 @@ class DiorClientGUI:
 
                                         self.killstreak_count = 0
                                         self.streak_factions = []
+                                        self.streak_slot_map = []
                                         self.is_dead = True
                                         self.root.after(0, self.update_streak_display)
 
@@ -4346,6 +4398,7 @@ class DiorClientGUI:
                                         self.is_dead = False
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.streak_factions = getattr(self, 'saved_factions', [])
+                                        self.streak_slot_map = getattr(self, 'saved_slots', [])
                                         self.root.after(0, self.update_streak_display)
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
                                         self.trigger_auto_voice("revived")
