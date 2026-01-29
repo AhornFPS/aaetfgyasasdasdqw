@@ -4354,6 +4354,7 @@ class DiorClientGUI:
                                         if self.killstreak_count > 0:
                                             self.saved_streak = self.killstreak_count
                                             self.saved_factions = getattr(self, 'streak_factions', [])
+                                            self.saved_slots = getattr(self, 'streak_slot_map', [])
 
                                         self.killstreak_count = 0
                                         self.streak_factions = []
