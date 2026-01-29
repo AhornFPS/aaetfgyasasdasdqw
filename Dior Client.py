@@ -803,6 +803,35 @@ class QtOverlay(QWidget):
 
                 lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
 
+    def update_crosshair(self, path, size, enabled):
+        """Aktualisiert das Crosshair Bild, Größe und Position"""
+        # Wenn deaktiviert (und nicht im Edit-Modus) oder Datei fehlt -> Verstecken
+        if (not enabled and not self.edit_mode) or not os.path.exists(path):
+            self.crosshair_label.hide()
+            return
+
+        pixmap = QPixmap(path)
+        if not pixmap.isNull():
+            # Skalieren
+            pixmap = pixmap.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                                   Qt.TransformationMode.SmoothTransformation)
+            self.crosshair_label.setPixmap(pixmap)
+            self.crosshair_label.adjustSize()
+
+            # Position berechnen
+            off_x, off_y = 0, 0
+            if self.gui_ref:
+                c = self.gui_ref.config.get("crosshair", {})
+                off_x = self.s(c.get("x", 0))
+                off_y = self.s(c.get("y", 0))
+
+            # Zentrieren + Offset
+            cx = (self.width() // 2) - (self.crosshair_label.width() // 2) + off_x
+            cy = (self.height() // 2) - (self.crosshair_label.height() // 2) + off_y
+
+            self.safe_move(self.crosshair_label, cx, cy)
+            self.crosshair_label.show()
+
 
 try:
     import pygame
