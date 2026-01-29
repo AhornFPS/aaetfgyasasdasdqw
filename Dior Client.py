@@ -816,6 +816,11 @@ LOADOUT_MAP = {
     "max": ["7", "14", "21", "45"]
 }
 
+HSR_WEAPON_CATEGORY = {
+    "AI MAX (Left)", "AI MAX (Right)", "Amphibious Rifle", "Anti-Materiel Rifle", "Assault Rifle", "Carbine", "Heavy Weapon",
+    "Hybrid Rifle", "LMG", "Pistol", "Scout Rifle", "Shotgun", "SMG", "Sniper Rifle", "Amphibious Sidearm", "Knife"
+}
+
 # 2. Mapping für Aktionen (Experience IDs)IDs
 PS2_EXP_DETECTION = {
     # --- SUPPORT ---
@@ -2589,13 +2594,13 @@ class DiorClientGUI:
                 my_id = self.current_character_id
                 if my_id and my_id in self.session_stats:
                     s = self.session_stats[my_id]
-                    kills, deaths, hs = s.get("k", 0), s.get("d", 0), s.get("hs", 0)
+                    kills, deaths, hs, hsrkills = s.get("k", 0), s.get("d", 0), s.get("hs", 0), s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
                 else:
                     kills, deaths, hs, start_time = 0, 0, 0, time.time()
 
             kd = kills / max(1, deaths)
-            hsr = (hs / kills * 100) if kills > 0 else 0
+            hsr = (hs / hsrkills * 100) if hsrkills > 0 else 0
             dur_min = (time.time() - start_time) / 60
             kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
             hrs = int(dur_min // 60);
@@ -3926,7 +3931,7 @@ class DiorClientGUI:
                             faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
                             self.session_stats[cid] = {
                                 "id": cid, "name": self.name_cache.get(cid, "Searching..."),
-                                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,
+                                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,"hsrkill": 0,
                                 "start": time.time(), "last_kill_time": time.time()
                             }
                         return self.session_stats[cid]
@@ -4021,12 +4026,20 @@ class DiorClientGUI:
                                 victim_id = p.get("character_id")
                                 my_id = self.current_character_id
                                 is_hs = (p.get("is_headshot") == "1")
+                                weapon_id = p.get("attacker_weapon_id")
+                                w_info = self.item_db.get(weapon_id, {})
+                                category = w_info.get("type", "Unknown")
+
 
                                 if killer_id and killer_id != "0" and killer_id != victim_id:
                                     k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                                     k_obj["k"] += 1
                                     k_obj["last_kill_time"] = time.time()
-                                    if is_hs: k_obj["hs"] += 1
+                                    if category in HSR_WEAPON_CATEGORY:
+                                        k_obj["hsrkill"] += 1
+                                        if is_hs: k_obj["hs"] += 1
+                                        print(category)
+
 
                                 if victim_id and victim_id != "0":
                                     v_obj = get_stat_obj(victim_id, p.get("team_id"))
@@ -4083,8 +4096,7 @@ class DiorClientGUI:
                                             category = w_info.get("type", "Unknown")
                                             weapon_name = w_info.get("name", "Unknown")
                                             special_event = None
-                                            print(category)
-                                            print(weapon_name)
+
 
                                             if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
                                                 special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
