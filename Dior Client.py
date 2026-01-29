@@ -2707,7 +2707,7 @@ class DiorClientGUI:
                     kills, deaths, hs, hsrkills = s.get("k", 0), s.get("d", 0), s.get("hs", 0), s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
                 else:
-                    kills, deaths, hs, start_time = 0, 0, 0, time.time()
+                    kills, deaths, hs, hsrkills, start_time = 0, 0, 0, 0, time.time()
 
             kd = kills / max(1, deaths)
             hsr = (hs / hsrkills * 100) if hsrkills > 0 else 0
