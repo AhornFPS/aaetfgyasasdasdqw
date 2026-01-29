@@ -4318,8 +4318,13 @@ class DiorClientGUI:
                                             if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                 if my_id and char_id == my_id:
-                                    self.myTeamId = p.get("team_id")
-                                    self.myWorldID = p.get("world_id")
+                                    # HIER DIE KORREKTUR: Typenumwandlung zu int für sicheren Vergleich
+                                    try:
+                                        self.myTeamId = int(p.get("team_id", 0))
+                                        self.myWorldID = int(p.get("world_id", 0))
+                                        self.currentZone = int(p.get("zone_id", 0))  # <--- DAS HAT GEFEHLT!
+                                    except:
+                                        pass
                                     if exp_id in ["7", "53"]:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
                                     else:
@@ -4333,20 +4338,50 @@ class DiorClientGUI:
                             # =========================================================
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
-                                world = p.get("world_id")
-                                zone = p.get("zone_id")
-                                VS = p.get("faction_vs")
-                                TR = p.get("faction_tr")
-                                NC = p.get("faction_nc")
-                                print()
-                                if state == "ended" and world == self.myWorldID and zone == self.currentZone:
-                                    print("alert ended")
+
+                                # Sicherstellen, dass wir Zahlen vergleichen
+                                try:
+                                    world = int(p.get("world_id", 0))
+                                    zone = int(p.get("zone_id", 0))
+                                    # Die Scores kommen als String (z.B. "33.5"), daher float!
+                                    VS = float(p.get("faction_vs", 0))
+                                    TR = float(p.get("faction_tr", 0))
+                                    NC = float(p.get("faction_nc", 0))
+                                except ValueError:
+                                    continue  # Datenmüll von der API ignorieren
+
+                                # Debugging aktivieren, damit du siehst was passiert
+                                # print(f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}, WinnerCheck: VS={VS}, TR={TR}, NC={NC}")
+
+                                if state == "ended" and world == getattr(self, 'myWorldID',
+                                                                         0) and zone == getattr(self,
+                                                                                                'currentZone',
+                                                                                                0):
+                                    print("ALERT ENDED - CHECKING WINNER...")
+
+                                    # VS WIN (VS hat mehr als TR UND mehr als NC)
                                     if VS > TR and VS > NC and self.myTeamId == 1:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
-                                    if NC > TR and NC > VS and self.myTeamId == 2:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
-                                    if TR > VS and TR > NC and self.myTeamId == 3:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
+                                        self.root.after(0,
+                                                        lambda: self.trigger_overlay_event("Alert Win"))
+                                        self.add_log("EVENT: Alert Win (VS)")
+
+                                    # NC WIN
+                                    elif NC > TR and NC > VS and self.myTeamId == 2:
+                                        self.root.after(0,
+                                                        lambda: self.trigger_overlay_event("Alert Win"))
+                                        self.add_log("EVENT: Alert Win (NC)")
+
+                                    # TR WIN
+                                    elif TR > VS and TR > NC and self.myTeamId == 3:
+                                        self.root.after(0,
+                                                        lambda: self.trigger_overlay_event("Alert Win"))
+                                        self.add_log("EVENT: Alert Win (TR)")
+
+                                    # Unentschieden oder Niederlage
+                                    else:
+                                        self.root.after(0,
+                                                        lambda: self.trigger_overlay_event("Alert End"))
+                                        self.add_log("EVENT: Alert Ended (Lost or Draw)")
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
