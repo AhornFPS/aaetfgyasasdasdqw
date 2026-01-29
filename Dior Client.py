@@ -762,9 +762,14 @@ PS2_DETECTION = {
     "CATEGORIES": {
         "Knife": "Knife Kill",
         "Grenade": "Nade Kill",
-        "MAX": "Max Kill",
-        "Spitfire Kill": "Spitfire Auto-Turret"
+        "MAX": "Max Kill"
     },
+
+    "NAMES": {
+            "SpitFire Turret": "Spitfire Kill",
+            "Spitfire Auto-Turret": "Spitfire Kill"
+        },
+
 
     "SPECIAL_IDS": {
         "802512": "Spitfire Kill",
@@ -4076,12 +4081,17 @@ class DiorClientGUI:
                                             weapon_id = p.get("attacker_weapon_id")
                                             w_info = self.item_db.get(weapon_id, {})
                                             category = w_info.get("type", "Unknown")
+                                            weapon_name = w_info.get("name", "Unknown")
                                             special_event = None
+                                            print(category)
+                                            print(weapon_name)
 
                                             if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
                                                 special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
                                             elif category in PS2_DETECTION["CATEGORIES"]:
                                                 special_event = PS2_DETECTION["CATEGORIES"][category]
+                                            elif weapon_name in PS2_DETECTION["NAMES"]:
+                                                special_event = PS2_DETECTION["NAMES"][weapon_name]
 
                                             if is_hs:
                                                 self.trigger_auto_voice("kill_hs")
@@ -4197,6 +4207,7 @@ class DiorClientGUI:
                                 NC = p.get("faction_nc")
                                 print()
                                 if state == "ended" and world == self.myWorldID and zone == self.currentZone:
+                                    print("alert ended")
                                     if VS > TR and VS > NC and self.myTeamId == 1:
                                         self.root.after(0, lambda: self.trigger_overlay_event("Alert Win"))
                                     if NC > TR and NC > VS and self.myTeamId == 2:
