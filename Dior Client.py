@@ -4038,7 +4038,6 @@ class DiorClientGUI:
                                     if category in HSR_WEAPON_CATEGORY:
                                         k_obj["hsrkill"] += 1
                                         if is_hs: k_obj["hs"] += 1
-                                        print(category)
 
 
                                 if victim_id and victim_id != "0":
