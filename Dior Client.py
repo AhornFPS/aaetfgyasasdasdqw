@@ -98,48 +98,67 @@ class PathDrawingLayer(QWidget):
         from PyQt6.QtCore import QPoint
 
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # --- DER FIX FÜR "KLICKEN AUSERHALB" ---
-        # Wir malen den ganzen Bildschirm mit Alpha 1 (fast unsichtbar) aus.
-        # Dadurch denkt Windows, hier ist ein Fenster, und lässt uns klicken.
+        # 1. Klick-Fläche (Unsichtbar, aber nötig für Maus-Events)
         painter.setBrush(QColor(0, 0, 0, 1))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRect(self.rect())
-        # ---------------------------------------
 
         if len(self.parent_ovl.custom_path) == 0: return
 
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        skull_center = self.parent_ovl.streak_bg_label.geometry().center()
+
+        # --- STIFTE DEFINIEREN ---
+        # A) Der Schatten-Stift (Dick, Schwarz, halbtransparent)
+        shadow_pen = QPen(QColor(0, 0, 0, 180), 5, Qt.PenStyle.SolidLine)
+
+        # B) Der Haupt-Stift (Cyan, Gestrichelt)
         cyan_color = QColor(0, 242, 255)
         line_pen = QPen(cyan_color, 2, Qt.PenStyle.DashLine)
+
+        # C) Punkte Stifte
+        shadow_brush = QBrush(QColor(0, 0, 0, 180))
         point_brush = QBrush(cyan_color)
         point_pen = QPen(QColor(255, 255, 255), 1)
 
-        skull_center = self.parent_ovl.streak_bg_label.geometry().center()
+        # --- HILFSFUNKTION ZUM ZEICHNEN DER LINIEN ---
+        def draw_path_lines(p):
+            if len(self.parent_ovl.custom_path) > 1:
+                for i in range(len(self.parent_ovl.custom_path) - 1):
+                    p1 = skull_center + QPoint(int(self.parent_ovl.custom_path[i][0]),
+                                               int(self.parent_ovl.custom_path[i][1]))
+                    p2 = skull_center + QPoint(int(self.parent_ovl.custom_path[i + 1][0]),
+                                               int(self.parent_ovl.custom_path[i + 1][1]))
+                    p.drawLine(p1, p2)
+                # Kreis schließen
+                p_last = skull_center + QPoint(int(self.parent_ovl.custom_path[-1][0]),
+                                               int(self.parent_ovl.custom_path[-1][1]))
+                p_first = skull_center + QPoint(int(self.parent_ovl.custom_path[0][0]),
+                                                int(self.parent_ovl.custom_path[0][1]))
+                p.drawLine(p_last, p_first)
 
-        # 1. LINIEN
-        if len(self.parent_ovl.custom_path) > 1:
-            painter.setPen(line_pen)
-            for i in range(len(self.parent_ovl.custom_path) - 1):
-                p1 = skull_center + QPoint(int(self.parent_ovl.custom_path[i][0]),
-                                           int(self.parent_ovl.custom_path[i][1]))
-                p2 = skull_center + QPoint(int(self.parent_ovl.custom_path[i + 1][0]),
-                                           int(self.parent_ovl.custom_path[i + 1][1]))
-                painter.drawLine(p1, p2)
+        # 2. SCHATTEN ZEICHNEN (Hintergrund)
+        painter.setPen(shadow_pen)
+        draw_path_lines(painter)
 
-            # Kreis schließen
-            p_last = skull_center + QPoint(int(self.parent_ovl.custom_path[-1][0]),
-                                           int(self.parent_ovl.custom_path[-1][1]))
-            p_first = skull_center + QPoint(int(self.parent_ovl.custom_path[0][0]),
-                                            int(self.parent_ovl.custom_path[0][1]))
-            painter.drawLine(p_last, p_first)
+        # 3. GLOW/HAUPTLINIE ZEICHNEN (Vordergrund)
+        painter.setPen(line_pen)
+        draw_path_lines(painter)
 
-        # 2. PUNKTE
-        painter.setPen(point_pen)
-        painter.setBrush(point_brush)
+        # 4. PUNKTE MIT SCHATTEN ZEICHNEN
         for pt_data in self.parent_ovl.custom_path:
             center = skull_center + QPoint(int(pt_data[0]), int(pt_data[1]))
-            painter.drawEllipse(center, 6, 6)
+
+            # Erst der schwarze Klecks dahinter
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(shadow_brush)
+            painter.drawEllipse(center, 8, 8)
+
+            # Dann der bunte Punkt davor
+            painter.setPen(point_pen)
+            painter.setBrush(point_brush)
+            painter.drawEllipse(center, 5, 5)
 
 
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
@@ -430,6 +449,17 @@ class QtOverlay(QWidget):
                 self.gui_ref.apply_crosshair_settings()
         self.dragging_widget = None;
         self.drag_offset = None
+
+    # --- TASTATUR-STEUERUNG (SPACE ZUM STOPPEN) ---
+    def keyPressEvent(self, event):
+        if self.path_edit_active and event.key() == Qt.Key.Key_Space:
+            # Ruft die Toggle-Funktion in der GUI auf -> Stoppt die Aufnahme
+            if self.gui_ref:
+                print("DEBUG: Space gedrückt -> Beende Path Record")
+                self.gui_ref.start_path_record()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     # --- RENDERING LOGIK ---
     def add_killfeed_row(self, html_msg):
@@ -1032,27 +1062,31 @@ class DiorClientGUI:
             self.overlay_win.set_mouse_passthrough(False)
             self.overlay_win.custom_path = []
 
-            # 2. Die Zeichen-Ebene sichtbar, anklickbar und ganz nach oben machen
+            # 2. Die Zeichen-Ebene aktivieren
             self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            self.overlay_win.path_layer.setGeometry(self.overlay_win.rect())  # Sichergehen
+            self.overlay_win.path_layer.setGeometry(self.overlay_win.rect())
             self.overlay_win.path_layer.show()
-            self.overlay_win.path_layer.raise_()  # GANZ WICHTIG! Über das PNG heben
+            self.overlay_win.path_layer.raise_()
 
-            self.btn_path_record.config(text="STOP PATH RECORD", bg="#ff0000", fg="white")
+            # --- NEU: FOKUS SETZEN DAMIT SPACEBAR GEHT ---
+            self.overlay_win.activateWindow()
+            self.overlay_win.setFocus()
+            # ---------------------------------------------
 
-            # Dummy-Streak anzeigen (10 Messer), damit man weiß wohin man klickt
+            self.btn_path_record.config(text="STOP PATH RECORD (SPACE)", bg="#ff0000", fg="white")
+
+            # Dummy-Streak anzeigen
             self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
             self.temp_factions_backup = getattr(self, 'streak_factions', [])
             self.killstreak_count = 10
             self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
             self.update_streak_display()
 
-            self.add_log("PATH: Modus AN. Klicke ÜBERALL (auch außerhalb des Bildes).")
+            self.add_log("PATH: Modus AN. Drücke SPACE zum Speichern & Beenden.")
         else:
             # --- STOP ---
-            # Ebene wieder durchsichtig für Klicks machen und verstecken
             self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            self.overlay_win.path_layer.hide()  # Verstecken
+            self.overlay_win.path_layer.hide()
             self.save_streak_settings()
 
     def clear_path(self):
@@ -2171,8 +2205,9 @@ class DiorClientGUI:
         path_btn_box = tk.Frame(tab_streak, bg="#1a1a1a")
         path_btn_box.pack(pady=(0, 20))
 
+        # Breite von 20 auf 35 erhöht, damit der Text "(SPACE)" Platz hat
         self.btn_path_record = tk.Button(path_btn_box, text="START PATH RECORD", bg="#ff8c00", fg="black",
-                                         font=("Consolas", 10, "bold"), width=20, height=2,
+                                         font=("Consolas", 10, "bold"), width=35, height=2,
                                          command=self.start_path_record)
         self.btn_path_record.pack(side="left", padx=10)
 
