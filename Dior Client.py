@@ -550,11 +550,11 @@ class QtOverlay(QWidget):
 
     def draw_streak_ui(self, img_path, count, factions, cfg):
         import math
+        import time  # Wichtig für den Zeitstempel
         from PyQt6.QtGui import QTransform
         from PyQt6.QtCore import QPoint
 
-        # --- NEU: Sofort prüfen ob aktiv ---
-        # Wenn "active" False ist, ALLES verstecken und abbrechen
+        # --- Check Active ---
         if not cfg.get("active", True) and not self.edit_mode:
             self.streak_bg_label.hide()
             self.streak_text_label.hide()
@@ -562,13 +562,12 @@ class QtOverlay(QWidget):
                 l.hide()
             return
 
-
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide()
             self.streak_text_label.hide()
             for l in self.knife_labels:
                 l.hide()
-                l._is_active = False  # Animation für versteckte Messer stoppen
+                l._is_active = False
             return
 
         display_count = count if count > 0 else 100
@@ -599,10 +598,9 @@ class QtOverlay(QWidget):
                     self.knife_labels.append(lbl)
 
                 # ==========================================
-                # MODUS 1: CUSTOM PATH (Falls Pfad existiert)
+                # MODUS 1: CUSTOM PATH
                 # ==========================================
                 if len(path_data) > 2:
-                    # Pfad-Länge berechnen
                     segments = []
                     total_l = 0
                     pts = [QPoint(int(p[0]), int(p[1])) for p in path_data]
@@ -612,30 +610,24 @@ class QtOverlay(QWidget):
                         segments.append((p1, p2, d, total_l))
                         total_l += d
 
-                    # Definition für Pfad-Verteilung (damit es nicht crasht)
                     knives_per_ring_path = 50
 
-                    # Messer zeichnen (Von Außen nach Innen für Layering)
                     for i in range(len(factions) - 1, -1, -1):
                         label = self.knife_labels[i]
 
-                        # --- HIER WAR DER FEHLER: ---
-                        f_tag = factions[i]  # Diese Zeile hat gefehlt!
-                        # ----------------------------
+                        # [NEU] War das Messer vorher unsichtbar? Dann ist es neu!
+                        is_new_spawn = not label.isVisible()
 
+                        f_tag = factions[i]
                         k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
                         k_path = get_asset_path(k_file)
                         if not os.path.exists(k_path): label.hide(); continue
 
                         ring_idx = i // knives_per_ring_path
                         pos_in_ring = i % knives_per_ring_path
-
-                        # Dichte Skalierung (0.12 statt 0.35 für Schild-Effekt)
                         ring_scale = 1.0 + (ring_idx * 0.28)
-
                         target_dist = (pos_in_ring / knives_per_ring_path) * total_l
 
-                        # Interpoliere Position auf Pfad
                         kx_off, ky_off = 0, 0
                         for p1, p2, seg_d, start_l in segments:
                             if start_l <= target_dist <= start_l + seg_d:
@@ -654,27 +646,34 @@ class QtOverlay(QWidget):
                         label.setPixmap(k_pix)
                         label.adjustSize()
 
-                        # NEU: Wir speichern den Abstand zur Mitte für die Animation
+                        # Basis-Werte speichern
                         label._base_off_x = kx - skull_center.x()
                         label._base_off_y = ky - skull_center.y()
                         label._is_active = True
+
+                        # [NEU] Wenn neu, Zeitstempel setzen für Animation
+                        if is_new_spawn:
+                            label._spawn_time = time.time()
 
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
                         label.raise_()
 
                 # ==========================================
-                # MODUS 2: SCHILD-KRANZ (Falls KEIN Pfad)
+                # MODUS 2: SCHILD-KRANZ (DEFAULT)
                 # ==========================================
                 else:
-                    knives_per_circle = 50  # Dicht gepackt
-                    radius_step = self.s(22)  # Enger Abstand für Schild-Effekt
-
+                    knives_per_circle = 50
+                    radius_step = self.s(22)
                     start_radius_x = (self.streak_bg_label.width() // 2) - self.s(15)
                     start_radius_y = (self.streak_bg_label.height() // 2) - self.s(15)
 
                     for i in range(len(factions) - 1, -1, -1):
                         label = self.knife_labels[i]
+
+                        # [NEU] Check ob neu
+                        is_new_spawn = not label.isVisible()
+
                         f_tag = factions[i]
                         k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
                         k_path = get_asset_path(k_file)
@@ -683,14 +682,11 @@ class QtOverlay(QWidget):
 
                         ring_idx = i // knives_per_circle
                         pos_in_ring = i % knives_per_circle
-
                         angle = (pos_in_ring * (360 / knives_per_circle)) - 90
                         rad = math.radians(angle)
 
-                        # Leichte Oval-Form
                         s_val = math.sin(rad)
                         jaw_narrowing = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
-
                         curr_rx = (start_radius_x + (ring_idx * radius_step)) * jaw_narrowing
                         curr_ry = (start_radius_y + (ring_idx * radius_step))
 
@@ -700,7 +696,6 @@ class QtOverlay(QWidget):
                         transform = QTransform().rotate(angle + 90)
                         k_pix = QPixmap(k_path)
                         if k_pix.isNull(): continue
-
                         k_pix = k_pix.transformed(transform, Qt.TransformationMode.SmoothTransformation)
                         k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
                                              Qt.TransformationMode.SmoothTransformation)
@@ -708,23 +703,22 @@ class QtOverlay(QWidget):
                         label.setPixmap(k_pix)
                         label.adjustSize()
 
-                        # NEU: Wir speichern den Abstand zur Mitte für die Animation
-                        # skull_center ist oben in der Methode definiert
+                        # Basis Werte speichern
                         label._base_off_x = kx - skull_center.x()
                         label._base_off_y = ky - skull_center.y()
                         label._is_active = True
+
+                        # [NEU] Spawn Zeit setzen
+                        if is_new_spawn:
+                            label._spawn_time = time.time()
 
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
                         label.raise_()
 
-                # --- FINALES AUFRÄUMEN FÜR BEIDE MODI ---
-                # Restliche Labels verstecken
+                # Cleanup
                 for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
-
-                # Totenkopf & Text nach oben
                 self.streak_bg_label.raise_()
-
                 self.streak_text_label.setText(
                     f"<span style='font-size: {int(26 * final_scale)}pt; font-family: Impact; color: white; text-shadow: 2px 2px 0 #000;'>{display_count}</span>")
                 self.streak_text_label.adjustSize()
@@ -736,38 +730,26 @@ class QtOverlay(QWidget):
                 self.streak_text_label.show()
                 self.streak_text_label.raise_()
 
-                # Edit-Layer ganz nach oben, falls an
                 if self.path_edit_active:
                     self.path_layer.setGeometry(self.rect())
                     self.path_layer.show()
                     self.path_layer.raise_()
 
     def animate_pulse(self):
-        """Lässt die Messer rhythmisch atmen (pulsieren)"""
+        """Kombiniert Spawn-Animation (Einfliegen) und Pulsieren"""
         if not self.streak_bg_label.isVisible(): return
 
         s_conf = {}
         if self.gui_ref:
             s_conf = self.gui_ref.config.get("streak", {})
 
-        # 1. MASTER CHECK: Wenn ganz aus -> Abbrechen
+        # 1. MASTER CHECK
         if not s_conf.get("active", True):
             return
 
-        # 2. ANIMATION CHECK: Wenn Animation aus -> Positionen resetten und return
-        if not s_conf.get("anim_active", True):
-            # Wir stellen sicher, dass die Messer auf ihrer Basis-Position stehen
-            center = self.streak_bg_label.geometry().center()
-            cx, cy = center.x(), center.y()
-            for lbl in self.knife_labels:
-                if getattr(lbl, "_is_active", False):
-                    ox = getattr(lbl, "_base_off_x", 0)
-                    oy = getattr(lbl, "_base_off_y", 0)
-                    # Setze exakt auf die Ursprungsposition ohne Sinus-Welle
-                    lbl.move(cx + ox - (lbl.width() // 2), cy + oy - (lbl.height() // 2))
-            return
+        # Basis-Prüfung für Animation
+        anim_enabled = s_conf.get("anim_active", True)
 
-            # 3. Wenn beides AN ist -> Pulsieren berechnen
         try:
             user_val = int(s_conf.get("speed", 50))
             speed_factor = user_val / 20.0
@@ -775,39 +757,51 @@ class QtOverlay(QWidget):
             speed_factor = 2.5
 
         import time, math
-        t = time.time()
-        pulse_scale = 1.0 + (math.sin(t * speed_factor) * 0.04)
+        now = time.time()
+
+        # Berechnung für das normale Pulsieren
+        pulse_val = math.sin(now * speed_factor) * 0.04
+        normal_pulse_scale = 1.0 + pulse_val
 
         center = self.streak_bg_label.geometry().center()
         cx, cy = center.x(), center.y()
+
+        spawn_duration = 0.4  # Dauer des "Einfliegens" in Sekunden
 
         for lbl in self.knife_labels:
             if getattr(lbl, "_is_active", False) and lbl.isVisible():
                 ox = getattr(lbl, "_base_off_x", 0)
                 oy = getattr(lbl, "_base_off_y", 0)
 
-                new_x = cx + int(ox * pulse_scale)
-                new_y = cy + int(oy * pulse_scale)
-                lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
+                # Wann wurde dieses Messer gespawnt?
+                spawn_time = getattr(lbl, "_spawn_time", 0)
+                alive_time = now - spawn_time
 
-    def update_crosshair(self, path, size, enabled):
-        if (not enabled and not self.edit_mode) or not os.path.exists(path):
-            self.crosshair_label.hide();
-            return
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            pixmap = pixmap.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
-                                   Qt.TransformationMode.SmoothTransformation)
-            self.crosshair_label.setPixmap(pixmap);
-            self.crosshair_label.adjustSize()
-            off_x, off_y = 0, 0
-            if self.gui_ref:
-                c = self.gui_ref.config.get("crosshair", {})
-                off_x, off_y = self.s(c.get("x", 0)), self.s(c.get("y", 0))
-            cx = (self.width() // 2) - (self.crosshair_label.width() // 2) + off_x
-            cy = (self.height() // 2) - (self.crosshair_label.height() // 2) + off_y
-            self.safe_move(self.crosshair_label, cx, cy);
-            self.crosshair_label.show()
+                current_scale = 1.0
+
+                # --- PHASE 1: SPAWN ANIMATION (Einfliegen) ---
+                if alive_time < spawn_duration:
+                    # Fortschritt 0.0 bis 1.0
+                    progress = alive_time / spawn_duration
+
+                    # Ease-Out Effekt (schnell starten, langsam landen)
+                    # Wir starten bei Faktor 1.8 (weit draußen) und enden bei 1.0
+                    start_dist_factor = 1.8
+                    current_scale = start_dist_factor - (
+                                (start_dist_factor - 1.0) * (math.sin(progress * (math.pi / 2))))
+
+                # --- PHASE 2: NORMALES PULSIEREN ---
+                else:
+                    if anim_enabled:
+                        current_scale = normal_pulse_scale
+                    else:
+                        current_scale = 1.0  # Stillstand, aber Spawn-Animation ist fertig
+
+                # Neue Position berechnen
+                new_x = cx + int(ox * current_scale)
+                new_y = cy + int(oy * current_scale)
+
+                lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
 
 
 try:
