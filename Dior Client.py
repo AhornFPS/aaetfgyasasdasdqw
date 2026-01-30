@@ -1810,8 +1810,11 @@ class DiorClientGUI:
             if hasattr(self, 'total_players_label'):
                 self.total_players_label.config(text=f"Total Players: {total}")
 
-            active_players = [p for p in self.session_stats.values() if isinstance(p, dict) and (
-                        not p.get("last_kill_time") or (now - p.get("last_kill_time")) < 600)]
+            active_ids = self.active_players.keys()
+            active_players = [
+                p for p_id, p in self.session_stats.items()
+                if isinstance(p, dict) and p_id in active_ids
+            ]
 
             for name, w in self.dash_widgets.get("factions", {}).items():
                 count = self.live_stats.get(name, 0)
@@ -1834,16 +1837,34 @@ class DiorClientGUI:
                     p_id = p.get("id")
                     if p.get("name") in ["Unknown", "Searching...", None] and p_id in self.name_cache:
                         p["name"] = self.name_cache[p_id]
+                    display_name = p.get("name", "Searching...")
 
+                    # --- HIER DEN NEUEN BLOCK EINFÜGEN / ERSETZEN ---
                     k, a, d = p.get("k", 0), p.get("a", 0), p.get("d", 0)
-                    p_dur = (now - p.get("first_kill_time", now)) / 60
-                    s_min = max(session_duration_min, p_dur, 1.0)
 
-                    row_data = [(p.get("name", "Searching...")[:32], 32, "w", "#ccc"), (k, 4, "center", "white"),
-                                (f"{k / s_min:.1f}", 5, "center", self.get_kpm_color(k / s_min)),
-                                (d, 4, "center", "white"), (a, 4, "center", "white"),
-                                (f"{k / max(1, d):.1f}", 5, "center", self.get_kpm_color(k / max(1, d))),
-                                (f"{(k + a) / max(1, d):.1f}", 5, "center", "#00f2ff")]
+                    # Berechnung der aktiven Zeit dieses Spielers
+                    # Hinweis: In deinem Code (Zeile 1451) heißt der Key 'start'
+                    p_start = p.get("start", now)
+                    p_last = p.get("last_kill_time", now)
+
+                    # Wie lange war der Spieler aktiv? (Mindestens 1 Minute für KPM)
+                    player_active_min = max((p_last - p_start) / 60, 1.0)
+
+                    kpm = k / player_active_min
+                    kd = k / max(1, d)
+                    kda = (k + a) / max(1, d)
+
+                    # Die row_data muss die neuen Variablen (kpm, kd, kda) nutzen:
+                    row_data = [
+                        (display_name[:32], 32, "w", "#ccc"),
+                        (k, 4, "center", "white"),
+                        (f"{kpm:.1f}", 5, "center", self.get_kpm_color(kpm)),
+                        (d, 4, "center", "white"),
+                        (a, 4, "center", "white"),
+                        (f"{kd:.1f}", 5, "center", self.get_kpm_color(kd)),
+                        (f"{kda:.1f}", 5, "center", "#00f2ff")
+                    ]
+
                     for c_idx, (v, width, anc, fg) in enumerate(row_data):
                         tk.Label(lf, text=v, font=("Consolas", 10), bg="#1d1d1d" if (i + 1) % 2 == 0 else "#1a1a1a",
                                  fg=fg, anchor=anc, width=width).grid(row=i + 1, column=c_idx, sticky="nsew", padx=1)
@@ -4213,11 +4234,20 @@ class DiorClientGUI:
                                                             lambda n=s_name, i=payload_world: self.switch_server(n, i))
                                         break
 
+
                             elif e_name == "PlayerLogout":
-                                if p.get("character_id") == self.current_character_id:
+                                logout_id = p.get("character_id")
+                                # 1. Falls du es selbst bist:
+                                if logout_id == self.current_character_id:
                                     self.current_character_id = ""
                                     self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
-                                    self.add_log("AUTO-TRACK: Charakter ausgeloggt.")
+                                    self.add_log("AUTO-TRACK: Eigener Charakter ausgeloggt.")
+                                # 2. JEDEN Spieler sofort aus der Live-Anzeige entfernen
+                                if logout_id in self.active_players:
+                                    del self.active_players[logout_id]
+                                if logout_id in self.session_stats:
+                                    # Wir löschen die Stats nicht (Session!), aber markieren sie als inaktiv
+                                    self.session_stats[logout_id]["last_kill_time"] = 0
 
                             # =========================================================
                             # 2. DER SERVER-FILTER
