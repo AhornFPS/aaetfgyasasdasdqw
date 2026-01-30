@@ -1676,19 +1676,44 @@ class DiorClientGUI:
             f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
             f_box.pack(side="left", expand=True, fill="both", padx=5)
 
+            # Name (TR/NC/VS)
             tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
+
+            # Prozent-Anzeige
             p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
 
+            # [NEU] Anzahl der Spieler Anzeige
+            c_lab = tk.Label(f_box, text="0 Players", font=("Consolas", 10), bg="#1a1a1a", fg="#888")
+            c_lab.pack(pady=(0, 5))
+
             # Balken
             bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=10);
+            bar_bg.pack(pady=5);
             bar_bg.pack_propagate(False)
             bar = tk.Frame(bar_bg, bg=color, height=8)
             bar.place(x=0, y=0, width=0)
 
             tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
                 pady=(15, 0))
+
+            list_frame = tk.Frame(f_box, bg="#1a1a1a")
+            list_frame.pack(fill="x", padx=5, pady=5)
+
+            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
+                       ("KDA", 6, 5)]
+            for text, col, width in headers:
+                h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
+                                 bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
+                h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
+
+            # [WICHTIG] "count": c_lab hinzufügen, damit das Update es findet
+            self.dash_widgets["factions"][name] = {
+                "label": p_lab,
+                "count": c_lab,  # <--- DAS HAT GEFEHLT
+                "bar": bar,
+                "list_frame": list_frame
+            }
 
             # --- TABELLEN-HEADER ---
             list_frame = tk.Frame(f_box, bg="#1a1a1a")
@@ -3419,12 +3444,20 @@ class DiorClientGUI:
             f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
             f_box.pack(side="left", expand=True, fill="both", padx=5)
 
+            # 1. Name der Fraktion
             tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
+
+            # 2. Prozent-Anzeige
             p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
             p_lab.pack()
 
+            # 3. [NEU] Anzahl der Spieler (Das hat gefehlt!)
+            c_lab = tk.Label(f_box, text="0 Players", font=("Consolas", 10), bg="#1a1a1a", fg="#888")
+            c_lab.pack(pady=(0, 5))
+
+            # 4. Balken
             bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=10);
+            bar_bg.pack(pady=5)
             bar_bg.pack_propagate(False)
             bar = tk.Frame(bar_bg, bg=color, height=8)
             bar.place(x=0, y=0, width=0)
@@ -3442,7 +3475,13 @@ class DiorClientGUI:
                                  bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
                 h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
 
-            self.dash_widgets["factions"][name] = {"label": p_lab, "bar": bar, "list_frame": list_frame}
+            # WICHTIG: Hier registrieren wir das Label 'count', damit die Update-Funktion es findet
+            self.dash_widgets["factions"][name] = {
+                "label": p_lab,
+                "count": c_lab,  # <--- HIER MUSS ES REIN
+                "bar": bar,
+                "list_frame": list_frame
+            }
 
         # Footer
         self.dash_widgets["footer"] = tk.Label(dash_frame, text="", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
