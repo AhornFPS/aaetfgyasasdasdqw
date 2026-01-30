@@ -1044,6 +1044,9 @@ class DiorClientGUI:
             # Pfade
             self.ps2_dir = self.config.get("ps2_path", "")
 
+            #Dashboard update
+            self.last_graph_point_time = 0
+
             # Variablen
             saved_state = self.config.get("overlay_master_active", False)
             self.overlay_active = tk.BooleanVar(value=saved_state)
@@ -1741,141 +1744,109 @@ class DiorClientGUI:
         self.update_dashboard_elements()
 
     def update_dashboard_elements(self):
-        # 1. Sicherheitscheck
         if not hasattr(self, 'dash_widgets') or self.current_tab != "Dashboard":
             return
-
         if not hasattr(self, 'session_stats'): self.session_stats = {}
 
-        # Zeitstempel für Berechnungen
         now = time.time()
-
-        # WICHTIG: Session-Startzeit tracken, falls noch nicht geschehen
-        if not hasattr(self, 'session_start_time'):
-            self.session_start_time = now
+        if not hasattr(self, 'session_start_time'): self.session_start_time = now
 
         canvas = self.dash_widgets.get("canvas")
         if not canvas or not canvas.winfo_exists():
             return
 
         try:
-            # --- GRAPH DATEN ZEICHNEN ---
+            # --- GRAPH ZEICHNEN ---
             total_w, total_h = 800, 180
             off_l, off_r, off_t, off_b = 40, 10, 25, 20
             draw_w, draw_h = total_w - off_l - off_r, total_h - off_t - off_b
             max_pop = 1500
             points = []
+
             if len(self.pop_history) > 1:
                 for idx, val in enumerate(self.pop_history):
                     x = off_l + (idx * (draw_w / (len(self.pop_history) - 1)))
                     y = (total_h - off_b) - (val * (draw_h / max_pop))
                     y = max(off_t, min(y, total_h - off_b))
                     points.extend([x, y])
+
                 canvas.delete("all")
+
+                # Raster
                 for i in range(0, max_pop + 1, 300):
                     y_p = (total_h - off_b) - (i * (draw_h / max_pop))
                     canvas.create_line(off_l, y_p, total_w - off_r, y_p, fill="#151515")
                     canvas.create_text(off_l - 8, y_p, text=str(i), fill="#777", font=("Arial", 7), anchor="e")
+
+                # --- ADAPTIVE X-ACHSE (15s Optimiert) ---
+                elapsed_now = now - self.session_start_time
+                current_interval = 1 if elapsed_now < 60 else 15
+
                 for i in range(0, 101, 20):
                     x_p = off_l + (i * (draw_w / 100))
-                    sec_display = 100 - i
-                    time_text = "NOW" if sec_display == 0 else f"-{sec_display}s"
-                    canvas.create_text(x_p, off_t - 5, text=time_text, fill="#00f2ff", font=("Arial", 7, "bold"),
-                                       anchor="s")
+                    total_sec_ago = (100 - i) * current_interval
+
+                    if total_sec_ago == 0:
+                        time_text = "NOW"
+                    elif current_interval == 1:
+                        time_text = f"-{total_sec_ago}s"
+                    else:
+                        # Rechnet 300s, 600s etc. in saubere Minuten um
+                        mins = total_sec_ago // 60
+                        time_text = f"-{mins}m"
+
+                    canvas.create_text(x_p, off_t - 5, text=time_text, fill="#00f2ff",
+                                       font=("Arial", 7, "bold"), anchor="s")
+
                 canvas.create_polygon([off_l, total_h - off_b] + points + [total_w - off_r, total_h - off_b],
                                       fill="#001a1a")
                 canvas.create_line(points, fill="#00f2ff", width=2, smooth=True)
                 canvas.create_line(off_l, off_t, off_l, total_h - off_b, fill="#333")
                 canvas.create_line(off_l, total_h - off_b, total_w - off_r, total_h - off_b, fill="#333")
 
-            # --- STATS AKTUALISIEREN ---
+            # --- STATS & LISTEN UPDATE (Jede Sekunde) ---
             total = self.live_stats.get("Total", 0)
-            now = time.time()
-
-            # WICHTIG: Session Startzeit sicherstellen
-            if not hasattr(self, 'session_start_time'): self.session_start_time = now
             session_duration_min = (now - self.session_start_time) / 60
-
-            # 1. Total Label aktualisieren
             if hasattr(self, 'total_players_label'):
                 self.total_players_label.config(text=f"Total Players: {total}")
 
-            # 2. Filter: Wer soll in die Liste? (10 Min Inaktivitäts-Check)
-            active_players = []
-            for p in self.session_stats.values():
-                if isinstance(p, dict):  # NUR wenn es ein Dictionary ist (kein int!)
-                    last_active = p.get("last_kill_time")
-                    if last_active is None or (now - last_active) < 600:
-                        active_players.append(p)
+            active_players = [p for p in self.session_stats.values() if isinstance(p, dict) and (
+                        not p.get("last_kill_time") or (now - p.get("last_kill_time")) < 600)]
 
-            # 3. Die Fraktions-Listen befüllen
             for name, w in self.dash_widgets.get("factions", {}).items():
-                # Balken & Prozente
                 count = self.live_stats.get(name, 0)
                 perc = (count / total * 100) if total > 0 else 0
                 if "label" in w: w["label"].config(text=f"{perc:.1f}%")
                 if "count" in w: w["count"].config(text=f"{count} Players")
                 if "bar" in w: w["bar"].place(width=int(perc * 1.8))
 
-                list_frame = w.get("list_frame")
-                if not list_frame: continue
-
-                # ALTE ZEILEN LÖSCHEN (Wichtig für Refresh)
-                for child in list_frame.winfo_children():
-                    # Wir behalten nur Reihe 0 (den Header)
+                lf = w.get("list_frame")
+                if not lf: continue
+                for child in lf.winfo_children():
                     try:
                         if int(child.grid_info()["row"]) > 0: child.destroy()
                     except:
                         pass
 
-                # Spieler dieser Fraktion sortieren
-                f_players = [p for p in active_players if p.get("faction") == name]
-                f_players.sort(key=lambda x: x.get("k", 0), reverse=True)
-
-                # Top 5 zeichnen
+                f_players = sorted([p for p in active_players if p.get("faction") == name], key=lambda x: x.get("k", 0),
+                                   reverse=True)
                 for i, p in enumerate(f_players[:5]):
-                    row_idx = i + 1
-
-                    # 1. ID holen
                     p_id = p.get("id")
-
-                    # 2. CHECK: Ist der Name inzwischen im Cache bekannt?
-                    # Wenn im Stats-Objekt noch "Searching..." steht, aber der Cache den Namen hat -> UPDATE!
                     if p.get("name") in ["Unknown", "Searching...", None] and p_id in self.name_cache:
                         p["name"] = self.name_cache[p_id]
 
-                    # 3. Den Namen für die Anzeige setzen
-                    display_name = p.get("name", "Searching...")
-
-                    # Rest der Berechnung wie vorher...
                     k, a, d = p.get("k", 0), p.get("a", 0), p.get("d", 0)
+                    p_dur = (now - p.get("first_kill_time", now)) / 60
+                    s_min = max(session_duration_min, p_dur, 1.0)
 
-                    p_start = p.get("first_kill_time", now)
-                    p_dur = (now - p_start) / 60
-                    stable_min = max(session_duration_min, p_dur, 1.0)
-
-                    kpm = k / stable_min
-                    kd = k / max(1, d)
-                    kda = (k + a) / max(1, d)
-
-                    bg_col = "#1d1d1d" if row_idx % 2 == 0 else "#1a1a1a"
-
-                    # Die Liste der Daten für die Labels
-                    row_data = [
-                        (display_name[:32], 32, "w", "#ccc"),  # Hier nutzen wir den geupdateten Namen
-                        (k, 4, "center", "white"),
-                        (f"{kpm:.1f}", 5, "center", self.get_kpm_color(kpm)),
-                        (d, 4, "center", "white"),
-                        (a, 4, "center", "white"),
-                        (f"{kd:.1f}", 5, "center", self.get_kpm_color(kd)),
-                        (f"{kda:.1f}", 5, "center", "#00f2ff")
-                    ]
-
-                    # Labels zeichnen
-                    for col_idx, (val, width, anchor, fg) in enumerate(row_data):
-                        tk.Label(list_frame, text=val, font=("Consolas", 10),
-                                 bg=bg_col, fg=fg, anchor=anchor, width=width).grid(row=row_idx, column=col_idx,
-                                                                                    sticky="nsew", padx=1)
+                    row_data = [(p.get("name", "Searching...")[:32], 32, "w", "#ccc"), (k, 4, "center", "white"),
+                                (f"{k / s_min:.1f}", 5, "center", self.get_kpm_color(k / s_min)),
+                                (d, 4, "center", "white"), (a, 4, "center", "white"),
+                                (f"{k / max(1, d):.1f}", 5, "center", self.get_kpm_color(k / max(1, d))),
+                                (f"{(k + a) / max(1, d):.1f}", 5, "center", "#00f2ff")]
+                    for c_idx, (v, width, anc, fg) in enumerate(row_data):
+                        tk.Label(lf, text=v, font=("Consolas", 10), bg="#1d1d1d" if (i + 1) % 2 == 0 else "#1a1a1a",
+                                 fg=fg, anchor=anc, width=width).grid(row=i + 1, column=c_idx, sticky="nsew", padx=1)
 
         except Exception as e:
             print(f"DEBUG: Dashboard Update failed: {e}")
@@ -3329,44 +3300,48 @@ class DiorClientGUI:
     def update_live_graph(self):
         try:
             now = time.time()
-            # Dein neues 5-Minuten Fenster
-            timeout = 300
+            timeout = 300  # 5 Minuten Aktivitätsfenster
 
-            # 1. Bereinigen: Nur Spieler behalten, die in den letzten 5 Min aktiv waren
+            # 1. Zähl-Logik für aktive Spieler (Jede Sekunde)
             temp_active = {}
             for uid, info in self.active_players.items():
                 if isinstance(info, tuple):
                     ts, fac = info
                     if now - ts < timeout:
                         temp_active[uid] = (ts, fac)
-
-            # WICHTIG: Überschreibe die Liste mit den wirklich Aktiven
             self.active_players = temp_active
 
-            # 2. Fraktionen neu zählen (basierend auf den 5-Minuten-Daten)
             counts = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0}
             for _, fac in self.active_players.values():
                 if fac in counts:
                     counts[fac] += 1
 
             total_pop = len(self.active_players)
-
-            # 3. Stats für die UI aktualisieren
             self.live_stats.update(counts)
             self.live_stats["Total"] = total_pop
 
-            # 4. Graph-Punkt setzen
-            self.pop_history.pop(0)
-            self.pop_history.append(total_pop)
+            # --- NEU: ADAPTIVES GRAPH-DATEN-UPDATE ---
+            # Berechne Zeit seit Session-Start
+            elapsed = now - getattr(self, 'session_start_time', now)
 
-            # 5. UI sofort erneuern
+            # Intervall bestimmen: 1s in der ersten Minute, danach 30s
+            graph_interval = 1.0 if elapsed < 60 else 30.0
+
+            # Nur dem Graphen-Speicher einen Punkt hinzufügen, wenn das Intervall abgelaufen ist
+            if now - getattr(self, 'last_graph_point_time', 0) >= graph_interval:
+                self.pop_history.pop(0)
+                self.pop_history.append(total_pop)
+                self.last_graph_point_time = now
+
+            # --- UI UPDATE (Jede Sekunde) ---
+            # Das Dashboard (Listen & Zahlen) wird immer jede Sekunde aktualisiert
             if self.current_tab == "Dashboard":
                 self.update_dashboard_elements()
 
         except Exception as e:
             print(f"Graph-Error: {e}")
 
-        # Update alle 1-2 Sekunden für ein flüssiges Gefühl
+        # Die Haupt-Schleife läuft IMMER jede Sekunde für die "Live"-Werte
         self.root.after(1000, self.update_live_graph)
 
     def hide_sub_menu(self, event):
@@ -4193,31 +4168,49 @@ class DiorClientGUI:
                             # =========================================================
                             if e_name == "PlayerLogin":
                                 c_id = p.get("character_id")
+
+                                # [NEU] Funktion zum Synchronisieren der Faction und Abspielen des Sounds
+                                def sync_faction_and_play(char_id, char_name):
+                                    try:
+                                        # 1. Aktuelle Faction von Census abfragen
+                                        url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?character_id={char_id}&c:show=faction_id"
+                                        r = requests.get(url, timeout=5).json()
+
+                                        f_id = "0"
+                                        if r.get('returned', 0) > 0:
+                                            f_id = r['character_list'][0].get('faction_id', "0")
+
+                                            # 2. Datenbank mit der richtigen Faction aktualisieren
+                                            conn = sqlite3.connect("ps2_master.db")
+                                            conn.execute("UPDATE player_cache SET faction_id=? WHERE character_id=?",
+                                                         (f_id, char_id))
+                                            conn.commit()
+                                            conn.close()
+
+                                        # 3. Den korrekten Sound basierend auf der frischen Faction triggern
+                                        f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
+                                        self.root.after(0, lambda: self.trigger_overlay_event(f"Login {f_tag}"))
+                                        self.add_log(f"AUTO-TRACK: {char_name} eingeloggt ({f_tag}).")
+
+                                    except Exception as e:
+                                        print(f"Login-Sync Error: {e}")
+
+                                # Prüfen, ob es einer deiner Tracking-Charaktere ist
                                 for name, saved_id in self.char_data.items():
                                     if saved_id == c_id:
                                         self.current_character_id = c_id
                                         self.root.after(0, lambda n=name: self.char_var.set(n))
-                                        self.add_log(f"AUTO-TRACK: {name} eingeloggt.")
 
+                                        # Sync-Thread starten, damit die GUI nicht einfriert
+                                        threading.Thread(target=sync_faction_and_play, args=(c_id, name),
+                                                         daemon=True).start()
+
+                                        # Server-Switch Logik (bleibt gleich)
                                         if payload_world != "0" and payload_world != str(self.current_world_id):
                                             s_name = self.get_server_name_by_id(payload_world)
                                             self.add_log(f"AUTO-SWITCH: Wechsel zu {s_name}...")
                                             self.root.after(0,
                                                             lambda n=s_name, i=payload_world: self.switch_server(n, i))
-
-                                        faction_tag = "NSO"
-                                        try:
-                                            conn = sqlite3.connect("ps2_master.db")
-                                            res = conn.execute(
-                                                "SELECT faction_id FROM player_cache WHERE character_id=?",
-                                                (c_id,)).fetchone()
-                                            conn.close()
-                                            if res: faction_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(res[0]),
-                                                                                                        "NSO")
-                                        except:
-                                            pass
-                                        self.root.after(0,
-                                                        lambda e=f"Login {faction_tag}": self.trigger_overlay_event(e))
                                         break
 
                             elif e_name == "PlayerLogout":
