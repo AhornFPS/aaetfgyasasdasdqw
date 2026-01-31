@@ -344,10 +344,20 @@ class QtOverlay(QWidget):
                 self.edit_mode = True
                 style = "border: 2px solid #00ff00; background: rgba(0, 255, 0, 0.1);"
                 targets = active_targets if active_targets else []
-                if "feed" in targets: self.feed_label.setStyleSheet(style)
-                if "stats" in targets: self.stats_bg_label.setStyleSheet(style)
-                if "streak" in targets: self.streak_bg_label.setStyleSheet(style)
-                if "crosshair" in targets: self.crosshair_label.setStyleSheet(style)
+
+                # WICHTIG: Hier fügen wir .show() hinzu, damit die Box sichtbar wird
+                if "feed" in targets:
+                    self.feed_label.setStyleSheet(style)
+                    self.feed_label.show()  # Zeigt den Feed-Bereich
+                if "stats" in targets:
+                    self.stats_bg_label.setStyleSheet(style)
+                    self.stats_bg_label.show()  # Zeigt den Stats-Bereich
+                if "streak" in targets:
+                    self.streak_bg_label.setStyleSheet(style)
+                    self.streak_bg_label.show()  # Zeigt den Streak-Bereich
+                if "crosshair" in targets:
+                    self.crosshair_label.setStyleSheet(style)
+                    self.crosshair_label.show()  # Zeigt das Crosshair
         except Exception as e:
             print(f"Passthrough Error: {e}")
 
