@@ -228,10 +228,7 @@ class QtOverlay(QWidget):
         self.streak_bg_label.hide()
         self.streak_text_label = QLabel(self)
         self.streak_text_label.hide()
-        shadow_streak = QGraphicsDropShadowEffect()
-        shadow_streak.setBlurRadius(5 * self.ui_scale)
-        shadow_streak.setColor(QColor(0, 0, 0, 255))
-        self.streak_text_label.setGraphicsEffect(shadow_streak)
+
 
         # --- KILLFEED: SINGLE LABEL (STABIL GEGEN GHOSTING) ---
         self.feed_messages = []
@@ -291,8 +288,38 @@ class QtOverlay(QWidget):
         return int(float(value) * self.ui_scale)
 
     def safe_move(self, widget, x, y):
-        safe_y = max(0, int(y))
-        widget.move(int(x), safe_y)
+        """Bewegt ein Widget mit Clamping und Magnet-Effekt an den Rändern."""
+        screen_w = self.width()
+        screen_h = self.height()
+        w_w = widget.width()
+        w_h = widget.height()
+
+        # Konfigurierbare Magnet-Stärke (in Pixeln)
+        snap = 25
+
+        # --- Magnet-Logik (Snapping) ---
+        # Horizontales Snapping (Links, Mitte, Rechts)
+        if abs(x) < snap:
+            x = 0  # Snap an linken Rand
+        elif abs(x - (screen_w - w_w)) < snap:
+            x = screen_w - w_w  # Snap an rechten Rand
+        elif abs(x - (screen_w // 2 - w_w // 2)) < snap:
+            x = screen_w // 2 - w_w // 2  # Snap an Mitte
+
+        # Vertikales Snapping (Oben, Mitte, Unten)
+        if abs(y) < snap:
+            y = 0  # Snap an oberen Rand
+        elif abs(y - (screen_h - w_h)) < snap:
+            y = screen_h - w_h  # Snap an unteren Rand
+        elif abs(y - (screen_h // 2 - w_h // 2)) < snap:
+            y = screen_h // 2 - w_h // 2  # Snap an Mitte
+
+        # --- Sicherheits-Clamping (Die "Mauer") ---
+        # Dies verhindert, dass Werte jemals außerhalb des gültigen Bereichs landen
+        final_x = max(0, min(int(x), screen_w - w_w))
+        final_y = max(0, min(int(y), screen_h - w_h))
+
+        widget.move(final_x, final_y)
 
     def set_mouse_passthrough(self, enabled=True, active_targets=None):
         try:
@@ -384,32 +411,42 @@ class QtOverlay(QWidget):
                 painter.drawEllipse(center, 5, 5)  # Etwas größere Punkte
 
     def mouseMoveEvent(self, event):
-        if not self.edit_mode or not self.dragging_widget or not self.drag_offset: return
-        raw_pos = event.pos() - self.drag_offset
-        new_x = raw_pos.x();
-        new_y = max(0, raw_pos.y())
+        if not self.edit_mode or not self.dragging_widget or not self.drag_offset:
+            return
+
+        # Nutze globale Koordinaten für absolute Stabilität
+        # .toPoint() wird für PyQt6 benötigt, um von QPointF zu QPoint zu wandeln
+        curr_mouse_pos = event.globalPosition().toPoint()
+        new_pos = curr_mouse_pos - self.drag_offset
+
         if self.dragging_widget == "feed":
-            self.feed_label.move(new_x, new_y)
+            self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
+
         elif self.dragging_widget == "stats":
-            self.stats_bg_label.move(new_x, new_y)
+            self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
+            # Text-Label folgt dem Hintergrund-Widget
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
                 tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx = new_x + (self.stats_bg_label.width() // 2);
-                cy = new_y + (self.stats_bg_label.height() // 2)
-                self.safe_move(self.stats_text_label, cx + tx - (self.stats_text_label.width() // 2),
+                cx = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
+                cy = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
+                self.safe_move(self.stats_text_label,
+                               cx + tx - (self.stats_text_label.width() // 2),
                                cy + ty - (self.stats_text_label.height() // 2))
+
         elif self.dragging_widget == "streak":
-            self.streak_bg_label.move(new_x, new_y)
+            self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("streak", {})
                 tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx = new_x + (self.streak_bg_label.width() // 2)
-                cy = new_y + (self.streak_bg_label.height() // 2)
-                self.safe_move(self.streak_text_label, cx + tx - (self.streak_text_label.width() // 2),
+                cx = self.streak_bg_label.x() + (self.streak_bg_label.width() // 2)
+                cy = self.streak_bg_label.y() + (self.streak_bg_label.height() // 2)
+                self.safe_move(self.streak_text_label,
+                               cx + tx - (self.streak_text_label.width() // 2),
                                cy + ty - (self.streak_text_label.height() // 2))
+
         elif self.dragging_widget == "crosshair":
-            self.crosshair_label.move(new_x, new_y)
+            self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
 
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
@@ -436,13 +473,16 @@ class QtOverlay(QWidget):
                 self.gui_ref.scale_sty.set(uns(cy - mid_y))
                 self.gui_ref.save_stats_config()
         elif self.dragging_widget == "streak":
-            curr = self.streak_bg_label.pos();
-            cx = curr.x() + (self.streak_bg_label.width() // 2);
+            curr = self.streak_bg_label.pos()
+            cx = curr.x() + (self.streak_bg_label.width() // 2)
             cy = curr.y() + (self.streak_bg_label.height() // 2)
+
             if self.gui_ref:
-                self.gui_ref.scale_sx.set(uns(cx - mid_x))
-                self.gui_ref.scale_sy.set(uns(cy - mid_y))
-                self.gui_ref.save_streak_settings()
+                # Wir schreiben direkt in die Config, da die Slider weg sind
+                if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
+                self.gui_ref.config["streak"]["x"] = uns(cx - mid_x)
+                self.gui_ref.config["streak"]["y"] = uns(cy - mid_y)
+                self.gui_ref.save_streak_settings()  # Speichert tx, ty, etc. mit ab
         elif self.dragging_widget == "crosshair":
             curr = self.crosshair_label.pos();
             cx = curr.x() + (self.crosshair_label.width() // 2);
@@ -515,7 +555,7 @@ class QtOverlay(QWidget):
                     self.stats_bg_label.adjustSize()
             else:
                 self.stats_bg_label.clear();
-                self.stats_bg_label.resize(int(400 * self.ui_scale), int(100 * self.ui_scale))
+                self.stats_bg_label.resize(int(400 * self.ui_scale), int(50 * self.ui_scale))
             bg_x = base_x - (self.stats_bg_label.width() // 2);
             bg_y = base_y - (self.stats_bg_label.height() // 2)
             self.safe_move(self.stats_bg_label, bg_x, bg_y);
@@ -549,17 +589,20 @@ class QtOverlay(QWidget):
         QTimer.singleShot(duration, temp_label.deleteLater)
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
+        """
+        Haupt-Anzeige für den Killstreak.
+        Kombiniert Messer-Kreis-Logik mit dem neuen globalen Zahl-Design.
+        """
         import math
-        import time  # Wichtig für den Zeitstempel
+        import time
         from PyQt6.QtGui import QTransform
         from PyQt6.QtCore import QPoint
 
-        # --- Check Active ---
+        # --- 1. Check Active ---
         if not cfg.get("active", True) and not self.edit_mode:
             self.streak_bg_label.hide()
             self.streak_text_label.hide()
-            for l in self.knife_labels:
-                l.hide()
+            for l in self.knife_labels: l.hide()
             return
 
         if count <= 0 and not self.edit_mode:
@@ -570,18 +613,19 @@ class QtOverlay(QWidget):
                 l._is_active = False
             return
 
-        display_count = count if count > 0 else 100
+        display_count = count if count > 0 else 10  # Dummy Wert für Edit-Mode
+        final_scale = cfg.get("scale", 1.0) * self.ui_scale
 
+        # --- 2. Haupt-Hintergrund (Skull) ---
         if os.path.exists(img_path):
             pix = QPixmap(img_path)
-            final_scale = cfg.get("scale", 1.0) * self.ui_scale
             if not pix.isNull():
                 pix = pix.scaled(int(pix.width() * final_scale), int(pix.height() * final_scale),
                                  Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 self.streak_bg_label.setPixmap(pix)
                 self.streak_bg_label.adjustSize()
 
-                # Position des Schädels
+                # Position des Schädels berechnen
                 bx = (self.width() // 2) + self.s(cfg.get("x", 0))
                 by = (self.height() // 2) + self.s(cfg.get("y", 100))
                 self.safe_move(self.streak_bg_label, bx - (self.streak_bg_label.width() // 2),
@@ -591,14 +635,14 @@ class QtOverlay(QWidget):
                 skull_center = self.streak_bg_label.geometry().center()
                 path_data = cfg.get("custom_path", [])
 
-                # Sicherstellen, dass genug Labels da sind
+                # Sicherstellen, dass genug Messer-Labels existieren
                 while len(self.knife_labels) < len(factions):
                     lbl = QLabel(self)
                     lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
                     self.knife_labels.append(lbl)
 
                 # ==========================================
-                # MODUS 1: CUSTOM PATH
+                # MODUS 1: CUSTOM PATH (Messer auf Pfad)
                 # ==========================================
                 if len(path_data) > 2:
                     segments = []
@@ -611,24 +655,17 @@ class QtOverlay(QWidget):
                         total_l += d
 
                     knives_per_ring_path = 50
-
-                    for i in range(len(factions) - 1, -1, -1):
+                    for i in range(len(factions)):
                         label = self.knife_labels[i]
-
-                        # [NEU] War das Messer vorher unsichtbar? Dann ist es neu!
                         is_new_spawn = not label.isVisible()
-
                         f_tag = factions[i]
                         k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
                         k_path = get_asset_path(k_file)
+
                         if not os.path.exists(k_path): label.hide(); continue
 
-                        if slot_map and i < len(slot_map):
-                            slot_idx = slot_map[i]
-                        else:
-                            slot_idx = i  # Fallback falls Liste leer
-
-                        ring_idx = slot_idx // knives_per_ring_path  # <--- Ein 'r' entfernen
+                        slot_idx = slot_map[i] if slot_map and i < len(slot_map) else i
+                        ring_idx = slot_idx // knives_per_ring_path
                         pos_in_ring = slot_idx % knives_per_ring_path
                         ring_scale = 1.0 + (ring_idx * 0.28)
                         target_dist = (pos_in_ring / knives_per_ring_path) * total_l
@@ -643,29 +680,21 @@ class QtOverlay(QWidget):
 
                         kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
                         angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
-
                         k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle),
                                                             Qt.TransformationMode.SmoothTransformation)
                         k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
                                              Qt.TransformationMode.SmoothTransformation)
+
                         label.setPixmap(k_pix)
                         label.adjustSize()
-
-                        # Basis-Werte speichern
-                        label._base_off_x = kx - skull_center.x()
-                        label._base_off_y = ky - skull_center.y()
+                        label._base_off_x, label._base_off_y = kx - skull_center.x(), ky - skull_center.y()
                         label._is_active = True
-
-                        # [NEU] Wenn neu, Zeitstempel setzen für Animation
-                        if is_new_spawn:
-                            label._spawn_time = time.time()
-
+                        if is_new_spawn: label._spawn_time = time.time()
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
-                        label.raise_()
 
                 # ==========================================
-                # MODUS 2: SCHILD-KRANZ (DEFAULT)
+                # MODUS 2: SCHILD-KRANZ (DEFAULT KREIS)
                 # ==========================================
                 else:
                     knives_per_circle = 50
@@ -673,23 +702,15 @@ class QtOverlay(QWidget):
                     start_radius_x = (self.streak_bg_label.width() // 2) - self.s(15)
                     start_radius_y = (self.streak_bg_label.height() // 2) - self.s(15)
 
-                    for i in range(len(factions) - 1, -1, -1):
+                    for i in range(len(factions)):
                         label = self.knife_labels[i]
-
-                        # [NEU] Check ob neu
                         is_new_spawn = not label.isVisible()
-
                         f_tag = factions[i]
                         k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
                         k_path = get_asset_path(k_file)
-
                         if not os.path.exists(k_path): label.hide(); continue
 
-                        if slot_map and i < len(slot_map):
-                            slot_idx = slot_map[i]
-                        else:
-                            slot_idx = i
-
+                        slot_idx = slot_map[i] if slot_map and i < len(slot_map) else i
                         ring_idx = slot_idx // knives_per_circle
                         pos_in_ring = slot_idx % knives_per_circle
                         angle = (pos_in_ring * (360 / knives_per_circle)) - 90
@@ -703,41 +724,54 @@ class QtOverlay(QWidget):
                         kx = bx + int(curr_rx * math.cos(rad))
                         ky = (by - self.s(20)) + int(curr_ry * math.sin(rad))
 
-                        transform = QTransform().rotate(angle + 90)
-                        k_pix = QPixmap(k_path)
-                        if k_pix.isNull(): continue
-                        k_pix = k_pix.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+                        k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle + 90),
+                                                            Qt.TransformationMode.SmoothTransformation)
                         k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
                                              Qt.TransformationMode.SmoothTransformation)
 
                         label.setPixmap(k_pix)
                         label.adjustSize()
-
-                        # Basis Werte speichern
-                        label._base_off_x = kx - skull_center.x()
-                        label._base_off_y = ky - skull_center.y()
+                        label._base_off_x, label._base_off_y = kx - skull_center.x(), ky - skull_center.y()
                         label._is_active = True
-
-                        # [NEU] Spawn Zeit setzen
-                        if is_new_spawn:
-                            label._spawn_time = time.time()
-
+                        if is_new_spawn: label._spawn_time = time.time()
                         self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
                         label.show()
-                        label.raise_()
 
-                # Cleanup
+                # Cleanup alter Labels
                 for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
-                self.streak_bg_label.raise_()
-                self.streak_text_label.setText(
-                    f"<span style='font-size: {int(26 * final_scale)}pt; font-family: Impact; color: white; text-shadow: 2px 2px 0 #000;'>{display_count}</span>")
+
+                # --- 3. DIE ZAHL ANZEIGEN (Globales Design - IMMER AUFRUFEN) ---
+                f_color = cfg.get("color", "#ffffff")
+                f_size = cfg.get("size", 26)
+                sh_size = int(cfg.get("shadow_size", 0))
+
+                # CSS Style zusammenbauen
+                style_parts = [
+                    f"font-family: 'Black Ops One', sans-serif",
+                    f"font-size: {int(f_size * final_scale)}px",
+                    f"color: {f_color}"
+                ]
+
+                # Schatten NUR hinzufügen, wenn sh_size wirklich > 0 ist
+                if sh_size > 0:
+                    style_parts.append(f"text-shadow: {sh_size}px {sh_size}px 0 #000")
+                else:
+                    style_parts.append("text-shadow: none")
+
+                if cfg.get("bold", False): style_parts.append("font-weight: bold")
+                if cfg.get("underline", False): style_parts.append("text-decoration: underline")
+
+                self.streak_text_label.setText(f'<div style="{"; ".join(style_parts)}">{display_count}</div>')
                 self.streak_text_label.adjustSize()
 
+                # Positionierung der Zahl
                 tx = bx + self.s(cfg.get("tx", 0))
                 ty = by + self.s(cfg.get("ty", 0))
                 self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
                                ty - (self.streak_text_label.height() // 2))
+
                 self.streak_text_label.show()
+                self.streak_bg_label.raise_()
                 self.streak_text_label.raise_()
 
                 if self.path_edit_active:
@@ -1041,6 +1075,17 @@ class DiorClientGUI:
                     break
 
 
+            s_conf = self.config.get("streak", {})
+            self.streak_color_var = tk.StringVar(value=s_conf.get("color", "#ffffff"))
+            self.streak_fontsize_var = tk.StringVar(value=str(s_conf.get("size", 26)))
+            self.streak_shadow_size_var = tk.StringVar(value=str(s_conf.get("shadow_size", 2)))
+            self.var_streak_bold = tk.BooleanVar(value=s_conf.get("bold", False))
+            self.var_streak_underline = tk.BooleanVar(value=s_conf.get("underline", False))
+
+            self._streak_debounce_timer = None
+            self._streak_test_timer = None
+            self._streak_backup = None
+
             # Pfade
             self.ps2_dir = self.config.get("ps2_path", "")
 
@@ -1120,6 +1165,56 @@ class DiorClientGUI:
                 f.write(traceback.format_exc())
             messagebox.showerror("Startup Error", f"Fehler:\n{str(e)}")
             self.root.destroy()
+
+    def reset_ui_layout(self):
+        """Setzt alle HUD-Positionen auf die Werkseinstellungen zurück."""
+        if not messagebox.askyesno("HUD Reset", "Möchtest du alle HUD-Positionen auf Standardwerte zurücksetzen?"):
+            return
+
+        # 1. Standardwerte definieren
+        defaults = {
+            "stats_widget": {"x": -500, "y": -300, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
+            "killfeed": {"x": -800, "y": 200, "hs_icon": "headshot.png", "show_revives": True},
+            "streak": {"x": 0, "y": 100, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
+            "crosshair": {"x": 0, "y": 0, "size": 32, "active": True}
+        }
+
+        # 2. Config aktualisieren
+        for key, val in defaults.items():
+            if key not in self.config: self.config[key] = {}
+            self.config[key].update(val)
+
+        # 3. GUI-Elemente (Slider/Entrys) aktualisieren, falls sie existieren
+        try:
+            # Stats & Feed
+            if hasattr(self, 'scale_stx'): self.scale_stx.set(-500)
+            if hasattr(self, 'scale_sty'): self.scale_sty.set(-300)
+            if hasattr(self, 'scale_kfx'): self.scale_kfx.set(-800)
+            if hasattr(self, 'scale_kfy'): self.scale_kfy.set(200)
+
+            # Streak
+            if hasattr(self, 'scale_sx'): self.scale_sx.set(0)
+            if hasattr(self, 'scale_sy'): self.scale_sy.set(100)
+
+            # Crosshair
+            if hasattr(self, 'scale_cx'): self.scale_cx.set(0)
+            if hasattr(self, 'scale_cy'): self.scale_cy.set(0)
+            if hasattr(self, 'crosshair_size_entry'):
+                self.crosshair_size_entry.delete(0, tk.END)
+                self.crosshair_size_entry.insert(0, "32")
+        except:
+            pass  # Falls ein Tab gerade nicht geladen ist
+
+        # 4. Speichern und Overlay triggern
+        self.save_config()
+        self.add_log("HUD: Alle Positionen wurden zurückgesetzt.")
+
+        # Sofortige visuelle Aktualisierung
+        if self.overlay_win:
+            self.overlay_win.update_killfeed_pos()
+            self.apply_crosshair_settings()
+            self.update_streak_display()
+            self.refresh_ingame_overlay()
 
     def ps2_process_monitor(self):
         self.ps2_running = False
@@ -2302,54 +2397,95 @@ class DiorClientGUI:
         tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333",
                   fg="white").pack(side="left")
 
-        # --- MESSER-KONFIGURATION ---
-        tk.Label(tab_streak, text="FRAKTIONS-MESSER (Für den Kreis):", font=("Consolas", 10, "bold"), bg="#1a1a1a",
-                 fg="#ffcc00").pack(pady=(15, 5))
+        # --- KOMBINIERTER BEREICH: MESSER (Links) & DESIGN (Rechts) ---
+        tk.Label(tab_streak, text="STREAK-KONFIGURATION (Messer & Design):",
+                 font=("Consolas", 10, "bold"), bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 5))
 
-        knife_frame = tk.Frame(tab_streak, bg="#1a1a1a")
-        knife_frame.pack(pady=5)
+        # Hauptcontainer für beide Spalten
+        streak_settings_container = tk.Frame(tab_streak, bg="#1a1a1a")
+        streak_settings_container.pack(pady=5, fill="x", padx=20)
+
+        # LINKER BEREICH: Messer-Bilder
+        knife_frame = tk.Frame(streak_settings_container, bg="#1a1a1a")
+        knife_frame.pack(side="left", padx=(0, 30))
 
         self.knife_entries = {}
-        for i, (f_name, f_col) in enumerate([("TR", "#ff4444"), ("NC", "#0066ff"), ("VS", "#9900ff")]):
+        for f_name in ["TR", "NC", "VS"]:
+            f_key = f_name.lower()
             row = tk.Frame(knife_frame, bg="#1a1a1a")
             row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{f_name} Knife:", bg="#1a1a1a", fg=f_col, width=10, anchor="w").pack(side="left")
+            tk.Label(row, text=f"{f_name}:", bg="#1a1a1a", fg="white", width=4, anchor="w").pack(side="left")
 
-            ent = tk.Entry(row, width=30, bg="#111", fg="white")
-            saved_knife = s_conf.get(f"knife_{f_name.lower()}", f"knife_{f_name.lower()}.png")
-            ent.insert(0, get_short_name(saved_knife))
+            ent = tk.Entry(row, width=25, bg="#111", fg="white", bd=1)
+            ent.insert(0, get_short_name(s_conf.get(f"knife_{f_key}", f"knife_{f_key}.png")))
             ent.pack(side="left", padx=5)
-            self.knife_entries[f_name.lower()] = ent
+            self.knife_entries[f_key] = ent
 
-            tk.Button(row, text="Browse", command=lambda e=ent: self.browse_file(e, "png"), bg="#333", fg="white",
-                      font=("Arial", 8)).pack(side="left")
+            tk.Button(row, text="📁", command=lambda e=ent: self.browse_file(e, "png"),
+                      bg="#333", fg="white", bd=0, width=3).pack(side="left")
 
-        # --- POSITIONIERUNG ---
-        tk.Label(tab_streak, text="Position BILD (Offset):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(15, 0))
-        img_pos_f = tk.Frame(tab_streak, bg="#1a1a1a")
-        img_pos_f.pack(fill="x", padx=50)
-        self.scale_sx = tk.Scale(img_pos_f, from_=-1000, to=1000, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Bild X")
-        self.scale_sx.set(s_conf.get("x", 0))
-        self.scale_sx.pack(side="left", fill="x", expand=True)
-        self.scale_sy = tk.Scale(img_pos_f, from_=-700, to=700, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Bild Y")
-        self.scale_sy.set(s_conf.get("y", 100))
-        self.scale_sy.pack(side="left", fill="x", expand=True)
+        # RECHTER BEREICH: Globales Zahl-Design (Kompakt & Übersichtlich)
+        design_frame = tk.LabelFrame(streak_settings_container, text=" [ Zahl-Design ] ",
+                                     bg="#1a1a1a", fg="#00f2ff", font=("Consolas", 9))
+        design_frame.pack(side="left", fill="both", expand=True, padx=10, pady=5)
 
+        current_color = s_conf.get("color", "#ffffff")
+
+        # 1. Farbe
+        tk.Label(design_frame, text="Farbe:", bg="#1a1a1a", fg="white").grid(row=0, column=0, padx=5, pady=5,
+                                                                             sticky="w")
+        self.btn_streak_color = tk.Button(design_frame, text="🎨 PICK", bg=current_color,
+                                          width=8, font=("Consolas", 8, "bold"),
+                                          command=self.pick_streak_color)
+        self.btn_streak_color.grid(row=0, column=1, padx=5, pady=5)
+
+        # 2. Schriftgröße (Combobox)
+        tk.Label(design_frame, text="Size:", bg="#1a1a1a", fg="white").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.streak_fontsize_var = tk.StringVar(value=str(s_conf.get("size", 26)))
+        self.combo_size = ttk.Combobox(design_frame, textvariable=self.streak_fontsize_var,
+                                       values=[12, 16, 20, 24, 26, 28, 32, 36, 48, 72], width=5)
+        self.combo_size.grid(row=1, column=1, padx=5, pady=5)
+        self.streak_fontsize_var.trace_add("write", self.streak_font_debounce)
+
+        # 3. Schatten (0 = Aus)
+        tk.Label(design_frame, text="Shadow:", bg="#1a1a1a", fg="white").grid(row=0, column=2, padx=5, pady=5,
+                                                                              sticky="w")
+        self.streak_shadow_size_var = tk.StringVar(value=str(s_conf.get("shadow_size", 2)))
+        self.combo_shadow = ttk.Combobox(design_frame, textvariable=self.streak_shadow_size_var,
+                                         values=[0, 1, 2, 3, 4, 5, 8], width=3)
+        self.combo_shadow.grid(row=0, column=3, padx=5, pady=5)
+        self.streak_shadow_size_var.trace_add("write", lambda *a: self.save_streak_settings(preview=True))
+
+        # 4. Fett & Linie
+        self.var_streak_bold = tk.BooleanVar(value=s_conf.get("bold", False))
+        tk.Checkbutton(design_frame, text="Fett", variable=self.var_streak_bold,
+                       bg="#1a1a1a", fg="white", selectcolor="black", font=("Arial", 8),
+                       command=lambda: self.save_streak_settings(preview=True)).grid(row=1, column=2, padx=5,
+                                                                                     sticky="w")
+
+        self.var_streak_underline = tk.BooleanVar(value=s_conf.get("underline", False))
+        tk.Checkbutton(design_frame, text="Linie", variable=self.var_streak_underline,
+                       bg="#1a1a1a", fg="white", selectcolor="black", font=("Arial", 8),
+                       command=lambda: self.save_streak_settings(preview=True)).grid(row=1, column=3, padx=5,
+                                                                                     sticky="w")
+
+        # --- POSITIONIERUNG ZAHL (Relativ zum Bild) ---
         tk.Label(tab_streak, text="Position ZAHL (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 0))
         txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a")
         txt_pos_f.pack(fill="x", padx=50)
+
         self.scale_tx = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
                                  label="Zahl X")
         self.scale_tx.set(s_conf.get("tx", 0))
         self.scale_tx.pack(side="left", fill="x", expand=True)
+
         self.scale_ty = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
                                  label="Zahl Y")
         self.scale_ty.set(s_conf.get("ty", 0))
         self.scale_ty.pack(side="left", fill="x", expand=True)
 
-        tk.Label(tab_streak, text="Skalierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(10, 0))
+        # --- SKALIERUNG (Bild & Zahl gesamt) ---
+        tk.Label(tab_streak, text="Gesamt-Skalierung (HUD-Größe):", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
         self.scale_s_size = tk.Scale(tab_streak, from_=0.1, to=3.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
                                      fg="white")
         self.scale_s_size.set(s_conf.get("scale", 1.0))
@@ -2520,6 +2656,10 @@ class DiorClientGUI:
         btn_box.pack(pady=20)
         tk.Button(btn_box, text="SAVE ALL SETTINGS", bg="#004400", fg="white", width=20, height=2,
                   command=self.save_stats_config).pack(side="left", padx=10)
+
+        tk.Button(btn_box, text="RESET ALL POSITIONS", bg="#440000", fg="#ff4444",
+                  font=("Consolas", 10, "bold"), width=20, height=2,
+                  command=self.reset_ui_layout).pack(side="left", padx=10)
 
         # NEU: Drag & Drop Button für Stats/Feed
         self.btn_edit_hud = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25,
@@ -2747,13 +2887,15 @@ class DiorClientGUI:
         # Prüfen ob Overlay aktiv sein soll
         if master_switch and (game_running or test_active) and cfg.get("active", True):
 
-            # --- 1. DATEN VORBEREITEN (Unverändert) ---
+            # --- 1. DATEN VORBEREITEN ---
             if test_active:
-                kills, deaths, hs, start_time = 15, 5, 6, time.time() - 3600
+                # HIER FEHLTE 'hsrkills' -> Wir fügen es hinzu (z.B. 10)
+                kills, deaths, hs, hsrkills, start_time = 15, 5, 6, 10, time.time() - 3600
             else:
                 my_id = self.current_character_id
                 if my_id and my_id in self.session_stats:
                     s = self.session_stats[my_id]
+                    # Hier ist es bereits korrekt definiert
                     kills, deaths, hs, hsrkills = s.get("k", 0), s.get("d", 0), s.get("hs", 0), s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
                 else:
@@ -3080,45 +3222,69 @@ class DiorClientGUI:
         # Wird vom Loop erledigt, dient nur als Dummy oder Trigger für sofortigen Refresh
         self.refresh_ingame_overlay()
 
-    def save_streak_settings(self):
-        if "streak" not in self.config: self.config["streak"] = {}
+    def pick_streak_color(self):
+        """Öffnet den Windows-Farbdialog und aktualisiert das HUD."""
+        from tkinter import colorchooser
+        color = colorchooser.askcolor(title="Wähle Farbe für die Streak-Zahl", color=self.streak_color_var.get())
 
+        if color[1]:  # Wenn User nicht abgebrochen hat
+            self.streak_color_var.set(color[1])
+            # Button-Farbe anpassen
+            self.btn_streak_color.config(bg=color[1])
+            # Textfarbe auf Button lesbar halten (schwarz bei hellen Farben)
+            self.btn_streak_color.config(fg="black" if color[1].lower() in ["#ffffff", "#ffff00"] else "white")
+            # Speichern & Vorschau triggern
+            self.save_streak_settings(preview=True)
+
+    def streak_font_debounce(self, *args):
+        """Wartet 500ms nach der letzten Eingabe, bevor der Test gestartet wird."""
+        if self._streak_debounce_timer:
+            self.root.after_cancel(self._streak_debounce_timer)
+
+        # Starte den Test erst nach 500ms Inaktivität
+        self._streak_debounce_timer = self.root.after(500, lambda: self.save_streak_settings(preview=True))
+
+    def save_streak_settings(self, preview=False):
+        """Speichert Messer-Bilder und das GLOBALE Design der Zahl."""
+        if "streak" not in self.config:
+            self.config["streak"] = {}
+
+        # --- 1. WERTE AUS UI-FELDERN LESEN (Mit Fallback) ---
         try:
-            raw_speed = int(self.ent_streak_speed.get())
-        except ValueError:
+            raw_speed = int(self.ent_streak_speed.get()) if hasattr(self, 'ent_streak_speed') else 50
+        except:
             raw_speed = 50
 
-        # Pfad-Modus beenden beim Speichern
-        if self.overlay_win:
-            self.config["streak"]["custom_path"] = getattr(self.overlay_win, 'custom_path', [])
-            self.overlay_win.path_edit_active = False
-            self.overlay_win.set_mouse_passthrough(True)
-            self.overlay_win.update()
-            if hasattr(self, 'btn_path_record'):
-                self.btn_path_record.config(text="START PATH RECORD", bg="#ff8c00", fg="black")
+        # Hier werden die Variablen sicher ausgelesen
+        global_color = self.streak_color_var.get() if hasattr(self, 'streak_color_var') else "#ffffff"
+        try:
+            global_size = int(self.streak_fontsize_var.get()) if hasattr(self, 'streak_fontsize_var') else 26
+        except:
+            global_size = 26
 
-        # Dummies entfernen
-        if hasattr(self, 'temp_streak_backup'):
-            self.killstreak_count = self.temp_streak_backup
-            self.streak_factions = getattr(self, 'temp_factions_backup', [])
-            del self.temp_streak_backup
-            if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
-        else:
-            self.killstreak_count = 0
-            self.streak_factions = []
+        try:
+            sh_size = int(self.streak_shadow_size_var.get()) if hasattr(self, 'streak_shadow_size_var') else 2
+        except:
+            sh_size = 2
 
-        # WICHTIG: Hier speichern wir jetzt BEIDE Checkboxen
+        is_bold = self.var_streak_bold.get() if hasattr(self, 'var_streak_bold') else False
+        is_underline = self.var_streak_underline.get() if hasattr(self, 'var_streak_underline') else False
+
+        # --- 2. CONFIG AKTUALISIEREN ---
         self.config["streak"].update({
-            "active": self.var_streak_active.get() if hasattr(self, 'var_streak_active') else True, # Fallback falls Fehler
-            "active": self.var_streak_master.get(),  # DER NEUE MASTER SWITCH
-            "anim_active": self.var_streak_anim.get(), # DER NEUE ANIMATION SWITCH
+            "active": self.var_streak_master.get() if hasattr(self, 'var_streak_master') else True,
+            "anim_active": self.var_streak_anim.get() if hasattr(self, 'var_streak_anim') else True,
             "speed": raw_speed,
-            "img": get_short_name(self.ent_streak_img.get()),
-            "x": self.scale_sx.get(),
-            "y": self.scale_sy.get(),
-            "tx": self.scale_tx.get(),
-            "ty": self.scale_ty.get(),
-            "scale": self.scale_s_size.get()
+            "img": get_short_name(self.ent_streak_img.get()) if hasattr(self, 'ent_streak_img') else "KS_Counter.png",
+            "color": global_color,
+            "size": global_size,
+            "shadow_size": sh_size,
+            "shadow_active": sh_size > 0,  # Schatten ist nur aktiv, wenn Größe > 0
+            "bold": is_bold,
+            "underline": is_underline,
+            "tx": self.scale_tx.get() if hasattr(self, 'scale_tx') else 0,
+            "ty": self.scale_ty.get() if hasattr(self, 'scale_ty') else 0,
+            "scale": self.scale_s_size.get() if hasattr(self, 'scale_s_size') else 1.0
         })
 
         if hasattr(self, 'knife_entries'):
@@ -3127,68 +3293,12 @@ class DiorClientGUI:
 
         self.save_config()
         self.update_streak_display()
-        self.add_log(f"STREAK: Gespeichert (Master: {self.var_streak_master.get()}, Anim: {self.var_streak_anim.get()})")
 
-    def draw_streak_ui(self, img_path, count, config):
-        """Zeichnet das Killstreak-Bild und die Zahl basierend auf der Config"""
+        if preview:
+            self.test_streak_visuals()
 
-        # 1. Wenn Count 0 ist, alles verstecken
-        if count <= 0:
-            self.streak_label.hide()
-            self.streak_text_label.hide()
-            return
-
-        # 2. Bild laden und skalieren
-        if os.path.exists(img_path):
-            pixmap = QPixmap(img_path)
-            scale = config.get("scale", 1.0)
-            if not pixmap.isNull():
-                # Skalieren
-                w = int(pixmap.width() * scale)
-                h = int(pixmap.height() * scale)
-                pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
-                                       Qt.TransformationMode.SmoothTransformation)
-
-                self.streak_label.setPixmap(pixmap)
-                self.streak_label.adjustSize()
-
-                # Position Bild (Mitte + Offset)
-                scr_w = self.width()
-                scr_h = self.height()
-
-                x_off = config.get("x", 0)
-                y_off = config.get("y", 100)
-
-                img_x = (scr_w // 2) - (w // 2) + int(x_off)
-                img_y = (scr_h // 2) - (h // 2) + int(y_off)
-
-                self.streak_label.move(img_x, img_y)
-                self.streak_label.show()
-
-                # 3. Zahl positionieren (Relativ zum Bild)
-                # HTML Styling für die Zahl
-                self.streak_text_label.setText(
-                    f"<span style='font-size: {int(40 * scale)}pt; font-family: Black Ops One; color: #ff0000; "
-                    f"text-shadow: 2px 2px 0 #000;'>{count}</span>"
-                )
-                self.streak_text_label.adjustSize()
-
-                tx_off = config.get("tx", 0)
-                ty_off = config.get("ty", 0)
-
-                # Mitte des Bildes berechnen
-                center_img_x = img_x + (w // 2)
-                center_img_y = img_y + (h // 2)
-
-                # Zahl platzieren
-                num_x = center_img_x - (self.streak_text_label.width() // 2) + int(tx_off)
-                num_y = center_img_y - (self.streak_text_label.height() // 2) + int(ty_off)
-
-                self.streak_text_label.move(num_x, num_y)
-                self.streak_text_label.show()
-                if self.path_edit_active:
-                    self.path_layer.show()
-                    self.path_layer.raise_()
+        # FIX: Hier wurde g_color statt global_color verwendet, was den Absturz verursachte
+        self.add_log(f"STREAK: Gespeichert (Farbe: {global_color}, Schatten: {sh_size})")
 
     def _get_random_slot(self):
         import random
@@ -3235,31 +3345,51 @@ class DiorClientGUI:
         )
 
     def test_streak_visuals(self):
-        old_c = getattr(self, 'killstreak_count', 0)
-        old_f = getattr(self, 'streak_factions', [])
-        old_s = getattr(self, 'streak_slot_map', [])  # Backup
+        """
+        Startet eine Vorschau mit 20 Messern.
+        Verhindert Abstürze durch Spamming und schützt echte Statistiken.
+        """
+        # 1. Vorherige Timer abbrechen, damit die GUI nicht "hängt"
+        if self._streak_test_timer:
+            self.root.after_cancel(self._streak_test_timer)
+            self._streak_test_timer = None
 
-        self.add_log("UI: Teste Killstreak-Visuals...")
-        self.killstreak_count = 100
-        self.streak_factions = (["TR", "NC", "VS"] * 34)[:100]
+        # 2. Echte Daten nur sichern, wenn wir noch NICHT im Test-Modus sind.
+        # Das verhindert, dass die Test-Zahl (20) als "echter" Wert gespeichert wird.
+        if self._streak_backup is None:
+            self._streak_backup = {
+                'count': getattr(self, 'killstreak_count', 0),
+                'factions': getattr(self, 'streak_factions', []),
+                'slots': getattr(self, 'streak_slot_map', [])
+            }
 
-        # Fake Random Slots erzeugen
-        self.streak_slot_map = []
+        self.add_log("UI: Teste Killstreak-Visuals (20 Messer)...")
+
+        # 3. Testwerte setzen (Begrenzt auf 20 für Performance)
+        self.killstreak_count = 20
+        self.streak_factions = (["TR", "NC", "VS"] * 7)[:20]
+
         import random
-        # Einfach 0-49 mischen und verdoppeln für den Test
-        slots = list(range(50)) + list(range(50, 100))
+        slots = list(range(20))
         random.shuffle(slots)
         self.streak_slot_map = slots
 
+        # 4. Sofortiges Update an das Overlay senden
         self.update_streak_display()
 
-        def reset_test():
-            self.killstreak_count = old_c
-            self.streak_factions = old_f
-            self.streak_slot_map = old_s  # Restore
-            self.update_streak_display()
+        # 5. Reset-Funktion: Stellt die echten Daten wieder her
+        def reset_action():
+            if self._streak_backup:
+                self.killstreak_count = self._streak_backup['count']
+                self.streak_factions = self._streak_backup['factions']
+                self.streak_slot_map = self._streak_backup['slots']
+                self.update_streak_display()
+                self._streak_backup = None  # Backup löschen
+            self._streak_test_timer = None
+            self.add_log("UI: Test beendet.")
 
-        self.root.after(4000, reset_test)
+        # 6. Timer für das automatische Ende starten (4 Sekunden)
+        self._streak_test_timer = self.root.after(2000, reset_action)
 
     def fade_out(self, tag, alpha=255):
         if alpha > 0:
