@@ -4418,19 +4418,17 @@ class DiorClientGUI:
                                 w_info = self.item_db.get(weapon_id, {})
                                 category = w_info.get("type", "Unknown")
 
-
-                                if killer_id and killer_id != "0" and killer_id != victim_id:
-                                    k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
-                                    k_obj["k"] += 1
-                                    k_obj["last_kill_time"] = time.time()
-                                    if category in HSR_WEAPON_CATEGORY:
-                                        k_obj["hsrkill"] += 1
-                                        if is_hs: k_obj["hs"] += 1
-
-
-                                if victim_id and victim_id != "0":
-                                    v_obj = get_stat_obj(victim_id, p.get("team_id"))
-                                    v_obj["d"] += 1
+                                if p.get("attacker_team_id") != p.get("team_id"):
+                                    if killer_id and killer_id != "0" and killer_id != victim_id:
+                                        k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
+                                        k_obj["k"] += 1
+                                        k_obj["last_kill_time"] = time.time()
+                                        if category in HSR_WEAPON_CATEGORY:
+                                            k_obj["hsrkill"] += 1
+                                            if is_hs: k_obj["hs"] += 1
+                                    if victim_id and victim_id != "0":
+                                        v_obj = get_stat_obj(victim_id, p.get("team_id"))
+                                        v_obj["d"] += 1
 
                                 if my_id:
                                     # Icon Vorbereitung (HS Icon)
