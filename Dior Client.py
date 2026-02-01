@@ -1253,13 +1253,14 @@ class DiorClientGUI:
                         else:
                             self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt inaktiv.")
 
-                    else:
-                        self.add_log("MONITOR: PlanetSide 2 beendet.")
-                        # Ruft unsere neue stop_overlay_logic auf -> Versteckt Stats, Feed UND Zahl
-                        self.root.after(0, self.stop_overlay_logic)
 
-                        # Zur Sicherheit Crosshair explizit verstecken
-                        if self.overlay_win:
+                    else:
+
+                        self.add_log("MONITOR: PlanetSide 2 beendet.")
+                        # Ruft die neue stop_overlay_logic auf
+                        self.root.after(0, self.stop_overlay_logic)
+                        # Crosshair nur verstecken, wenn NICHT im Edit-Modus
+                        if self.overlay_win and not getattr(self, "is_hud_editing", False):
                             self.root.after(0, self.overlay_win.crosshair_label.hide)
 
             except:
@@ -1312,10 +1313,17 @@ class DiorClientGUI:
 
             self.add_log("PATH: Modus AN. Drücke SPACE zum Speichern & Beenden.")
         else:
-            # --- STOP ---
-            self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            # --- STOP DER AUFNAHME ---
+            self.overlay_win.path_edit_active = False  # WICHTIG: Status zurücksetzen!
+            self.overlay_win.set_mouse_passthrough(True)
             self.overlay_win.path_layer.hide()
+
+            # Button zurücksetzen
+            self.btn_path_record.config(text="REC PATH", bg="#ff8c00", fg="black")
+
+            # Pfad in Config speichern
             self.save_streak_settings()
+            self.add_log("PATH: Aufnahme beendet und Pfad gespeichert.")
 
     def clear_path(self):
         if "streak" in self.config:
@@ -2871,16 +2879,27 @@ class DiorClientGUI:
             self.overlay_win.feed_label.hide()
             self.overlay_win.feed_label.setText("")
 
-        # 3. Killstreak verstecken (Bild UND Zahl) - NEU
+        # 3. Killstreak komplett aufräumen
         if self.overlay_win:
             if hasattr(self.overlay_win, 'streak_bg_label'):
                 self.overlay_win.streak_bg_label.hide()
             if hasattr(self.overlay_win, 'streak_text_label'):
-                self.overlay_win.streak_text_label.hide()  # <-- Das ist die Zahl!
+                self.overlay_win.streak_text_label.hide()
 
-        # Interne Zähler resetten, damit beim Neustart nicht kurz "5" aufblitzt
+            # NEU: Alle Messer-Labels explizit verstecken
+            if hasattr(self.overlay_win, 'knife_labels'):
+                for l in self.overlay_win.knife_labels:
+                    l.hide()
+                    l._is_active = False
+
+        # Zähler resetten
         self.killstreak_count = 0
         self.kill_counter = 0
+        self.streak_factions = []
+        self.streak_slot_map = []
+
+        # WICHTIG: Das Overlay über den neuen Stand (0) informieren
+        self.update_streak_display()
 
         # 4. Status im GUI updaten
         if hasattr(self, 'ovl_status_label'):
@@ -3255,17 +3274,23 @@ class DiorClientGUI:
         self._streak_debounce_timer = self.root.after(500, lambda: self.save_streak_settings(preview=True))
 
     def save_streak_settings(self, preview=False):
-        """Speichert Messer-Bilder und das GLOBALE Design der Zahl."""
+        """Speichert Messer-Bilder, das GLOBALE Design der Zahl und den aufgenommenen Pfad."""
         if "streak" not in self.config:
             self.config["streak"] = {}
 
+        # --- NEU: PFAD AUS DEM OVERLAY SICHERN (WICHTIG: Damit Aufnahmen nicht verloren gehen) ---
+        if self.overlay_win and hasattr(self.overlay_win, 'custom_path'):
+            # Wir übertragen die Koordinaten aus dem Live-Overlay in die Konfiguration
+            self.config["streak"]["custom_path"] = self.overlay_win.custom_path
+
         # --- 1. WERTE AUS UI-FELDERN LESEN (Mit Fallback) ---
         try:
+            # Puls-Geschwindigkeit validieren
             raw_speed = int(self.ent_streak_speed.get()) if hasattr(self, 'ent_streak_speed') else 50
         except:
             raw_speed = 50
 
-        # Hier werden die Variablen sicher ausgelesen
+        # Design-Werte sicher auslesen (Farbe, Größe, Schatten)
         global_color = self.streak_color_var.get() if hasattr(self, 'streak_color_var') else "#ffffff"
         try:
             global_size = int(self.streak_fontsize_var.get()) if hasattr(self, 'streak_fontsize_var') else 26
@@ -3277,10 +3302,25 @@ class DiorClientGUI:
         except:
             sh_size = 2
 
+        # Style-Checkboxen (Fett & Unterstrichen)
         is_bold = self.var_streak_bold.get() if hasattr(self, 'var_streak_bold') else False
         is_underline = self.var_streak_underline.get() if hasattr(self, 'var_streak_underline') else False
 
+        if hasattr(self, 'temp_streak_backup'):
+            self.killstreak_count = self.temp_streak_backup
+            self.streak_factions = getattr(self, 'temp_factions_backup', [])
+            # Backups nach Wiederherstellung löschen
+            del self.temp_streak_backup
+            if hasattr(self, 'temp_factions_backup'):
+                del self.temp_factions_backup
+        else:
+            # Falls kein Backup da ist, sicherstellen dass Variablen existieren
+            if not hasattr(self, 'killstreak_count'):
+                self.killstreak_count = 0
+                s
+
         # --- 2. CONFIG AKTUALISIEREN ---
+        # .update() stellt sicher, dass bestehende Werte (wie x/y vom Drag&Drop) erhalten bleiben
         self.config["streak"].update({
             "active": self.var_streak_master.get() if hasattr(self, 'var_streak_master') else True,
             "anim_active": self.var_streak_anim.get() if hasattr(self, 'var_streak_anim') else True,
@@ -3297,17 +3337,21 @@ class DiorClientGUI:
             "scale": self.scale_s_size.get() if hasattr(self, 'scale_s_size') else 1.0
         })
 
+        # Messer-Bilder pro Fraktion speichern
         if hasattr(self, 'knife_entries'):
             for f_tag, ent in self.knife_entries.items():
                 self.config["streak"][f"knife_{f_tag}"] = get_short_name(ent.get())
 
+        # Daten permanent in config.json schreiben
         self.save_config()
+        # Das Live-Overlay über die Änderungen informieren
         self.update_streak_display()
 
+        # Optionalen Test-Lauf starten (bei manuellem Save oder Checkbox-Klick)
         if preview:
             self.test_streak_visuals()
 
-        # FIX: Hier wurde g_color statt global_color verwendet, was den Absturz verursachte
+        # Erfolgsmeldung im Log (FIX: nutzt jetzt korrekt 'global_color')
         self.add_log(f"STREAK: Gespeichert (Farbe: {global_color}, Schatten: {sh_size})")
 
     def _get_random_slot(self):
