@@ -516,24 +516,19 @@ class QtOverlay(QWidget):
 
                 self.gui_ref.save_config()
 
-            # --- 4. KILLSTREAK (RELATIVER OFFSET: MITTE) ---
-            # (Streak haben wir noch nicht auf Absolut umgestellt, daher bleibt hier die Offset-Logik)
+                # --- 4. KILLSTREAK (JETZT AUCH ABSOLUT) ---
             elif self.dragging_widget == "streak":
-                mid_x = self.width() // 2
-                mid_y = self.height() // 2
+                # Position des Hintergrundbilds (Top-Left)
                 curr = self.streak_bg_label.pos()
-
-                # Mittelpunkt des Widgets berechnen
-                cx = curr.x() + (self.streak_bg_label.width() // 2)
-                cy = curr.y() + (self.streak_bg_label.height() // 2)
 
                 if "streak" not in self.gui_ref.config:
                     self.gui_ref.config["streak"] = {}
 
-                # Speichern als Offset zur Bildschirmmitte (z.B. -100 oder +50)
-                self.gui_ref.config["streak"]["x"] = uns(cx - mid_x)
-                self.gui_ref.config["streak"]["y"] = uns(cy - mid_y)
+                # Wir speichern jetzt ABSOLUTE Koordinaten
+                self.gui_ref.config["streak"]["x"] = uns(curr.x())
+                self.gui_ref.config["streak"]["y"] = uns(curr.y())
 
+                # Wichtig: Wir rufen save_streak_settings auf, damit auch Farben/Größe etc. mit gespeichert werden
                 self.gui_ref.save_streak_settings()
 
         # Dragging-Status zurücksetzen
@@ -668,7 +663,7 @@ class QtOverlay(QWidget):
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         """
         Haupt-Anzeige für den Killstreak.
-        Kombiniert Messer-Kreis-Logik mit dem neuen globalen Zahl-Design.
+        JETZT MIT ABSOLUTER POSITIONIERUNG (0,0 = Oben Links).
         """
         import math
         import time
@@ -690,7 +685,7 @@ class QtOverlay(QWidget):
                 l._is_active = False
             return
 
-        display_count = count if count > 0 else 10  # Dummy Wert für Edit-Mode
+        display_count = count if count > 0 else 10
         final_scale = cfg.get("scale", 1.0) * self.ui_scale
 
         # --- 2. Haupt-Hintergrund (Skull) ---
@@ -702,14 +697,20 @@ class QtOverlay(QWidget):
                 self.streak_bg_label.setPixmap(pix)
                 self.streak_bg_label.adjustSize()
 
-                # Position des Schädels berechnen
-                bx = (self.width() // 2) + self.s(cfg.get("x", 0))
-                by = (self.height() // 2) + self.s(cfg.get("y", 100))
-                self.safe_move(self.streak_bg_label, bx - (self.streak_bg_label.width() // 2),
-                               by - (self.streak_bg_label.height() // 2))
+                # --- ÄNDERUNG: Absolute Positionierung ---
+                # Wir laden die Werte direkt (Standard z.B. 100, 100)
+                # Keine Bildschirmmitte-Berechnung mehr!
+                abs_x = self.s(cfg.get("x", 100))
+                abs_y = self.s(cfg.get("y", 100))
+
+                # Wir setzen das Label an diese Position (Top-Left)
+                self.safe_move(self.streak_bg_label, abs_x, abs_y)
                 self.streak_bg_label.show()
 
+                # WICHTIG: Skull Center neu berechnen für die Messer
                 skull_center = self.streak_bg_label.geometry().center()
+                bx, by = abs_x, abs_y  # Für Text-Referenz
+
                 path_data = cfg.get("custom_path", [])
 
                 # Sicherstellen, dass genug Messer-Labels existieren
@@ -798,8 +799,9 @@ class QtOverlay(QWidget):
                         curr_rx = (start_radius_x + (ring_idx * radius_step)) * jaw_narrowing
                         curr_ry = (start_radius_y + (ring_idx * radius_step))
 
-                        kx = bx + int(curr_rx * math.cos(rad))
-                        ky = (by - self.s(20)) + int(curr_ry * math.sin(rad))
+                        # Position relativ zum aktuellen Skull-Center berechnen
+                        kx = skull_center.x() + int(curr_rx * math.cos(rad))
+                        ky = skull_center.y() - self.s(20) + int(curr_ry * math.sin(rad))
 
                         k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle + 90),
                                                             Qt.TransformationMode.SmoothTransformation)
@@ -817,19 +819,16 @@ class QtOverlay(QWidget):
                 # Cleanup alter Labels
                 for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
 
-                # --- 3. DIE ZAHL ANZEIGEN (Globales Design - IMMER AUFRUFEN) ---
+                # --- 3. DIE ZAHL ANZEIGEN ---
                 f_color = cfg.get("color", "#ffffff")
                 f_size = cfg.get("size", 26)
                 sh_size = int(cfg.get("shadow_size", 0))
 
-                # CSS Style zusammenbauen
                 style_parts = [
                     f"font-family: 'Black Ops One', sans-serif",
                     f"font-size: {int(f_size * final_scale)}px",
                     f"color: {f_color}"
                 ]
-
-                # Schatten NUR hinzufügen, wenn sh_size wirklich > 0 ist
                 if sh_size > 0:
                     style_parts.append(f"text-shadow: {sh_size}px {sh_size}px 0 #000")
                 else:
@@ -841,9 +840,11 @@ class QtOverlay(QWidget):
                 self.streak_text_label.setText(f'<div style="{"; ".join(style_parts)}">{display_count}</div>')
                 self.streak_text_label.adjustSize()
 
-                # Positionierung der Zahl
-                tx = bx + self.s(cfg.get("tx", 0))
-                ty = by + self.s(cfg.get("ty", 0))
+                # Positionierung der Zahl (Relativ zum Skull Center)
+                # Skull Center + TextOffset - Halbe Textbreite
+                tx = skull_center.x() + self.s(cfg.get("tx", 0))
+                ty = skull_center.y() + self.s(cfg.get("ty", 0))
+
                 self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
                                ty - (self.streak_text_label.height() // 2))
 
@@ -1267,11 +1268,10 @@ class DiorClientGUI:
 
         # 1. Standardwerte definieren (ABSOLUT)
         defaults = {
-            # Stats: Unten Links (Beispiel)
             "stats_widget": {"x": 50, "y": 800, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
-            # Feed: Oben Rechts (Beispiel)
             "killfeed": {"x": 1400, "y": 50, "hs_icon": "headshot.png", "show_revives": True},
-            "streak": {"x": 0, "y": 100, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
+            # HIER: Streak Standard (z.B. Oben Mitte)
+            "streak": {"x": mid_x - 50, "y": 100, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
             "crosshair": {"x": mid_x, "y": mid_y, "size": 32, "active": True}
         }
 
