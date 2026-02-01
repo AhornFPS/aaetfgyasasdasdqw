@@ -459,49 +459,85 @@ class QtOverlay(QWidget):
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
 
     def mouseReleaseEvent(self, event):
-        if not self.edit_mode or not self.dragging_widget: return
-        mid_x = self.width() // 2;
-        mid_y = self.height() // 2
+        """
+        Wird aufgerufen, wenn die Maustaste losgelassen wird (Ende des Drag & Drop).
+        Speichert die neuen Positionen direkt in die Config.
+        """
+        if not self.edit_mode or not self.dragging_widget:
+            return
 
+        # Hilfsfunktion: UI-Skalierung herausrechnen, um rohe Pixelwerte zu speichern
         def uns(val):
             return int(val / self.ui_scale)
 
-        if self.dragging_widget == "feed":
-            curr = self.feed_label.pos();
-            off_x = curr.x() - mid_x;
-            off_y = curr.y() - mid_y
-            if self.gui_ref:
-                self.gui_ref.scale_kfx.set(uns(off_x))
-                self.gui_ref.scale_kfy.set(uns(off_y))
-                self.gui_ref.save_stats_config()
-        elif self.dragging_widget == "stats":
-            curr = self.stats_bg_label.pos();
-            cx = curr.x() + (self.stats_bg_label.width() // 2);
-            cy = curr.y() + (self.stats_bg_label.height() // 2)
-            if self.gui_ref:
-                self.gui_ref.scale_stx.set(uns(cx - mid_x))
-                self.gui_ref.scale_sty.set(uns(cy - mid_y))
-                self.gui_ref.save_stats_config()
-        elif self.dragging_widget == "streak":
-            curr = self.streak_bg_label.pos()
-            cx = curr.x() + (self.streak_bg_label.width() // 2)
-            cy = curr.y() + (self.streak_bg_label.height() // 2)
+        # Referenz zur GUI prüfen
+        if self.gui_ref:
 
-            if self.gui_ref:
-                # Wir schreiben direkt in die Config, da die Slider weg sind
-                if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
+            # --- 1. CROSSHAIR (ABSOLUTE POSITION: MITTE) ---
+            if self.dragging_widget == "crosshair":
+                curr = self.crosshair_label.pos()
+                # Wir berechnen den Mittelpunkt des Labels
+                center_x = curr.x() + (self.crosshair_label.width() // 2)
+                center_y = curr.y() + (self.crosshair_label.height() // 2)
+
+                if "crosshair" not in self.gui_ref.config:
+                    self.gui_ref.config["crosshair"] = {}
+
+                # Speichern der echten Bildschirmkoordinaten
+                self.gui_ref.config["crosshair"]["x"] = uns(center_x)
+                self.gui_ref.config["crosshair"]["y"] = uns(center_y)
+
+                self.gui_ref.save_config()
+                print(f"DEBUG: Crosshair saved at {uns(center_x)}, {uns(center_y)}")
+
+            # --- 2. KILLFEED (ABSOLUTE POSITION: OBEN LINKS) ---
+            elif self.dragging_widget == "feed":
+                curr = self.feed_label.pos()
+
+                if "killfeed" not in self.gui_ref.config:
+                    self.gui_ref.config["killfeed"] = {}
+
+                # Speichern der Top-Left Koordinaten
+                self.gui_ref.config["killfeed"]["x"] = uns(curr.x())
+                self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
+
+                self.gui_ref.save_config()
+
+            # --- 3. SESSION STATS (ABSOLUTE POSITION: OBEN LINKS) ---
+            elif self.dragging_widget == "stats":
+                curr = self.stats_bg_label.pos()
+
+                if "stats_widget" not in self.gui_ref.config:
+                    self.gui_ref.config["stats_widget"] = {}
+
+                # Speichern der Top-Left Koordinaten
+                self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
+                self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
+
+                self.gui_ref.save_config()
+
+            # --- 4. KILLSTREAK (RELATIVER OFFSET: MITTE) ---
+            # (Streak haben wir noch nicht auf Absolut umgestellt, daher bleibt hier die Offset-Logik)
+            elif self.dragging_widget == "streak":
+                mid_x = self.width() // 2
+                mid_y = self.height() // 2
+                curr = self.streak_bg_label.pos()
+
+                # Mittelpunkt des Widgets berechnen
+                cx = curr.x() + (self.streak_bg_label.width() // 2)
+                cy = curr.y() + (self.streak_bg_label.height() // 2)
+
+                if "streak" not in self.gui_ref.config:
+                    self.gui_ref.config["streak"] = {}
+
+                # Speichern als Offset zur Bildschirmmitte (z.B. -100 oder +50)
                 self.gui_ref.config["streak"]["x"] = uns(cx - mid_x)
                 self.gui_ref.config["streak"]["y"] = uns(cy - mid_y)
-                self.gui_ref.save_streak_settings()  # Speichert tx, ty, etc. mit ab
-        elif self.dragging_widget == "crosshair":
-            curr = self.crosshair_label.pos();
-            cx = curr.x() + (self.crosshair_label.width() // 2);
-            cy = curr.y() + (self.crosshair_label.height() // 2)
-            if self.gui_ref:
-                self.gui_ref.scale_cx.set(uns(cx - mid_x))
-                self.gui_ref.scale_cy.set(uns(cy - mid_y))
-                self.gui_ref.apply_crosshair_settings()
-        self.dragging_widget = None;
+
+                self.gui_ref.save_streak_settings()
+
+        # Dragging-Status zurücksetzen
+        self.dragging_widget = None
         self.drag_offset = None
 
     # --- TASTATUR-STEUERUNG (SPACE ZUM STOPPEN) ---
@@ -543,17 +579,27 @@ class QtOverlay(QWidget):
     def update_killfeed_pos(self):
         if not self.gui_ref: return
         kf_conf = self.gui_ref.config.get("killfeed", {})
-        off_x = self.s(kf_conf.get("x", -800));
-        off_y = self.s(kf_conf.get("y", 200))
-        self.safe_move(self.feed_label, (self.width() // 2) + off_x, (self.height() // 2) + off_y)
+
+        # --- NEU: Absolute Position (0,0 = Oben Links) ---
+        # Standardwert z.B. 50, 200 (nicht mehr -800)
+        abs_x = kf_conf.get("x", 50)
+        abs_y = kf_conf.get("y", 200)
+
+        # Nur noch Skalierung anwenden, keine Bildschirmmitte mehr draufrechnen
+        self.safe_move(self.feed_label, self.s(abs_x), self.s(abs_y))
 
     def set_stats_html(self, html_content, img_path):
         cfg = {}
-        if self.gui_ref and hasattr(self.gui_ref, 'config'): cfg = self.gui_ref.config.get("stats_widget", {})
-        base_x = (self.width() // 2) + self.s(cfg.get("x", -500));
-        base_y = (self.height() // 2) + self.s(cfg.get("y", -300))
-        ref_x, ref_y = base_x, base_y
+        if self.gui_ref and hasattr(self.gui_ref, 'config'):
+            cfg = self.gui_ref.config.get("stats_widget", {})
+
+        # Absolute Position aus Config laden
+        base_x = self.s(cfg.get("x", 50))
+        base_y = self.s(cfg.get("y", 500))
+
         has_image = os.path.exists(img_path)
+
+        # --- HINTERGRUND ---
         if has_image or self.edit_mode:
             if has_image:
                 pix = QPixmap(img_path);
@@ -566,21 +612,42 @@ class QtOverlay(QWidget):
             else:
                 self.stats_bg_label.clear();
                 self.stats_bg_label.resize(int(400 * self.ui_scale), int(50 * self.ui_scale))
-            bg_x = base_x - (self.stats_bg_label.width() // 2);
-            bg_y = base_y - (self.stats_bg_label.height() // 2)
-            self.safe_move(self.stats_bg_label, bg_x, bg_y);
+
+            # WICHTIG: Nur bewegen, wenn wir NICHT im Edit-Modus sind!
+            # Im Edit-Modus hat die Maus die Kontrolle.
+            if not self.edit_mode:
+                self.safe_move(self.stats_bg_label, base_x, base_y);
+
             self.stats_bg_label.show()
         else:
             self.stats_bg_label.hide()
 
+        # --- TEXT ---
         scaled_html = html_content
         for size in [28, 22, 20, 19, 16, 14]:
             scaled_html = scaled_html.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
+
         self.stats_text_label.setText(scaled_html);
         self.stats_text_label.adjustSize()
-        text_x = ref_x + self.s(cfg.get("tx", 0)) - (self.stats_text_label.width() // 2);
-        text_y = ref_y + self.s(cfg.get("ty", 0)) - (self.stats_text_label.height() // 2)
+
+        # Positionierung berechnen
+        # Wenn wir im Edit-Modus sind, nehmen wir die AKTUELLE Position des Hintergrunds als Referenz
+        if self.edit_mode:
+            bg_center_x = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
+            bg_center_y = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
+        else:
+            # Sonst nehmen wir die Config-Werte (base_x/base_y sind Top-Left)
+            bg_center_x = base_x + (self.stats_bg_label.width() // 2)
+            bg_center_y = base_y + (self.stats_bg_label.height() // 2)
+
+        # Text Feinjustierung (tx/ty) anwenden
+        text_x = bg_center_x + self.s(cfg.get("tx", 0)) - (self.stats_text_label.width() // 2)
+        text_y = bg_center_y + self.s(cfg.get("ty", 0)) - (self.stats_text_label.height() // 2)
+
+        # Text immer bewegen (er muss ja dem Hintergrund folgen, auch beim Ziehen)
+        # Aber nur wenn wir nicht gerade den Text selbst ziehen würden (was wir aktuell nicht tun, wir ziehen den BG)
         self.safe_move(self.stats_text_label, text_x, text_y);
+
         self.stats_text_label.show();
         self.stats_text_label.raise_()
 
@@ -858,7 +925,7 @@ class QtOverlay(QWidget):
                 lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
 
     def update_crosshair(self, path, size, enabled):
-        """Aktualisiert das Crosshair Bild, Größe und Position"""
+        """Aktualisiert das Crosshair: JETZT MIT ABSOLUTER POSITIONIERUNG"""
         # Wenn deaktiviert (und nicht im Edit-Modus) oder Datei fehlt -> Verstecken
         if (not enabled and not self.edit_mode) or not os.path.exists(path):
             self.crosshair_label.hide()
@@ -872,18 +939,32 @@ class QtOverlay(QWidget):
             self.crosshair_label.setPixmap(pixmap)
             self.crosshair_label.adjustSize()
 
-            # Position berechnen
-            off_x, off_y = 0, 0
+            # --- FIX: Absolute Koordinaten verwenden ---
+            target_x = 0
+            target_y = 0
+
             if self.gui_ref:
                 c = self.gui_ref.config.get("crosshair", {})
-                off_x = self.s(c.get("x", 0))
-                off_y = self.s(c.get("y", 0))
 
-            # Zentrieren + Offset
-            cx = (self.width() // 2) - (self.crosshair_label.width() // 2) + off_x
-            cy = (self.height() // 2) - (self.crosshair_label.height() // 2) + off_y
+                # Werte aus Config laden (Das sind jetzt absolute Werte, z.B. 960)
+                raw_x = c.get("x", 0)
+                raw_y = c.get("y", 0)
 
-            self.safe_move(self.crosshair_label, cx, cy)
+                # FALLBACK: Wenn X und Y beide 0 sind (z.B. frisch nach Reset oder neu),
+                # setzen wir es automatisch in die Bildschirmmitte.
+                if raw_x == 0 and raw_y == 0:
+                    target_x = self.width() // 2
+                    target_y = self.height() // 2
+                else:
+                    # Skalierung anwenden, falls UI-Scale aktiv ist
+                    target_x = self.s(raw_x)
+                    target_y = self.s(raw_y)
+
+            # Label so verschieben, dass seine Mitte genau auf target_x/target_y liegt
+            final_x = target_x - (self.crosshair_label.width() // 2)
+            final_y = target_y - (self.crosshair_label.height() // 2)
+
+            self.safe_move(self.crosshair_label, final_x, final_y)
             self.crosshair_label.show()
 
 
@@ -1177,16 +1258,21 @@ class DiorClientGUI:
             self.root.destroy()
 
     def reset_ui_layout(self):
-        """Setzt alle HUD-Positionen auf die Werkseinstellungen zurück."""
+        """Setzt alle HUD-Positionen zurück."""
         if not messagebox.askyesno("HUD Reset", "Möchtest du alle HUD-Positionen auf Standardwerte zurücksetzen?"):
             return
 
-        # 1. Standardwerte definieren
+        mid_x = self.root.winfo_screenwidth() // 2
+        mid_y = self.root.winfo_screenheight() // 2
+
+        # 1. Standardwerte definieren (ABSOLUT)
         defaults = {
-            "stats_widget": {"x": -500, "y": -300, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
-            "killfeed": {"x": -800, "y": 200, "hs_icon": "headshot.png", "show_revives": True},
+            # Stats: Unten Links (Beispiel)
+            "stats_widget": {"x": 50, "y": 800, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
+            # Feed: Oben Rechts (Beispiel)
+            "killfeed": {"x": 1400, "y": 50, "hs_icon": "headshot.png", "show_revives": True},
             "streak": {"x": 0, "y": 100, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
-            "crosshair": {"x": 0, "y": 0, "size": 32, "active": True}
+            "crosshair": {"x": mid_x, "y": mid_y, "size": 32, "active": True}
         }
 
         # 2. Config aktualisieren
@@ -1194,36 +1280,22 @@ class DiorClientGUI:
             if key not in self.config: self.config[key] = {}
             self.config[key].update(val)
 
-        # 3. GUI-Elemente (Slider/Entrys) aktualisieren, falls sie existieren
-        try:
-            # Stats & Feed
-            if hasattr(self, 'scale_stx'): self.scale_stx.set(-500)
-            if hasattr(self, 'scale_sty'): self.scale_sty.set(-300)
-            if hasattr(self, 'scale_kfx'): self.scale_kfx.set(-800)
-            if hasattr(self, 'scale_kfy'): self.scale_kfy.set(200)
-
-            # Streak
-            if hasattr(self, 'scale_sx'): self.scale_sx.set(0)
-            if hasattr(self, 'scale_sy'): self.scale_sy.set(100)
-
-            # Crosshair
-            if hasattr(self, 'scale_cx'): self.scale_cx.set(0)
-            if hasattr(self, 'scale_cy'): self.scale_cy.set(0)
-            if hasattr(self, 'crosshair_size_entry'):
-                self.crosshair_size_entry.delete(0, tk.END)
-                self.crosshair_size_entry.insert(0, "32")
-        except:
-            pass  # Falls ein Tab gerade nicht geladen ist
+        # 3. GUI-Elemente aktualisieren (Nur noch die, die es gibt)
+        # Stats und Feed Slider gibt es nicht mehr -> Nichts zu tun hier für die.
 
         # 4. Speichern und Overlay triggern
         self.save_config()
         self.add_log("HUD: Alle Positionen wurden zurückgesetzt.")
 
-        # Sofortige visuelle Aktualisierung
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
-            self.apply_crosshair_settings()
-            self.update_streak_display()
+
+            c = self.config["crosshair"]
+            game_running = getattr(self, 'ps2_running', False)
+            should_show = c.get("active", True) and game_running
+            path = get_asset_path(c.get("file", "crosshair.png"))
+            self.overlay_win.update_crosshair(path, c.get("size", 32), should_show)
+
             self.refresh_ingame_overlay()
 
     def ps2_process_monitor(self):
@@ -1410,48 +1482,88 @@ class DiorClientGUI:
         conn.commit()
         conn.close()
 
+    def center_crosshair(self):
+        """Setzt das Crosshair auf Mitte und zeigt es kurz (3s) zur Bestätigung."""
+        # Bildschirmmitte ermitteln
+        mid_x = self.root.winfo_screenwidth() // 2
+        mid_y = self.root.winfo_screenheight() // 2
+
+        if "crosshair" not in self.config:
+            self.config["crosshair"] = {}
+
+        # Werte speichern
+        self.config["crosshair"]["x"] = mid_x
+        self.config["crosshair"]["y"] = mid_y
+        self.save_config()
+        self.add_log(f"SYSTEM: Crosshair auf {mid_x}x{mid_y} zentriert.")
+
+        # Overlay sofort aktualisieren
+        if self.overlay_win:
+            c = self.config["crosshair"]
+            path = get_asset_path(c.get("file", "crosshair.png"))
+            size = c.get("size", 32)
+
+            # 1. Sofort ANZEIGEN (Feedback für den User)
+            # Wir senden "True", egal ob das Spiel läuft oder nicht
+            self.overlay_win.update_crosshair(path, size, True)
+
+            # 2. Timer: Nach 3 Sekunden den "echten" Status wiederherstellen
+            def restore_state():
+                # Logik prüfen: Soll es eigentlich an sein?
+                game_running = getattr(self, 'ps2_running', False)
+                user_wants = c.get("active", True)
+                is_editing = getattr(self, "is_hud_editing", False)
+
+                # Normalzustand berechnen
+                should_be_visible = (user_wants and game_running) or is_editing
+
+                # Zurücksetzen
+                if self.overlay_win:
+                    self.overlay_win.update_crosshair(path, size, should_be_visible)
+
+            # 2000 Millisekunden = 2 Sekunden warten, dann restore_state aufrufen
+            self.root.after(2000, restore_state)
+
     def apply_crosshair_settings(self):
         try:
-            # Werte aus GUI auslesen
+            # 1. Pfad auslesen
             new_file = self.ent_cross_path.get()
 
-            # Fehler abfangen, falls Größe leer oder Text ist
-            try:
-                new_size = int(self.crosshair_size_entry.get())
-            except ValueError:
-                new_size = 32  # Fallback
-
-            new_x = self.scale_cx.get()
-            new_y = self.scale_cy.get()
-
-            # WICHTIG: Prüfen ob Variable existiert, sonst Default True
+            # 2. Aktiv-Status auslesen (Checkbox)
             if hasattr(self, 'crosshair_active_var'):
                 is_active = self.crosshair_active_var.get()
             else:
                 is_active = True
 
-            # In die Haupt-Config schreiben
+            # 3. Config updaten
             if "crosshair" not in self.config:
                 self.config["crosshair"] = {}
 
+            # Wir speichern den WUNSCH des Users (Checkbox-Status)
             self.config["crosshair"]["file"] = new_file
-            self.config["crosshair"]["size"] = new_size
-            self.config["crosshair"]["x"] = new_x
-            self.config["crosshair"]["y"] = new_y
             self.config["crosshair"]["active"] = is_active
+
+            current_size = self.config["crosshair"].get("size", 32)
+            self.config["crosshair"]["size"] = current_size
 
             # Permanent speichern
             self.save_config()
             self.add_log(f"SYSTEM: Crosshair-Konfiguration aktualisiert.")
 
+            # --- LOGIK-FIX: Sichtbarkeit ---
+            # Wir zeigen es nur an, wenn der User es will (is_active) UND das Spiel läuft.
+            # (Ausnahme: Edit-Modus, aber das regelt das Overlay selbst, wenn wir False senden)
+            game_running = getattr(self, 'ps2_running', False)
+            should_show = is_active and game_running
+
             # Live-Update an das Qt-Fenster senden
             if self.overlay_win:
                 full_path = get_asset_path(new_file)
-                self.overlay_win.update_crosshair(full_path, new_size, is_active)
+                self.overlay_win.update_crosshair(full_path, current_size, should_show)
 
         except Exception as e:
             self.add_log(f"Error saving crosshair: {e}")
-            traceback.print_exc()  # Hilft beim Debuggen in der Konsole
+            traceback.print_exc()
 
     def get_time_diff_str(self, past_date_str, mode="login"):
         if not past_date_str or past_date_str == "Unknown":
@@ -2538,7 +2650,6 @@ class DiorClientGUI:
                   font=("Consolas", 10, "bold"), width=10, height=2,
                   command=self.clear_path).pack(side="left", padx=5)
 
-
         # =========================================================
         # TAB 4: CROSSHAIR
         # =========================================================
@@ -2549,13 +2660,13 @@ class DiorClientGUI:
             self.config["crosshair"] = {"file": "crosshair.png", "size": 32, "x": 0, "y": 0, "active": True}
         c_conf = self.config["crosshair"]
 
-        # --- NEU: AKTIVIERUNGS-CHECKBOX (Das hat gefehlt!) ---
+        # 1. Checkbox
         self.crosshair_active_var = tk.BooleanVar(value=c_conf.get("active", True))
         tk.Checkbutton(tab_cross, text="CROSSHAIR ANZEIGEN", variable=self.crosshair_active_var,
-                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold")).pack(
-            pady=(15, 5))
+                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
+                       command=self.apply_crosshair_settings).pack(pady=(30, 10))
 
-        # 1. Bild
+        # 2. Bild Auswahl
         tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
         f_frame = tk.Frame(tab_cross, bg="#1a1a1a");
         f_frame.pack(pady=5)
@@ -2565,37 +2676,36 @@ class DiorClientGUI:
         tk.Button(f_frame, text="Browse", command=lambda: self.browse_file(self.ent_cross_path, "png"), bg="#333",
                   fg="white").pack(side="left")
 
-        # 2. Größe
-        s_frame = tk.Frame(tab_cross, bg="#1a1a1a");
-        s_frame.pack(pady=10)
-        tk.Label(s_frame, text="Größe (px):", bg="#1a1a1a", fg="white").pack(side="left", padx=5)
-        self.crosshair_size_entry = tk.Entry(s_frame, width=8, bg="#111", fg="#00f2ff", bd=1)
-        self.crosshair_size_entry.insert(0, str(c_conf.get("size", 32)))
-        self.crosshair_size_entry.pack(side="left")
+        # --- HIER: SLIDER SIND WEG, BUTTON KOMMT HIN ---
 
-        # 3. Position Sliders
-        tk.Label(tab_cross, text="Position X / Y Offset:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
-        self.scale_cx = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
-                                 label="X Offset")
-        self.scale_cx.set(c_conf.get("x", 0));
-        self.scale_cx.pack(fill="x", padx=100)
-        self.scale_cy = tk.Scale(tab_cross, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
-                                 label="Y Offset")
-        self.scale_cy.set(c_conf.get("y", 0));
-        self.scale_cy.pack(fill="x", padx=100)
+        tk.Label(tab_cross, text="Positionierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(20, 5))
 
-        # 4. Buttons (Save + DragDrop)
+        # Der neue Button - WICHTIG: Name muss self.btn_edit_cross sein!
+        self.btn_edit_cross = tk.Button(tab_cross, text="LAYOUT PER MAUS VERSCHIEBEN",
+                                        bg="#0066ff", fg="white", width=30, height=2,
+                                        font=("Consolas", 10, "bold"),
+                                        command=self.toggle_hud_edit_mode)
+        self.btn_edit_cross.pack(pady=5)
+
+        # 2. NEUER CENTER BUTTON
+        tk.Button(tab_cross, text="AUTO-CENTER (MITTE)",
+                  bg="#444", fg="white", width=25, height=1,
+                  font=("Consolas", 10),
+                  command=self.center_crosshair).pack(pady=2)
+
+        # 3. Save Button
         tk.Button(tab_cross, text="SAVE & APPLY CROSSHAIR", bg="#00f2ff", fg="black", font=("Consolas", 11, "bold"),
-                  command=self.apply_crosshair_settings).pack(pady=15)
+                  command=self.apply_crosshair_settings).pack(pady=10)
 
         # =========================================================
-        # TAB 5: SESSION STATS & KILLFEED
+        # TAB 5: SESSION STATS & KILLFEED (BEREINIGT)
         # =========================================================
         tab_stats = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
         self.ovl_notebook.add(tab_stats, text=" SESSION STATS & FEED ")
 
-        st_conf = self.overlay_config.get("stats_widget", {"active": True, "x": -500, "y": -300})
+        st_conf = self.overlay_config.get("stats_widget", {"active": True, "x": 50, "y": 500})
 
+        # --- STATS WIDGET ---
         tk.Label(tab_stats, text="--- SESSION STATS WIDGET ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
                  fg="#00f2ff").pack(pady=(10, 5))
         self.var_stats_active = tk.BooleanVar(value=st_conf.get("active", True))
@@ -2611,20 +2721,14 @@ class DiorClientGUI:
         tk.Button(st_img_f, text="...", command=lambda: self.browse_file(self.ent_stats_img, "png"), bg="#333",
                   fg="white", width=3).pack(side="left")
 
-        tk.Label(tab_stats, text="Widget Position (X / Y Offset):", bg="#1a1a1a", fg="#ccc").pack(pady=(10, 0))
-        st_pos_f = tk.Frame(tab_stats, bg="#1a1a1a");
-        st_pos_f.pack(fill="x", padx=20)
-        self.scale_stx = tk.Scale(st_pos_f, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="white",
-                                  label="X Offset");
-        self.scale_stx.set(st_conf.get("x", -500));
-        self.scale_stx.pack(side="left", fill="x", expand=True)
-        self.scale_sty = tk.Scale(st_pos_f, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="white",
-                                  label="Y Offset");
-        self.scale_sty.set(st_conf.get("y", -300));
-        self.scale_sty.pack(side="left", fill="x", expand=True)
+        # HIER WAREN DIE POSITION SLIDER - JETZT WEG
+        tk.Label(tab_stats, text="Positionierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 5))
+        tk.Label(tab_stats, text="(Nutze 'LAYOUT PER MAUS VERSCHIEBEN' zum Positionieren)",
+                 bg="#1a1a1a", fg="#666", font=("Arial", 9)).pack()
 
-        tk.Label(tab_stats, text="Text Feinjustierung (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(
-            pady=(10, 0))
+        # Feinjustierung TEXT (Das bleibt, ist intern)
+        tk.Label(tab_stats, text="Text Feinjustierung (Innerhalb des Bildes):", bg="#1a1a1a", fg="#ffcc00").pack(
+            pady=(15, 0))
         st_adj_f = tk.Frame(tab_stats, bg="#1a1a1a");
         st_adj_f.pack(fill="x", padx=20)
         self.scale_st_tx = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
@@ -2642,21 +2746,14 @@ class DiorClientGUI:
         self.scale_st_scale.set(st_conf.get("scale", 1.0));
         self.scale_st_scale.pack(fill="x", padx=100)
 
-        kf_conf = self.overlay_config.get("killfeed", {"x": -800, "y": 200})
-        tk.Label(tab_stats, text="--- KILLFEED POSITION (OFFSET) ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
+        # --- KILLFEED ---
+        kf_conf = self.overlay_config.get("killfeed", {"x": 50, "y": 200})
+        tk.Label(tab_stats, text="--- KILLFEED ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
                  fg="#ff4444").pack(pady=(20, 5))
-        kf_pos_f = tk.Frame(tab_stats, bg="#1a1a1a");
-        kf_pos_f.pack(fill="x", padx=20)
-        self.scale_kfx = tk.Scale(kf_pos_f, from_=-960, to=960, orient="horizontal", bg="#1a1a1a", fg="white",
-                                  label="Feed X Offset");
-        self.scale_kfx.set(kf_conf.get("x", -800));
-        self.scale_kfx.pack(side="left", fill="x", expand=True)
-        self.scale_kfy = tk.Scale(kf_pos_f, from_=-540, to=540, orient="horizontal", bg="#1a1a1a", fg="white",
-                                  label="Feed Y Offset");
-        self.scale_kfy.set(kf_conf.get("y", 200));
-        self.scale_kfy.pack(side="left", fill="x", expand=True)
 
-        tk.Label(tab_stats, text="Headshot Icon (PNG):", bg="#1a1a1a", fg="white").pack(pady=(15, 0))
+        # HIER WAREN FEED POSITION SLIDER - JETZT WEG
+
+        tk.Label(tab_stats, text="Headshot Icon (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
         hs_img_f = tk.Frame(tab_stats, bg="#1a1a1a");
         hs_img_f.pack()
         self.ent_hs_icon = tk.Entry(hs_img_f, width=30, bg="#111", fg="#00f2ff");
@@ -2670,23 +2767,19 @@ class DiorClientGUI:
                        fg="#00ff00", selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack(
             pady=5)
 
+        # Buttons
         btn_box = tk.Frame(tab_stats, bg="#1a1a1a");
         btn_box.pack(pady=20)
-        tk.Button(btn_box, text="SAVE ALL SETTINGS", bg="#004400", fg="white", width=20, height=2,
+        tk.Button(btn_box, text="SAVE SETTINGS", bg="#004400", fg="white", width=20, height=2,
                   command=self.save_stats_config).pack(side="left", padx=10)
 
-        tk.Button(btn_box, text="RESET ALL POSITIONS", bg="#440000", fg="#ff4444",
-                  font=("Consolas", 10, "bold"), width=20, height=2,
-                  command=self.reset_ui_layout).pack(side="left", padx=10)
-
-        # NEU: Drag & Drop Button für Stats/Feed
+        # Der wichtige Edit Button
         self.btn_edit_hud = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25,
                                       height=2, command=self.toggle_hud_edit_mode)
         self.btn_edit_hud.pack(side="left", padx=10)
 
         tk.Button(btn_box, text="TEST UI", bg="#444", fg="white", width=15, height=2,
                   command=self.test_stats_visuals).pack(side="left", padx=10)
-        self.scale_st_font = tk.Scale(self.root, from_=0, to=1)
 
         # =========================================================
         # TAB 6: VOICE
@@ -2869,28 +2962,32 @@ class DiorClientGUI:
     def stop_overlay_logic(self):
         """Versteckt alle Overlay-Elemente (Stats, Crosshair, Feed, Streak)"""
 
-        # 1. Stats Widget verstecken
-        if self.overlay_win and hasattr(self.overlay_win, 'stats_bg_label'):
-            self.overlay_win.stats_bg_label.hide()
-            self.overlay_win.stats_text_label.hide()
-
-        # 2. Killfeed verstecken & leeren
-        if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
-            self.overlay_win.feed_label.hide()
-            self.overlay_win.feed_label.setText("")
-
-        # 3. Killstreak komplett aufräumen
         if self.overlay_win:
+            # 1. Stats Widget verstecken
+            if hasattr(self.overlay_win, 'stats_bg_label'):
+                self.overlay_win.stats_bg_label.hide()
+                self.overlay_win.stats_text_label.hide()
+
+            # 2. Killfeed verstecken & leeren
+            if hasattr(self.overlay_win, 'feed_label'):
+                self.overlay_win.feed_label.hide()
+                self.overlay_win.feed_label.setText("")
+
+            # 3. Killstreak komplett aufräumen
             if hasattr(self.overlay_win, 'streak_bg_label'):
                 self.overlay_win.streak_bg_label.hide()
             if hasattr(self.overlay_win, 'streak_text_label'):
                 self.overlay_win.streak_text_label.hide()
-
-            # NEU: Alle Messer-Labels explizit verstecken
+            # Alle Messer-Labels verstecken
             if hasattr(self.overlay_win, 'knife_labels'):
                 for l in self.overlay_win.knife_labels:
                     l.hide()
                     l._is_active = False
+
+            # --- NEU: Crosshair explizit verstecken ---
+            # Das sorgt dafür, dass es sofort weg ist, wenn Overlay gestoppt wird
+            if hasattr(self.overlay_win, 'crosshair_label'):
+                self.overlay_win.crosshair_label.hide()
 
         # Zähler resetten
         self.killstreak_count = 0
@@ -2977,27 +3074,26 @@ class DiorClientGUI:
             self.stop_overlay_logic()
 
     def save_stats_config(self):
-        """Speichert und aktualisiert sofort (Fix für Positionen)"""
+        """Speichert Einstellungen (Position wird nur noch durch Maus geändert)"""
         raw_path = self.ent_stats_img.get()
         clean_name = get_short_name(raw_path)
 
         # 1. Stats Config Update
         if "stats_widget" not in self.config: self.config["stats_widget"] = {}
+
+        # WICHTIG: Wir updaten NICHT MEHR 'x' und 'y' von Sliders!
         self.config["stats_widget"].update({
             "active": self.var_stats_active.get(),
-            "x": self.scale_stx.get(),  # Globale Position X
-            "y": self.scale_sty.get(),  # Globale Position Y
             "img": clean_name,
-            "tx": self.scale_st_tx.get(),  # Text Feinjustierung X
-            "ty": self.scale_st_ty.get(),  # Text Feinjustierung Y (NEU)
+            "tx": self.scale_st_tx.get(),  # Das existiert noch (Text-Intern)
+            "ty": self.scale_st_ty.get(),
             "scale": self.scale_st_scale.get()
         })
 
         # 2. Killfeed Config Update
         if "killfeed" not in self.config: self.config["killfeed"] = {}
         self.config["killfeed"].update({
-            "x": self.scale_kfx.get(),
-            "y": self.scale_kfy.get(),
+            # Auch hier kein X/Y Update mehr aus Sliders
             "hs_icon": get_short_name(self.ent_hs_icon.get()),
             "show_revives": self.var_show_revives.get()
         })
@@ -3007,7 +3103,7 @@ class DiorClientGUI:
 
         # --- UPDATE ERZWINGEN ---
         if self.overlay_win:
-            # Killfeed Position updaten (Methode muss in QtOverlay existieren!)
+            # Killfeed Position updaten (nutzt jetzt gespeicherte Werte aus Config)
             if hasattr(self.overlay_win, 'update_killfeed_pos'):
                 self.overlay_win.update_killfeed_pos()
 
@@ -3197,47 +3293,76 @@ class DiorClientGUI:
                 path = get_asset_path(c_conf.get("file", "crosshair.png"))
                 self.overlay_win.update_crosshair(path, c_conf.get("size", 32), True)
 
+
         else:
+
             # --- DEAKTIVIEREN (SPEICHERN) ---
+
             self.is_hud_editing = False
 
-            # 1. ZUERST den Edit-Modus im QtOverlay beenden (Klick-Through wieder AN)
+            # 1. ZUERST den Edit-Modus im QtOverlay beenden
+
             if self.overlay_win:
                 self.overlay_win.set_mouse_passthrough(True)
 
-            # Buttons zurück auf Blau setzen
+            # Buttons zurücksetzen
+
             btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak']
+
             for b in btn_list:
+
                 if hasattr(self, b):
                     getattr(self, b).config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
 
-            # 2. DUMMY-DATEN ENTFERNEN & ORIGINALE WIEDERHERSTELLEN
+            # 2. DUMMY-DATEN ENTFERNEN (Stats/Streak Reset wie gehabt...)
+
             if hasattr(self, 'temp_streak_backup'):
+
                 self.killstreak_count = self.temp_streak_backup
+
                 self.streak_factions = getattr(self, 'temp_factions_backup', [])
-                # Temporäre Backups löschen
+
                 del self.temp_streak_backup
+
                 if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
+
             else:
+
                 self.killstreak_count = 0
+
                 self.streak_factions = []
 
-            # UI mit echten Werten (oder 0) aktualisieren
             self.update_streak_display()
 
             self.is_stats_test = False
+
             self.stop_overlay_logic()
 
-            # Crosshair auf gespeicherten Zustand zurücksetzen
+            # --- LOGIK-FIX: Crosshair Status wiederherstellen ---
+
             c_conf = self.config.get("crosshair", {})
+
+            # Prüfen: Will User es anhaben (Active=True) UND läuft das Spiel?
+
+            user_wants_it = c_conf.get("active", True)
+
+            game_running = getattr(self, 'ps2_running', False)
+
+            should_show = user_wants_it and game_running
+
             if self.overlay_win:
                 self.overlay_win.update_crosshair(
+
                     get_asset_path(c_conf.get("file", "")),
+
                     c_conf.get("size", 32),
-                    c_conf.get("active", True)
+
+                    should_show  # <-- Hier senden wir jetzt False, wenn das Game aus ist
+
                 )
 
             self.add_log("UI: Edit-Modus AUS. Positionen wurden gesichert.")
+
             self.save_config()
 
     def on_overlay_tab_change(self, event):
