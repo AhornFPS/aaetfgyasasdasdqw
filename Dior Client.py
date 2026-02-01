@@ -2721,10 +2721,6 @@ class DiorClientGUI:
         tk.Button(st_img_f, text="...", command=lambda: self.browse_file(self.ent_stats_img, "png"), bg="#333",
                   fg="white", width=3).pack(side="left")
 
-        # HIER WAREN DIE POSITION SLIDER - JETZT WEG
-        tk.Label(tab_stats, text="Positionierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 5))
-        tk.Label(tab_stats, text="(Nutze 'LAYOUT PER MAUS VERSCHIEBEN' zum Positionieren)",
-                 bg="#1a1a1a", fg="#666", font=("Arial", 9)).pack()
 
         # Feinjustierung TEXT (Das bleibt, ist intern)
         tk.Label(tab_stats, text="Text Feinjustierung (Innerhalb des Bildes):", bg="#1a1a1a", fg="#ffcc00").pack(
