@@ -1483,45 +1483,74 @@ class DiorClientGUI:
         conn.close()
 
     def center_crosshair(self):
-        """Setzt das Crosshair auf Mitte und zeigt es kurz (3s) zur Bestätigung."""
-        # Bildschirmmitte ermitteln
-        mid_x = self.root.winfo_screenwidth() // 2
-        mid_y = self.root.winfo_screenheight() // 2
+        """
+        Zentriert das Crosshair intelligent für JEDE Auflösung (2K, 4K, 4:3, 16:9).
+        Berücksichtigt die interne UI-Skalierung, damit es nicht unten rechts landet.
+        """
+        real_w = 0
+        real_h = 0
+        current_scale = 1.0
+
+        # STRATEGIE 1: Wir fragen das Overlay direkt (Am genausten)
+        if self.overlay_win and self.overlay_win.isVisible():
+            real_w = self.overlay_win.width()
+            real_h = self.overlay_win.height()
+            current_scale = self.overlay_win.ui_scale
+
+        # STRATEGIE 2: Fallback über ctypes (Wenn Overlay noch aus ist)
+        else:
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                user32.SetProcessDPIAware()  # Wichtig für echte 2K/4K Werte
+                real_w = user32.GetSystemMetrics(0)
+                real_h = user32.GetSystemMetrics(1)
+                # Skalierung simulieren (Basis 1080p wie im Overlay)
+                current_scale = real_h / 1080.0
+                current_scale = max(0.8, current_scale)
+            except:
+                # Notfall-Fallback auf Tkinter
+                real_w = self.root.winfo_screenwidth()
+                real_h = self.root.winfo_screenheight()
+                current_scale = 1.0
+
+        # 1. Die echte Bildschirm-Mitte berechnen
+        mid_x = real_w // 2
+        mid_y = real_h // 2
+
+        # 2. WICHTIG: Den Wert "entskalieren" (Normalized auf 1080p Basis)
+        # Damit update_crosshair es später nicht doppelt skaliert.
+        config_x = int(mid_x / current_scale)
+        config_y = int(mid_y / current_scale)
 
         if "crosshair" not in self.config:
             self.config["crosshair"] = {}
 
-        # Werte speichern
-        self.config["crosshair"]["x"] = mid_x
-        self.config["crosshair"]["y"] = mid_y
+        # 3. Speichern
+        self.config["crosshair"]["x"] = config_x
+        self.config["crosshair"]["y"] = config_y
         self.save_config()
-        self.add_log(f"SYSTEM: Crosshair auf {mid_x}x{mid_y} zentriert.")
 
-        # Overlay sofort aktualisieren
+        self.add_log(f"SYSTEM: Crosshair zentriert auf {real_w}x{real_h} (Logic: {config_x}x{config_y})")
+
+        # 4. Overlay sofort aktualisieren (Feedback)
         if self.overlay_win:
             c = self.config["crosshair"]
             path = get_asset_path(c.get("file", "crosshair.png"))
             size = c.get("size", 32)
 
-            # 1. Sofort ANZEIGEN (Feedback für den User)
-            # Wir senden "True", egal ob das Spiel läuft oder nicht
+            # Zeige es kurz an (True), dann Timer für Restore
             self.overlay_win.update_crosshair(path, size, True)
 
-            # 2. Timer: Nach 3 Sekunden den "echten" Status wiederherstellen
             def restore_state():
-                # Logik prüfen: Soll es eigentlich an sein?
                 game_running = getattr(self, 'ps2_running', False)
                 user_wants = c.get("active", True)
                 is_editing = getattr(self, "is_hud_editing", False)
-
-                # Normalzustand berechnen
                 should_be_visible = (user_wants and game_running) or is_editing
 
-                # Zurücksetzen
                 if self.overlay_win:
                     self.overlay_win.update_crosshair(path, size, should_be_visible)
 
-            # 2000 Millisekunden = 2 Sekunden warten, dann restore_state aufrufen
             self.root.after(2000, restore_state)
 
     def apply_crosshair_settings(self):
