@@ -247,6 +247,9 @@ class QtOverlay(QWidget):
         shadow_feed.setColor(QColor(0, 0, 0, 255))
         self.feed_label.setGraphicsEffect(shadow_feed)
 
+        self.event_preview_label = QLabel(self)
+        self.event_preview_label.hide()
+
         # --- ZEICHEN-EBENE (WICHTIG: ALS LETZTES ERSTELLEN) ---
         self.path_edit_active = False
         self.custom_path = []
@@ -363,26 +366,38 @@ class QtOverlay(QWidget):
 
     # In der QtOverlay Klasse:
     def mousePressEvent(self, event):
-        # Falls wir im Pfad-Edit Modus sind, macht die PathDrawingLayer jetzt die Arbeit!
-        if self.path_edit_active:
+        # Falls wir im Pfad-Edit Modus sind, bricht hier ab (PathDrawingLayer übernimmt)
+        if getattr(self, "path_edit_active", False):
             return
 
-        # Normaler Drag & Drop Modus (unverändert)
         if not self.edit_mode: return
         pos = event.pos()
-        if "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
+
+        # 1. EVENT LABEL CHECK (Das hat gefehlt!)
+        # Wir prüfen, ob das Label sichtbar ist UND der Klick innerhalb des Rahmens liegt
+        if self.event_preview_label.isVisible() and self.event_preview_label.geometry().contains(pos):
+            self.dragging_widget = "event"
+            self.drag_offset = pos - self.event_preview_label.pos()
+
+        # 2. FEED CHECK
+        elif "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
             self.dragging_widget = "feed"
             self.drag_offset = pos - self.feed_label.pos()
+
+        # 3. STATS CHECK
         elif "border" in self.stats_bg_label.styleSheet() and self.stats_bg_label.geometry().contains(pos):
             self.dragging_widget = "stats"
             self.drag_offset = pos - self.stats_bg_label.pos()
+
+        # 4. STREAK CHECK
         elif "border" in self.streak_bg_label.styleSheet() and self.streak_bg_label.geometry().contains(pos):
             self.dragging_widget = "streak"
             self.drag_offset = pos - self.streak_bg_label.pos()
+
+        # 5. CROSSHAIR CHECK
         elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
             self.dragging_widget = "crosshair"
             self.drag_offset = pos - self.crosshair_label.pos()
-
     def paintEvent(self, event):
         # Wir nutzen ein internes Zeichnen auf dem path_layer, falls aktiv
         if getattr(self, "path_edit_active", False) and len(self.custom_path) > 0:
@@ -424,17 +439,20 @@ class QtOverlay(QWidget):
         if not self.edit_mode or not self.dragging_widget or not self.drag_offset:
             return
 
-        # Nutze globale Koordinaten für absolute Stabilität
-        # .toPoint() wird für PyQt6 benötigt, um von QPointF zu QPoint zu wandeln
+        # Position berechnen
         curr_mouse_pos = event.globalPosition().toPoint()
         new_pos = curr_mouse_pos - self.drag_offset
 
-        if self.dragging_widget == "feed":
+        # 1. EVENT BEWEGEN (Das hat gefehlt!)
+        if self.dragging_widget == "event":
+            self.safe_move(self.event_preview_label, new_pos.x(), new_pos.y())
+
+        elif self.dragging_widget == "feed":
             self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
 
         elif self.dragging_widget == "stats":
             self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
-            # Text-Label folgt dem Hintergrund-Widget
+            # Text mitbewegen
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
                 tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
@@ -459,79 +477,60 @@ class QtOverlay(QWidget):
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
 
     def mouseReleaseEvent(self, event):
-        """
-        Wird aufgerufen, wenn die Maustaste losgelassen wird (Ende des Drag & Drop).
-        Speichert die neuen Positionen direkt in die Config.
-        """
         if not self.edit_mode or not self.dragging_widget:
             return
 
-        # Hilfsfunktion: UI-Skalierung herausrechnen, um rohe Pixelwerte zu speichern
         def uns(val):
             return int(val / self.ui_scale)
 
-        # Referenz zur GUI prüfen
         if self.gui_ref:
+            # 1. EVENT SPEICHERN (Das hat gefehlt!)
+            if self.dragging_widget == "event":
+                curr = self.event_preview_label.pos()
+                current_event_name = self.gui_ref.var_event_sel.get()
 
-            # --- 1. CROSSHAIR (ABSOLUTE POSITION: MITTE) ---
-            if self.dragging_widget == "crosshair":
+                # Config Struktur sichern
+                if "events" not in self.gui_ref.config: self.gui_ref.config["events"] = {}
+                if current_event_name not in self.gui_ref.config["events"]:
+                    self.gui_ref.config["events"][current_event_name] = {}
+
+                # Koordinaten speichern
+                self.gui_ref.config["events"][current_event_name]["x"] = uns(curr.x())
+                self.gui_ref.config["events"][current_event_name]["y"] = uns(curr.y())
+
+                self.gui_ref.save_config()
+                print(f"DEBUG: Event '{current_event_name}' moved to {uns(curr.x())}, {uns(curr.y())}")
+
+            elif self.dragging_widget == "crosshair":
                 curr = self.crosshair_label.pos()
-                # Wir berechnen den Mittelpunkt des Labels
                 center_x = curr.x() + (self.crosshair_label.width() // 2)
                 center_y = curr.y() + (self.crosshair_label.height() // 2)
-
-                if "crosshair" not in self.gui_ref.config:
-                    self.gui_ref.config["crosshair"] = {}
-
-                # Speichern der echten Bildschirmkoordinaten
+                if "crosshair" not in self.gui_ref.config: self.gui_ref.config["crosshair"] = {}
                 self.gui_ref.config["crosshair"]["x"] = uns(center_x)
                 self.gui_ref.config["crosshair"]["y"] = uns(center_y)
-
                 self.gui_ref.save_config()
-                print(f"DEBUG: Crosshair saved at {uns(center_x)}, {uns(center_y)}")
 
-            # --- 2. KILLFEED (ABSOLUTE POSITION: OBEN LINKS) ---
             elif self.dragging_widget == "feed":
                 curr = self.feed_label.pos()
-
-                if "killfeed" not in self.gui_ref.config:
-                    self.gui_ref.config["killfeed"] = {}
-
-                # Speichern der Top-Left Koordinaten
+                if "killfeed" not in self.gui_ref.config: self.gui_ref.config["killfeed"] = {}
                 self.gui_ref.config["killfeed"]["x"] = uns(curr.x())
                 self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
-
                 self.gui_ref.save_config()
 
-            # --- 3. SESSION STATS (ABSOLUTE POSITION: OBEN LINKS) ---
             elif self.dragging_widget == "stats":
                 curr = self.stats_bg_label.pos()
-
-                if "stats_widget" not in self.gui_ref.config:
-                    self.gui_ref.config["stats_widget"] = {}
-
-                # Speichern der Top-Left Koordinaten
+                if "stats_widget" not in self.gui_ref.config: self.gui_ref.config["stats_widget"] = {}
                 self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
                 self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
-
                 self.gui_ref.save_config()
 
-                # --- 4. KILLSTREAK (JETZT AUCH ABSOLUT) ---
             elif self.dragging_widget == "streak":
-                # Position des Hintergrundbilds (Top-Left)
                 curr = self.streak_bg_label.pos()
-
-                if "streak" not in self.gui_ref.config:
-                    self.gui_ref.config["streak"] = {}
-
-                # Wir speichern jetzt ABSOLUTE Koordinaten
+                if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
                 self.gui_ref.config["streak"]["x"] = uns(curr.x())
                 self.gui_ref.config["streak"]["y"] = uns(curr.y())
-
-                # Wichtig: Wir rufen save_streak_settings auf, damit auch Farben/Größe etc. mit gespeichert werden
                 self.gui_ref.save_streak_settings()
 
-        # Dragging-Status zurücksetzen
         self.dragging_widget = None
         self.drag_offset = None
 
@@ -646,17 +645,25 @@ class QtOverlay(QWidget):
         self.stats_text_label.show();
         self.stats_text_label.raise_()
 
-    def display_image(self, img_path, duration, off_x, off_y):
+    def display_image(self, img_path, duration, abs_x, abs_y):
+        """Zeigt ein Bild an absoluten Koordinaten an."""
         if not os.path.exists(img_path): return
         pixmap = QPixmap(img_path)
         if pixmap.isNull(): return
-        temp_label = QLabel(self);
-        temp_label.setPixmap(pixmap);
+
+        temp_label = QLabel(self)
+        temp_label.setPixmap(pixmap)
         temp_label.adjustSize()
-        x = self.event_center_x + self.s(off_x) - (temp_label.width() // 2)
-        y = self.event_center_y + self.s(off_y) - (temp_label.height() // 2)
-        self.safe_move(temp_label, x, y);
-        temp_label.raise_();
+        temp_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # Klicks gehen durch
+
+        # Skalierung beachten
+        x = self.s(abs_x)
+        y = self.s(abs_y)
+
+        # Positionieren (Top-Left)
+        self.safe_move(temp_label, x, y)
+
+        temp_label.raise_()
         temp_label.show()
         QTimer.singleShot(duration, temp_label.deleteLater)
 
@@ -2306,41 +2313,31 @@ class DiorClientGUI:
             self.drag_data["y"] = event.y
 
     def trigger_overlay_event(self, event_type):
-        """Triggert das Bild im Qt-Overlay mit Offsets und Dauer"""
-        if not hasattr(self, 'overlay_win') or not self.overlay_win:
-            return
+        if not self.overlay_win: return
 
-        # Daten aus der Config laden
         event_data = self.config.get("events", {}).get(event_type, {})
-        if not event_data:
-            return
+        if not event_data: return
 
-        # Offsets und Dauer auslesen
-        try:
-            ox = int(event_data.get("x_offset", 0))
-            oy = int(event_data.get("y_offset", 0))
-            # Nutzt gespeicherte Dauer, Fallback auf 3000ms
-            dur = int(event_data.get("duration", 3000))
-        except (ValueError, TypeError):
-            ox, oy, dur = 0, 0, 3000
+        # Absolute Koordinaten laden (früher offset)
+        abs_x = int(event_data.get("x", 100))
+        abs_y = int(event_data.get("y", 200))
+        dur = int(event_data.get("duration", 3000))
 
         img_name = event_data.get("img")
         if img_name:
             img_path = get_asset_path(img_name)
             if os.path.exists(img_path):
-                # Signal senden: (Pfad, Dauer, X, Y)
-                self.overlay_win.signals.show_image.emit(img_path, dur, ox, oy)
+                # Signal senden (Pfad, Dauer, X, Y)
+                self.overlay_win.signals.show_image.emit(img_path, dur, abs_x, abs_y)
 
-        # Sound abspielen (unverändert)
+        # Sound (unverändert)
         if HAS_SOUND:
             snd_name = event_data.get("snd")
             if snd_name:
-                sound_path = get_asset_path(snd_name)
-                if os.path.exists(sound_path):
-                    try:
-                        pygame.mixer.Sound(sound_path).play()
-                    except:
-                        pass
+                s_path = get_asset_path(snd_name)
+                if os.path.exists(s_path):
+                    try: pygame.mixer.Sound(s_path).play()
+                    except: pass
 
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
@@ -2426,7 +2423,7 @@ class DiorClientGUI:
         check_btn.pack(pady=10)
 
         # =========================================================
-        # TAB 2: EVENTS (WIEDER EINGEFÜGT, DAMIT DER FEHLER WEG GEHT)
+        # TAB 2: EVENTS (KORRIGIERT)
         # =========================================================
         tab_events = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
         self.ovl_notebook.add(tab_events, text=" EVENTS (Kills/Deaths) ")
@@ -2445,15 +2442,17 @@ class DiorClientGUI:
             "SYSTEM / LOGIN": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
 
-        grid_frame = tk.Frame(tab_events, bg="#1a1a1a");
+        # --- 1. GRID MIT BUTTONS ---
+        grid_frame = tk.Frame(tab_events, bg="#1a1a1a")
         grid_frame.pack(fill="both", expand=True, pady=10, padx=5)
+
         self.var_event_sel = tk.StringVar(value="Kill")
         self.lbl_current_edit = tk.Label(tab_events, text="EDITING: Kill", font=("Consolas", 14, "bold"), bg="#1a1a1a",
-                                         fg="#00ff00");
+                                         fg="#00ff00")
         self.lbl_current_edit.pack(pady=(0, 5))
 
         for cat_name, items in event_categories.items():
-            col_frame = tk.Frame(grid_frame, bg="#222", bd=1, relief="solid");
+            col_frame = tk.Frame(grid_frame, bg="#222", bd=1, relief="solid")
             col_frame.pack(side="left", fill="both", padx=2, expand=True)
             tk.Label(col_frame, text=cat_name, bg="#333", fg="#00f2ff", font=("Arial", 7, "bold")).pack(fill="x",
                                                                                                         pady=(0, 2))
@@ -2462,54 +2461,70 @@ class DiorClientGUI:
                           activebackground="#00f2ff", activeforeground="black",
                           command=lambda x=item: self.select_event_from_grid(x)).pack(fill="x", pady=0)
 
-        # Settings Bereich (Hier fehlten die widgets!)
-        settings_frame = tk.Frame(tab_events, bg="#1a1a1a");
-        settings_frame.pack(fill="x", pady=10)
+        # --- 2. EINGABEFELDER FÜR BILD & SOUND (DIESE FEHLTEN!) ---
+        io_frame = tk.Frame(tab_events, bg="#1a1a1a")
+        io_frame.pack(pady=10)
 
-        tk.Label(settings_frame, text="Image (PNG):", bg="#1a1a1a", fg="white").grid(row=0, column=0, sticky="e",
-                                                                                     padx=5)
-        self.ent_evt_img = tk.Entry(settings_frame, width=30, bg="#111", fg="#00f2ff")  # <--- DAS HAT GEFEHLT
-        self.ent_evt_img.grid(row=0, column=1, sticky="w")
-        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_img, "png"), bg="#333",
-                  fg="white", font=("Arial", 8)).grid(row=0, column=2, padx=5)
+        # Bild
+        tk.Label(io_frame, text="Image (PNG):", bg="#1a1a1a", fg="white").grid(row=0, column=0, padx=5, sticky="e")
+        self.ent_evt_img = tk.Entry(io_frame, width=30, bg="#111", fg="#00f2ff")
+        self.ent_evt_img.grid(row=0, column=1, padx=5)
+        tk.Button(io_frame, text="...", command=lambda: self.browse_file(self.ent_evt_img, "png"),
+                  bg="#333", fg="white", width=3).grid(row=0, column=2)
 
-        tk.Label(settings_frame, text="Sound:", bg="#1a1a1a", fg="white").grid(row=1, column=0, sticky="e", padx=5)
-        self.ent_evt_snd = tk.Entry(settings_frame, width=30, bg="#111", fg="#00f2ff")
-        self.ent_evt_snd.grid(row=1, column=1, sticky="w")
-        tk.Button(settings_frame, text="Browse", command=lambda: self.browse_file(self.ent_evt_snd, "audio"), bg="#333",
-                  fg="white", font=("Arial", 8)).grid(row=1, column=2, padx=5)
+        # Sound
+        tk.Label(io_frame, text="Sound (MP3):", bg="#1a1a1a", fg="white").grid(row=1, column=0, padx=5, sticky="e")
+        self.ent_evt_snd = tk.Entry(io_frame, width=30, bg="#111", fg="#00f2ff")
+        self.ent_evt_snd.grid(row=1, column=1, padx=5)
+        tk.Button(io_frame, text="...", command=lambda: self.browse_file(self.ent_evt_snd, "audio"),
+                  bg="#333", fg="white", width=3).grid(row=1, column=2)
 
-        sl_frame = tk.Frame(tab_events, bg="#1a1a1a");
-        sl_frame.pack(fill="x", padx=20)
-        self.scale_ex = tk.Scale(sl_frame, from_=-900, to=900, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
-                                 label="X Offset");
-        self.scale_ex.pack(side="left", fill="x", expand=True, padx=5)
-        self.scale_ey = tk.Scale(sl_frame, from_=-500, to=500, orient="horizontal", bg="#1a1a1a", fg="#00f2ff",
-                                 label="Y Offset");
-        self.scale_ey.pack(side="left", fill="x", expand=True, padx=5)
-        self.scale_png_size = tk.Scale(sl_frame, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
-                                       fg="#00f2ff", label="Scale");
-        self.scale_png_size.set(1.0);
-        self.scale_png_size.pack(side="left", fill="x", expand=True, padx=5)
+        # --- 3. SKALIERUNG & DAUER ---
+        pos_frame = tk.Frame(tab_events, bg="#1a1a1a")
+        pos_frame.pack(fill="x", padx=20, pady=5)
 
+        self.scale_png_size = tk.Scale(pos_frame, from_=0.1, to=3.0, resolution=0.05, orient="horizontal",
+                                       bg="#1a1a1a", fg="#00f2ff", label="Scale")
+        self.scale_png_size.set(1.0)
+        self.scale_png_size.pack(fill="x", pady=5)
+
+        # Duration Feld
         dur_frame = tk.Frame(tab_events, bg="#1a1a1a")
         dur_frame.pack(pady=5)
-
         tk.Label(dur_frame, text="Display Duration (ms):", bg="#1a1a1a", fg="#aaaaaa", font=("Arial", 9)).pack(
             side="left", padx=5)
         vcmd_num = (self.root.register(lambda P: P.isdigit() or P == ""), '%P')
         self.ent_evt_duration = tk.Entry(dur_frame, width=8, bg="#111111", fg="white", insertbackground="white",
                                          validate='key', validatecommand=vcmd_num)
-        # Standardwert setzen (wird beim Wechseln des Events normalerweise überschrieben)
         self.ent_evt_duration.insert(0, "3000")
         self.ent_evt_duration.pack(side="left", padx=5)
 
-        btn_box = tk.Frame(tab_events, bg="#1a1a1a");
+        # --- 4. ACTION BUTTONS ---
+        btn_box = tk.Frame(tab_events, bg="#1a1a1a")
         btn_box.pack(pady=15)
-        tk.Button(btn_box, text="SAVE THIS EVENT", bg="#004400", fg="white", width=20,
-                  command=self.save_event_ui_data).pack(side="left", padx=10)
-        tk.Button(btn_box, text="TEST PREVIEW", bg="#444", fg="white", width=20,
-                  command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left", padx=10)
+
+        # EDIT BUTTON
+        self.btn_edit_event = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
+                                        width=30, height=2, font=("Consolas", 10, "bold"),
+                                        command=self.toggle_hud_edit_mode)
+        self.btn_edit_event.pack(side="left", padx=5)
+
+        # TEST BUTTON
+        tk.Button(btn_box, text="TEST PREVIEW", bg="#444", fg="white", width=15, height=2,
+                  font=("Consolas", 10, "bold"),
+                  command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left",
+                                                                                             padx=5)
+
+        # --- 5. COPY TO ALL SECTION ---
+        copy_frame = tk.Frame(tab_events, bg="#1a1a1a", bd=1, relief="solid")
+        copy_frame.pack(fill="x", padx=40, pady=10)
+
+        tk.Label(copy_frame, text="BULK ACTIONS:", bg="#1a1a1a", fg="#ffcc00", font=("Arial", 8, "bold")).pack(
+            pady=(5, 2))
+
+        tk.Button(copy_frame, text="COPY POSITION/SCALE TO ALL EVENTS (Except Hitmarker)",
+                  bg="#440000", fg="#ffaaaa", font=("Consolas", 9),
+                  command=self.copy_event_layout_to_all).pack(pady=5, padx=10, fill="x")
 
         # =========================================================
         # TAB 3: KILLSTREAK (Messer-Kreis-System)
@@ -2844,6 +2859,46 @@ class DiorClientGUI:
         # Notebook Packen
         self.content_ids.append(self.canvas.create_window(mid, 525, window=self.ovl_notebook, width=1100, height=700))
 
+    def copy_event_layout_to_all(self):
+        """Kopiert X, Y und Scale vom aktuellen Event auf ALLE anderen (außer Hitmarker)."""
+        current_name = self.var_event_sel.get()
+        if not current_name: return
+
+        # Sicherheitsabfrage
+        if not messagebox.askyesno("Confirm Copy",
+                                   f"Kopiere Layout von '{current_name}' auf alle anderen Events?\n(Hitmarker wird ignoriert)"):
+            return
+
+        # Quelldaten
+        cfg = self.config.get("events", {})
+        if current_name not in cfg:
+            self.add_log("ERR: Aktuelles Event hat noch keine gespeicherten Daten.")
+            return
+
+        src_data = cfg[current_name]
+        src_x = src_data.get("x", 50)  # Fallback Werte
+        src_y = src_data.get("y", 200)
+        src_scale = src_data.get("scale", 1.0)
+
+        count = 0
+        for evt_name in cfg.keys():
+            # HITMARKER IGNORIEREN
+            if evt_name == "Hitmarker":
+                continue
+
+            # Selbst überspringen (unnötig, aber sauber)
+            if evt_name == current_name:
+                continue
+
+            # Werte setzen
+            cfg[evt_name]["x"] = src_x
+            cfg[evt_name]["y"] = src_y
+            cfg[evt_name]["scale"] = src_scale
+            count += 1
+
+        self.save_config()
+        self.add_log(f"BULK: Layout auf {count} Events übertragen.")
+
     def select_event_from_grid(self, event_name):
         """Wird aufgerufen, wenn man im Grid auf einen Button klickt"""
         # 1. Variable setzen (damit save_event_ui_data weiß, für wen es speichert)
@@ -2886,74 +2941,51 @@ class DiorClientGUI:
             entry_widget.insert(0, filename)
 
     def load_event_ui_data(self, event_type):
-        """Lädt die gespeicherten Daten in die Eingabefelder inklusive Duration"""
-        if not event_type or event_type.startswith("---"):
-            return
+        if not event_type: return
 
-        # Daten aus der Config holen
         data = self.overlay_config.get("events", {}).get(event_type, {})
 
-        # 1. Bildpfad laden
+        # Pfade
         self.ent_evt_img.delete(0, tk.END)
-        img_val = data.get("img", "")
-        self.ent_evt_img.insert(0, get_short_name(img_val))
+        self.ent_evt_img.insert(0, get_short_name(data.get("img", "")))
 
-        # 2. Soundpfad laden
         self.ent_evt_snd.delete(0, tk.END)
-        snd_val = data.get("snd", "")
-        self.ent_evt_snd.insert(0, get_short_name(snd_val))
+        self.ent_evt_snd.insert(0, get_short_name(data.get("snd", "")))
 
-        # 3. Offsets laden
-        off_x = data.get("x_offset", data.get("x", 0))
-        off_y = data.get("y_offset", data.get("y", 0))
-        self.scale_ex.set(int(off_x))
-        self.scale_ey.set(int(off_y))
-
-        # 4. Skalierung laden
+        # Scale
         raw_scale = data.get("scale", 1.0)
-        if isinstance(raw_scale, (float, int)) and raw_scale <= 5.0:
-            display_scale = int(raw_scale * 100)
-        else:
-            display_scale = int(raw_scale)
-        self.scale_png_size.set(display_scale)
+        self.scale_png_size.set(raw_scale)
 
-        # 5. NEU: Dauer (Duration) laden
+        # Duration
         if hasattr(self, 'ent_evt_duration'):
             self.ent_evt_duration.delete(0, tk.END)
-            # Standardwert 3000ms falls nichts gespeichert ist
-            dur_val = data.get("duration", 3000)
-            self.ent_evt_duration.insert(0, str(dur_val))
+            self.ent_evt_duration.insert(0, str(data.get("duration", 3000)))
 
     def save_event_ui_data(self):
-        """Speichert die Eingabefelder in die Config und stellt sicher, dass die Keys passen"""
         etype = self.var_event_sel.get()
+        if "events" not in self.config: self.config["events"] = {}
 
-        # Sicherstellen, dass die Struktur existiert
-        if "events" not in self.overlay_config:
-            self.overlay_config["events"] = {}
+        # Existierende Daten laden um X/Y zu behalten
+        existing = self.config["events"].get(etype, {})
+        current_x = existing.get("x", 100)  # Default Werte
+        current_y = existing.get("y", 100)
 
-        # Dauer auslesen (Default 3000ms falls leer)
         try:
-            raw_dur = self.ent_evt_duration.get()
-            final_dur = int(raw_dur) if raw_dur else 3000
-        except ValueError:
-            final_dur = 3000
+            dur = int(self.ent_evt_duration.get())
+        except:
+            dur = 3000
 
-        # Speichern in der Overlay-Config
-        self.overlay_config["events"][etype] = {
+        self.config["events"][etype] = {
             "img": self.ent_evt_img.get(),
             "snd": self.ent_evt_snd.get(),
-            "x_offset": int(self.scale_ex.get()),
-            "y_offset": int(self.scale_ey.get()),
-            "scale": float(self.scale_png_size.get()) / 100.0,
-            "duration": final_dur  # NEU: Speichert die Millisekunden
+            "scale": self.scale_png_size.get(),
+            "duration": dur,
+            "x": current_x,  # WICHTIG: Alte Position behalten!
+            "y": current_y
         }
 
-        # Synchronisiere mit der Haupt-Config
-        self.config["events"] = self.overlay_config["events"]
-
-        self.save_overlay_config()
-        self.add_log(f"EVENT-SYSTEM: '{etype}' ({final_dur}ms) erfolgreich konfiguriert.")
+        self.save_config()
+        self.add_log(f"EVENT: '{etype}' Data Saved.")
 
     def save_overlay_ui_data(self):
         """Speichert Crosshair Settings"""
@@ -3266,6 +3298,8 @@ class DiorClientGUI:
                 targets = ["stats", "feed"]
             elif "KILLSTREAK" in tab_text:
                 targets = ["streak"]
+            elif "EVENTS" in tab_text:
+                targets = ["event"]
 
             return targets
         except:
@@ -3278,9 +3312,10 @@ class DiorClientGUI:
             return
 
         is_editing = getattr(self, "is_hud_editing", False)
+        btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak', 'btn_edit_event']
 
         if not is_editing:
-            # --- AKTIVIEREN ---
+            # --- AKTIVIEREN (EDIT MODE AN) ---
             targets = self.get_current_tab_targets()
             if not targets:
                 self.add_log("INFO: In diesem Tab gibt es nichts zu verschieben.")
@@ -3288,106 +3323,153 @@ class DiorClientGUI:
 
             self.is_hud_editing = True
 
-            # Buttons auf Rot setzen (Feedback für User)
-            btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak']
+            # Buttons rot färben
             for b in btn_list:
-                if hasattr(self, b):
-                    getattr(self, b).config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
+                if hasattr(self, b): getattr(self, b).config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
 
-            # Edit-Modus im Overlay einschalten (Maus-Events freigeben)
+            # Edit-Modus im Overlay einschalten
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
             self.add_log(f"UI: Edit-Modus für {targets} gestartet.")
 
             # --- DUMMYS ANZEIGEN ---
+
+            # 1. EVENT PREVIEW
+            if "event" in targets and self.overlay_win:
+                evt_name = self.var_event_sel.get()
+
+                # Live-Werte aus UI lesen
+                img_name = self.ent_evt_img.get().strip()
+                raw_scale = self.scale_png_size.get()
+
+                # Fallback auf Config wenn leer
+                if not img_name:
+                    data = self.config.get("events", {}).get(evt_name, {})
+                    img_name = data.get("img", "")
+
+                img_path = get_asset_path(img_name)
+                saved_data = self.config.get("events", {}).get(evt_name, {})
+
+                # Koordinaten aus Config (werden beim Schieben aktualisiert)
+                pos_x = saved_data.get("x", 100)
+                pos_y = saved_data.get("y", 200)
+
+                if raw_scale < 0.1: raw_scale = 1.0
+                final_scale = raw_scale * self.overlay_win.ui_scale
+
+                pix = None
+                if img_name and os.path.exists(img_path):
+                    pix = QPixmap(img_path)
+                else:
+                    # Roter Fehler-Platzhalter
+                    pix = QPixmap(int(400 * self.overlay_win.ui_scale), int(150 * self.overlay_win.ui_scale))
+                    pix.fill(QColor(100, 0, 0, 200))
+                    painter = QPainter(pix)
+                    painter.setPen(QColor(255, 255, 255))
+                    font = painter.font()
+                    font.setPixelSize(int(20 * self.overlay_win.ui_scale))
+                    font.setBold(True)
+                    painter.setFont(font)
+                    painter.drawText(pix.rect(), Qt.AlignmentFlag.AlignCenter, f"MISSING:\n{img_name}")
+                    painter.end()
+
+                if pix and not pix.isNull():
+                    w = int(pix.width() * final_scale)
+                    h = int(pix.height() * final_scale)
+                    w, h = max(50, w), max(50, h)
+
+                    pix = pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
+
+                    self.overlay_win.event_preview_label.setPixmap(pix)
+                    self.overlay_win.event_preview_label.adjustSize()
+
+                    ax = self.overlay_win.s(pos_x)
+                    ay = self.overlay_win.s(pos_y)
+                    self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
+
+                    # Grüner Rahmen
+                    self.overlay_win.event_preview_label.setStyleSheet(
+                        "border: 3px solid #00ff00; background: rgba(0, 0, 0, 0.3);")
+                    self.overlay_win.event_preview_label.show()
+                    self.overlay_win.event_preview_label.raise_()
+
+            # 2. KILLSTREAK
             if "streak" in targets:
-                # Alten Streak & Messer sichern
                 self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
                 self.temp_factions_backup = getattr(self, 'streak_factions', [])
-
-                # Dummy-Daten setzen: 5 Kills mit gemischten Messer-Farben
                 self.killstreak_count = 10
                 self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
                 self.update_streak_display()
 
+            # 3. STATS / FEED
             if "stats" in targets or "feed" in targets:
                 self.is_stats_test = True
                 self.refresh_ingame_overlay()
 
+            # 4. CROSSHAIR
             if "crosshair" in targets:
                 c_conf = self.config.get("crosshair", {})
                 path = get_asset_path(c_conf.get("file", "crosshair.png"))
                 self.overlay_win.update_crosshair(path, c_conf.get("size", 32), True)
 
-
         else:
-
             # --- DEAKTIVIEREN (SPEICHERN) ---
-
             self.is_hud_editing = False
 
-            # 1. ZUERST den Edit-Modus im QtOverlay beenden
+            # WICHTIG: Wir holen uns die Targets erneut, um zu wissen, welche Speicher-Funktion wir rufen müssen
+            targets = self.get_current_tab_targets()
 
+            # 1. Overlay Maus-Modus aus
             if self.overlay_win:
                 self.overlay_win.set_mouse_passthrough(True)
+                self.overlay_win.event_preview_label.hide()
 
             # Buttons zurücksetzen
-
-            btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak']
-
             for b in btn_list:
+                if hasattr(self, b): getattr(self, b).config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
 
-                if hasattr(self, b):
-                    getattr(self, b).config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
+            # --- 2. DIE RICHTIGE SPEICHER-FUNKTION AUFRUFEN (DAS IST NEU) ---
+            # Das sorgt dafür, dass Sliders (Größe) UND Maus-Position zusammengeführt werden.
 
-            # 2. DUMMY-DATEN ENTFERNEN (Stats/Streak Reset wie gehabt...)
+            if "event" in targets:
+                self.save_event_ui_data()  # Speichert Bild, Scale & Position für Events
 
+            if "streak" in targets:
+                self.save_streak_settings()  # Speichert Einstellungen für Streak
+
+            if "crosshair" in targets:
+                self.apply_crosshair_settings()  # Speichert Crosshair
+
+            if "stats" in targets or "feed" in targets:
+                self.save_stats_config()  # Speichert Stats/Feed
+
+            # 3. Aufräumen (Backups wiederherstellen)
             if hasattr(self, 'temp_streak_backup'):
-
                 self.killstreak_count = self.temp_streak_backup
-
                 self.streak_factions = getattr(self, 'temp_factions_backup', [])
-
                 del self.temp_streak_backup
-
                 if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
-
             else:
-
                 self.killstreak_count = 0
-
                 self.streak_factions = []
 
             self.update_streak_display()
-
             self.is_stats_test = False
-
             self.stop_overlay_logic()
 
-            # --- LOGIK-FIX: Crosshair Status wiederherstellen ---
-
+            # 4. Crosshair wiederherstellen
             c_conf = self.config.get("crosshair", {})
-
-            # Prüfen: Will User es anhaben (Active=True) UND läuft das Spiel?
-
-            user_wants_it = c_conf.get("active", True)
-
-            game_running = getattr(self, 'ps2_running', False)
-
-            should_show = user_wants_it and game_running
+            should_show = c_conf.get("active", True) and getattr(self, 'ps2_running', False)
 
             if self.overlay_win:
                 self.overlay_win.update_crosshair(
-
                     get_asset_path(c_conf.get("file", "")),
-
                     c_conf.get("size", 32),
-
-                    should_show  # <-- Hier senden wir jetzt False, wenn das Game aus ist
-
+                    should_show
                 )
 
-            self.add_log("UI: Edit-Modus AUS. Positionen wurden gesichert.")
-
+            self.add_log("UI: Edit-Modus AUS. Positionen & Einstellungen gespeichert.")
+            # Sicherheitshalber alles nochmal auf Disk schreiben
             self.save_config()
 
     def on_overlay_tab_change(self, event):
