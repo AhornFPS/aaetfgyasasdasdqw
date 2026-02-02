@@ -164,7 +164,7 @@ class PathDrawingLayer(QWidget):
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 class OverlaySignals(QObject):
-    show_image = pyqtSignal(str, int, int, int)
+    show_image = pyqtSignal(str, str, int, int, int, float, bool)
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
     update_streak = pyqtSignal(str, int, list, dict, list)
@@ -174,9 +174,9 @@ class OverlaySignals(QObject):
 
 # --- STABILES QTOVERLAY (SINGLE LABEL METHODE) ---
 class QtOverlay(QWidget):
-    def __init__(self, config=None):
+    def __init__(self, gui_ref=None):
         super().__init__()
-        self.gui_ref = None
+        self.gui_ref = gui_ref
         self.edit_mode = False
         self.dragging_widget = None
         self.drag_offset = None
@@ -259,7 +259,9 @@ class QtOverlay(QWidget):
 
         # 4. SIGNALE
         self.signals = OverlaySignals()
-        self.signals.show_image.connect(self.display_image)
+        # Event Queue is the new connect.
+        #self.signals.show_image.connect(self.display_image)
+        self.signals.show_image.connect(self.add_event_to_queue)
         self.signals.killfeed_entry.connect(self.add_killfeed_row)
         self.signals.update_stats.connect(self.set_stats_html)
         self.signals.update_streak.connect(self.draw_streak_ui)
@@ -275,6 +277,100 @@ class QtOverlay(QWidget):
         self.redraw_timer = QTimer(self)
         self.redraw_timer.timeout.connect(self.force_update)
         self.redraw_timer.start(1000)
+
+        # --- QUEUE SYSTEM VARIABLEN ---
+        self.event_queue = []  # Hier speichern wir die Events: (path, duration, x, y)
+        self.is_showing = False  # Status: Läuft gerade eine Animation?
+        self.queue_enabled = True
+
+        # Timer für die Queue-Verarbeitung
+        self.queue_timer = QTimer()
+        self.queue_timer.setSingleShot(True)
+        self.queue_timer.timeout.connect(self.finish_current_event)
+
+
+        self.img_label = QLabel(self)
+        self.img_label.setScaledContents(True)
+        self.img_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.img_label.hide()
+        if self.gui_ref and hasattr(self.gui_ref, 'config'):
+            self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
+        else:
+            self.queue_enabled = True  # Fallback
+
+    def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, is_hitmarker=False):
+        """
+        Fügt Event hinzu, spielt Hitmarker sofort parallel ab oder beachtet den Queue-Status.
+        """
+
+        if is_hitmarker:
+            if sound_path:
+                try:
+                    pygame.mixer.Sound(sound_path).play()
+                except:
+                    pass
+
+            if img_path and os.path.exists(img_path):
+                self.display_image(img_path, duration, x, y, scale)
+            return
+
+        # --- NORMALER ABLAUF (Queue oder Instant) ---
+
+        # Falls queue_enabled aus irgendeinem Grund fehlt (sollte durch __init__ fix da sein)
+        if not hasattr(self, 'queue_enabled'):
+            self.queue_enabled = True
+
+        # MODUS: INSTANT (Queue ist AUSgeschaltet)
+        if not self.queue_enabled:
+            # Stoppt nur Bilder/Animationen, lässt Sounds weiterlaufen
+            self.clear_queue_now()
+
+            # Bild sofort anzeigen
+            self.display_image(img_path, duration, x, y, scale)
+
+            # Sound sofort spielen
+            if sound_path:
+                try:
+                    pygame.mixer.Sound(sound_path).play()
+                except Exception as e:
+                    print(f"Sound Error: {e}")
+            return
+
+        # MODUS: QUEUE (Queue ist EINGESCHALTET)
+        self.event_queue.append((img_path, sound_path, duration, x, y, scale))
+
+        if not self.is_showing:
+            self.process_next_event()
+
+    def process_next_event(self):
+        if not self.event_queue:
+            self.is_showing = False
+            return
+
+        self.is_showing = True
+        # Scale mit auspacken
+        img_path, sound_path, duration, x, y, scale = self.event_queue.pop(0)
+
+        # An display_image übergeben
+        self.display_image(img_path, duration, x, y, scale)
+
+        if sound_path:
+            try: pygame.mixer.Sound(sound_path).play()
+            except: pass
+
+        self.queue_timer.start(duration)
+
+    def finish_current_event(self):
+        self.process_next_event()
+
+    def clear_queue_now(self):
+        """Leert die Warteschlange und stoppt aktuelle Timer."""
+        self.event_queue.clear()
+        self.queue_timer.stop()
+        self.is_showing = False
+
+
+
 
     def resizeEvent(self, event):
         if hasattr(self, 'path_layer'):
@@ -645,27 +741,58 @@ class QtOverlay(QWidget):
         self.stats_text_label.show();
         self.stats_text_label.raise_()
 
-    def display_image(self, img_path, duration, abs_x, abs_y):
-        """Zeigt ein Bild an absoluten Koordinaten an."""
-        if not os.path.exists(img_path): return
+    def display_image(self, img_path, duration, abs_x, abs_y, scale=1.0):
+        """Zeigt Bild an, nutzt safe_move und versteckt es sicher nach 'duration'."""
+
+        # 1. Altes Bild/Timer aufräumen
+        if hasattr(self, 'hide_timer') and self.hide_timer.isActive():
+            self.hide_timer.stop()
+
+        # Falls kein Bild da ist -> Verstecken und raus
+        if not img_path or not os.path.exists(img_path):
+            self.img_label.hide()
+            return
+
         pixmap = QPixmap(img_path)
         if pixmap.isNull(): return
 
-        temp_label = QLabel(self)
-        temp_label.setPixmap(pixmap)
-        temp_label.adjustSize()
-        temp_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # Klicks gehen durch
+        # 2. SKALIERUNG BERECHNEN (Deine Logik, unverändert)
+        final_scale = self.ui_scale * scale
 
-        # Skalierung beachten
+        if final_scale != 1.0:
+            w = int(pixmap.width() * final_scale)
+            h = int(pixmap.height() * final_scale)
+            pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+        # 3. LABEL UPDATEN
+        self.img_label.setPixmap(pixmap)
+        self.img_label.adjustSize()
+
+        # 4. POSITIONIEREN (Hier nutzen wir safe_move für korrekten Sitz!)
         x = self.s(abs_x)
         y = self.s(abs_y)
 
-        # Positionieren (Top-Left)
-        self.safe_move(temp_label, x, y)
+        # self.safe_move statt self.img_label.move nutzen!
+        # Falls du safe_move nicht hast, nutze move(x,y), aber safe_move ist präziser.
+        if hasattr(self, 'safe_move'):
+            self.safe_move(self.img_label, x, y)
+        else:
+            self.img_label.move(x, y)
 
-        temp_label.raise_()
-        temp_label.show()
-        QTimer.singleShot(duration, temp_label.deleteLater)
+        self.img_label.show()
+        self.img_label.raise_()
+
+        # 5. TIMER ZUM AUSBLENDEN (WICHTIG!)
+        # Wir erstellen einen Timer, der das Bild nach 'duration' ausblendet.
+        # Wir speichern ihn in self, damit wir ihn beim nächsten Bild abbrechen können (siehe oben).
+        if not hasattr(self, 'hide_timer'):
+            self.hide_timer = QTimer(self)
+            self.hide_timer.setSingleShot(True)
+            self.hide_timer.timeout.connect(self.img_label.hide)
+
+        self.hide_timer.start(duration)
+
+
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         """
@@ -976,6 +1103,13 @@ class QtOverlay(QWidget):
             self.crosshair_label.show()
 
 
+
+
+
+
+
+
+
 try:
     import pygame
 
@@ -1252,6 +1386,7 @@ class DiorClientGUI:
             self.qt_app = QApplication.instance() or QApplication(sys.argv)
             self.start_qt_overlay()
 
+
             # Start-Logik
             self.root.after(500, self.show_dashboard)
             self.root.after(1000, self.update_live_graph)
@@ -1439,7 +1574,7 @@ class DiorClientGUI:
     def start_qt_overlay(self):
         try:
             if self.overlay_win is None:
-                self.overlay_win = QtOverlay()
+                self.overlay_win = QtOverlay(self)
                 self.overlay_win.gui_ref = self
             self.overlay_win.update_killfeed_pos()
             self.overlay_win.showFullScreen()
@@ -2313,31 +2448,63 @@ class DiorClientGUI:
             self.drag_data["y"] = event.y
 
     def trigger_overlay_event(self, event_type):
-        if not self.overlay_win: return
+        """Triggert Bild/Sound im Overlay. Findet Config-Eintrag robust & erlaubt Sound-Only."""
+        if not hasattr(self, 'overlay_win') or not self.overlay_win:
+            return
 
-        event_data = self.config.get("events", {}).get(event_type, {})
-        if not event_data: return
+        # 1. CONFIG-DATEN SUCHEN (ROBUST & CASE-INSENSITIVE)
+        events_dict = self.config.get("events", {})
+        # Erst exakt suchen ("Hitmarker")
+        event_data = events_dict.get(event_type)
 
-        # Absolute Koordinaten laden (früher offset)
-        abs_x = int(event_data.get("x", 100))
-        abs_y = int(event_data.get("y", 200))
-        dur = int(event_data.get("duration", 3000))
+        # Falls nicht gefunden, Case-Insensitive suchen ("hitmarker" -> "Hitmarker")
+        if not event_data:
+            for key, val in events_dict.items():
+                if key.lower() == event_type.lower():
+                    event_data = val
+                    break
 
+        # Wenn immer noch nichts da ist, abbrechen
+        if not event_data:
+            return
+
+        # 2. KOORDINATEN & DAUER LADEN
+        try:
+            abs_x = int(event_data.get("x", event_data.get("x_offset", 0)))
+            abs_y = int(event_data.get("y", event_data.get("y_offset", 0)))
+            dur = int(event_data.get("duration", 3000))
+            # NEU: Scale laden (Standard 1.0)
+            scale = float(event_data.get("scale", 1.0))
+        except (ValueError, TypeError):
+            abs_x, abs_y, dur, scale = 0, 0, 3000, 1.0
+
+        # 3. BILD-PFAD ERMITTELN (Auch leere Pfade sind ok)
+        img_path = ""
         img_name = event_data.get("img")
         if img_name:
-            img_path = get_asset_path(img_name)
-            if os.path.exists(img_path):
-                # Signal senden (Pfad, Dauer, X, Y)
-                self.overlay_win.signals.show_image.emit(img_path, dur, abs_x, abs_y)
+            temp_path = get_asset_path(img_name)
+            if os.path.exists(temp_path):
+                img_path = temp_path
 
-        # Sound (unverändert)
-        if HAS_SOUND:
+        # 4. SOUND-PFAD ERMITTELN
+        sound_path = ""
+        # Prüfen auf Sound-System (Global oder Class-Attribut)
+        has_sound = globals().get("HAS_SOUND", False)
+        if has_sound:
             snd_name = event_data.get("snd")
             if snd_name:
-                s_path = get_asset_path(snd_name)
-                if os.path.exists(s_path):
-                    try: pygame.mixer.Sound(s_path).play()
-                    except: pass
+                temp_snd = get_asset_path(snd_name)
+                if os.path.exists(temp_snd):
+                    sound_path = temp_snd
+
+        # 5. FLAG SETZEN: Ist es ein Hitmarker?
+        is_hitmarker = (event_type.lower() == "hitmarker")
+
+        # 6. SIGNAL SENDEN (Wenn Bild ODER Sound existiert)
+        if img_path or sound_path:
+            self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, is_hitmarker)
+
+
 
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
@@ -2360,6 +2527,33 @@ class DiorClientGUI:
         # Referenz aus dem Dictionary löschen, damit der RAM nicht voll läuft
         if hasattr(self, 'active_event_photos') and tag in self.active_event_photos:
             del self.active_event_photos[tag]
+
+    def toggle_event_queue(self):
+        """Schaltet das Queue-System an oder aus und speichert es."""
+        # Aktuellen Status umkehren
+        current_state = self.config.get("event_queue_active", True)
+        new_state = not current_state
+
+        # Speichern
+        self.config["event_queue_active"] = new_state
+        self.save_config()
+
+        # Button Optik updaten
+        if new_state:
+            self.btn_queue_toggle.config(text="EVENT QUEUE: ON", bg="#004400")
+            self.add_log("SYS: Event Queue ENABLED (Sequential Playback)")
+        else:
+            self.btn_queue_toggle.config(text="EVENT QUEUE: OFF", bg="#440000")
+            self.add_log("SYS: Event Queue DISABLED (Instant Overwrite)")
+
+        # --- WICHTIGE ÄNDERUNG HIER ---
+        if self.overlay_win:
+            # 1. Dem Overlay den neuen Status mitteilen
+            self.overlay_win.queue_enabled = new_state
+
+            # 2. Wenn ausgeschaltet, sofort aufräumen
+            if not new_state:
+                self.overlay_win.clear_queue_now()
 
     def show_ingame_overlay_tab(self):
         self.clear_content()
@@ -2423,10 +2617,44 @@ class DiorClientGUI:
         check_btn.pack(pady=10)
 
         # =========================================================
-        # TAB 2: EVENTS (KORRIGIERT)
+        # TAB 2: EVENTS (NEUES DESIGN: KOMBI-LEISTE OBEN)
         # =========================================================
         tab_events = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
         self.ovl_notebook.add(tab_events, text=" EVENTS (Kills/Deaths) ")
+
+        # --- CONTAINER FÜR BEIDE KONTROLL-ELEMENTE ---
+        # Ein Frame, der die ganze Breite einnimmt
+        control_container = tk.Frame(tab_events, bg="#1a1a1a")
+        control_container.pack(fill="x", padx=10, pady=10)
+
+        # --- LINKE SPALTE: QUEUE CONTROL ---
+        evt_ctrl_frame = tk.LabelFrame(control_container, text=" Global Queue ", bg="#1a1a1a", fg="#00f2ff", padx=5,
+                                       pady=5)
+        evt_ctrl_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+
+        # Status holen
+        q_active = self.config.get("event_queue_active", True)
+
+        # Button Text/Farbe
+        self.btn_queue_toggle = tk.Button(evt_ctrl_frame,
+                                          text="QUEUE: ON" if q_active else "QUEUE: OFF",
+                                          bg="#004400" if q_active else "#440000",
+                                          fg="white", font=("Arial", 9, "bold"),
+                                          command=self.toggle_event_queue)
+        self.btn_queue_toggle.pack(fill="x", pady=2)
+
+        # Kleiner Hinweis (Optional, damit es aufgeräumt bleibt)
+        tk.Label(evt_ctrl_frame, text="(Sequential / Instant)", bg="#1a1a1a", fg="#666", font=("Arial", 7)).pack()
+
+        # --- RECHTE SPALTE: BULK ACTIONS ---
+        bulk_frame = tk.LabelFrame(control_container, text=" Bulk Actions ", bg="#1a1a1a", fg="#ffcc00", padx=5, pady=5)
+        bulk_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+
+        # Der "Copy All" Button
+        tk.Button(bulk_frame, text="APPLY LAYOUT TO ALL\n(Except Hitmarker)",
+                  bg="#552200", fg="#ffdddd", font=("Consolas", 8, "bold"),
+                  command=self.copy_event_layout_to_all).pack(fill="x", pady=2)
+
 
         event_categories = {
             "STANDARD KILLS": ["Kill", "Headshot", "Death", "Hitmarker", "Team Kill", "Team Kill Victim"],
@@ -2514,17 +2742,6 @@ class DiorClientGUI:
                   font=("Consolas", 10, "bold"),
                   command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left",
                                                                                              padx=5)
-
-        # --- 5. COPY TO ALL SECTION ---
-        copy_frame = tk.Frame(tab_events, bg="#1a1a1a", bd=1, relief="solid")
-        copy_frame.pack(fill="x", padx=40, pady=10)
-
-        tk.Label(copy_frame, text="BULK ACTIONS:", bg="#1a1a1a", fg="#ffcc00", font=("Arial", 8, "bold")).pack(
-            pady=(5, 2))
-
-        tk.Button(copy_frame, text="COPY POSITION/SCALE TO ALL EVENTS (Except Hitmarker)",
-                  bg="#440000", fg="#ffaaaa", font=("Consolas", 9),
-                  command=self.copy_event_layout_to_all).pack(pady=5, padx=10, fill="x")
 
         # =========================================================
         # TAB 3: KILLSTREAK (Messer-Kreis-System)
@@ -3549,7 +3766,7 @@ class DiorClientGUI:
             # Falls kein Backup da ist, sicherstellen dass Variablen existieren
             if not hasattr(self, 'killstreak_count'):
                 self.killstreak_count = 0
-                s
+                
 
         # --- 2. CONFIG AKTUALISIEREN ---
         # .update() stellt sicher, dass bestehende Werte (wie x/y vom Drag&Drop) erhalten bleiben
@@ -4794,7 +5011,7 @@ class DiorClientGUI:
                                             if special_event:
                                                 self.root.after(0,
                                                                 lambda e=special_event: self.trigger_overlay_event(e))
-                                            self.root.after(50, lambda: self.trigger_overlay_event("Kill"))
+                                            self.root.after(50, lambda: self.trigger_overlay_event("Hitmarker"))
 
 
 
