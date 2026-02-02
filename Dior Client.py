@@ -32,27 +32,36 @@ from ctypes import wintypes
 import sqlite3
 import tkinter.ttk as ttk  # Für die Tabs im Menü
 import PyQt6
+import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
+import launcher_qt
+import characters_qt
+import settings_qt
+import overlay_config_qt
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,  # Neu hinzugefügt
+    QMainWindow,  # Neu hinzugefügt
+    QListWidget,  # Neu hinzugefügt
+    QStackedWidget,  # Neu hinzugefügt
     QGraphicsDropShadowEffect
 )
 from PyQt6.QtGui import (
     QPixmap,
     QColor,
     QPainter,  # Neu: Für das Zeichnen der Linie
-    QPen,      # Neu: Für die Linien-Dicke und Farbe
-    QBrush,    # Neu: Zum Ausfüllen der Kreise/Punkte
-    QTransform # Neu: Zum Rotieren der Messer am Pfad
+    QPen,  # Neu: Für die Linien-Dicke und Farbe
+    QBrush,  # Neu: Zum Ausfüllen der Kreise/Punkte
+    QTransform  # Neu: Zum Rotieren der Messer am Pfad
 )
 from PyQt6.QtCore import (
     Qt,
     pyqtSignal,
     QObject,
     QTimer,
-    QPoint     # Neu: Für die Koordinaten-Punkte
+    QPoint  # Neu: Für die Koordinaten-Punkte
 )
 
 # Ermittelt den Ordner, in dem die EXE oder das Skript liegt
@@ -65,6 +74,50 @@ else:
 def get_asset_path(filename):
     if not filename: return ""
     return os.path.join(BASE_DIR, "assets", filename)
+
+
+class DiorMainHub(QMainWindow):
+    def __init__(self, controller):
+        super().__init__()
+        self.controller = controller
+        self.setWindowTitle("DIOR CLIENT - PS2 MASTER")
+        self.resize(1400, 900)
+
+        # Zentrales Widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # --- SEITENLEISTE (Navigation) ---
+        self.nav_list = QListWidget()
+        self.nav_list.setFixedWidth(200)
+        self.nav_list.setObjectName("NavBar")
+        self.nav_list.addItems(["DASHBOARD", "LAUNCHER", "CHARACTERS", "OVERLAY", "SETTINGS"])
+
+        # Styling für die Seitenleiste
+        self.nav_list.setStyleSheet("""
+            QListWidget { background-color: #1a1a1a; border: none; outline: none; }
+            QListWidget::item { padding: 25px; color: #4a6a7a; font-family: 'Consolas'; font-weight: bold; }
+            QListWidget::item:selected { background-color: #252525; color: #00f2ff; border-left: 4px solid #00f2ff; }
+        """)
+
+        # --- CONTENT BEREICH (Stacked Widget) ---
+        self.stack = QStackedWidget()
+
+        # Hier fügen wir die Fenster hinzu, die du bereits erstellt hast
+        self.stack.addWidget(self.controller.dash_window)  # Index 0
+        self.stack.addWidget(self.controller.launcher_win)  # Index 1
+        self.stack.addWidget(self.controller.char_win)  # Index 2
+        self.stack.addWidget(self.controller.ovl_config_win)  # Index 3
+        self.stack.addWidget(self.controller.settings_win)  # Index 4
+
+        main_layout.addWidget(self.nav_list)
+        main_layout.addWidget(self.stack)
+
+        # Verbindung: Klick in der Liste wechselt das Fenster im Stack
+        self.nav_list.currentRowChanged.connect(self.stack.setCurrentIndex)
 
 
 class PathDrawingLayer(QWidget):
@@ -164,12 +217,18 @@ class PathDrawingLayer(QWidget):
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 # WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
 class OverlaySignals(QObject):
+    # Bestehende Signale (von dir oben genannt)
     show_image = pyqtSignal(str, str, int, int, int, float, bool)
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
     update_streak = pyqtSignal(str, int, list, dict, list)
     path_points_updated = pyqtSignal(list)
     clear_feed = pyqtSignal()
+
+    # ZUSÄTZLICH BENÖTIGTE SIGNALE (damit connect_all_qt_signals nicht abstürzt)
+    setting_changed = pyqtSignal(str, object)  # Für Grid-Auswahl
+    test_trigger = pyqtSignal(str)  # Für Preview-Buttons
+    edit_mode_toggled = pyqtSignal(str)  # FIX für den AttributeError!
 
 
 # --- STABILES QTOVERLAY (SINGLE LABEL METHODE) ---
@@ -199,8 +258,7 @@ class QtOverlay(QWidget):
         self.event_center_x = screen.width() // 2
         self.event_center_y = (screen.height() // 2)
 
-
-        #Transparente Ebene für die Pfad-Zeichnung (Ganz oben)
+        # Transparente Ebene für die Pfad-Zeichnung (Ganz oben)
 
         # Initialisiere die Zeichen-Ebene
         self.path_layer = PathDrawingLayer(self)
@@ -229,7 +287,6 @@ class QtOverlay(QWidget):
         self.streak_text_label = QLabel(self)
         self.streak_text_label.hide()
 
-
         # --- KILLFEED: SINGLE LABEL (STABIL GEGEN GHOSTING) ---
         self.feed_messages = []
         self.feed_label = QLabel(self)
@@ -238,7 +295,6 @@ class QtOverlay(QWidget):
         self.feed_label.setFixedSize(self.feed_w, self.feed_h)
         self.feed_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         self.feed_label.setStyleSheet("background: transparent;")
-
 
         shadow_feed = QGraphicsDropShadowEffect()
         shadow_feed.setBlurRadius(4 * self.ui_scale)
@@ -260,7 +316,7 @@ class QtOverlay(QWidget):
         # 4. SIGNALE
         self.signals = OverlaySignals()
         # Event Queue is the new connect.
-        #self.signals.show_image.connect(self.display_image)
+        # self.signals.show_image.connect(self.display_image)
         self.signals.show_image.connect(self.add_event_to_queue)
         self.signals.killfeed_entry.connect(self.add_killfeed_row)
         self.signals.update_stats.connect(self.set_stats_html)
@@ -287,7 +343,6 @@ class QtOverlay(QWidget):
         self.queue_timer = QTimer()
         self.queue_timer.setSingleShot(True)
         self.queue_timer.timeout.connect(self.finish_current_event)
-
 
         self.img_label = QLabel(self)
         self.img_label.setScaledContents(True)
@@ -355,8 +410,10 @@ class QtOverlay(QWidget):
         self.display_image(img_path, duration, x, y, scale)
 
         if sound_path:
-            try: pygame.mixer.Sound(sound_path).play()
-            except: pass
+            try:
+                pygame.mixer.Sound(sound_path).play()
+            except:
+                pass
 
         self.queue_timer.start(duration)
 
@@ -369,9 +426,6 @@ class QtOverlay(QWidget):
         self.queue_timer.stop()
         self.is_showing = False
 
-
-
-
     def resizeEvent(self, event):
         if hasattr(self, 'path_layer'):
             self.path_layer.setGeometry(self.rect())
@@ -381,7 +435,7 @@ class QtOverlay(QWidget):
         self.repaint()
         # Falls Edit an ist, Layer immer nach vorne holen
         if self.path_edit_active:
-             self.path_layer.raise_()
+            self.path_layer.raise_()
 
     def s(self, value):
         return int(float(value) * self.ui_scale)
@@ -494,6 +548,7 @@ class QtOverlay(QWidget):
         elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
             self.dragging_widget = "crosshair"
             self.drag_offset = pos - self.crosshair_label.pos()
+
     def paintEvent(self, event):
         # Wir nutzen ein internes Zeichnen auf dem path_layer, falls aktiv
         if getattr(self, "path_edit_active", False) and len(self.custom_path) > 0:
@@ -580,20 +635,20 @@ class QtOverlay(QWidget):
             return int(val / self.ui_scale)
 
         if self.gui_ref:
-            # 1. EVENT SPEICHERN (Das hat gefehlt!)
+            # Aktuellen Event-Namen aus dem Qt-Label der GUI holen
+            current_event_name = self.gui_ref.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
+
             if self.dragging_widget == "event":
                 curr = self.event_preview_label.pos()
-                current_event_name = self.gui_ref.var_event_sel.get()
 
                 # Config Struktur sichern
                 if "events" not in self.gui_ref.config: self.gui_ref.config["events"] = {}
                 if current_event_name not in self.gui_ref.config["events"]:
                     self.gui_ref.config["events"][current_event_name] = {}
 
-                # Koordinaten speichern
+                # Koordinaten unskaliert speichern
                 self.gui_ref.config["events"][current_event_name]["x"] = uns(curr.x())
                 self.gui_ref.config["events"][current_event_name]["y"] = uns(curr.y())
-
                 self.gui_ref.save_config()
                 print(f"DEBUG: Event '{current_event_name}' moved to {uns(curr.x())}, {uns(curr.y())}")
 
@@ -625,7 +680,7 @@ class QtOverlay(QWidget):
                 if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
                 self.gui_ref.config["streak"]["x"] = uns(curr.x())
                 self.gui_ref.config["streak"]["y"] = uns(curr.y())
-                self.gui_ref.save_streak_settings()
+                self.gui_ref.save_config()
 
         self.dragging_widget = None
         self.drag_offset = None
@@ -791,8 +846,6 @@ class QtOverlay(QWidget):
             self.hide_timer.timeout.connect(self.img_label.hide)
 
         self.hide_timer.start(duration)
-
-
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         """
@@ -1044,7 +1097,7 @@ class QtOverlay(QWidget):
                     # Wir starten bei Faktor 1.8 (weit draußen) und enden bei 1.0
                     start_dist_factor = 1.8
                     current_scale = start_dist_factor - (
-                                (start_dist_factor - 1.0) * (math.sin(progress * (math.pi / 2))))
+                            (start_dist_factor - 1.0) * (math.sin(progress * (math.pi / 2))))
 
                 # --- PHASE 2: NORMALES PULSIEREN ---
                 else:
@@ -1103,13 +1156,6 @@ class QtOverlay(QWidget):
             self.crosshair_label.show()
 
 
-
-
-
-
-
-
-
 try:
     import pygame
 
@@ -1143,10 +1189,9 @@ PS2_DETECTION = {
     },
 
     "NAMES": {
-            "SpitFire Turret": "Spitfire Kill",
-            "Spitfire Auto-Turret": "Spitfire Kill"
-        },
-
+        "SpitFire Turret": "Spitfire Kill",
+        "Spitfire Auto-Turret": "Spitfire Kill"
+    },
 
     "SPECIAL_IDS": {
         "802512": "Spitfire Kill",
@@ -1194,7 +1239,8 @@ LOADOUT_MAP = {
 }
 
 HSR_WEAPON_CATEGORY = {
-    "AI MAX (Left)", "AI MAX (Right)", "Amphibious Rifle", "Anti-Materiel Rifle", "Assault Rifle", "Carbine", "Heavy Weapon",
+    "AI MAX (Left)", "AI MAX (Right)", "Amphibious Rifle", "Anti-Materiel Rifle", "Assault Rifle", "Carbine",
+    "Heavy Weapon",
     "Hybrid Rifle", "LMG", "Pistol", "Scout Rifle", "Shotgun", "SMG", "Sniper Rifle", "Amphibious Sidearm", "Knife"
 }
 
@@ -1261,144 +1307,457 @@ CHEAT_DESCRIPTIONS = {
 
 
 class DiorClientGUI:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self):
+        # 1. BASIS-DATEN LADEN
+        # Wir definieren BASE_DIR, falls noch nicht geschehen, für relative Pfade
+        self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.init_db()
+        self.config = self.load_config()
+        self.overlay_config = self.config
+        self.char_data = self.load_chars_from_db() or {}
+        self.name_cache = self.load_cache_from_db() or {}
+
+        # 2. LOGIK-VARIABLEN INITIALISIEREN (Sehr wichtig: VOR der GUI!)
+        # Diese Variablen ersetzen die alten tk.BooleanVar / tk.StringVar
+        self.overlay_active_state = self.config.get("overlay_master_active", False)
+        self.ps2_dir = self.config.get("ps2_path", "")
+        self.current_world_id = self.config.get("world_id", "10")
+        self.current_character_id = ""
+
+        self.server_map = {
+            "Wainwright (EU)": "10",
+            "Osprey (US)": "1",
+            "SolTech (Asia)": "40",
+            "Jaeger": "19"
+        }
+
+        # Tracking & Stats
+        self.killstreak_count = 0
+        self.kill_counter = 0
+        self.is_dead = False
+        self.was_revived = False
+        self.streak_timeout = 12.0
+        self.pop_history = [0] * 100
+        self.myTeamId = 0
+        self.currentZone = 0
+        self.myWorldID = self.current_world_id
+        self.last_kill_time = 0
+
+        self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
+        self.session_stats = {}
+        self.active_players = {}
+
+        # Enforcer / Watchdog
+        self.observer = None
+        self.last_killer_name = "None"
+        self.last_killer_id = "0"
+        self.last_evidence_url = ""
+
+        # Assets & Netzwerk
+        self.item_db = {}
+        self.id_queue = Queue()
+        self.websocket = None
+        self.loop = None
+
+        # Pfade für Inis
+        self.assets_path = os.path.join("assets", "Planetside 2 ini")
+        self.source_high = os.path.join(self.assets_path, "UserOptions_high.ini")
+        self.source_low = os.path.join(self.assets_path, "UserOptions_low.ini")
+
+        # 3. QT APP & MODULE INITIALISIEREN
+        self.qt_app = QApplication.instance() or QApplication(sys.argv)
+        self.qt_app.setStyle("Fusion")
+
+        # Fenster erstellen
+        self.dash_window = dashboard_qt.DashboardWindow()
+        self.dash_controller = dashboard_qt.DashboardController(self.dash_window)  # Falls benötigt
+        self.launcher_win = launcher_qt.LauncherWindow()
+        self.char_win = characters_qt.CharactersWindow()
+        self.ovl_config_win = overlay_config_qt.OverlayConfigWindow()
+        self.settings_win = settings_qt.SettingsWindow()
+
+        # 4. MAIN HUB STARTEN (Die Hülle, die alles zusammenhält)
+        self.main_hub = DiorMainHub(self)
+
+        # 5. SIGNALE VERBINDEN
+        self.connect_all_qt_signals()
+
+        # 6. DATEN IN DIE FENSTER LADEN
+        # Jetzt existieren alle Variablen, load_overlay_config_to_qt wird nicht mehr abstürzen
+        self.load_overlay_config_to_qt()
+        self.settings_win.load_config(self.config, self.ps2_dir)
+
+        # Charakter-Dropdown im Overlay-Fenster füllen
+        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
+        self.ovl_config_win.char_combo.clear()
+        self.ovl_config_win.char_combo.addItems(opts)
+
+        # 7. ANZEIGEN
+        self.main_hub.show()
+        self.overlay_win = None  # Initial leer
+
+        # 8. HINTERGRUND-THREADS STARTEN
+        # Erst ganz am Ende, wenn die GUI bereit ist, Daten zu empfangen
+        self.start_websocket_thread()
+        threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
+
+        # Item DB laden
+        csv_path = os.path.join(self.BASE_DIR, "assets", "sanction-list.csv")
+        if os.path.exists(csv_path):
+            self.load_item_db(csv_path)
+
+        self.stats_timer = QTimer()
+        self.stats_timer.timeout.connect(self.update_live_graph)  # Die Logik-Funktion
+        self.stats_timer.start(1000)  # Jede Sekunde (1000ms)
+
+        # Wichtig: Startzeit für KPM-Berechnung setzen
+        self.session_start_time = time.time()
+        self.last_graph_point_time = time.time()
+
+        self.overlay_win = QtOverlay(self)  # Deine Klasse instanziieren
+        # WICHTIG: Signale der Overlay-Klasse mit der Logik verbinden
+        ui = self.ovl_config_win
+        # ui.btn_save_evt.clicked.connect(self.save_event_ui_data)
+        ui.btn_edit_hud.clicked.connect(self.toggle_hud_edit_mode)  # Im Event Tab
+        ui.btn_edit_streak.clicked.connect(self.toggle_hud_edit_mode)
+        ui.btn_edit_cross.clicked.connect(self.toggle_hud_edit_mode)
+        ui.btn_edit_hud_stats.clicked.connect(self.toggle_hud_edit_mode)
+        self.ovl_config_win.btn_save_event.clicked.connect(self.save_event_ui_data)
+
+        # Grid-Klicks (Falls du das Grid in Qt hast)
+        ui.signals.test_trigger.connect(self.load_event_ui_data)
+
+        # Initialisierung der Positionen
+        self.overlay_win.update_killfeed_pos()
+
+    def apply_event_layout_to_all(self):
+        """Überträgt Position und Skalierung des aktuellen Events auf ALLE anderen."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        # 1. Quell-Daten aus der UI holen
+        ui = self.ovl_config_win
+        source_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+
+        if source_name == "NONE" or not source_name:
+            self.add_log("WARN: Kein Quell-Event ausgewählt.")
+            return
+
+        # Sicherheitsabfrage
+        confirm = QMessageBox.question(
+            self.ovl_config_win,
+            "Layout übertragen?",
+            f"Sollen Skalierung und Position von '{source_name}' auf ALLE anderen Events übertragen werden?\n(Bilder und Sounds bleiben erhalten!)",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        # 2. Aktuelle Werte ermitteln (Live vom Overlay oder aus Feldern)
+        if self.overlay_win and self.overlay_win.event_preview_label.isVisible():
+            pos = self.overlay_win.event_preview_label.pos()
+            new_x = int(pos.x() / self.overlay_win.ui_scale)
+            new_y = int(pos.y() / self.overlay_win.ui_scale)
+        else:
+            # Fallback auf Config des Quell-Events
+            src_data = self.config.get("events", {}).get(source_name, {})
+            new_x = src_data.get("x", 100)
+            new_y = src_data.get("y", 200)
+
+        new_scale = ui.slider_evt_scale.value() / 100.0
+
+        # 3. Auf alle Events anwenden
+        if "events" not in self.config: self.config["events"] = {}
+
+        count = 0
+        for evt_key in self.config["events"]:
+            if evt_key == source_name: continue  # Quelle überspringen
+
+            # Bestehende Daten laden, damit Bild/Sound NICHT überschrieben werden
+            self.config["events"][evt_key]["x"] = new_x
+            self.config["events"][evt_key]["y"] = new_y
+            self.config["events"][evt_key]["scale"] = new_scale
+            count += 1
+
+        self.save_config()
+        self.add_log(f"SYS: Layout von '{source_name}' auf {count} Events übertragen.")
+
+        # Visuelles Feedback
+        QMessageBox.information(self.ovl_config_win, "Erfolg", f"Layout auf {count} Events übertragen!")
+
+    def process_search_results_qt(self, stats, weapons):
+        """Wird im Haupt-Thread aufgerufen, wenn der Worker fertig ist."""
         try:
-            self.REFERENCE_WIDTH = 1920
-            curr_width = self.root.winfo_screenwidth()
-            self.ui_scale = curr_width / self.REFERENCE_WIDTH
+            self.add_log("DASHBOARD: Rendering Character Data...")
+            self.char_win.update_overview(stats)
+            self.char_win.update_weapons(weapons)
 
-            self.root.title("PS2 Master Client")
-            self.root.geometry("1200x900")
-            self.root.configure(bg="#1e1e1e")
-
-
-            self.init_db()
-            self.char_data = self.load_chars_from_db() or {}
-            self.outfit_cache = {}
-            self.name_cache = self.load_cache_from_db() or {}
-
-            # 1. Zuerst die Config laden
-            self.config = self.load_config()
-            self.overlay_config = self.config
-
-            # 2. Prüfen, ob ein Pfad gespeichert ist, sonst Standard-JPG
-            saved_bg = self.config.get("main_background_path", "")
-            if saved_bg and os.path.exists(saved_bg):
-                self.gif_path = saved_bg
-            else:
-                self.gif_path = get_asset_path("background.jpg")
-
-            #Server list
-            self.server_map = {
-                "Wainwright (EU)": "10",
-                "Osprey (US)": "1",
-                "SolTech (Asia)": "40",
-                "Jaeger": "19"
-            }
-
-            # Standard ist 10 (Wainwright), falls nichts gespeichert ist
-            self.current_world_id = self.config.get("world_id", "10")
-
-            # Namen für die ID finden (für die Anzeige)
-            self.current_server_name = "Wainwright (EU)"  # Default
-            for name, sid in self.server_map.items():
-                if sid == self.current_world_id:
-                    self.current_server_name = name
-                    break
-
-
-            s_conf = self.config.get("streak", {})
-            self.streak_color_var = tk.StringVar(value=s_conf.get("color", "#ffffff"))
-            self.streak_fontsize_var = tk.StringVar(value=str(s_conf.get("size", 26)))
-            self.streak_shadow_size_var = tk.StringVar(value=str(s_conf.get("shadow_size", 2)))
-            self.var_streak_bold = tk.BooleanVar(value=s_conf.get("bold", False))
-            self.var_streak_underline = tk.BooleanVar(value=s_conf.get("underline", False))
-
-            self._streak_debounce_timer = None
-            self._streak_test_timer = None
-            self._streak_backup = None
-
-            # Pfade
-            self.ps2_dir = self.config.get("ps2_path", "")
-
-            #Dashboard update
-            self.last_graph_point_time = 0
-
-            # Variablen
-            saved_state = self.config.get("overlay_master_active", False)
-            self.overlay_active = tk.BooleanVar(value=saved_state)
-            self.char_option_menus = []
-            self.current_tab = "Dashboard"
-            self.current_sub_tab = "Overview"
-            self.content_ids = []
-            self.killstreak_count = 0
-            self.kill_counter = 0
-            self.is_dead = False
-            self.was_revived = False
-            self.streak_timeout = 12.0
-            self.pop_history = [0] * 100
-            self.myTeamId = 0
-            self.currentZone = 0
-            self.myWorldID = 0
-
-            self.bg_photo = None
-            self.last_size = (1200, 900)
-            self.char_entries = []
-
-            self.observer = None
-            self.last_killer_name = "None"  # <--- Hier wurde der Crash verursacht
-            self.last_killer_id = "0"  # <--- Sicherung für Enforcer-Logik
-            self.last_evidence_url = ""  # <--- Sicherung für Link-Anzeige
-
-            self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
-            self.session_stats = {}
-            self.active_players = {}
-            self.char_var = tk.StringVar(value="SELECT_UNIT...")
-            self.websocket = None
-            self.loop = None
-            self.frac_var = tk.StringVar(value="TR")
-            self.cont_var = tk.StringVar(value="Indar")
-            self.current_character_id = ""
-            self.check_vars = {}
-            self.id_queue = Queue()
-            self.item_db = {}
-            self.last_kill_time = 0
-
-            # UI Aufbau
-            self.canvas = tk.Canvas(root, highlightthickness=0, bg="#1e1e1e")
-            self.canvas.pack(fill="both", expand=True)
-            self.bg_image_id = self.canvas.create_image(0, 0, anchor="nw")
-            self.setup_ui_elements()
-            self.setup_char_sub_menu()
-
-            # Item DB laden
-            csv_path = get_asset_path("sanction-list.csv")
-            if os.path.exists(csv_path): self.load_item_db(csv_path)
-
-            # Threads
-            threading.Thread(target=self.cache_worker, daemon=True).start()
-            self.start_websocket_thread()
-            threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
-
-            # Qt Overlay im Mainthread
-            self.overlay_win = None
-            self.qt_app = QApplication.instance() or QApplication(sys.argv)
-            self.start_qt_overlay()
-
-
-            # Start-Logik
-            self.root.after(500, self.show_dashboard)
-            self.root.after(1000, self.update_live_graph)
-            self.root.bind("<Configure>", self.on_resize)
-            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-            self.root.after(100, lambda: self.update_background_view(self.root.winfo_width(), self.root.winfo_height()))
-
+            self.char_win.btn_search.setEnabled(True)
+            self.char_win.btn_search.setText("SEARCH")
+            self.add_log(f"SUCCESS: Character UI updated.")
         except Exception as e:
-            with open("crash_log.txt", "w") as f:
-                f.write(traceback.format_exc())
-            messagebox.showerror("Startup Error", f"Fehler:\n{str(e)}")
-            self.root.destroy()
+            self.add_log(f"RENDER ERROR: {e}")
+
+    def toggle_master_switch_qt(self, checked):
+        """Speichert den Status des Master-Switches sofort."""
+        self.overlay_active_state = checked  # Lokale Variable aktualisieren
+        self.config["overlay_master_active"] = checked
+        self.save_config()
+        self.add_log(f"SYS: Global Overlay {'ENABLED' if checked else 'DISABLED'}")
+
+    def connect_all_qt_signals(self):
+        """Zentrales Management aller PyQt6 Signale."""
+
+        # --- CHARACTERS WINDOW ---
+        self.char_win.signals.search_requested.connect(self.run_search)
+        self.char_win.signals.search_finished.connect(self.process_search_results_qt)
+
+        # --- LAUNCHER WINDOW ---
+        self.launcher_win.signals.launch_requested.connect(self.execute_launch)
+
+        # --- SETTINGS WINDOW ---
+        self.settings_win.signals.browse_obs_requested.connect(self.browse_folder)
+        self.settings_win.signals.browse_ps2_requested.connect(self.browse_ps2_folder)
+        self.settings_win.signals.change_bg_requested.connect(self.change_background_file)
+        self.settings_win.signals.save_requested.connect(self.save_enforcer_config_qt)
+
+        # --- OVERLAY CONFIG WINDOW ---
+        # Identität & Master Switch
+        self.ovl_config_win.char_combo.currentTextChanged.connect(self.update_active_char)
+        self.ovl_config_win.check_master.toggled.connect(self.toggle_master_switch_qt)
+
+        # Event-Selection & Grid-Klick (Nur einmal verbinden!)
+        self.ovl_config_win.signals.setting_changed.connect(
+            lambda key, val: self.on_event_selected_in_qt(val) if key == "event_selection" else None
+        )
+
+        # Slider für Killstreak (Tab 3) - AUTOMATISCHES SPEICHERN BEI ÄNDERUNG
+        self.ovl_config_win.slider_scale.valueChanged.connect(self.save_streak_settings_from_qt)
+        self.ovl_config_win.slider_tx.valueChanged.connect(self.save_streak_settings_from_qt)
+        self.ovl_config_win.slider_ty.valueChanged.connect(self.save_streak_settings_from_qt)
+
+        # Slider für Stats-Widget (Tab 5) - AUTOMATISCHES SPEICHERN BEI ÄNDERUNG
+        self.ovl_config_win.slider_st_scale.valueChanged.connect(self.save_stats_config_from_qt)
+        self.ovl_config_win.slider_st_tx.valueChanged.connect(self.save_stats_config_from_qt)
+        self.ovl_config_win.slider_st_ty.valueChanged.connect(self.save_stats_config_from_qt)
+
+        # Manuelle Save-Buttons (als Backup oder für Texteingaben)
+        self.ovl_config_win.btn_save_streak.clicked.connect(self.save_streak_settings_from_qt)
+        self.ovl_config_win.btn_save_stats.clicked.connect(self.save_stats_config_from_qt)
+        self.ovl_config_win.btn_save_voice.clicked.connect(self.save_voice_config_from_qt)
+
+        # Test- & Preview-Buttons
+        self.ovl_config_win.btn_test_preview.clicked.connect(
+            lambda: self.trigger_overlay_event(self.ovl_config_win.lbl_editing.text().replace("EDITING: ", ""))
+        )
+        self.ovl_config_win.btn_test_streak.clicked.connect(self.test_streak_visuals)
+        self.ovl_config_win.btn_test_stats.clicked.connect(self.test_stats_visuals)
+
+        # HUD Edit-Modus
+        self.ovl_config_win.btn_edit_hud.clicked.connect(self.toggle_hud_edit_mode)
+        self.ovl_config_win.btn_edit_hud_stats.clicked.connect(self.toggle_hud_edit_mode)
+        self.ovl_config_win.btn_edit_cross.clicked.connect(self.toggle_hud_edit_mode)
+
+        # --- BROWSE BUTTONS IM EVENT TAB ---
+
+        self.ovl_config_win.btn_browse_evt_img.clicked.connect(
+            lambda: self.browse_file_qt(self.ovl_config_win.ent_evt_img, "png")
+        )
+        self.ovl_config_win.btn_browse_evt_snd.clicked.connect(
+            lambda: self.browse_file_qt(self.ovl_config_win.ent_evt_snd, "audio")
+        )
+
+
+
+        self.ovl_config_win.signals.setting_changed.connect(
+            lambda key, val: self.load_event_ui_data(val) if key == "event_selection" else None
+        )
+        if hasattr(self.ovl_config_win, 'btn_apply_all'):
+            self.ovl_config_win.btn_apply_all.clicked.connect(self.apply_event_layout_to_all)
+
+            # 2. Queue Toggle (Wichtig für Sound-Management)
+        if hasattr(self.ovl_config_win, 'btn_queue_toggle'):
+            self.ovl_config_win.btn_queue_toggle.clicked.connect(self.toggle_event_queue_qt)
+
+            # 3. Save Event (Hatten wir schon, aber zur Sicherheit)
+        self.ovl_config_win.btn_save_event.clicked.connect(self.save_event_ui_data)
+
+        # --- DASHBOARD ---
+        self.dash_controller.signals.server_changed.connect(self.change_server_logic)
+
+        print("SYS: All Qt signals successfully routed.")
+
+
+
+    def on_event_selected_in_qt(self, event_name):
+        """Wird gerufen, wenn man im Grid auf ein Event klickt."""
+        ui = self.ovl_config_win
+        # Daten aus der Config holen (Sektion 'events')
+        ev_conf = self.config.get("events", {})
+        data = ev_conf.get(event_name, {})
+
+        # 1. Label aktualisieren
+        ui.lbl_editing.setText(f"EDITING: {event_name}")
+
+        # 2. Felder befüllen (mit Fallback-Werten, falls leer)
+        ui.ent_evt_img.setText(data.get("img", "default.png"))
+        ui.ent_evt_snd.setText(data.get("sound", "none.ogg"))
+
+        # Scale Slider (Config Wert * 100 für den Slider-Bereich)
+        scale_val = int(data.get("scale", 1.0) * 100)
+        ui.slider_evt_scale.setValue(scale_val)
+
+        # Duration
+        ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
+
+        self.add_log(f"UI: Settings for '{event_name}' loaded.")
+
+    def save_streak_settings_from_qt(self):
+        """Liest Streak-Settings aus Qt und speichert sie."""
+        s_ui = self.ovl_config_win
+
+        # Neues Datenpaket schnüren
+        new_streak = {
+            "active": s_ui.check_streak_master.isChecked(),
+            "anim_active": s_ui.check_streak_anim.isChecked(),
+            "tx": s_ui.slider_tx.value(),
+            "ty": s_ui.slider_ty.value(),
+            "scale": s_ui.slider_scale.value() / 100.0,
+            "knife_tr": s_ui.knife_inputs["TR"].text(),
+            "knife_nc": s_ui.knife_inputs["NC"].text(),
+            "knife_vs": s_ui.knife_inputs["VS"].text()
+        }
+
+        # In die Config übernehmen
+        self.overlay_config["streak"].update(new_streak)
+        self.save_config()  # Deine existierende Funktion
+        self.add_log("SYS: Killstreak settings locked.")
+
+    def save_stats_config_from_qt(self):
+        """Liest Stats & Feed Settings aus Qt und speichert sie."""
+        s_ui = self.ovl_config_win
+
+        # Stats Widget Daten
+        st_data = {
+            "active": s_ui.check_stats_active.isChecked(),
+            "img": s_ui.ent_stats_img.text(),
+            "tx": s_ui.slider_st_tx.value(),
+            "ty": s_ui.slider_st_ty.value(),
+            "scale": s_ui.slider_st_scale.value() / 100.0
+        }
+
+        # Killfeed Daten
+        kf_data = {
+            "hs_icon": s_ui.ent_hs_icon.text(),
+            "show_revives": s_ui.check_show_revives.isChecked()
+        }
+
+        self.overlay_config["stats_widget"].update(st_data)
+        self.overlay_config["killfeed"].update(kf_data)
+        self.save_config()
+        self.add_log("SYS: Stats & Killfeed configuration updated.")
+
+    def save_voice_config_from_qt(self):
+        """Liest Voice Macros aus Qt und speichert sie."""
+        new_v = {}
+        for key, combo in self.ovl_config_win.voice_combos.items():
+            new_v[key] = combo.currentText()
+
+        self.overlay_config["auto_voice"] = new_v
+        self.save_config()
+        self.add_log("SYS: Auto-Voice Macros saved.")
+
+    def load_overlay_config_to_qt(self):
+        """Überträgt ALLE Config-Werte in die Qt-Oberfläche (Nur Setzen, kein Connecten!)"""
+        # 1. DATEN HOLEN
+        s_conf = self.config.get("streak", {})
+        st_conf = self.config.get("stats_widget", {"active": True})
+        kf_conf = self.config.get("killfeed", {})
+        v_conf = self.config.get("auto_voice", {})
+        ev_conf = self.config.get("events", {})
+
+        ui = self.ovl_config_win
+
+        # --- 2. TAB 1: IDENTITY ---
+        active_char = getattr(self, 'char_var_value', "SELECT_UNIT...")
+        idx = ui.char_combo.findText(active_char)
+        if idx >= 0: ui.char_combo.setCurrentIndex(idx)
+        ui.check_master.setChecked(self.config.get("overlay_master_active", False))
+
+        # --- 3. TAB 3: KILLSTREAK ---
+        ui.slider_tx.setValue(s_conf.get("tx", 0))
+        ui.slider_ty.setValue(s_conf.get("ty", 0))
+        ui.slider_scale.setValue(int(s_conf.get("scale", 1.0) * 100))
+        ui.check_streak_master.setChecked(s_conf.get("active", True))
+        ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
+
+        for fac in ["TR", "NC", "VS"]:
+            if fac in ui.knife_inputs:
+                ui.knife_inputs[fac].setText(s_conf.get(f"knife_{fac.lower()}", ""))
+
+        # --- 4. TAB 5: STATS & FEED ---
+        ui.check_stats_active.setChecked(st_conf.get("active", True))
+        ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
+        ui.slider_st_tx.setValue(st_conf.get("tx", 0))
+        ui.slider_st_ty.setValue(st_conf.get("ty", 0))
+        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
+        ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
+        ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
+
+        # --- 5. TAB 2: EVENTS (GRID) ---
+        if hasattr(ui, 'event_checkboxes'):
+            for ev_name, checkbox in ui.event_checkboxes.items():
+                entry = ev_conf.get(ev_name, {})
+                is_active = entry.get("active", True) if isinstance(entry, dict) else True
+                checkbox.setChecked(is_active)
+
+        # --- 6. SIDEBAR REINIGEN (Sicherer Zugriff) ---
+        if hasattr(ui, 'lbl_editing'): ui.lbl_editing.setText("EDITING: NONE")
+        for attr_name in ['ent_text', 'ent_img', 'ent_sound']:
+            field = getattr(ui, attr_name, None)
+            if field: field.clear()
+
+        # --- 7. TAB 6: VOICE MACROS ---
+        for key, combo in ui.voice_combos.items():
+            val = v_conf.get(key, "OFF")
+            idx = combo.findText(str(val))
+            if idx >= 0: combo.setCurrentIndex(idx)
+
+        self.add_log("SYS: Overlay configuration synchronized.")
+
+    def prepare_stats_for_qt(self, char_data):
+        """Formatiert die API-Daten für das characters_qt Fenster."""
+        c = char_data.get('custom_stats', {})
+        return {
+            'name': c.get('name', '-'),
+            'fac_short': {"1": "VS", "2": "NC", "3": "TR", "4": "NSO"}.get(char_data.get('faction_id'), "-"),
+            'server': c.get('server', '-'),
+            'outfit': c.get('outfit', '-'),
+            'rank': c.get('rank', '-'),
+            'time_played': c.get('time_played', '-'),
+            'lt_kills': c.get('lt_kills', '0'),
+            'lt_deaths': c.get('lt_deaths', '0'),
+            'lt_kd': c.get('lt_kd', '0.00'),
+            'lt_kpm': c.get('lt_kpm', '0.00'),
+            'lt_kph': c.get('lt_kph', '0.00'),
+            'lt_spm': c.get('lt_spm', '0.00'),
+            'lt_score': c.get('lt_score', '0'),
+            'm30_kills': c.get('m30_kills', '0'),
+            'm30_deaths': c.get('m30_deaths', '0'),
+            'm30_kd': c.get('m30_kd', '0.00'),
+            'm30_kpm': c.get('m30_kpm', '0.00'),
+            'm30_kph': c.get('m30_kph', '0.00'),
+            'm30_spm': c.get('m30_spm', '0.00'),
+            'm30_score': c.get('m30_score', '0')
+        }
+
+    def change_server_logic(self, world_id):
+        self.current_world_id = world_id
+        self.add_log(f"DASHBOARD: Switching to World ID {world_id}")
+        # Hier könntest du den Websocket neu starten oder die Config speichern
+        self.config["world_id"] = world_id
+        self.save_config()
+        self.start_websocket_thread()
 
     def reset_ui_layout(self):
         """Setzt alle HUD-Positionen zurück."""
@@ -1444,6 +1803,7 @@ class DiorClientGUI:
         self.ps2_running = False
         while True:
             try:
+                # Tasklist-Abfrage
                 output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
                     "cp1252", errors="ignore")
                 is_now_running = "PlanetSide2_x64.exe" in output
@@ -1453,32 +1813,31 @@ class DiorClientGUI:
 
                     if is_now_running:
                         self.add_log("MONITOR: PlanetSide 2 gestartet.")
+                        if self.overlay_active_state:
+                            # Wir nutzen die Methode, die wir für Qt gebaut haben
+                            # WICHTIG: Aufruf über das Hauptfenster/MainHub sicherstellen
+                            from PyQt6.QtCore import QMetaObject, Q_ARG, Qt
+                            QMetaObject.invokeMethod(self.overlay_win, "showFullScreen",
+                                                     Qt.ConnectionType.QueuedConnection)
+                            QMetaObject.invokeMethod(self, "auto_enable_overlay", Qt.ConnectionType.QueuedConnection)
 
-                        # Prüfen ob Master-Switch AN ist
-                        if self.overlay_active.get():
-                            # 1. Crosshair an
-                            self.root.after(0, self.auto_enable_overlay)
-                            # 2. Stats-Loop starten
-                            self.root.after(0, self.refresh_ingame_overlay)
-                            # 3. Killfeed einschalten
-                            if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
-                                self.root.after(0, self.overlay_win.feed_label.show)
-                                self.root.after(0, lambda: self.overlay_win.feed_label.setText(""))
+                            # Stats Refresh starten (Falls vorhanden)
+                            if hasattr(self, 'refresh_ingame_overlay'):
+                                QMetaObject.invokeMethod(self, "refresh_ingame_overlay",
+                                                         Qt.ConnectionType.QueuedConnection)
                         else:
                             self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt inaktiv.")
-
-
                     else:
-
                         self.add_log("MONITOR: PlanetSide 2 beendet.")
-                        # Ruft die neue stop_overlay_logic auf
-                        self.root.after(0, self.stop_overlay_logic)
-                        # Crosshair nur verstecken, wenn NICHT im Edit-Modus
-                        if self.overlay_win and not getattr(self, "is_hud_editing", False):
-                            self.root.after(0, self.overlay_win.crosshair_label.hide)
+                        # Sicherer Aufruf der Stop-Logik
+                        if hasattr(self, 'stop_overlay_logic'):
+                            QMetaObject.invokeMethod(self, "stop_overlay_logic", Qt.ConnectionType.QueuedConnection)
+                        elif self.overlay_win:
+                            QMetaObject.invokeMethod(self.overlay_win, "hide", Qt.ConnectionType.QueuedConnection)
 
-            except:
-                pass
+            except Exception as e:
+                print(f"Monitor Loop Error: {e}")
+
             time.sleep(5)
 
     def start_path_edit(self):
@@ -1548,20 +1907,25 @@ class DiorClientGUI:
             self.add_log("PATH: Pfad gelöscht.")
 
     def auto_enable_overlay(self):
-        """Wird aufgerufen, wenn PlanetSide2_x64.exe gefunden wird."""
-        if self.overlay_win:
-            # Falls das Fenster minimiert oder versteckt war:
-            self.overlay_win.showFullScreen()
+        """Wird gerufen, wenn PS2 startet."""
+        if not self.overlay_win:
+            # Hier musst du deine Overlay-Fenster Klasse importieren (z.B. QtOverlay)
+            # self.overlay_win = QtOverlay(self)
+            self.add_log("ERR: Overlay Fenster Objekt nicht initialisiert!")
+            return
 
-            # Jetzt laden wir die Crosshair-Daten und machen es sichtbar
-            c_conf = self.config.get("crosshair", {})
-            path = get_asset_path(c_conf.get("file", "crosshair.png"))
-            size = c_conf.get("size", 32)
-            active = c_conf.get("active", True)
+        # Sichtbar machen
+        self.overlay_win.showFullScreen()
 
-            # Dieser Aufruf zeigt das Crosshair nun aktiv an
-            self.overlay_win.update_crosshair(path, size, active)
-            self.add_log("GAME: PlanetSide 2 erkannt. Crosshair aktiviert.")
+        # Crosshair laden aus Config
+        c = self.config.get("crosshair", {})
+        if c.get("active", True) and hasattr(self.overlay_win, 'update_crosshair'):
+            self.overlay_win.update_crosshair(
+                os.path.join(self.BASE_DIR, "assets", c.get("file", "crosshair.png")),
+                c.get("size", 32),
+                True
+            )
+        self.add_log("SYS: Overlay HUD synchronisiert.")
 
     def auto_disable_overlay(self):
         """Wird aufgerufen, wenn das Spiel geschlossen wird."""
@@ -1588,22 +1952,31 @@ class DiorClientGUI:
         self.root.after(10, self.pump_qt)
 
     def toggle_overlay(self):
-        self.overlay_enabled = not self.overlay_enabled
+        """Startet oder stoppt das Ingame-Overlay Fenster."""
+        # Falls das Fenster noch nie erstellt wurde
+        if self.overlay_win is None:
+            try:
+                  # Importiere deine Overlay-Klasse
+                self.overlay_win = QtOverlay(self)  # Übergib 'self' für den Datenzugriff
+                self.add_log("SYS: Overlay-Instanz erstellt.")
+            except Exception as e:
+                self.add_log(f"ERR: Overlay konnte nicht erstellt werden: {e}")
+                return
 
-        if self.overlay_enabled:
-            self.btn_overlay_toggle.config(text="OVERLAY SYSTEM DEAKTIVIEREN", bg="#28a745")
-            self.add_log("OVERLAY: Aktiviere System...")
-
-            if self.overlay_win is None:
-                # KEIN THREAD! Einfach direkt aufrufen
-                self.start_qt_overlay()
-            else:
-                self.overlay_win.showFullScreen()
+        # Umschalten der Sichtbarkeit
+        if self.overlay_win.isVisible():
+            self.overlay_win.hide()
+            self.add_log("SYS: Overlay versteckt.")
         else:
-            self.btn_overlay_toggle.config(text="OVERLAY SYSTEM AKTIVIEREN", bg="#dc3545")
-            self.add_log("OVERLAY: System Deaktiviert")
-            if self.overlay_win:
-                self.overlay_win.hide()
+            # Overlay anzeigen und in den Vordergrund bringen
+            self.overlay_win.showFullScreen()
+            self.overlay_win.setWindowFlags(
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowTransparentForInput  # Wichtig für 'Durchklicken'
+            )
+            self.overlay_win.show()
+            self.add_log("SYS: Overlay aktiviert.")
 
     def init_db(self):
         conn = sqlite3.connect("ps2_master.db")
@@ -1963,313 +2336,72 @@ class DiorClientGUI:
                 self.nso_running = False
 
     # --- UI & NAVIGATION ---
-    def update_background_view(self, w, h):
-        if not self.gif_path or not os.path.exists(self.gif_path): return
-        w, h = max(w, 100), max(h, 100)
-        try:
-            img_obj = Image.open(self.gif_path)
-            resized_img = img_obj.resize((w, h), Image.LANCZOS)
-            self.bg_photo = ImageTk.PhotoImage(resized_img)
-            self.canvas.itemconfig(self.bg_image_id, image=self.bg_photo)
-        except Exception as e:
-            print(f"Fehler beim Laden des Hintergrunds: {e}")
-
-    def setup_ui_elements(self):
-        w = self.root.winfo_width() if self.root.winfo_width() > 10 else 850
-        mid = w // 2
-        self.title_id = self.canvas.create_text(mid, 50, text="PLANETSIDE 2 MASTER CONTROL", fill="#00f2ff",
-                                                font=("Arial", 22, "bold"))
-
-        btn_nav_frame = tk.Frame(self.root, bg="#111")
-        btn_style = {"bg": "#111", "fg": "white", "relief": "flat", "width": 14, "font": ("Arial", 10, "bold")}
-
-        tk.Button(btn_nav_frame, text="DASHBOARD", command=self.show_dashboard, **btn_style).pack(side="left", padx=2)
-        tk.Button(btn_nav_frame, text="LAUNCHER", command=self.show_launcher, **btn_style).pack(side="left", padx=2)
-        tk.Button(btn_nav_frame, text="ENFORCER", command=self.show_enforcer, **btn_style).pack(side="left", padx=2)
-        # tk.Button(btn_nav_frame, text="NSO TELEPORTER", command=self.show_nso_teleporter, **btn_style).pack(side="left", padx=2)
-        tk.Button(btn_nav_frame, text="Ingame Overlay", command=self.show_ingame_overlay_tab, **btn_style).pack(
-            side="left", padx=2)
-
-        # --- CHARACTERS BUTTON MIT HOVER BINDING (KORRIGIERT) ---
-        char_btn = tk.Button(btn_nav_frame, text="CHARACTERS",
-                             command=lambda: [setattr(self, 'current_sub_tab', 'Overview'), self.show_characters()],
-                             **btn_style)
-        char_btn.pack(side="left", padx=2)
-        char_btn.bind("<Enter>", self.show_sub_menu)
-        char_btn.bind("<Leave>", self.hide_sub_menu)
-
-        tk.Button(btn_nav_frame, text="SETTINGS", command=self.show_settings, **btn_style).pack(side="left", padx=2)
-
-        self.nav_id = self.canvas.create_window(mid, 110, window=btn_nav_frame)
-        self.content_ids = []
-        self.show_launcher()
-
-    def setup_char_sub_menu(self):
-        # Das Frame für das Untermenü
-        self.sub_menu_frame = tk.Frame(self.root, bg="#0a141d", bd=1, relief="solid", highlightbackground="#00f2ff",
-                                       highlightthickness=1)
-
-        self.sub_items = [
-            "Overview", "Weapon stats", "Vehicle stats", "Sessions",
-            "Unlocks", "Friends", "Directives", "Achievements",
-            "Outfit history", "Killboard", "Alerts"
-        ]
-        self.sub_buttons = []
-
-        for item in self.sub_items:
-            btn = tk.Button(self.sub_menu_frame, text=item.upper(),
-                            bg="#0a141d", fg="#00f2ff",
-                            font=("Consolas", 8, "bold"),
-                            activebackground="#00f2ff", activeforeground="black",
-                            bd=0, padx=8, pady=5,
-                            command=lambda i=item: self.handle_sub_click(i))
-            btn.pack(side="left")
-            btn.bind("<Enter>", lambda e, b=btn: b.config(bg="#1a2b3c"))
-            btn.bind("<Leave>", lambda e, b=btn: b.config(bg="#0a141d"))
-            self.sub_buttons.append(btn)
-
-    def animate_api_light(self, canvas, light_id, color_type, step=0):
-        import math
-        brightness = (math.sin(step) + 1) / 4 + 0.5
-        color_hex = f'#{0 if color_type == "green" else int(255 * brightness):02x}{int(255 * brightness) if color_type == "green" else 0:02x}00'
-        try:
-            canvas.itemconfig(light_id, fill=color_hex, outline="#333")
-            self.root.after(50, lambda: self.animate_api_light(canvas, light_id, color_type, step + 0.1))
-        except:
-            pass
 
     def show_dashboard(self):
-        # 1. Zuerst IMMER aufräumen
-        self.clear_content()
+        """Wechselt in der Qt-Oberfläche zum Dashboard-Tab"""
         self.current_tab = "Dashboard"
+        # Falls dein MainHub ein QStackedWidget für Tabs nutzt:
+        if hasattr(self.main_hub, 'stacked_widget'):
+            # Index 0 ist meist das Dashboard
+            self.main_hub.stacked_widget.setCurrentIndex(0)
 
-        # WICHTIG: Alte Graphen-Referenzen löschen
-        if hasattr(self, 'graph_line'): del self.graph_line
-        if hasattr(self, 'graph_glow'): del self.graph_glow
-
-        # Fenstergröße setzen
-        self.root.geometry("1600x1000")
-        mid = self.root.winfo_width() // 2
-
-        # 2. Haupt-Frame erstellen
-        dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
-        self.dash_widgets = {"frame": dash_frame, "factions": {}}
-
-        tk.Label(dash_frame, text="WAINWRIGHT LIVE TELEMETRY", font=("Arial", 24, "bold"), bg="#1a1a1a",
-                 fg="#00f2ff").pack(pady=15)
-
-        # 3. Größeres Canvas für den Graphen
-        g_canvas = tk.Canvas(dash_frame, width=800, height=200, bg="#050505", highlightthickness=0)
-        g_canvas.pack(pady=10, padx=20)
-        self.dash_widgets["canvas"] = g_canvas
-
-        self.total_players_label = tk.Label(dash_frame, text="Total Players: 0", font=("Consolas", 22, "bold"),
-                                            bg="#1a1a1a", fg="#00f2ff")
-        self.total_players_label.pack(pady=10)
-
-        # 4. Fraktionen Grid
-        f_frame = tk.Frame(dash_frame, bg="#111", pady=10)
-        f_frame.pack(fill="x", padx=10)
-
-        for name, color in [("TR", "#ff0000"), ("NC", "#0066ff"), ("VS", "#9900ff")]:
-            f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
-            f_box.pack(side="left", expand=True, fill="both", padx=5)
-
-            # Name (TR/NC/VS)
-            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
-
-            # Prozent-Anzeige
-            p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
-            p_lab.pack()
-
-            # [NEU] Anzahl der Spieler Anzeige
-            c_lab = tk.Label(f_box, text="0 Players", font=("Consolas", 10), bg="#1a1a1a", fg="#888")
-            c_lab.pack(pady=(0, 5))
-
-            # Balken
-            bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=5);
-            bar_bg.pack_propagate(False)
-            bar = tk.Frame(bar_bg, bg=color, height=8)
-            bar.place(x=0, y=0, width=0)
-
-            tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
-                pady=(15, 0))
-
-            list_frame = tk.Frame(f_box, bg="#1a1a1a")
-            list_frame.pack(fill="x", padx=5, pady=5)
-
-            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
-                       ("KDA", 6, 5)]
-            for text, col, width in headers:
-                h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
-                                 bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
-                h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
-
-            # [WICHTIG] "count": c_lab hinzufügen, damit das Update es findet
-            self.dash_widgets["factions"][name] = {
-                "label": p_lab,
-                "count": c_lab,  # <--- DAS HAT GEFEHLT
-                "bar": bar,
-                "list_frame": list_frame
-            }
-
-            # --- TABELLEN-HEADER ---
-            list_frame = tk.Frame(f_box, bg="#1a1a1a")
-            list_frame.pack(fill="x", padx=5, pady=5)
-
-            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
-                       ("KDA", 6, 5)]
-            for text, col, width in headers:
-                h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
-                                 bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
-                h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
-
-            self.dash_widgets["factions"][name] = {
-                "label": p_lab,
-                "bar": bar,
-                "list_frame": list_frame
-            }
-
-        # Footer
-        self.dash_widgets["footer"] = tk.Label(dash_frame, text="", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
-        self.dash_widgets["footer"].pack(pady=10)
-
-        id_dash = self.canvas.create_window(mid, 480, window=dash_frame, width=1450, height=850)
-        self.content_ids.append(id_dash)
-        self.update_dashboard_elements()
+        self.add_log("DASHBOARD: View active.")
+        # Initialer Trigger für Daten-Update
+        self.update_live_graph()
 
     def update_dashboard_elements(self):
-        if not hasattr(self, 'dash_widgets') or self.current_tab != "Dashboard":
+        """Sendet echte Live-Daten an das neue PyQt6 Dashboard via Signale."""
+        if not hasattr(self, 'dash_window') or not hasattr(self, 'dash_controller'):
             return
-        if not hasattr(self, 'session_stats'): self.session_stats = {}
 
+        # 1. POPULATION & FRAKTIONEN (Direktes Emit)
+        total_players = self.live_stats.get("Total", 0)
+        self.dash_controller.signals.update_population.emit(total_players)
+
+        faction_data = {
+            "TR": self.live_stats.get("TR", 0),
+            "NC": self.live_stats.get("NC", 0),
+            "VS": self.live_stats.get("VS", 0),
+            "NSO": self.live_stats.get("NSO", 0)
+        }
+        self.dash_controller.signals.update_factions.emit(faction_data)
+
+        # 2. TOP PLAYER LISTE VORBEREITEN
+        active_ids = self.active_players.keys()
         now = time.time()
-        if not hasattr(self, 'session_start_time'): self.session_start_time = now
+        prepared_players = []
 
-        canvas = self.dash_widgets.get("canvas")
-        if not canvas or not canvas.winfo_exists():
-            return
+        for p_id, p in self.session_stats.items():
+            # Nur Spieler berücksichtigen, die noch als 'aktiv' markiert sind
+            if not isinstance(p, dict) or p_id not in active_ids:
+                continue
 
-        try:
-            # --- GRAPH ZEICHNEN ---
-            total_w, total_h = 800, 180
-            off_l, off_r, off_t, off_b = 40, 10, 25, 20
-            draw_w, draw_h = total_w - off_l - off_r, total_h - off_t - off_b
-            max_pop = 1500
-            points = []
+            # --- NAMEN-FIX ---
+            # Falls die API noch lädt, nutzen wir den Cache
+            p_name = p.get("name")
+            if p_name in ["Unknown", "Searching...", None]:
+                p_name = self.name_cache.get(p_id, f"ID: {p_id[-4:]}")
 
-            if len(self.pop_history) > 1:
-                for idx, val in enumerate(self.pop_history):
-                    x = off_l + (idx * (draw_w / (len(self.pop_history) - 1)))
-                    y = (total_h - off_b) - (val * (draw_h / max_pop))
-                    y = max(off_t, min(y, total_h - off_b))
-                    points.extend([x, y])
+            # --- KPM LOGIK ---
+            # Wir nutzen die Zeit seit dem ersten Kill dieser Session
+            p_start = p.get("start", now)
+            active_min = max((now - p_start) / 60, 0.5)
 
-                canvas.delete("all")
+            # Paket schnüren (Wichtig: Nur Basisdaten, die GUI berechnet den Rest)
+            prepared_players.append({
+                "name": p_name,
+                "fac": p.get("faction", "NSO"),
+                "k": p.get("k", 0),
+                "d": p.get("d", 0),
+                "a": p.get("a", 0),
+                "active_min": active_min
+            })
 
-                # Raster
-                for i in range(0, max_pop + 1, 300):
-                    y_p = (total_h - off_b) - (i * (draw_h / max_pop))
-                    canvas.create_line(off_l, y_p, total_w - off_r, y_p, fill="#151515")
-                    canvas.create_text(off_l - 8, y_p, text=str(i), fill="#777", font=("Arial", 7), anchor="e")
+        # 3. SORTIERUNG (Nach Kills, damit das Dashboard oben die Besten zeigt)
+        prepared_players.sort(key=lambda x: x['k'], reverse=True)
 
-                # --- ADAPTIVE X-ACHSE (15s Optimiert) ---
-                elapsed_now = now - self.session_start_time
-                current_interval = 1 if elapsed_now < 60 else 15
-
-                for i in range(0, 101, 20):
-                    x_p = off_l + (i * (draw_w / 100))
-                    total_sec_ago = (100 - i) * current_interval
-
-                    if total_sec_ago == 0:
-                        time_text = "NOW"
-                    elif current_interval == 1:
-                        time_text = f"-{total_sec_ago}s"
-                    else:
-                        # Rechnet 300s, 600s etc. in saubere Minuten um
-                        mins = total_sec_ago // 60
-                        time_text = f"-{mins}m"
-
-                    canvas.create_text(x_p, off_t - 5, text=time_text, fill="#00f2ff",
-                                       font=("Arial", 7, "bold"), anchor="s")
-
-                canvas.create_polygon([off_l, total_h - off_b] + points + [total_w - off_r, total_h - off_b],
-                                      fill="#001a1a")
-                canvas.create_line(points, fill="#00f2ff", width=2, smooth=True)
-                canvas.create_line(off_l, off_t, off_l, total_h - off_b, fill="#333")
-                canvas.create_line(off_l, total_h - off_b, total_w - off_r, total_h - off_b, fill="#333")
-
-            # --- STATS & LISTEN UPDATE (Jede Sekunde) ---
-            total = self.live_stats.get("Total", 0)
-            session_duration_min = (now - self.session_start_time) / 60
-            if hasattr(self, 'total_players_label'):
-                self.total_players_label.config(text=f"Total Players: {total}")
-
-            active_ids = self.active_players.keys()
-            active_players = [
-                p for p_id, p in self.session_stats.items()
-                if isinstance(p, dict) and p_id in active_ids
-            ]
-
-            for name, w in self.dash_widgets.get("factions", {}).items():
-                count = self.live_stats.get(name, 0)
-                perc = (count / total * 100) if total > 0 else 0
-                if "label" in w: w["label"].config(text=f"{perc:.1f}%")
-                if "count" in w: w["count"].config(text=f"{count} Players")
-                if "bar" in w: w["bar"].place(width=int(perc * 1.8))
-
-                lf = w.get("list_frame")
-                if not lf: continue
-                for child in lf.winfo_children():
-                    try:
-                        if int(child.grid_info()["row"]) > 0: child.destroy()
-                    except:
-                        pass
-
-                f_players = sorted([p for p in active_players if p.get("faction") == name], key=lambda x: x.get("k", 0),
-                                   reverse=True)
-                for i, p in enumerate(f_players[:5]):
-                    p_id = p.get("id")
-                    if p.get("name") in ["Unknown", "Searching...", None] and p_id in self.name_cache:
-                        p["name"] = self.name_cache[p_id]
-                    display_name = p.get("name", "Searching...")
-
-                    # --- HIER DEN NEUEN BLOCK EINFÜGEN / ERSETZEN ---
-                    k, a, d = p.get("k", 0), p.get("a", 0), p.get("d", 0)
-
-                    # Berechnung der aktiven Zeit dieses Spielers
-                    # Hinweis: In deinem Code (Zeile 1451) heißt der Key 'start'
-                    p_start = p.get("start", now)
-                    p_last = p.get("last_kill_time", now)
-
-                    # Wie lange war der Spieler aktiv? (Mindestens 1 Minute für KPM)
-                    player_active_min = max((p_last - p_start) / 60, 1.0)
-
-                    kpm = k / player_active_min
-                    kd = k / max(1, d)
-                    kda = (k + a) / max(1, d)
-
-                    # Die row_data muss die neuen Variablen (kpm, kd, kda) nutzen:
-                    row_data = [
-                        (display_name[:32], 32, "w", "#ccc"),
-                        (k, 4, "center", "white"),
-                        (f"{kpm:.1f}", 5, "center", self.get_kpm_color(kpm)),
-                        (d, 4, "center", "white"),
-                        (a, 4, "center", "white"),
-                        (f"{kd:.1f}", 5, "center", self.get_kpm_color(kd)),
-                        (f"{kda:.1f}", 5, "center", "#00f2ff")
-                    ]
-
-                    for c_idx, (v, width, anc, fg) in enumerate(row_data):
-                        tk.Label(lf, text=v, font=("Consolas", 10), bg="#1d1d1d" if (i + 1) % 2 == 0 else "#1a1a1a",
-                                 fg=fg, anchor=anc, width=width).grid(row=i + 1, column=c_idx, sticky="nsew", padx=1)
-
-        except Exception as e:
-            print(f"DEBUG: Dashboard Update failed: {e}")
-
-        if "footer" in self.dash_widgets:
-            self.dash_widgets["footer"].config(text=f"Last Update: {time.strftime('%H:%M:%S')}")
+        # Signal abfeuern (Top 20 reicht meist für die Anzeige)
+        self.dash_controller.signals.update_top_list.emit(prepared_players[:20])
 
     def open_server_menu(self, event):
         """Öffnet das Popup-Menü zur Serverwahl"""
@@ -2313,21 +2445,28 @@ class DiorClientGUI:
 
     def get_server_name_by_id(self, world_id):
         """Sucht den Anzeigenamen zum Server anhand der World-ID"""
+        world_id = str(world_id)
         for name, wid in self.server_map.items():
-            if str(wid) == str(world_id):
+            if str(wid) == world_id:
                 return name
-        return "Unknown Server"
+        return f"Unknown ({world_id})"
 
     def save_config(self):
-        """Speichert die gesamte Konfiguration in die config.json"""
+        """Speichert die aktuelle Konfiguration sicher auf Festplatte."""
         try:
-            # Pfad zur config.json im Hauptverzeichnis
-            config_path = os.path.join(BASE_DIR, "config.json")
+            # Wir säubern die Config von evtl. eingeschlichenen Qt-Objekten
+            clean_config = {}
+            for k, v in self.config.items():
+                # Nur einfache Datentypen zulassen
+                if isinstance(v, (str, int, float, bool, dict, list)):
+                    clean_config[k] = v
+
+            config_path = os.path.join(self.BASE_DIR, "config.json")
             with open(config_path, "w", encoding="utf-8") as f:
-                # indent=4 macht die Datei für Menschen lesbar (schön formatiert)
-                json.dump(self.config, f, indent=4)
+                json.dump(clean_config, f, indent=4)
+            self.add_log("SYS: Konfiguration erfolgreich gespeichert.")
         except Exception as e:
-            print(f"Fehler beim Speichern der config.json: {e}")
+            self.add_log(f"ERR: Fehler beim Speichern der JSON: {e}")
 
     def destroy_overlay_window(self):
         if self.overlay_win:
@@ -2504,8 +2643,6 @@ class DiorClientGUI:
         if img_path or sound_path:
             self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, is_hitmarker)
 
-
-
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
         if not hasattr(self, 'ovl_canvas'): return
@@ -2555,654 +2692,89 @@ class DiorClientGUI:
             if not new_state:
                 self.overlay_win.clear_queue_now()
 
-    def show_ingame_overlay_tab(self):
-        self.clear_content()
-        self.current_tab = "Ingame Overlay"
-        mid = self.root.winfo_width() // 2
-
-        # Styles für die Tabs
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("TNotebook", background="#1e1e1e", borderwidth=0)
-        style.configure("TNotebook.Tab", background="#333", foreground="white", font=('Consolas', 10, 'bold'),
-                        padding=[10, 5])
-        style.map("TNotebook.Tab", background=[("selected", "#00f2ff")], foreground=[("selected", "black")])
-
-        # Notebook erstellen und binden
-        self.ovl_notebook = ttk.Notebook(self.root)
-        self.ovl_notebook.bind("<<NotebookTabChanged>>", self.on_overlay_tab_change)
-
-        # =========================================================
-        # TAB 1: IDENTITY (Verschoben von Pos 4 auf Pos 1)
-        # =========================================================
-        tab_ident = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_ident, text=" IDENTITY ")
-
-        tk.Label(tab_ident, text="ACTIVE TRACKING IDENTITY", font=("Consolas", 14, "bold"), bg="#1a1a1a",
-                 fg="#00f2ff").pack(pady=(20, 10))
-        tk.Label(tab_ident,
-                 text="Select the character you are currently playing.\nOnly events for this ID will trigger overlay effects.",
-                 bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
-
-        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
-        self.ovl_char_menu = tk.OptionMenu(tab_ident, self.char_var, *opts, command=self.update_active_char)
-        self.ovl_char_menu.config(bg="#333", fg="white", font=("Consolas", 11, "bold"), width=25, bd=0,
-                                  highlightthickness=0)
-        self.ovl_char_menu["menu"].config(bg="#333", fg="white", font=("Consolas", 11))
-        self.ovl_char_menu.pack(pady=5)
-        self.char_option_menus.append(self.ovl_char_menu)
-
-        tk.Button(tab_ident, text="DELETE SELECTED", bg="#440000", fg="#ff4444", font=("Consolas", 9),
-                  command=self.delete_char).pack(pady=5)
-
-        tk.Frame(tab_ident, height=2, bd=1, relief="sunken", bg="#333").pack(fill="x", padx=40, pady=20)
-
-        tk.Label(tab_ident, text="ADD NEW CHARACTER", font=("Consolas", 11, "bold"), bg="#1a1a1a", fg="#00ff00").pack(
-            pady=(10, 5))
-        add_frame = tk.Frame(tab_ident, bg="#1a1a1a");
-        add_frame.pack()
-        self.ovl_char_entry = tk.Entry(add_frame, bg="#111", fg="#00f2ff", font=("Consolas", 11), width=20)
-        self.ovl_char_entry.pack(side="left", padx=5)
-        self.ovl_char_entry.bind("<Return>", lambda e: self.add_char())
-        tk.Button(add_frame, text="ADD", bg="#004400", fg="white", font=("Consolas", 10, "bold"),
-                  command=self.add_char).pack(side="left")
-
-        # --- MASTER SCHALTER (Verschoben von Crosshair Tab hierher) ---
-        sep_master = tk.Frame(tab_ident, height=2, bd=1, relief="sunken", bg="#333")
-        sep_master.pack(fill="x", padx=40, pady=20)
-
-        check_btn = tk.Checkbutton(tab_ident, text="SYSTEM OVERLAY MASTER-SWITCH", variable=self.overlay_active,
-                                   bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
-                                   command=self.toggle_master_switch)  # <--- Hier rufen wir jetzt die Speicher-Funktion auf
-        check_btn.pack(pady=10)
-
-        # =========================================================
-        # TAB 2: EVENTS (NEUES DESIGN: KOMBI-LEISTE OBEN)
-        # =========================================================
-        tab_events = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_events, text=" EVENTS (Kills/Deaths) ")
-
-        # --- CONTAINER FÜR BEIDE KONTROLL-ELEMENTE ---
-        # Ein Frame, der die ganze Breite einnimmt
-        control_container = tk.Frame(tab_events, bg="#1a1a1a")
-        control_container.pack(fill="x", padx=10, pady=10)
-
-        # --- LINKE SPALTE: QUEUE CONTROL ---
-        evt_ctrl_frame = tk.LabelFrame(control_container, text=" Global Queue ", bg="#1a1a1a", fg="#00f2ff", padx=5,
-                                       pady=5)
-        evt_ctrl_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
-
-        # Status holen
-        q_active = self.config.get("event_queue_active", True)
-
-        # Button Text/Farbe
-        self.btn_queue_toggle = tk.Button(evt_ctrl_frame,
-                                          text="QUEUE: ON" if q_active else "QUEUE: OFF",
-                                          bg="#004400" if q_active else "#440000",
-                                          fg="white", font=("Arial", 9, "bold"),
-                                          command=self.toggle_event_queue)
-        self.btn_queue_toggle.pack(fill="x", pady=2)
-
-        # Kleiner Hinweis (Optional, damit es aufgeräumt bleibt)
-        tk.Label(evt_ctrl_frame, text="(Sequential / Instant)", bg="#1a1a1a", fg="#666", font=("Arial", 7)).pack()
-
-        # --- RECHTE SPALTE: BULK ACTIONS ---
-        bulk_frame = tk.LabelFrame(control_container, text=" Bulk Actions ", bg="#1a1a1a", fg="#ffcc00", padx=5, pady=5)
-        bulk_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
-
-        # Der "Copy All" Button
-        tk.Button(bulk_frame, text="APPLY LAYOUT TO ALL\n(Except Hitmarker)",
-                  bg="#552200", fg="#ffdddd", font=("Consolas", 8, "bold"),
-                  command=self.copy_event_layout_to_all).pack(fill="x", pady=2)
-
-
-        event_categories = {
-            "STANDARD KILLS": ["Kill", "Headshot", "Death", "Hitmarker", "Team Kill", "Team Kill Victim"],
-            "STREAK MEILENSTEINE": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
-            "MULTI KILL RUSH": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill",
-                                "Ludicrous Kill", "Holy Shit"],
-            "SPEZIAL EVENTS": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill",
-                               "Road Kill", "Roadkill Victim", "Spitfire Kill", "Gunner Kill", "Tankmine Kill",
-                               "AP-Mine Kill"],
-            "SUPPORT & TEAM": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction"],
-            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
-                           "Alert Win"],
-            "SYSTEM / LOGIN": ["Login TR", "Login NC", "Login VS", "Login NSO"]
-        }
-
-        # --- 1. GRID MIT BUTTONS ---
-        grid_frame = tk.Frame(tab_events, bg="#1a1a1a")
-        grid_frame.pack(fill="both", expand=True, pady=10, padx=5)
-
-        self.var_event_sel = tk.StringVar(value="Kill")
-        self.lbl_current_edit = tk.Label(tab_events, text="EDITING: Kill", font=("Consolas", 14, "bold"), bg="#1a1a1a",
-                                         fg="#00ff00")
-        self.lbl_current_edit.pack(pady=(0, 5))
-
-        for cat_name, items in event_categories.items():
-            col_frame = tk.Frame(grid_frame, bg="#222", bd=1, relief="solid")
-            col_frame.pack(side="left", fill="both", padx=2, expand=True)
-            tk.Label(col_frame, text=cat_name, bg="#333", fg="#00f2ff", font=("Arial", 7, "bold")).pack(fill="x",
-                                                                                                        pady=(0, 2))
-            for item in items:
-                tk.Button(col_frame, text=item, bg="#1a1a1a", fg="#ccc", font=("Arial", 8), bd=0,
-                          activebackground="#00f2ff", activeforeground="black",
-                          command=lambda x=item: self.select_event_from_grid(x)).pack(fill="x", pady=0)
-
-        # --- 2. EINGABEFELDER FÜR BILD & SOUND (DIESE FEHLTEN!) ---
-        io_frame = tk.Frame(tab_events, bg="#1a1a1a")
-        io_frame.pack(pady=10)
-
-        # Bild
-        tk.Label(io_frame, text="Image (PNG):", bg="#1a1a1a", fg="white").grid(row=0, column=0, padx=5, sticky="e")
-        self.ent_evt_img = tk.Entry(io_frame, width=30, bg="#111", fg="#00f2ff")
-        self.ent_evt_img.grid(row=0, column=1, padx=5)
-        tk.Button(io_frame, text="...", command=lambda: self.browse_file(self.ent_evt_img, "png"),
-                  bg="#333", fg="white", width=3).grid(row=0, column=2)
-
-        # Sound
-        tk.Label(io_frame, text="Sound (MP3):", bg="#1a1a1a", fg="white").grid(row=1, column=0, padx=5, sticky="e")
-        self.ent_evt_snd = tk.Entry(io_frame, width=30, bg="#111", fg="#00f2ff")
-        self.ent_evt_snd.grid(row=1, column=1, padx=5)
-        tk.Button(io_frame, text="...", command=lambda: self.browse_file(self.ent_evt_snd, "audio"),
-                  bg="#333", fg="white", width=3).grid(row=1, column=2)
-
-        # --- 3. SKALIERUNG & DAUER ---
-        pos_frame = tk.Frame(tab_events, bg="#1a1a1a")
-        pos_frame.pack(fill="x", padx=20, pady=5)
-
-        self.scale_png_size = tk.Scale(pos_frame, from_=0.1, to=3.0, resolution=0.05, orient="horizontal",
-                                       bg="#1a1a1a", fg="#00f2ff", label="Scale")
-        self.scale_png_size.set(1.0)
-        self.scale_png_size.pack(fill="x", pady=5)
-
-        # Duration Feld
-        dur_frame = tk.Frame(tab_events, bg="#1a1a1a")
-        dur_frame.pack(pady=5)
-        tk.Label(dur_frame, text="Display Duration (ms):", bg="#1a1a1a", fg="#aaaaaa", font=("Arial", 9)).pack(
-            side="left", padx=5)
-        vcmd_num = (self.root.register(lambda P: P.isdigit() or P == ""), '%P')
-        self.ent_evt_duration = tk.Entry(dur_frame, width=8, bg="#111111", fg="white", insertbackground="white",
-                                         validate='key', validatecommand=vcmd_num)
-        self.ent_evt_duration.insert(0, "3000")
-        self.ent_evt_duration.pack(side="left", padx=5)
-
-        # --- 4. ACTION BUTTONS ---
-        btn_box = tk.Frame(tab_events, bg="#1a1a1a")
-        btn_box.pack(pady=15)
-
-        # EDIT BUTTON
-        self.btn_edit_event = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white",
-                                        width=30, height=2, font=("Consolas", 10, "bold"),
-                                        command=self.toggle_hud_edit_mode)
-        self.btn_edit_event.pack(side="left", padx=5)
-
-        # TEST BUTTON
-        tk.Button(btn_box, text="TEST PREVIEW", bg="#444", fg="white", width=15, height=2,
-                  font=("Consolas", 10, "bold"),
-                  command=lambda: self.trigger_overlay_event(self.var_event_sel.get())).pack(side="left",
-                                                                                             padx=5)
-
-        # =========================================================
-        # TAB 3: KILLSTREAK (Messer-Kreis-System)
-        # =========================================================
-        tab_streak = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_streak, text=" KILLSTREAK ")
-        s_conf = self.overlay_config.get("streak", {})
-
-        # --- [NEU] STEUERUNG (MASTER & ANIMATION) ---
-        ctrl_frame = tk.Frame(tab_streak, bg="#1a1a1a", bd=1, relief="solid")
-        ctrl_frame.pack(fill="x", padx=10, pady=10)
-
-        # 1. MASTER SWITCH (Macht alles an/aus)
-        self.var_streak_master = tk.BooleanVar(value=s_conf.get("active", True))
-        tk.Checkbutton(ctrl_frame, text="KILLSTREAK SYSTEM AKTIVIEREN (Master)", variable=self.var_streak_master,
-                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 11, "bold"),
-                       command=self.save_streak_settings).pack(anchor="w", padx=10, pady=(5, 0))
-
-        # 2. ANIMATION SWITCH (Nur Pulsieren an/aus)
-        self.var_streak_anim = tk.BooleanVar(value=s_conf.get("anim_active", True))
-        tk.Checkbutton(ctrl_frame, text="PULSIERENDE ANIMATION AKTIVIEREN", variable=self.var_streak_anim,
-                       bg="#1a1a1a", fg="#ffcc00", selectcolor="black", font=("Consolas", 10),
-                       command=self.save_streak_settings).pack(anchor="w", padx=30, pady=(0, 5))
-
-        # 3. GESCHWINDIGKEIT
-        speed_frame = tk.Frame(tab_streak, bg="#1a1a1a")
-        speed_frame.pack(pady=5)
-        tk.Label(speed_frame, text="Puls-Geschwindigkeit (Zahl):", bg="#1a1a1a", fg="white").pack(side="left", padx=5)
-
-        self.ent_streak_speed = tk.Entry(speed_frame, width=10, bg="#111", fg="#00f2ff")
-        self.ent_streak_speed.insert(0, str(s_conf.get("speed", 50)))
-        self.ent_streak_speed.pack(side="left")
-
-        tk.Label(speed_frame, text="(Standard: 50)", bg="#1a1a1a", fg="#888", font=("Arial", 8)).pack(side="left",
-                                                                                                      padx=5)
-
-        # --- HAUPT-BILD (SKULL) ---
-        tk.Label(tab_streak, text="Haupt-Hintergrund (Skull PNG):", bg="#1a1a1a", fg="#00f2ff").pack(pady=(10, 0))
-        strk_img_f = tk.Frame(tab_streak, bg="#1a1a1a")
-        strk_img_f.pack()
-        self.ent_streak_img = tk.Entry(strk_img_f, width=40, bg="#111", fg="#00f2ff")
-        self.ent_streak_img.pack(side="left")
-        self.ent_streak_img.insert(0, get_short_name(s_conf.get("img", "KS_Counter.png")))
-        tk.Button(strk_img_f, text="Browse", command=lambda: self.browse_file(self.ent_streak_img, "png"), bg="#333",
-                  fg="white").pack(side="left")
-
-        # --- KOMBINIERTER BEREICH: MESSER (Links) & DESIGN (Rechts) ---
-        tk.Label(tab_streak, text="STREAK-KONFIGURATION (Messer & Design):",
-                 font=("Consolas", 10, "bold"), bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 5))
-
-        # Hauptcontainer für beide Spalten
-        streak_settings_container = tk.Frame(tab_streak, bg="#1a1a1a")
-        streak_settings_container.pack(pady=5, fill="x", padx=20)
-
-        # LINKER BEREICH: Messer-Bilder
-        knife_frame = tk.Frame(streak_settings_container, bg="#1a1a1a")
-        knife_frame.pack(side="left", padx=(0, 30))
-
-        self.knife_entries = {}
-        for f_name in ["TR", "NC", "VS"]:
-            f_key = f_name.lower()
-            row = tk.Frame(knife_frame, bg="#1a1a1a")
-            row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{f_name}:", bg="#1a1a1a", fg="white", width=4, anchor="w").pack(side="left")
-
-            ent = tk.Entry(row, width=25, bg="#111", fg="white", bd=1)
-            ent.insert(0, get_short_name(s_conf.get(f"knife_{f_key}", f"knife_{f_key}.png")))
-            ent.pack(side="left", padx=5)
-            self.knife_entries[f_key] = ent
-
-            tk.Button(row, text="📁", command=lambda e=ent: self.browse_file(e, "png"),
-                      bg="#333", fg="white", bd=0, width=3).pack(side="left")
-
-        # RECHTER BEREICH: Globales Zahl-Design (Kompakt & Übersichtlich)
-        design_frame = tk.LabelFrame(streak_settings_container, text=" [ Zahl-Design ] ",
-                                     bg="#1a1a1a", fg="#00f2ff", font=("Consolas", 9))
-        design_frame.pack(side="left", fill="both", expand=True, padx=10, pady=5)
-
-        current_color = s_conf.get("color", "#ffffff")
-
-        # 1. Farbe
-        tk.Label(design_frame, text="Farbe:", bg="#1a1a1a", fg="white").grid(row=0, column=0, padx=5, pady=5,
-                                                                             sticky="w")
-        self.btn_streak_color = tk.Button(design_frame, text="🎨 PICK", bg=current_color,
-                                          width=8, font=("Consolas", 8, "bold"),
-                                          command=self.pick_streak_color)
-        self.btn_streak_color.grid(row=0, column=1, padx=5, pady=5)
-
-        # 2. Schriftgröße (Combobox)
-        tk.Label(design_frame, text="Size:", bg="#1a1a1a", fg="white").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.streak_fontsize_var = tk.StringVar(value=str(s_conf.get("size", 26)))
-        self.combo_size = ttk.Combobox(design_frame, textvariable=self.streak_fontsize_var,
-                                       values=[12, 16, 20, 24, 26, 28, 32, 36, 48, 72], width=5)
-        self.combo_size.grid(row=1, column=1, padx=5, pady=5)
-        self.streak_fontsize_var.trace_add("write", self.streak_font_debounce)
-
-        # 3. Schatten (0 = Aus)
-        tk.Label(design_frame, text="Shadow:", bg="#1a1a1a", fg="white").grid(row=0, column=2, padx=5, pady=5,
-                                                                              sticky="w")
-        self.streak_shadow_size_var = tk.StringVar(value=str(s_conf.get("shadow_size", 2)))
-        self.combo_shadow = ttk.Combobox(design_frame, textvariable=self.streak_shadow_size_var,
-                                         values=[0, 1, 2, 3, 4, 5, 8], width=3)
-        self.combo_shadow.grid(row=0, column=3, padx=5, pady=5)
-        self.streak_shadow_size_var.trace_add("write", lambda *a: self.save_streak_settings(preview=True))
-
-        # 4. Fett & Linie
-        self.var_streak_bold = tk.BooleanVar(value=s_conf.get("bold", False))
-        tk.Checkbutton(design_frame, text="Fett", variable=self.var_streak_bold,
-                       bg="#1a1a1a", fg="white", selectcolor="black", font=("Arial", 8),
-                       command=lambda: self.save_streak_settings(preview=True)).grid(row=1, column=2, padx=5,
-                                                                                     sticky="w")
-
-        self.var_streak_underline = tk.BooleanVar(value=s_conf.get("underline", False))
-        tk.Checkbutton(design_frame, text="Linie", variable=self.var_streak_underline,
-                       bg="#1a1a1a", fg="white", selectcolor="black", font=("Arial", 8),
-                       command=lambda: self.save_streak_settings(preview=True)).grid(row=1, column=3, padx=5,
-                                                                                     sticky="w")
-
-        # --- POSITIONIERUNG ZAHL (Relativ zum Bild) ---
-        tk.Label(tab_streak, text="Position ZAHL (Relativ zum Bild):", bg="#1a1a1a", fg="#ffcc00").pack(pady=(15, 0))
-        txt_pos_f = tk.Frame(tab_streak, bg="#1a1a1a")
-        txt_pos_f.pack(fill="x", padx=50)
-
-        self.scale_tx = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Zahl X")
-        self.scale_tx.set(s_conf.get("tx", 0))
-        self.scale_tx.pack(side="left", fill="x", expand=True)
-
-        self.scale_ty = tk.Scale(txt_pos_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                 label="Zahl Y")
-        self.scale_ty.set(s_conf.get("ty", 0))
-        self.scale_ty.pack(side="left", fill="x", expand=True)
-
-        # --- SKALIERUNG (Bild & Zahl gesamt) ---
-        tk.Label(tab_streak, text="Gesamt-Skalierung (HUD-Größe):", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(15, 0))
-        self.scale_s_size = tk.Scale(tab_streak, from_=0.1, to=3.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
-                                     fg="white")
-        self.scale_s_size.set(s_conf.get("scale", 1.0))
-        self.scale_s_size.pack(fill="x", padx=100)
-
-        # --- ALLE BUTTONS IN EINER REIHE (KOMPAKT) ---
-        # Wir packen alle 5 Buttons in einen Frame, damit sie sicher ins Bild passen
-        action_box = tk.Frame(tab_streak, bg="#1a1a1a")
-        action_box.pack(pady=20)
-
-        # 1. SAVE
-        tk.Button(action_box, text="SAVE", bg="#004400", fg="white", width=10, height=2, font=("Consolas", 10, "bold"),
-                  command=self.save_streak_settings).pack(side="left", padx=5)
-
-        # 2. EDIT UI
-        tk.Button(action_box, text="EDIT UI", bg="#0066ff", fg="white", width=10, height=2,
-                  font=("Consolas", 10, "bold"),
-                  command=self.toggle_hud_edit_mode).pack(side="left", padx=5)
-
-        # 3. TEST
-        tk.Button(action_box, text="TEST", bg="#444", fg="white", width=10, height=2, font=("Consolas", 10, "bold"),
-                  command=self.test_streak_visuals).pack(side="left", padx=5)
-
-        # 4. REC PATH (Pfad aufnehmen)
-        self.btn_path_record = tk.Button(action_box, text="REC PATH", bg="#ff8c00", fg="black",
-                                         font=("Consolas", 10, "bold"), width=26, height=2,
-                                         command=self.start_path_record)
-        self.btn_path_record.pack(side="left", padx=5)
-
-        # 5. CLEAR PATH
-        tk.Button(action_box, text="CLEAR", bg="#440000", fg="white",
-                  font=("Consolas", 10, "bold"), width=10, height=2,
-                  command=self.clear_path).pack(side="left", padx=5)
-
-        # =========================================================
-        # TAB 4: CROSSHAIR
-        # =========================================================
-        tab_cross = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_cross, text=" CROSSHAIR ")
-
-        if "crosshair" not in self.config:
-            self.config["crosshair"] = {"file": "crosshair.png", "size": 32, "x": 0, "y": 0, "active": True}
-        c_conf = self.config["crosshair"]
-
-        # 1. Checkbox
-        self.crosshair_active_var = tk.BooleanVar(value=c_conf.get("active", True))
-        tk.Checkbutton(tab_cross, text="CROSSHAIR ANZEIGEN", variable=self.crosshair_active_var,
-                       bg="#1a1a1a", fg="#00ff00", selectcolor="black", font=("Consolas", 12, "bold"),
-                       command=self.apply_crosshair_settings).pack(pady=(30, 10))
-
-        # 2. Bild Auswahl
-        tk.Label(tab_cross, text="Crosshair Image (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
-        f_frame = tk.Frame(tab_cross, bg="#1a1a1a");
-        f_frame.pack(pady=5)
-        self.ent_cross_path = tk.Entry(f_frame, width=40, bg="#111", fg="#00f2ff", bd=1)
-        self.ent_cross_path.pack(side="left", padx=5)
-        self.ent_cross_path.insert(0, c_conf.get("file", "crosshair.png"))
-        tk.Button(f_frame, text="Browse", command=lambda: self.browse_file(self.ent_cross_path, "png"), bg="#333",
-                  fg="white").pack(side="left")
-
-        # --- HIER: SLIDER SIND WEG, BUTTON KOMMT HIN ---
-
-        tk.Label(tab_cross, text="Positionierung:", bg="#1a1a1a", fg="#4a6a7a").pack(pady=(20, 5))
-
-        # Der neue Button - WICHTIG: Name muss self.btn_edit_cross sein!
-        self.btn_edit_cross = tk.Button(tab_cross, text="LAYOUT PER MAUS VERSCHIEBEN",
-                                        bg="#0066ff", fg="white", width=30, height=2,
-                                        font=("Consolas", 10, "bold"),
-                                        command=self.toggle_hud_edit_mode)
-        self.btn_edit_cross.pack(pady=5)
-
-        # 2. NEUER CENTER BUTTON
-        tk.Button(tab_cross, text="AUTO-CENTER (MITTE)",
-                  bg="#444", fg="white", width=25, height=1,
-                  font=("Consolas", 10),
-                  command=self.center_crosshair).pack(pady=2)
-
-        # 3. Save Button
-        tk.Button(tab_cross, text="SAVE & APPLY CROSSHAIR", bg="#00f2ff", fg="black", font=("Consolas", 11, "bold"),
-                  command=self.apply_crosshair_settings).pack(pady=10)
-
-        # =========================================================
-        # TAB 5: SESSION STATS & KILLFEED (BEREINIGT)
-        # =========================================================
-        tab_stats = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_stats, text=" SESSION STATS & FEED ")
-
-        st_conf = self.overlay_config.get("stats_widget", {"active": True, "x": 50, "y": 500})
-
-        # --- STATS WIDGET ---
-        tk.Label(tab_stats, text="--- SESSION STATS WIDGET ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
-                 fg="#00f2ff").pack(pady=(10, 5))
-        self.var_stats_active = tk.BooleanVar(value=st_conf.get("active", True))
-        tk.Checkbutton(tab_stats, text="SHOW LIVE STATS", variable=self.var_stats_active, bg="#1a1a1a", fg="#00ff00",
-                       selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack()
-
-        tk.Label(tab_stats, text="Hintergrund (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
-        st_img_f = tk.Frame(tab_stats, bg="#1a1a1a");
-        st_img_f.pack()
-        self.ent_stats_img = tk.Entry(st_img_f, width=30, bg="#111", fg="#00f2ff");
-        self.ent_stats_img.pack(side="left")
-        self.ent_stats_img.insert(0, get_short_name(st_conf.get("img", "")))
-        tk.Button(st_img_f, text="...", command=lambda: self.browse_file(self.ent_stats_img, "png"), bg="#333",
-                  fg="white", width=3).pack(side="left")
-
-
-        # Feinjustierung TEXT (Das bleibt, ist intern)
-        tk.Label(tab_stats, text="Text Feinjustierung (Innerhalb des Bildes):", bg="#1a1a1a", fg="#ffcc00").pack(
-            pady=(15, 0))
-        st_adj_f = tk.Frame(tab_stats, bg="#1a1a1a");
-        st_adj_f.pack(fill="x", padx=20)
-        self.scale_st_tx = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                    label="Text X");
-        self.scale_st_tx.set(st_conf.get("tx", 0));
-        self.scale_st_tx.pack(side="left", fill="x", expand=True)
-        self.scale_st_ty = tk.Scale(st_adj_f, from_=-200, to=200, orient="horizontal", bg="#1a1a1a", fg="white",
-                                    label="Text Y");
-        self.scale_st_ty.set(st_conf.get("ty", 0));
-        self.scale_st_ty.pack(side="left", fill="x", expand=True)
-
-        tk.Label(tab_stats, text="Bild Skalierung:", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
-        self.scale_st_scale = tk.Scale(tab_stats, from_=0.1, to=2.0, resolution=0.05, orient="horizontal", bg="#1a1a1a",
-                                       fg="#00f2ff");
-        self.scale_st_scale.set(st_conf.get("scale", 1.0));
-        self.scale_st_scale.pack(fill="x", padx=100)
-
-        # --- KILLFEED ---
-        kf_conf = self.overlay_config.get("killfeed", {"x": 50, "y": 200})
-        tk.Label(tab_stats, text="--- KILLFEED ---", font=("Consolas", 12, "bold"), bg="#1a1a1a",
-                 fg="#ff4444").pack(pady=(20, 5))
-
-        # HIER WAREN FEED POSITION SLIDER - JETZT WEG
-
-        tk.Label(tab_stats, text="Headshot Icon (PNG):", bg="#1a1a1a", fg="white").pack(pady=(5, 0))
-        hs_img_f = tk.Frame(tab_stats, bg="#1a1a1a");
-        hs_img_f.pack()
-        self.ent_hs_icon = tk.Entry(hs_img_f, width=30, bg="#111", fg="#00f2ff");
-        self.ent_hs_icon.pack(side="left");
-        self.ent_hs_icon.insert(0, get_short_name(kf_conf.get("hs_icon", "headshot.png")))
-        tk.Button(hs_img_f, text="...", command=lambda: self.browse_file(self.ent_hs_icon, "png"), bg="#333",
-                  fg="white", width=3).pack(side="left")
-
-        self.var_show_revives = tk.BooleanVar(value=kf_conf.get("show_revives", True))
-        tk.Checkbutton(tab_stats, text="Revives im Killfeed anzeigen", variable=self.var_show_revives, bg="#1a1a1a",
-                       fg="#00ff00", selectcolor="black", font=("Consolas", 10), command=self.save_stats_config).pack(
-            pady=5)
-
-        # Buttons
-        btn_box = tk.Frame(tab_stats, bg="#1a1a1a");
-        btn_box.pack(pady=20)
-        tk.Button(btn_box, text="SAVE SETTINGS", bg="#004400", fg="white", width=20, height=2,
-                  command=self.save_stats_config).pack(side="left", padx=10)
-
-        # Der wichtige Edit Button
-        self.btn_edit_hud = tk.Button(btn_box, text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff", fg="white", width=25,
-                                      height=2, command=self.toggle_hud_edit_mode)
-        self.btn_edit_hud.pack(side="left", padx=10)
-
-        tk.Button(btn_box, text="TEST UI", bg="#444", fg="white", width=15, height=2,
-                  command=self.test_stats_visuals).pack(side="left", padx=10)
-
-        # =========================================================
-        # TAB 6: VOICE
-        # =========================================================
-        tab_voice = tk.Frame(self.ovl_notebook, bg="#1a1a1a")
-        self.ovl_notebook.add(tab_voice, text=" AUTO V0-9 ")
-        v_conf = self.overlay_config.get("auto_voice", {})
-        tk.Label(tab_voice, text="AUTO VOICE MACRO CONFIG", font=("Consolas", 14, "bold"), bg="#1a1a1a",
-                 fg="#00f2ff").pack(pady=15)
-        tk.Label(tab_voice,
-                 text="Automatically presses 'V' + Number when events occur.\nKeep 'OFF' to disable specific triggers.",
-                 bg="#1a1a1a", fg="#888", font=("Consolas", 9)).pack(pady=(0, 20))
-        v_grid = tk.Frame(tab_voice, bg="#1a1a1a");
-        v_grid.pack()
-        self.voice_vars = {}
-        triggers = [("I was Revived", "revived", "Use '1' for Thanks"),
-                    ("I Teamkilled someone", "tk", "Use '8' for Sorry"),
-                    ("Killed Infiltrator", "kill_infil", "Tactical Callout?"),
-                    ("Killed MAX Unit", "kill_max", "Taunt?"),
-                    ("Killed High KD Player (>2.0)", "kill_high_kd", "V6 recommended"),
-                    ("Headshot Kill", "kill_hs", "Nice Shot?")]
-        opts = ["OFF"] + [str(i) for i in range(10)]
-        for i, (label_text, key, hint) in enumerate(triggers):
-            tk.Label(v_grid, text=label_text, font=("Consolas", 11), bg="#1a1a1a", fg="white", anchor="w",
-                     width=25).grid(row=i, column=0, pady=8, padx=5)
-            var = tk.StringVar(value=v_conf.get(key, "OFF"));
-            self.voice_vars[key] = var
-            om = tk.OptionMenu(v_grid, var, *opts);
-            om.config(bg="#333", fg="#00f2ff", width=5, highlightthickness=0, bd=0);
-            om["menu"].config(bg="#333", fg="white");
-            om.grid(row=i, column=1, padx=10)
-            tk.Label(v_grid, text=hint, font=("Arial", 8), bg="#1a1a1a", fg="#555", anchor="w").grid(row=i, column=2,
-                                                                                                     padx=5)
-        tk.Button(tab_voice, text="SAVE VOICE MACROS", bg="#004400", fg="white", width=20, height=2,
-                  command=self.save_voice_config).pack(pady=30)
-
-        # Notebook Packen
-        self.content_ids.append(self.canvas.create_window(mid, 525, window=self.ovl_notebook, width=1100, height=700))
-
-    def copy_event_layout_to_all(self):
-        """Kopiert X, Y und Scale vom aktuellen Event auf ALLE anderen (außer Hitmarker)."""
-        current_name = self.var_event_sel.get()
-        if not current_name: return
-
-        # Sicherheitsabfrage
-        if not messagebox.askyesno("Confirm Copy",
-                                   f"Kopiere Layout von '{current_name}' auf alle anderen Events?\n(Hitmarker wird ignoriert)"):
-            return
-
-        # Quelldaten
-        cfg = self.config.get("events", {})
-        if current_name not in cfg:
-            self.add_log("ERR: Aktuelles Event hat noch keine gespeicherten Daten.")
-            return
-
-        src_data = cfg[current_name]
-        src_x = src_data.get("x", 50)  # Fallback Werte
-        src_y = src_data.get("y", 200)
-        src_scale = src_data.get("scale", 1.0)
-
-        count = 0
-        for evt_name in cfg.keys():
-            # HITMARKER IGNORIEREN
-            if evt_name == "Hitmarker":
-                continue
-
-            # Selbst überspringen (unnötig, aber sauber)
-            if evt_name == current_name:
-                continue
-
-            # Werte setzen
-            cfg[evt_name]["x"] = src_x
-            cfg[evt_name]["y"] = src_y
-            cfg[evt_name]["scale"] = src_scale
-            count += 1
-
-        self.save_config()
-        self.add_log(f"BULK: Layout auf {count} Events übertragen.")
-
-    def select_event_from_grid(self, event_name):
-        """Wird aufgerufen, wenn man im Grid auf einen Button klickt"""
-        # 1. Variable setzen (damit save_event_ui_data weiß, für wen es speichert)
-        self.var_event_sel.set(event_name)
-
-        # 2. Anzeige im UI aktualisieren (Label über den Eingabefeldern)
-        if hasattr(self, 'lbl_current_edit'):
-            self.lbl_current_edit.config(text=f"EDITING: {event_name.upper()}")
-
-        # 3. Alle Daten (Pfade, Slider, Duration) in die UI-Elemente füllen
-        self.load_event_ui_data(event_name)
-
-        # Visuelles Feedback im Log
-        self.add_log(f"UI: Switch Edit-Mode to '{event_name}'")
-
-    def browse_file(self, entry_widget, type_):
-        # Filter: Audio oder Bilder
-        ft = [("PNG Images", "*.png")] if type_ == "png" else [("Audio Files", "*.mp3 *.wav *.ogg")]
-
-        # 1. Datei auswählen
-        file_path = filedialog.askopenfilename(filetypes=ft)
+    def browse_file_qt(self, line_edit_widget, type_):
+        # Filter für PyQt6 QFileDialog
+        ft = "Images (*.png)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
+
+        # 1. Datei auswählen (nutzt jetzt Qt statt filedialog)
+        from PyQt6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Datei auswählen", "", ft)
 
         if file_path:
             # 2. Dateinamen extrahieren
             filename = os.path.basename(file_path)
 
-            # 3. Zielpfad im assets-Ordner bestimmen
+            # 3. Zielpfad bestimmen (Nutzt deine get_asset_path Funktion)
             target_path = get_asset_path(filename)
 
-            # 4. Datei kopieren, falls sie von woanders kommt (z.B. Desktop)
+            # 4. Datei kopieren
             try:
-                # Prüfen ob Quelle und Ziel unterschiedlich sind, um Fehler zu vermeiden
                 if os.path.abspath(file_path) != os.path.abspath(target_path):
                     shutil.copy2(file_path, target_path)
             except Exception as e:
-                print(f"Kopier-Fehler: {e}")
+                self.add_log(f"ERR: Kopier-Fehler: {e}")
 
-            # 5. Nur den Dateinamen ins Textfeld eintragen!
-            entry_widget.delete(0, tk.END)
-            entry_widget.insert(0, filename)
+            # 5. Nur den Dateinamen ins PyQt6 Textfeld eintragen
+            line_edit_widget.setText(filename)
 
     def load_event_ui_data(self, event_type):
+        """Lädt Config-Daten eines Events in die Qt-UI Felder"""
         if not event_type: return
 
-        data = self.overlay_config.get("events", {}).get(event_type, {})
+        data = self.config.get("events", {}).get(event_type, {})
+        ui = self.ovl_config_win
 
-        # Pfade
-        self.ent_evt_img.delete(0, tk.END)
-        self.ent_evt_img.insert(0, get_short_name(data.get("img", "")))
+        # Felder füllen (Qt-Syntax)
+        ui.ent_evt_img.setText(data.get("img", ""))
+        ui.ent_evt_snd.setText(data.get("snd", ""))
+        ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
 
-        self.ent_evt_snd.delete(0, tk.END)
-        self.ent_evt_snd.insert(0, get_short_name(data.get("snd", "")))
-
-        # Scale
+        # Slider setzen
         raw_scale = data.get("scale", 1.0)
-        self.scale_png_size.set(raw_scale)
+        ui.slider_evt_scale.setValue(int(raw_scale * 100))
 
-        # Duration
-        if hasattr(self, 'ent_evt_duration'):
-            self.ent_evt_duration.delete(0, tk.END)
-            self.ent_evt_duration.insert(0, str(data.get("duration", 3000)))
+        # Label aktualisieren
+        ui.lbl_editing.setText(f"EDITING: {event_type}")
+
+        # Falls wir im Edit-Modus sind: Preview sofort an die gespeicherte Stelle schieben
+        if getattr(self, "is_hud_editing", False) and self.overlay_win:
+            # Skalieren: Basis-Pixel * UI_Scale = Monitor-Position
+            ax = int(data.get("x", 100) * self.overlay_win.ui_scale)
+            ay = int(data.get("y", 200) * self.overlay_win.ui_scale)
+            self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
 
     def save_event_ui_data(self):
-        etype = self.var_event_sel.get()
+        """Speichert die UI-Eingaben für das aktuell gewählte Event in die Config"""
+        ui = self.ovl_config_win
+        etype = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+
+        if etype == "NONE" or not etype:
+            return
+
         if "events" not in self.config: self.config["events"] = {}
+        existing_data = self.config["events"].get(etype, {})
 
-        # Existierende Daten laden um X/Y zu behalten
-        existing = self.config["events"].get(etype, {})
-        current_x = existing.get("x", 100)  # Default Werte
-        current_y = existing.get("y", 100)
+        # Koordinaten vom Overlay holen, falls es gerade sichtbar ist (Edit Mode)
+        if self.overlay_win and self.overlay_win.event_preview_label.isVisible():
+            pos = self.overlay_win.event_preview_label.pos()
+            save_x = int(pos.x() / self.overlay_win.ui_scale)
+            save_y = int(pos.y() / self.overlay_win.ui_scale)
+        else:
+            save_x = existing_data.get("x", 100)
+            save_y = existing_data.get("y", 100)
 
-        try:
-            dur = int(self.ent_evt_duration.get())
-        except:
-            dur = 3000
-
-        self.config["events"][etype] = {
-            "img": self.ent_evt_img.get(),
-            "snd": self.ent_evt_snd.get(),
-            "scale": self.scale_png_size.get(),
-            "duration": dur,
-            "x": current_x,  # WICHTIG: Alte Position behalten!
-            "y": current_y
-        }
+        # Neue Daten zusammenstellen (Feldnamen korrigiert)
+        self.config["events"][etype].update({
+            "img": ui.ent_evt_img.text().strip(),
+            "snd": ui.ent_evt_snd.text().strip(),
+            "scale": ui.slider_evt_scale.value() / 100.0,
+            "duration": int(ui.ent_evt_duration.text() if ui.ent_evt_duration.text().isdigit() else 3000),
+            "x": save_x,
+            "y": save_y
+        })
 
         self.save_config()
-        self.add_log(f"EVENT: '{etype}' Data Saved.")
+        self.add_log(f"UI: '{etype}' gespeichert ({save_x}/{save_y}).")
 
     def save_overlay_ui_data(self):
         """Speichert Crosshair Settings"""
@@ -3501,17 +3073,18 @@ class DiorClientGUI:
         self.root.after(6000, end_test)
 
     def get_current_tab_targets(self):
-        """Ermittelt anhand des Tabs, was editiert werden soll"""
+        """Ermittelt anhand des Qt-Tabs, was editiert werden soll"""
         try:
-            # Hole den Index des aktuellen Tabs
-            idx = self.ovl_notebook.index(self.ovl_notebook.select())
-            # Hole den Text des Tabs
-            tab_text = self.ovl_notebook.tab(idx, "text").strip()
+            # 1. Zugriff auf das Qt TabWidget
+            ui = self.ovl_config_win
+            idx = ui.tabs.currentIndex()
+            tab_text = ui.tabs.tabText(idx).upper().strip()
 
             targets = []
+            # 2. Abfrage basierend auf deinen neuen Tab-Namen
             if "CROSSHAIR" in tab_text:
                 targets = ["crosshair"]
-            elif "SESSION STATS" in tab_text:
+            elif "STATS" in tab_text:  # Deckt "STATS & FEED" ab
                 targets = ["stats", "feed"]
             elif "KILLSTREAK" in tab_text:
                 targets = ["streak"]
@@ -3519,175 +3092,90 @@ class DiorClientGUI:
                 targets = ["event"]
 
             return targets
-        except:
+        except Exception as e:
+            self.add_log(f"ERR: get_current_tab_targets failed: {e}")
             return []
 
     def toggle_hud_edit_mode(self):
-        """Schaltet das Overlay in den Bearbeitungsmodus und aktiviert Dummys"""
+        """Startet/Stoppt den Edit-Modus für das Overlay (PyQt6)"""
         if not self.overlay_win:
-            messagebox.showwarning("Fehler", "Overlay läuft nicht!")
+            self.add_log("ERR: Overlay läuft nicht! Starten Sie erst das Spiel oder Overlay.")
             return
 
+        # Status prüfen
         is_editing = getattr(self, "is_hud_editing", False)
-        btn_list = ['btn_edit_hud', 'btn_edit_cross', 'btn_edit_streak', 'btn_edit_event']
+        ui = self.ovl_config_win
+
+        # Liste aller Edit-Buttons in der UI
+        btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats]
 
         if not is_editing:
-            # --- AKTIVIEREN (EDIT MODE AN) ---
-            targets = self.get_current_tab_targets()
+            # --- AKTIVIEREN ---
+            targets = self.get_current_tab_targets()  # Die Hilfsfunktion von vorhin
             if not targets:
-                self.add_log("INFO: In diesem Tab gibt es nichts zu verschieben.")
+                self.add_log("INFO: Bitte erst den passenden Tab (Events, Streak, etc.) auswählen.")
                 return
 
             self.is_hud_editing = True
 
             # Buttons rot färben
-            for b in btn_list:
-                if hasattr(self, b): getattr(self, b).config(text="STOP EDIT (SPEICHERN)", bg="#ff0000")
+            for btn in btn_list:
+                btn.setText("STOP EDIT (SPEICHERN)")
+                btn.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
 
-            # Edit-Modus im Overlay einschalten
+            # Overlay für Maus durchlässig machen (False = fängt Maus ab)
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
+
+            # Wenn wir Events bearbeiten, müssen wir das Dummy-Bild anzeigen
+            if "event" in targets:
+                # Daten aus UI holen
+                img_path = get_asset_path(ui.ent_evt_img.text().strip())  # Achtung: Feldname prüfen!
+                if not os.path.exists(img_path): img_path = ""  # Leeres Bild triggert "Missing"
+
+                # Position aus Config laden (oder 0,0 falls neu)
+                evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+                evt_data = self.config.get("events", {}).get(evt_name, {})
+
+                # Preview anzeigen
+                self.overlay_win.display_image(
+                    img_path,
+                    999999,  # Endlose Dauer
+                    evt_data.get("x", 100),
+                    evt_data.get("y", 200),
+                    (ui.slider_evt_scale.value() / 100.0)
+                )
+                # Grünen Rahmen drumherum
+                self.overlay_win.event_preview_label.setStyleSheet(
+                    "border: 2px solid #00ff00; background: rgba(0,0,0,0.2);")
+                self.overlay_win.event_preview_label.show()
+
             self.add_log(f"UI: Edit-Modus für {targets} gestartet.")
 
-            # --- DUMMYS ANZEIGEN ---
-
-            # 1. EVENT PREVIEW
-            if "event" in targets and self.overlay_win:
-                evt_name = self.var_event_sel.get()
-
-                # Live-Werte aus UI lesen
-                img_name = self.ent_evt_img.get().strip()
-                raw_scale = self.scale_png_size.get()
-
-                # Fallback auf Config wenn leer
-                if not img_name:
-                    data = self.config.get("events", {}).get(evt_name, {})
-                    img_name = data.get("img", "")
-
-                img_path = get_asset_path(img_name)
-                saved_data = self.config.get("events", {}).get(evt_name, {})
-
-                # Koordinaten aus Config (werden beim Schieben aktualisiert)
-                pos_x = saved_data.get("x", 100)
-                pos_y = saved_data.get("y", 200)
-
-                if raw_scale < 0.1: raw_scale = 1.0
-                final_scale = raw_scale * self.overlay_win.ui_scale
-
-                pix = None
-                if img_name and os.path.exists(img_path):
-                    pix = QPixmap(img_path)
-                else:
-                    # Roter Fehler-Platzhalter
-                    pix = QPixmap(int(400 * self.overlay_win.ui_scale), int(150 * self.overlay_win.ui_scale))
-                    pix.fill(QColor(100, 0, 0, 200))
-                    painter = QPainter(pix)
-                    painter.setPen(QColor(255, 255, 255))
-                    font = painter.font()
-                    font.setPixelSize(int(20 * self.overlay_win.ui_scale))
-                    font.setBold(True)
-                    painter.setFont(font)
-                    painter.drawText(pix.rect(), Qt.AlignmentFlag.AlignCenter, f"MISSING:\n{img_name}")
-                    painter.end()
-
-                if pix and not pix.isNull():
-                    w = int(pix.width() * final_scale)
-                    h = int(pix.height() * final_scale)
-                    w, h = max(50, w), max(50, h)
-
-                    pix = pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
-                                     Qt.TransformationMode.SmoothTransformation)
-
-                    self.overlay_win.event_preview_label.setPixmap(pix)
-                    self.overlay_win.event_preview_label.adjustSize()
-
-                    ax = self.overlay_win.s(pos_x)
-                    ay = self.overlay_win.s(pos_y)
-                    self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
-
-                    # Grüner Rahmen
-                    self.overlay_win.event_preview_label.setStyleSheet(
-                        "border: 3px solid #00ff00; background: rgba(0, 0, 0, 0.3);")
-                    self.overlay_win.event_preview_label.show()
-                    self.overlay_win.event_preview_label.raise_()
-
-            # 2. KILLSTREAK
-            if "streak" in targets:
-                self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
-                self.temp_factions_backup = getattr(self, 'streak_factions', [])
-                self.killstreak_count = 10
-                self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
-                self.update_streak_display()
-
-            # 3. STATS / FEED
-            if "stats" in targets or "feed" in targets:
-                self.is_stats_test = True
-                self.refresh_ingame_overlay()
-
-            # 4. CROSSHAIR
-            if "crosshair" in targets:
-                c_conf = self.config.get("crosshair", {})
-                path = get_asset_path(c_conf.get("file", "crosshair.png"))
-                self.overlay_win.update_crosshair(path, c_conf.get("size", 32), True)
-
         else:
-            # --- DEAKTIVIEREN (SPEICHERN) ---
+            # --- SPEICHERN & DEAKTIVIEREN ---
             self.is_hud_editing = False
 
-            # WICHTIG: Wir holen uns die Targets erneut, um zu wissen, welche Speicher-Funktion wir rufen müssen
+            # Wir müssen wissen, WAS wir gerade editiert haben, um es zu speichern
             targets = self.get_current_tab_targets()
 
-            # 1. Overlay Maus-Modus aus
-            if self.overlay_win:
-                self.overlay_win.set_mouse_passthrough(True)
-                self.overlay_win.event_preview_label.hide()
-
             # Buttons zurücksetzen
-            for b in btn_list:
-                if hasattr(self, b): getattr(self, b).config(text="LAYOUT PER MAUS VERSCHIEBEN", bg="#0066ff")
+            for btn in btn_list:
+                btn.setText("LAYOUT PER MAUS VERSCHIEBEN")
+                btn.setStyleSheet("background-color: #0066ff; color: white;")
 
-            # --- 2. DIE RICHTIGE SPEICHER-FUNKTION AUFRUFEN (DAS IST NEU) ---
-            # Das sorgt dafür, dass Sliders (Größe) UND Maus-Position zusammengeführt werden.
+            # Overlay Maus-Durchlässigkeit wiederherstellen
+            self.overlay_win.set_mouse_passthrough(True)
+            self.overlay_win.event_preview_label.hide()  # Preview weg
 
-            if "event" in targets:
-                self.save_event_ui_data()  # Speichert Bild, Scale & Position für Events
+            # SPEICHERN
+            if "event" in targets: self.save_event_ui_data()
+            if "streak" in targets: self.save_streak_settings_from_qt()
+            if "stats" in targets or "feed" in targets: self.save_stats_config_from_qt()
+            if "crosshair" in targets: self.save_config()  # Crosshair speichert direkt bei MouseRelease
 
-            if "streak" in targets:
-                self.save_streak_settings()  # Speichert Einstellungen für Streak
+            self.save_config()  # Alles auf Festplatte schreiben
+            self.add_log("UI: Positionen gespeichert & Edit-Modus beendet.")
 
-            if "crosshair" in targets:
-                self.apply_crosshair_settings()  # Speichert Crosshair
-
-            if "stats" in targets or "feed" in targets:
-                self.save_stats_config()  # Speichert Stats/Feed
-
-            # 3. Aufräumen (Backups wiederherstellen)
-            if hasattr(self, 'temp_streak_backup'):
-                self.killstreak_count = self.temp_streak_backup
-                self.streak_factions = getattr(self, 'temp_factions_backup', [])
-                del self.temp_streak_backup
-                if hasattr(self, 'temp_factions_backup'): del self.temp_factions_backup
-            else:
-                self.killstreak_count = 0
-                self.streak_factions = []
-
-            self.update_streak_display()
-            self.is_stats_test = False
-            self.stop_overlay_logic()
-
-            # 4. Crosshair wiederherstellen
-            c_conf = self.config.get("crosshair", {})
-            should_show = c_conf.get("active", True) and getattr(self, 'ps2_running', False)
-
-            if self.overlay_win:
-                self.overlay_win.update_crosshair(
-                    get_asset_path(c_conf.get("file", "")),
-                    c_conf.get("size", 32),
-                    should_show
-                )
-
-            self.add_log("UI: Edit-Modus AUS. Positionen & Einstellungen gespeichert.")
-            # Sicherheitshalber alles nochmal auf Disk schreiben
-            self.save_config()
 
     def on_overlay_tab_change(self, event):
         """Wenn Tab gewechselt wird während Edit an ist -> Edit Bereich anpassen"""
@@ -3766,7 +3254,6 @@ class DiorClientGUI:
             # Falls kein Backup da ist, sicherstellen dass Variablen existieren
             if not hasattr(self, 'killstreak_count'):
                 self.killstreak_count = 0
-                
 
         # --- 2. CONFIG AKTUALISIEREN ---
         # .update() stellt sicher, dass bestehende Werte (wie x/y vom Drag&Drop) erhalten bleiben
@@ -3952,19 +3439,11 @@ class DiorClientGUI:
         self.animate_fade_in()
 
     def update_live_graph(self):
+        """Berechnet jede Sekunde die aktuellen Stats und triggert das Dashboard-Update."""
         try:
             now = time.time()
-            timeout = 300  # 5 Minuten Aktivitätsfenster
 
-            # 1. Zähl-Logik für aktive Spieler (Jede Sekunde)
-            temp_active = {}
-            for uid, info in self.active_players.items():
-                if isinstance(info, tuple):
-                    ts, fac = info
-                    if now - ts < timeout:
-                        temp_active[uid] = (ts, fac)
-            self.active_players = temp_active
-
+            # 1. Fraktions-Zahlen aus den aktiven Spielern berechnen
             counts = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0}
             for _, fac in self.active_players.values():
                 if fac in counts:
@@ -3974,29 +3453,22 @@ class DiorClientGUI:
             self.live_stats.update(counts)
             self.live_stats["Total"] = total_pop
 
-            # --- NEU: ADAPTIVES GRAPH-DATEN-UPDATE ---
-            # Berechne Zeit seit Session-Start
+            # 2. Graph-Daten füttern (nur alle X Sekunden für eine schöne Kurve)
             elapsed = now - getattr(self, 'session_start_time', now)
-
-            # Intervall bestimmen: 1s in der ersten Minute, danach 30s
             graph_interval = 1.0 if elapsed < 60 else 30.0
 
-            # Nur dem Graphen-Speicher einen Punkt hinzufügen, wenn das Intervall abgelaufen ist
             if now - getattr(self, 'last_graph_point_time', 0) >= graph_interval:
                 self.pop_history.pop(0)
                 self.pop_history.append(total_pop)
                 self.last_graph_point_time = now
 
-            # --- UI UPDATE (Jede Sekunde) ---
-            # Das Dashboard (Listen & Zahlen) wird immer jede Sekunde aktualisiert
-            if self.current_tab == "Dashboard":
+            # 3. UI UPDATE (Nur wenn wir im Dashboard-Tab sind)
+            # Wir prüfen, ob im Stack das erste Fenster (Index 0 = Dashboard) aktiv ist
+            if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
                 self.update_dashboard_elements()
 
         except Exception as e:
-            print(f"Graph-Error: {e}")
-
-        # Die Haupt-Schleife läuft IMMER jede Sekunde für die "Live"-Werte
-        self.root.after(1000, self.update_live_graph)
+            print(f"Stats-Update Error: {e}")
 
     def hide_sub_menu(self, event):
         self.root.after(1000, self.check_mouse_leave)
@@ -4026,6 +3498,22 @@ class DiorClientGUI:
 
         self.content_ids.clear()
 
+    def show_dashboard(self):
+        """Zeigt das neue Qt-Fenster und leert den Tkinter-Bereich."""
+        self.clear_content()
+        self.current_tab = "Dashboard"
+
+        # Zeige das neue Fenster
+        if hasattr(self, 'dash_window'):
+            self.dash_window.show()
+            self.dash_window.raise_()  # In den Vordergrund
+
+        # Info im Hauptfenster (da es jetzt leer ist)
+        tk.Label(self.root, text="DASHBOARD IS RUNNING IN SEPARATE WINDOW",
+                 font=("Arial", 16), fg="#444").pack(expand=True)
+
+    # def show_dashboard ausgeklammert:
+    """
     def show_dashboard(self):
         # 1. Zuerst das UI komplett leeren und Widgets zerstören
         self.clear_content()
@@ -4122,6 +3610,7 @@ class DiorClientGUI:
 
         # Dashboard-Werte befüllen
         self.update_dashboard_elements()
+    """
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
         import math
@@ -4139,6 +3628,23 @@ class DiorClientGUI:
         except:
             pass  # Stoppt, wenn Tab gewechselt wird
 
+    def show_launcher(self):
+        self.clear_content()
+        self.current_tab = "launcher"
+
+        # Überprüfen, ob das Objekt existiert (Sicherheitscheck)
+        if hasattr(self, 'launcher_win'):
+            # Optional: Pfad-Info im Footer aktualisieren
+            path_info = f"TARGET_PATH: {self.ps2_dir if self.ps2_dir else 'NOT_FOUND'}"
+            self.launcher_win.lbl_info.setText(f"STATUS: SYSTEM_READY | {path_info}")
+
+            self.launcher_win.show()
+            self.launcher_win.activateWindow()
+            self.launcher_win.raise_()
+        else:
+            self.add_log("ERROR: Launcher window not initialized.")
+
+    """
     def show_launcher(self):
         self.current_tab = "launcher"
         self.clear_content()
@@ -4173,6 +3679,7 @@ class DiorClientGUI:
 
         id1 = self.canvas.create_window(mid, 350, window=launcher_frame, width=450)
         self.content_ids.append(id1)
+    """
 
     def show_nso_teleporter(self):
         self.current_tab = "nso_teleporter"
@@ -4263,56 +3770,21 @@ class DiorClientGUI:
         self.content_ids.extend([id1, id3, id4, id5, id_counter])
 
     def show_settings(self):
-        self.current_tab = "settings"
         self.clear_content()
-        mid = self.root.winfo_width() // 2
-        CYAN = "#00f2ff"
+        self.current_tab = "settings"
 
-        conf_frame = tk.LabelFrame(self.root, text=" > SOURCE_CONFIG ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10),
-                                   bd=1, padx=15, pady=15)
+        # Aktuelle Daten in das Qt Fenster laden
+        self.settings_win.load_config(self.config, self.ps2_dir)
 
-        tk.Label(conf_frame, text="OBS_VIDEO_DIR:", bg="#1e1e1e", fg="#4a6a7a").grid(row=0, column=0, sticky="w")
-        self.folder_entry = tk.Entry(conf_frame, bg="#0a141d", fg=CYAN, width=35, bd=1, relief="flat")
-        self.folder_entry.insert(0, self.config.get("watch_folder", ""))
-        self.folder_entry.grid(row=0, column=1, padx=10)
-        tk.Button(conf_frame, text="BROWSE", command=self.browse_folder, bg="#1a2b3c", fg=CYAN, bd=0).grid(row=0,
-                                                                                                           column=2)
+        self.settings_win.show()
+        self.settings_win.raise_()
 
-        tk.Label(conf_frame, text="STREAMABLE.IO EMAIL:", bg="#1e1e1e", fg="#4a6a7a").grid(row=1, column=0, sticky="w")
-        self.email_entry = tk.Entry(conf_frame, bg="#0a141d", fg=CYAN, bd=1, relief="flat")
-        self.email_entry.insert(0, self.config.get("email", ""))
-        self.email_entry.grid(row=1, column=1, sticky="ew", pady=5, padx=10)
-
-        tk.Label(conf_frame, text="STREAMABLE.IO PW:", bg="#1e1e1e", fg="#4a6a7a").grid(row=2, column=0, sticky="w")
-        self.pw_entry = tk.Entry(conf_frame, bg="#0a141d", fg=CYAN, show="*", bd=1, relief="flat")
-        self.pw_entry.insert(0, self.config.get("pw", ""))
-        self.pw_entry.grid(row=2, column=1, sticky="ew", pady=5, padx=10)
-
-        tk.Button(conf_frame, text="LOCK SETTINGS", command=self.save_enforcer_config, bg=CYAN, fg="black",
-                  font=("Consolas", 10, "bold")).grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
-
-        id1 = self.canvas.create_window(mid, 250, window=conf_frame)
-
-        path_box = tk.LabelFrame(self.root, text=" > GAME_DIRECTORY ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10),
-                                 bd=1, padx=15, pady=15)
-        path_info_frame = tk.Frame(path_box, bg="#1e1e1e")
-        path_info_frame.pack(fill="x")
-        tk.Label(path_info_frame, text="Pfad:", bg="#1e1e1e", fg=CYAN, font=("Consolas", 9)).pack(side="left")
-        self.ps2_path_label = tk.Label(path_info_frame, text=self.ps2_dir, bg="#1e1e1e", fg="#4a6a7a",
-                                       font=("Consolas", 8), wraplength=350)
-        self.ps2_path_label.pack(side="left", padx=5)
-        tk.Button(path_box, text="ORDNER WÄHLEN", command=self.browse_ps2_folder, bg="#1a2b3c", fg=CYAN,
-                  font=("Consolas", 9, "bold")).pack(fill="x", pady=(10, 0))
-
-        id2 = self.canvas.create_window(mid, 450, window=path_box, width=450)
-
-        bg_box = tk.LabelFrame(self.root, text=" > UI_VISUALS ", bg="#1e1e1e", fg=CYAN, font=("Consolas", 10), bd=1,
-                               padx=15, pady=15)
-        tk.Button(bg_box, text="HINTERGRUND ÄNDERN", command=self.change_background_file, bg="#1a2b3c", fg=CYAN,
-                  font=("Consolas", 9)).pack(fill="x")
-        id3 = self.canvas.create_window(mid, 580, window=bg_box, width=450)
-
-        self.content_ids.extend([id1, id2, id3])
+    def save_enforcer_config_qt(self, data):
+        # Wir aktualisieren das interne config dictionary
+        self.config.update(data)
+        # Dann rufen wir deine originale Speicherfunktion auf
+        self.save_enforcer_config()
+        self.add_log("SYS: Configuration locked and saved.")
 
     def refresh_tab_content_base(self, tab_name):
         self.current_tab = tab_name
@@ -4335,157 +3807,11 @@ class DiorClientGUI:
         self.show_characters()
 
     def show_characters(self):
-        # Debugging
-        print(f"DEBUG: Zeige Tab {getattr(self, 'current_sub_tab', 'No Tab Set')}")
-
-        self.refresh_tab_content_base("characters")
-
-        if not hasattr(self, 'current_sub_tab'):
-            self.current_sub_tab = "Overview"
-
-        w = self.root.winfo_width() if self.root.winfo_width() > 10 else 850
-        mid = w // 2
-
-        # --- DYNAMISCHE ÜBERSCHRIFT ---
-        header = self.canvas.create_text(mid, 170, text=self.current_sub_tab.upper(),
-                                         fill="#00f2ff", font=("Consolas", 18, "bold"), tags="content")
-        self.content_ids.append(header)
-
-        # --- LOG BEREICH (Ganz unten) ---
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=8, bg="#020508", fg="#00f2ff",
-                                                  font=("Consolas", 9), bd=1, relief="solid")
-        log_win = self.canvas.create_window(mid, 820, window=self.log_area, tags="content")
-        self.content_ids.append(log_win)
-
-        # Daten mit Fallback abrufen
-        char_info = getattr(self, 'last_char_data', {})
-        if not char_info:
-            print("DEBUG: Keine Charakterdaten im Speicher gefunden!")
-            c_stats = {}
-        else:
-            c_stats = char_info.get('custom_stats', {})
-            print(f"DEBUG: Gefundene Stats: {list(c_stats.keys())}")  # Zeigt in der Konsole an, was da ist
-
-        # --- DIE WEICHE FÜR DIE INHALTE ---
-        if self.current_sub_tab == "Overview":
-            # 1. Charakter Suche
-            search_frame = tk.Frame(self.root, bg="#111")
-            self.char_search_entry = tk.Entry(search_frame, bg="#222", fg="white", width=25)
-            self.char_search_entry.pack(side="left", padx=5)
-            self.char_search_entry.bind("<Return>", lambda e: self.run_search(self.char_search_entry.get()))
-            tk.Button(search_frame, text="SEARCH", command=lambda: self.run_search(self.char_search_entry.get()),
-                      bg="#333", fg="#00f2ff").pack(side="left")
-            self.content_ids.append(self.canvas.create_window(mid, 210, window=search_frame, tags="content"))
-
-            # 2. Main Stats Container
-            main_container = tk.Frame(self.root, bg="#121212", bd=1, relief="solid")
-
-            # LINKS: GENERAL INFORMATION
-            gen_col = tk.Frame(main_container, bg="#1a1a1a", padx=10, pady=10)
-            gen_col.pack(side="left", fill="both", expand=True, padx=2)
-            tk.Label(gen_col, text="GENERAL INFORMATION", fg="#00f2ff", bg="#1a1a1a",
-                     font=("Consolas", 10, "bold")).pack(anchor="w")
-
-            # Alle General-Felder inklusive Outfit und Time Played
-            fields = [
-                ("Name:", c_stats.get('name', '-')),
-                ("Faction:", {"1": "VS", "2": "NC", "3": "TR", "4": "NSO"}.get(char_info.get('faction_id'), "-")),
-                ("Server:", c_stats.get('server', '-')),
-                ("Outfit:", c_stats.get('outfit', '-')),
-                ("Rank:", c_stats.get('rank', '-')),
-                ("Time Played:", c_stats.get('time_played', '-'))
-            ]
-
-            for label_text, val in fields:
-                f = tk.Frame(gen_col, bg="#1a1a1a");
-                f.pack(fill="x", pady=2)
-                tk.Label(f, text=label_text, fg="#4a6a7a", bg="#1a1a1a", font=("Consolas", 9)).pack(side="left")
-                tk.Label(f, text=val, fg="white", bg="#1a1a1a", font=("Consolas", 9, "bold")).pack(side="right")
-
-            # --- RECHTS: STATISTICS (Lifetime & Last 30D) ---
-            stats_container = tk.Frame(main_container, bg="#121212", padx=20)
-            stats_container.pack(side="left", fill="both", expand=True)
-
-            # Diese Liste steuert, welche Werte aus deinem Datenpaket angezeigt werden
-            stat_groups = [
-                ("LIFETIME performance", [
-                    ("Kills", c_stats.get('lt_kills', '-')),
-                    ("Deaths", c_stats.get('lt_deaths', '-')),
-                    ("K/D", c_stats.get('lt_kd', '-')),
-                    ("KPM", c_stats.get('lt_kpm', '-')),
-                    ("KPH", c_stats.get('lt_kph', '-')),
-                    ("SPM", c_stats.get('lt_spm', '-')),
-                    ("Score", c_stats.get('lt_score', '-'))
-                ]),
-                ("LAST 30 DAYS", [
-                    ("Kills", c_stats.get('m30_kills', '-')),
-                    ("Deaths", c_stats.get('m30_deaths', '-')),
-                    ("K/D", c_stats.get('m30_kd', '-')),
-                    ("KPM", c_stats.get('m30_kpm', '-')),
-                    ("KPH", c_stats.get('m30_kph', '-')),
-                    ("SPM", c_stats.get('m30_spm', '-')),
-                    ("Score", c_stats.get('m30_score', '-'))
-                ])
-            ]
-
-            for title, rows in stat_groups:
-                col = tk.Frame(stats_container, bg="#121212")
-                col.pack(side="left", padx=20, fill="y")
-                tk.Label(col, text=title, fg="#00f2ff", bg="#121212", font=("Consolas", 10, "bold")).pack(pady=(0, 10))
-                for s_name, s_val in rows:
-                    tk.Label(col, text=f"{s_name}:", fg="#4a6a7a", bg="#121212", font=("Consolas", 9)).pack(anchor="w")
-                    # Hier wird der Wert aus c_stats (unserem Paket) ins Label geschrieben
-                    tk.Label(col, text=str(s_val), fg="white", bg="#121212", font=("Consolas", 11, "bold")).pack(
-                        anchor="w", pady=(0, 5))
-
-            self.content_ids.append(
-                self.canvas.create_window(mid, 460, window=main_container, width=720, height=450, tags="content"))
-
-        elif self.current_sub_tab.lower() == "weapon stats":
-            table_frame = tk.Frame(self.root, bg="#121212", bd=0)
-            head_bar = tk.Frame(table_frame, bg="#1a1a1a");
-            head_bar.pack(side="top", fill="x")
-
-            cols = [("WEAPON", 30), ("KILLS", 12), ("ACC %", 10), ("HSR %", 10)]
-            for text, w_val in cols:
-                tk.Label(head_bar, text=text, fg="#00f2ff", bg="#1a1a1a", font=("Consolas", 10, "bold"), width=w_val,
-                         anchor="w", padx=10).pack(side="left")
-
-            canvas_area = tk.Canvas(table_frame, bg="#121212", highlightthickness=0)
-            scrollbar = tk.Scrollbar(table_frame, orient="vertical", command=canvas_area.yview)
-            scroll_content = tk.Frame(canvas_area, bg="#121212")
-            canvas_area.create_window((0, 0), window=scroll_content, anchor="nw", width=730)
-            canvas_area.configure(yscrollcommand=scrollbar.set)
-
-            stats_to_show = getattr(self, 'last_weapon_stats', [])
-            if stats_to_show:
-                for i, w in enumerate(sorted(stats_to_show, key=lambda x: x.get('kills', 0), reverse=True)):
-                    row_bg = "#121212" if i % 2 == 0 else "#181818"
-                    row = tk.Frame(scroll_content, bg=row_bg);
-                    row.pack(fill="x", expand=True)
-
-                    kills = w.get('kills', 0)
-                    acc = (w.get('hits', 0) / w.get('shots', 1) * 100) if w.get('shots', 0) > 0 else 0
-                    hsr = (w.get('hs', 0) / kills * 100) if kills > 0 else 0
-
-                    tk.Label(row, text=w.get('name', '?')[:28], fg="white", bg=row_bg, font=("Consolas", 10), width=30,
-                             anchor="w", padx=10).pack(side="left")
-                    tk.Label(row, text=f"{kills:,}", fg="#00f2ff", bg=row_bg, font=("Consolas", 10, "bold"), width=12,
-                             anchor="w", padx=10).pack(side="left")
-                    tk.Label(row, text=f"{acc:.1f}%", fg="#ffcc00", bg=row_bg, font=("Consolas", 10), width=10).pack(
-                        side="left")
-                    tk.Label(row, text=f"{hsr:.1f}%", fg="#ff4444", bg=row_bg, font=("Consolas", 10), width=10).pack(
-                        side="left")
-            else:
-                tk.Label(scroll_content, text="NO DATA FOUND. SEARCH AGAIN.", fg="#4a6a7a", bg="#121212",
-                         pady=50).pack()
-
-            scroll_content.update_idletasks()
-            canvas_area.config(scrollregion=canvas_area.bbox("all"))
-            canvas_area.pack(side="left", fill="both", expand=True)
-            scrollbar.pack(side="right", fill="y")
-            self.content_ids.append(
-                self.canvas.create_window(mid, 450, window=table_frame, width=750, height=430, tags="content"))
+        self.clear_content()
+        self.current_tab = "characters"
+        if hasattr(self, 'char_win'):
+            self.char_win.show()
+            self.char_win.raise_()
 
     def load_enforcer_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -4647,7 +3973,7 @@ class DiorClientGUI:
                 if new_world_id != str(self.current_world_id):
                     s_name = self.get_server_name_by_id(new_world_id)
                     # Sicherer Aufruf des Serverwechsels
-                    self.root.after(0, lambda n=s_name, i=new_world_id: self.switch_server(n, i))
+                    QTimer.singleShot(0, lambda n=s_name, i=new_world_id: self.switch_server(n, i))
         except Exception as e:
             self.add_log(f"Auto-Switch Error: {e}")
 
@@ -4722,8 +4048,7 @@ class DiorClientGUI:
                                         count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
                                         conn.close()
 
-
-                                        self.root.after(0, lambda c=count: self.cache_label.config(
+                                        QTimer.singleShot(0, lambda c=count: self.cache_label.config(
                                             text=f"Characters in db: {c}"))
                                     except Exception as e:
                                         print(f"DEBUG: Cache Label Update skipped: {e}")
@@ -4739,8 +4064,6 @@ class DiorClientGUI:
         if self.observer:
             self.observer.stop()
         self.root.destroy()
-
-
 
     def start_websocket_thread(self):
         """Startet den Census-Listener in einem eigenen Hintergrund-Thread"""
@@ -4758,7 +4081,7 @@ class DiorClientGUI:
         self.loop = asyncio.get_running_loop()
         sid = S_ID
         uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={sid}"
-
+        print("debugtest")
         # Initialisiere den Duplikat-Filter
         self.event_cache = set()
         self.event_history = []
@@ -4784,9 +4107,12 @@ class DiorClientGUI:
                         if cid not in self.session_stats:
                             faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
                             self.session_stats[cid] = {
-                                "id": cid, "name": self.name_cache.get(cid, "Searching..."),
-                                "faction": faction_name, "k": 0, "d": 0, "a": 0, "hs": 0,"hsrkill": 0,
-                                "start": time.time(), "last_kill_time": time.time()
+                                "id": cid,
+                                "name": self.name_cache.get(cid, "Searching..."),
+                                "faction": faction_name,
+                                "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
+                                "start": time.time(),
+                                "last_kill_time": time.time()
                             }
                         return self.session_stats[cid]
 
@@ -4823,7 +4149,6 @@ class DiorClientGUI:
                             if e_name == "PlayerLogin":
                                 c_id = p.get("character_id")
 
-                                # [NEU] Funktion zum Synchronisieren der Faction und Abspielen des Sounds
                                 def sync_faction_and_play(char_id, char_name):
                                     try:
                                         # 1. Aktuelle Faction von Census abfragen
@@ -4832,7 +4157,11 @@ class DiorClientGUI:
 
                                         f_id = "0"
                                         if r.get('returned', 0) > 0:
-                                            f_id = r['character_list'][0].get('faction_id', "0")
+                                            character_list = r.get('character_list')
+                                            if character_list and len(character_list) > 0:
+                                                f_id = character_list[0].get('faction_id', "0")
+                                            else:
+                                                f_id = "0"  # Fallback
 
                                             # 2. Datenbank mit der richtigen Faction aktualisieren
                                             conn = sqlite3.connect("ps2_master.db")
@@ -4841,39 +4170,49 @@ class DiorClientGUI:
                                             conn.commit()
                                             conn.close()
 
-                                        # 3. Den korrekten Sound basierend auf der frischen Faction triggern
                                         f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
-                                        self.root.after(0, lambda: self.trigger_overlay_event(f"Login {f_tag}"))
+
+                                        # 3. QT-ÄNDERUNG: Direktaufruf (trigger_overlay_event sollte thread-sicher sein)
+                                        self.trigger_overlay_event(f"Login {f_tag}")
                                         self.add_log(f"AUTO-TRACK: {char_name} eingeloggt ({f_tag}).")
 
                                     except Exception as e:
                                         print(f"Login-Sync Error: {e}")
 
-                                # Prüfen, ob es einer deiner Tracking-Charaktere ist
                                 for name, saved_id in self.char_data.items():
                                     if saved_id == c_id:
                                         self.current_character_id = c_id
-                                        self.root.after(0, lambda n=name: self.char_var.set(n))
 
-                                        # Sync-Thread starten, damit die GUI nicht einfriert
+                                        # QT-ÄNDERUNG: Einfache Zuweisung statt .set()
+                                        self.current_selected_char_name = name
+
+                                        # NEU: Wir müssen das Label im Dashboard/Overlay-Fenster aktualisieren
+                                        # Falls du ein Dropdown hast:
+                                        if hasattr(self, 'ovl_config_win'):
+                                            # Wir nutzen das Signal-System, falls wir aus einem Thread kommen,
+                                            # oder wir rufen eine Methode auf, die das UI sicher updatet.
+                                            self.ovl_config_win.char_combo.setCurrentText(name)
+
                                         threading.Thread(target=sync_faction_and_play, args=(c_id, name),
                                                          daemon=True).start()
 
-                                        # Server-Switch Logik (bleibt gleich)
                                         if payload_world != "0" and payload_world != str(self.current_world_id):
                                             s_name = self.get_server_name_by_id(payload_world)
                                             self.add_log(f"AUTO-SWITCH: Wechsel zu {s_name}...")
-                                            self.root.after(0,
-                                                            lambda n=s_name, i=payload_world: self.switch_server(n, i))
+                                            # QT-ÄNDERUNG: Direkter Aufruf statt after()
+                                            self.switch_server(s_name, payload_world)
                                         break
+
 
 
                             elif e_name == "PlayerLogout":
                                 logout_id = p.get("character_id")
-                                # 1. Falls du es selbst bist:
                                 if logout_id == self.current_character_id:
                                     self.current_character_id = ""
-                                    self.root.after(0, lambda: self.char_var.set("WAITING FOR LOGIN..."))
+                                    self.current_selected_char_name = "WAITING FOR LOGIN..."
+                                    # UI Update für das Dropdown
+                                    if hasattr(self, 'ovl_config_win'):
+                                        self.ovl_config_win.char_combo.setPlaceholderText("WAITING FOR LOGIN...")
                                     self.add_log("AUTO-TRACK: Eigener Charakter ausgeloggt.")
                                 # 2. JEDEN Spieler sofort aus der Live-Anzeige entfernen
                                 if logout_id in self.active_players:
@@ -4895,13 +4234,23 @@ class DiorClientGUI:
                             if track_id and track_id != "0":
                                 tid = p.get("team_id") or p.get("attacker_team_id")
                                 f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+
+                                # Speichern in der Logik-Variable (DiorClientGUI)
                                 self.active_players[track_id] = (time.time(), f_name)
+
+                                # Namens-Abfrage in die Queue werfen (falls unbekannt)
                                 if track_id not in self.name_cache:
                                     self.id_queue.put(track_id)
 
-                            # =========================================================
-                            # EVENT: DEATH
-                            # =========================================================
+                                # --- NEU FÜR QT: DASHBOARD UPDATE TRIGGER ---
+                                # Wir rufen hier keine GUI-Befehle direkt auf, aber wir stellen sicher,
+                                # dass das Dashboard-Fenster Zugriff auf die frischen Stats hat.
+                                # Da das Dashboard meist über einen QTimer aktualisiert wird,
+                                # müssen wir hier meistens gar nichts aktiv "pushen".
+
+                                # =========================================================
+                                # EVENT: DEATH (PyQt6 Optimized)
+                                # =========================================================
                             if e_name == "Death":
                                 killer_id = p.get("attacker_character_id")
                                 victim_id = p.get("character_id")
@@ -4911,6 +4260,7 @@ class DiorClientGUI:
                                 w_info = self.item_db.get(weapon_id, {})
                                 category = w_info.get("type", "Unknown")
 
+                                # --- GLOBALE STATISTIKEN ---
                                 if p.get("attacker_team_id") != p.get("team_id"):
                                     if killer_id and killer_id != "0" and killer_id != victim_id:
                                         k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
@@ -4927,6 +4277,7 @@ class DiorClientGUI:
                                     # Icon Vorbereitung (HS Icon)
                                     icon_html = ""
                                     if is_hs:
+                                        # Pfad-Handling bleibt gleich, aber wir nutzen BASE_DIR
                                         hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                                         hs_path = get_asset_path(hs_icon).replace("\\", "/")
                                         if os.path.exists(hs_path):
@@ -4935,11 +4286,12 @@ class DiorClientGUI:
                                     # --- FALL A: ICH BIN DER KILLER ---
                                     if killer_id == my_id and victim_id != my_id:
 
-                                        # [NEU] Check: Ist Killstreak überhaupt aktiviert?
+                                        # [LOGIK] Check: Ist Killstreak aktiviert?
                                         if not self.config.get("streak", {}).get("active", True):
-                                            continue  # Wenn aus, ignoriere den Kill für Streaks
+                                            continue
 
                                         curr_time = time.time()
+                                        # Dubletten-Schutz
                                         if getattr(self, "last_victim_id", None) == victim_id and (
                                                 curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
                                             continue
@@ -4948,9 +4300,9 @@ class DiorClientGUI:
 
                                         if p.get("attacker_team_id") == p.get("team_id"):
                                             self.trigger_auto_voice("tk")
-                                            self.root.after(0, lambda: self.trigger_overlay_event("Team Kill"))
+                                            self.trigger_overlay_event("Team Kill")  # Kein .after() mehr
                                         else:
-                                            # Killstreak Logik
+                                            # Killstreak Logik (Messer-System)
                                             if self.killstreak_count == 0:
                                                 self.killstreak_count = 1
                                                 self.streak_factions = []
@@ -4958,33 +4310,32 @@ class DiorClientGUI:
                                             else:
                                                 self.killstreak_count += 1
 
-                                            if not hasattr(self, 'streak_factions'): self.streak_factions = []
-                                            if not hasattr(self, 'streak_slot_map'): self.streak_slot_map = []
                                             v_team = p.get("team_id")
-                                            v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team), "NSO")
+                                            v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team),
+                                                                                              "NSO")
                                             self.streak_factions.append(v_faction)
 
+                                            # Slot-Vergabe
                                             new_slot = self._get_random_slot()
                                             self.streak_slot_map.append(new_slot)
 
                                             self.is_dead = False
                                             self.was_revived = False
-                                            self.root.after(0, self.update_streak_display)
 
-                                            # Multi-Kill
-                                            if curr_time - getattr(self, "last_kill_time", 0) <= self.streak_timeout:
+                                            # Messer-Anzeige im Qt-Overlay aktualisieren
+                                            self.update_streak_display()
+
+                                            # Multi-Kill Zeitfenster
+                                            if curr_time - getattr(self, "last_kill_time",
+                                                                   0) <= self.streak_timeout:
                                                 self.kill_counter += 1
                                             else:
                                                 self.kill_counter = 1
                                             self.last_kill_time = curr_time
 
-                                            # Special Events (Weapon Check)
-                                            weapon_id = p.get("attacker_weapon_id")
-                                            w_info = self.item_db.get(weapon_id, {})
-                                            category = w_info.get("type", "Unknown")
+                                            # --- Spezial-Event Erkennung ---
                                             weapon_name = w_info.get("name", "Unknown")
                                             special_event = None
-
 
                                             if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
                                                 special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
@@ -4993,81 +4344,96 @@ class DiorClientGUI:
                                             elif weapon_name in PS2_DETECTION["NAMES"]:
                                                 special_event = PS2_DETECTION["NAMES"][weapon_name]
 
-                                            if is_hs:
-                                                if not special_event: special_event = "Headshot"
+                                            if is_hs and not special_event:
+                                                special_event = "Headshot"
 
-                                            # Popup Trigger
+                                            # Streak-Meilensteine (Squad Wipe etc.)
                                             streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
                                                           36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
                                             if self.killstreak_count in streak_map:
                                                 special_event = streak_map[self.killstreak_count]
                                             elif self.kill_counter > 1:
                                                 multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill",
-                                                             5: "Ultra Kill", 6: "Monster Kill", 7: "Ludicrous Kill",
+                                                             5: "Ultra Kill", 6: "Monster Kill",
+                                                             7: "Ludicrous Kill",
                                                              9: "Holy Shit"}
-                                                if self.kill_counter in multi_map: special_event = multi_map[
-                                                    self.kill_counter]
+                                                if self.kill_counter in multi_map:
+                                                    special_event = multi_map[self.kill_counter]
 
+                                            # Overlay triggern (Bilder/Sounds)
                                             if special_event:
-                                                self.root.after(0,
-                                                                lambda e=special_event: self.trigger_overlay_event(e))
-                                            self.root.after(50, lambda: self.trigger_overlay_event("Hitmarker"))
+                                                self.trigger_overlay_event(special_event)
 
+                                            # Hitmarker immer kurz verzögert (direkt aufrufen ist in Qt ok)
+                                            self.trigger_overlay_event("Hitmarker")
 
-
-                                            # Auto Voice Logic
+                                            # --- Auto Voice Logic (V-Macros) ---
                                             kd_triggered = False
                                             v_loadout = p.get("character_loadout_id")
                                             if victim_id in self.session_stats:
                                                 v_stat = self.session_stats[victim_id]
-                                                v_k = v_stat.get("k", 0)
-                                                v_d = v_stat.get("d", 1)
-                                                if (v_k / max(1, v_d)) >= 2.0:
+                                                if (v_stat.get("k", 0) / max(1, v_stat.get("d", 1))) >= 2.0:
                                                     self.trigger_auto_voice("kill_high_kd")
                                                     kd_triggered = True
-                                            if not kd_triggered and v_loadout in LOADOUT_MAP["max"]:
-                                                self.trigger_auto_voice("kill_max")
-                                                kd_triggered = True
-                                            if not kd_triggered and v_loadout in LOADOUT_MAP["infil"]:
-                                                self.trigger_auto_voice("kill_infil")
-                                                kd_triggered = True
-                                            if not kd_triggered and is_hs:
-                                                self.trigger_auto_voice("kill_hs")
 
-                                            # Killfeed
+                                            if not kd_triggered:
+                                                if v_loadout in LOADOUT_MAP["max"]:
+                                                    self.trigger_auto_voice("kill_max")
+                                                elif v_loadout in LOADOUT_MAP["infil"]:
+                                                    self.trigger_auto_voice("kill_infil")
+                                                elif is_hs:
+                                                    self.trigger_auto_voice("kill_hs")
+
+                                            # --- Killfeed Eintrag senden ---
                                             v_name = self.name_cache.get(victim_id, "Unknown")
                                             v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
                                             s_vic = self.session_stats.get(victim_id, {})
                                             v_kd = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
+
+                                            # HTML String für das Qt-Overlay Killfeed
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 19px;">({v_kd})</span></div>'
-                                            if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
+
+                                            if self.overlay_win:
+                                                self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                     # --- FALL B: ICH BIN DAS OPFER ---
                                     elif victim_id == my_id:
+                                        # 1. STREAK SICHERN (Wichtig für Revive-Logik)
                                         if self.killstreak_count > 0:
                                             self.saved_streak = self.killstreak_count
                                             self.saved_factions = getattr(self, 'streak_factions', [])
                                             self.saved_slots = getattr(self, 'streak_slot_map', [])
 
+                                        # 2. STATUS RESET
                                         self.killstreak_count = 0
                                         self.streak_factions = []
                                         self.streak_slot_map = []
                                         self.is_dead = True
-                                        self.root.after(0, self.update_streak_display)
 
+                                        # Direktes UI-Update statt root.after
+                                        self.update_streak_display()
+
+                                        # 3. KILLER-INFOS FÜR DEN FEED
                                         if killer_id and killer_id != "0":
                                             k_name = self.name_cache.get(killer_id, "Unknown")
                                             k_tag = getattr(self, "outfit_cache", {}).get(killer_id, "")
                                             k_vic = self.session_stats.get(killer_id, {})
                                             k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
+
+                                            # HTML-Formatierung für den roten "Death-Eintrag" im Killfeed
                                             msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
-                                                                                                text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                                                                {icon_html}<span style="color: #ff4444;"></span>
-                                                                                                <span style="color: #888;">[{"".join(k_tag)}]</span>
-                                                                                                <span style="color: #ff4444;">{k_name}</span>
-                                                                                                <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
-                                            if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Death"))
+                                                                                         text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
+                                                                                         {icon_html}
+                                                                                         <span style="color: #888;">[{"".join(k_tag)}]</span>
+                                                                                         <span style="color: #ff4444;">{k_name}</span>
+                                                                                         <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
+
+                                            # Signal an das Qt-Overlay senden
+                                            if self.overlay_win:
+                                                self.overlay_win.signals.killfeed_entry.emit(msg)
+
+                                        # 4. DEATH-EVENT TRIGGERN (Sound & Bild "You Died")
+                                        self.trigger_overlay_event("Death")
 
                             # =========================================================
                             # EVENT: EXPERIENCE (Revive, Assists)
@@ -5078,44 +4444,58 @@ class DiorClientGUI:
                                 char_id = p.get("character_id")
                                 my_id = self.current_character_id
 
+                                # 1. Globale Statistik-Updates (Assists)
                                 if exp_id in ["2", "3", "371", "372"]:
                                     a_obj = get_stat_obj(char_id, p.get("team_id"))
                                     a_obj["a"] += 1
 
+                                # 2. Globale Statistik-Updates (Revives korrigieren Deaths)
                                 if exp_id in ["7", "53"]:
                                     r_obj = get_stat_obj(other_id, p.get("team_id"))
-                                    if r_obj["d"] > 0: r_obj["d"] -= 1
+                                    if r_obj["d"] > 0:
+                                        r_obj["d"] -= 1
 
+                                # 3. LOGIK: ICH WURDE WIEDERBELEBT
                                 if my_id and other_id == my_id:
                                     if exp_id in ["7", "53"]:
                                         self.was_revived = True
                                         self.is_dead = False
+
+                                        # Killstreak aus dem "Sicherungs-Speicher" wiederherstellen
                                         self.killstreak_count = getattr(self, 'saved_streak', 0)
                                         self.streak_factions = getattr(self, 'saved_factions', [])
                                         self.streak_slot_map = getattr(self, 'saved_slots', [])
-                                        self.root.after(0, self.update_streak_display)
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Revive Taken"))
+
+                                        # UI-Updates (Direktaufruf statt .after)
+                                        self.update_streak_display()
+                                        self.trigger_overlay_event("Revive Taken")
                                         self.trigger_auto_voice("revived")
 
+                                        # Killfeed-Eintrag für Revive
                                         if self.config.get("killfeed", {}).get("show_revives", True):
                                             m_name = self.name_cache.get(char_id, "Medic")
                                             msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
-                                            if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
+                                            if self.overlay_win:
+                                                self.overlay_win.signals.killfeed_entry.emit(msg)
 
+                                # 4. LOGIK: ICH GEBE SUPPORT ODER ERHALTE EXP
                                 if my_id and char_id == my_id:
-                                    # HIER DIE KORREKTUR: Typenumwandlung zu int für sicheren Vergleich
                                     try:
+                                        # Standort-Daten für Alerts/Metagame synchronisieren
                                         self.myTeamId = int(p.get("team_id", 0))
                                         self.myWorldID = int(p.get("world_id", 0))
-                                        self.currentZone = int(p.get("zone_id", 0))  # <--- DAS HAT GEFEHLT!
+                                        self.currentZone = int(p.get("zone_id", 0))
                                     except:
                                         pass
+
                                     if exp_id in ["7", "53"]:
-                                        self.root.after(0, lambda: self.trigger_overlay_event("Revive Given"))
+                                        self.trigger_overlay_event("Revive Given")
                                     else:
+                                        # Spezial-Erkennung (z.B. Resupply, Repair, Point Control)
+                                        # PS2_EXP_DETECTION muss in Dior Client.py definiert sein
                                         for event_name, id_list in PS2_EXP_DETECTION.items():
                                             if exp_id in id_list:
-                                                self.root.after(0, lambda e=event_name: self.trigger_overlay_event(e))
+                                                self.trigger_overlay_event(event_name)
                                                 break
 
                             # =========================================================
@@ -5124,49 +4504,44 @@ class DiorClientGUI:
                             elif e_name == "MetagameEvent":
                                 state = p.get("metagame_event_state_name")
 
-                                # Sicherstellen, dass wir Zahlen vergleichen
+                                # Typenumwandlung sicherstellen
                                 try:
                                     world = int(p.get("world_id", 0))
                                     zone = int(p.get("zone_id", 0))
-                                    # Die Scores kommen als String (z.B. "33.5"), daher float!
+                                    # Scores kommen oft als String ("33.5")
                                     VS = float(p.get("faction_vs", 0))
                                     TR = float(p.get("faction_tr", 0))
                                     NC = float(p.get("faction_nc", 0))
-                                except ValueError:
-                                    continue  # Datenmüll von der API ignorieren
+                                except (ValueError, TypeError):
+                                    continue
 
-                                # Debugging aktivieren, damit du siehst was passiert
-                                print(f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}, WinnerCheck: VS={VS}, TR={TR}, NC={NC}")
+                                    # Debugging (Konsole)
+                                print(
+                                    f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}")
 
-                                if state == "ended" and world == getattr(self, 'myWorldID',
-                                                                         0) and zone == getattr(self,
-                                                                                                'currentZone',
-                                                                                                0):
+                                # Prüfen, ob der Alert auf deinem Server & deiner Zone geendet ist
+                                if state == "ended" and world == getattr(self, 'myWorldID', 0) and zone == getattr(self,
+                                                                                                                   'currentZone',
+                                                                                                                   0):
                                     print("ALERT ENDED - CHECKING WINNER...")
 
-                                    # VS WIN (VS hat mehr als TR UND mehr als NC)
+                                    # Gewinner-Logik basierend auf deiner Team-ID (1=VS, 2=NC, 3=TR)
+                                    won = False
                                     if VS > TR and VS > NC and self.myTeamId == 1:
-                                        self.root.after(0,
-                                                        lambda: self.trigger_overlay_event("Alert Win"))
-                                        self.add_log("EVENT: Alert Win (VS)")
-
-                                    # NC WIN
+                                        won = True
                                     elif NC > TR and NC > VS and self.myTeamId == 2:
-                                        self.root.after(0,
-                                                        lambda: self.trigger_overlay_event("Alert Win"))
-                                        self.add_log("EVENT: Alert Win (NC)")
-
-                                    # TR WIN
+                                        won = True
                                     elif TR > VS and TR > NC and self.myTeamId == 3:
-                                        self.root.after(0,
-                                                        lambda: self.trigger_overlay_event("Alert Win"))
-                                        self.add_log("EVENT: Alert Win (TR)")
+                                        won = True
 
-                                    # Unentschieden oder Niederlage
+                                    if won:
+                                        # QT-ÄNDERUNG: Direktaufruf (Bilder & Victory-Sound)
+                                        self.trigger_overlay_event("Alert Win")
+                                        self.add_log(f"EVENT: Alert Win for Faction {self.myTeamId}")
                                     else:
-                                        self.root.after(0,
-                                                        lambda: self.trigger_overlay_event("Alert End"))
-                                        self.add_log("EVENT: Alert Ended (Lost or Draw)")
+                                        # Entweder verloren oder Unentschieden
+                                        self.trigger_overlay_event("Alert End")
+                                        self.add_log("EVENT: Alert Ended (No Win recorded)")
 
             except Exception as e:
                 self.add_log(f"Websocket Error: {e}")
@@ -5191,16 +4566,17 @@ class DiorClientGUI:
         os.startfile(fn);
         self.add_log("SYS: Report generated.")
 
-    def add_log(self, msg):
-        """Fügt sicher eine Nachricht zum Log hinzu, auch wenn das Widget nicht existiert"""
-        print(f"LOG: {msg}")  # Backup in der Konsole
+    def add_log(self, text):
 
-        # Prüfen, ob log_area existiert und noch "lebt"
-        if hasattr(self, 'log_area') and self.log_area.winfo_exists():
-            try:
-                self.root.after(0, lambda: self._safe_log_insert(msg))
-            except:
-                pass
+        print(f"LOG: {text}")  # Backup in der Konsole
+        # Bestehender Tkinter Log
+        if hasattr(self, 'log_area') and self.log_area:
+            self.log_area.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {text}\n")
+            self.log_area.see(tk.END)
+
+        # NEU: Auch an das Qt-Fenster senden
+        if hasattr(self, 'char_win'):
+            self.char_win.add_log(text)
 
     def _safe_log_insert(self, msg):
         """Interne Hilfsfunktion für sicheres Schreiben"""
@@ -5276,256 +4652,153 @@ class DiorClientGUI:
             self.add_log(f"SYS: Hintergrund dauerhaft auf {os.path.basename(f)} gesetzt.")
 
     def execute_launch(self, mode):
+        # 1. Verzeichnis-Check
         if not self.ps2_dir or not os.path.exists(self.ps2_dir):
-            self.add_log("ERR: PS2 Directory not found! Please set it in Settings.")
+            msg = "ERR: PS2 Directory not found! Check Settings."
+            self.add_log(msg)
+            self.launcher_win.lbl_info.setText(msg)
             return
 
+        # Pfade definieren
         src = self.source_high if mode == "high" else self.source_low
         dest = os.path.join(self.ps2_dir, "UserOptions.ini")
         exe = os.path.join(self.ps2_dir, "LaunchPad.exe")
 
         if os.path.exists(src):
             try:
+                # Datei kopieren
                 shutil.copy2(src, dest)
                 self.add_log(f"SYS: Applied {mode} configuration.")
+
+                # Spiel starten
                 if os.path.exists(exe):
                     subprocess.Popen([exe])
                     self.add_log("SYS: LaunchPad triggered.")
+
+                    # GUI Feedback
+                    self.launcher_win.lbl_info.setText(f"SUCCESS: {mode.upper()} INITIALIZED. CLOSING...")
+
+                    # --- KORREKTUR: PyQt6 Weg statt self.root.after ---
+                    # Wir nutzen QTimer.singleShot für die Verzögerung
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(2000, self.launcher_win.hide)
+
                 else:
-                    self.add_log("ERR: LaunchPad.exe not found in PS2 folder.")
+                    self.add_log("ERR: LaunchPad.exe not found.")
+                    self.launcher_win.lbl_info.setText("ERR: LaunchPad.exe missing!")
             except Exception as e:
-                self.add_log(f"ERR: Copy failed: {e}")
+                # Hier stand vorher der Fehler-Log, weil 'e' oft den root-Crash enthielt
+                self.add_log(f"ERR: Launch interaction failed: {e}")
+                self.launcher_win.lbl_info.setText(f"ERR: {e}")
         else:
-            self.add_log(f"ERR: Missing {src} in app directory!")
+            msg = f"ERR: Source file missing: {src}"
+            self.add_log(msg)
+            self.launcher_win.lbl_info.setText(msg)
 
     def run_search(self, name):
-        def worker():  # Wir definieren einen internen Worker für den Thread
+        self.add_log(f"UPLINK: Start search for '{name}' (All-in-One Query)...")
+        # UI-Status auf "Warten" setzen
+        if hasattr(self, 'char_win'):
+            self.char_win.btn_search.setEnabled(False)
+            self.char_win.btn_search.setText("SYNCING...")
+
+        def worker():
             try:
-                self.add_log(f"SYNC: Initializing search for {name}...")
-
-                # 1. URL definieren
-                url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=outfit,world,stat_history,stat"
-
-                # 2. Basis-Abfrage
-                try:
-                    response = requests.get(url, timeout=30)
-                    response.raise_for_status()
-                    r = response.json()
-                except requests.exceptions.Timeout:
-                    self.add_log("ERROR: Census API Timeout.")
-                    return
-                except Exception as e:
-                    self.add_log(f"ERROR: API failed: {e}")
-                    return
+                # 1. API ABFRAGE
+                url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history,weapon_stat_by_faction"
+                r = requests.get(url, timeout=30).json()
 
                 if not r.get('character_list'):
-                    self.add_log(f"ERROR: Character '{name}' not found.")
+                    self.add_log(f"DEBUG: Character {name} nicht gefunden.")
+                    QTimer.singleShot(0, lambda: self.char_win.btn_search.setEnabled(True))
                     return
 
                 char_data = r['character_list'][0]
-                char_id = char_data['character_id']
+                all_stats_container = char_data.get('stats', {})
 
-                # --- STATS EXTRAKTION --
-                stats_history = char_data.get('stats', {}).get('stat_history', [])
+                # --- SCHRITT 2: STATS EXTRAKTION ---
+                stats_history = all_stats_container.get('stat_history', [])
 
-                def get_robust_stat(stat_name):
-                    entry = next((s for s in stats_history if s.get('stat_name') == stat_name), None)
+                def get_robust_stat(s_name):
+                    entry = next((s for s in stats_history if s.get('stat_name') == s_name), None)
                     if not entry: return 0, 0
-
-                    try:
-                        lt = int(entry.get('all_time', 0))
-                    except:
-                        lt = 0
-
+                    lt = int(entry.get('all_time', 0))
                     recent = 0
-                    raw_m = entry.get('month')
-                    if raw_m and str(raw_m).strip() != "":
-                        try:
-                            recent = int(raw_m)
-                        except:
-                            pass
-
-                    if recent == 0:
-                        raw_w = entry.get('week')
-                        if raw_w and str(raw_w).strip() != "":
-                            try:
-                                recent = int(raw_w)
-                            except:
-                                pass
-
-                    if recent == 0:
-                        day_data = entry.get('day')
-                        if isinstance(day_data, dict):
-                            recent = sum(int(v) for v in day_data.values() if str(v).isdigit())
+                    day_data = entry.get('day')
+                    if isinstance(day_data, dict):
+                        recent = sum(int(v) for v in day_data.values() if str(v).isdigit())
                     return lt, recent
 
-                # Stats berechnen
                 lt_kills, m30_kills = get_robust_stat('kills')
                 lt_deaths, m30_deaths = get_robust_stat('deaths')
                 lt_score, m30_score = get_robust_stat('score')
                 lt_time, m30_time = get_robust_stat('time')
 
-                lt_min = lt_time / 60 if lt_time > 0 else 1
-                lt_hrs = lt_time / 3600 if lt_time > 0 else 1
-                m30_min = m30_time / 60 if m30_time > 0 else 1
-                m30_hrs = m30_time / 3600 if m30_time > 0 else 1
+                def safe_div(a, b, r=2):
+                    return round(a / max(1, b), r)
 
-                char_data['custom_stats'] = {
+                # WICHTIG: Keys exakt so benennen, wie dein UI sie erwartet!
+                custom_stats = {
                     'name': char_data.get('name', {}).get('first', '-'),
+                    'fac_short': {"1": "VS", "2": "NC", "3": "TR"}.get(str(char_data.get('faction_id')), "NSO"),
+                    'server': self.get_server_name_by_id(char_data.get('world_id', '0')),
                     'outfit': char_data.get('outfit', {}).get('alias', 'NONE'),
-                    'server': char_data.get('world_id', '-'),
                     'rank': char_data.get('battle_rank', {}).get('value', '-'),
-                    'time_played': f"{int(lt_hrs)}h",
-                    'lt_kills': f"{lt_kills:,}",
-                    'lt_deaths': f"{lt_deaths:,}",
-                    'lt_kd': f"{(lt_kills / lt_deaths):.2f}" if lt_deaths > 0 else "0.00",
-                    'lt_kpm': f"{(lt_kills / lt_min):.2f}",
-                    'lt_kph': f"{(lt_kills / lt_hrs):.1f}",
-                    'lt_spm': f"{int(lt_score / lt_min):,}",
-                    'lt_score': f"{lt_score:,}",
-                    'm30_kills': f"{m30_kills:,}",
-                    'm30_deaths': f"{m30_deaths:,}",
-                    'm30_kd': f"{(m30_kills / m30_deaths):.2f}" if m30_deaths > 0 else "0.00",
-                    'm30_kpm': f"{(m30_kills / m30_min):.2f}",
-                    'm30_kph': f"{(m30_kills / m30_hrs):.1f}",
-                    'm30_spm': f"{int(m30_score / m30_min):,}",
-                    'm30_score': f"{m30_score:,}"
+                    'time_played': f"{int(lt_time / 3600)}h",
+                    'lt_kills': lt_kills, 'lt_deaths': lt_deaths,
+                    'lt_kd': safe_div(lt_kills, lt_deaths),
+                    'lt_kpm': safe_div(lt_kills, lt_time / 60),
+                    'lt_kph': safe_div(lt_kills, lt_time / 3600, 1),
+                    'lt_spm': int(safe_div(lt_score, lt_time / 60, 0)),
+                    'lt_score': f"{int(lt_score / 1000)}k",
+                    'm30_kills': m30_kills, 'm30_deaths': m30_deaths,
+                    'm30_kd': safe_div(m30_kills, m30_deaths),
+                    'm30_kpm': safe_div(m30_kills, m30_time / 60),
+                    'm30_spm': int(safe_div(m30_score, m30_time / 60, 0)),
+                    'm30_score': f"{int(m30_score / 1000)}k"
                 }
 
-                # --- WAFFENDATEN ---
-                w_url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/characters_weapon_stat/?character_id={char_id}&c:limit=5000"
+                # --- SCHRITT 3: WAFFEN-LOGIK ---
                 weapon_list = []
                 temp_w = {}
+                w_stats = all_stats_container.get('weapon_stat_by_faction', [])
 
-                try:
-                    w_r = requests.get(w_url, timeout=15)
-                    w_data = w_r.json()
-                    if 'characters_weapon_stat_list' in w_data:
-                        for item in w_data['characters_weapon_stat_list']:
-                            i_id = item.get('item_id')
-                            if not i_id or i_id == "0": continue
-                            if i_id not in temp_w:
-                                temp_w[i_id] = {'id': i_id, 'name': f"Item {i_id}", 'kills': 0, 'vehicle_kills': 0,
-                                                'shots': 0, 'hits': 0, 'hs': 0}
+                for entry in w_stats:
+                    i_id = entry.get('item_id')
+                    if not i_id or i_id == "0": continue
+                    if i_id not in temp_w:
+                        db_info = self.item_db.get(i_id, {"name": f"Unknown ({i_id})"})
+                        temp_w[i_id] = {'id': i_id, 'name': db_info['name'], 'kills': 0, 'shots': 0, 'hits': 0, 'hs': 0}
 
-                            val = int(item.get('value', 0))
-                            s_name = item.get('stat_name')
-                            if s_name == 'weapon_kills':
-                                temp_w[i_id]['kills'] += val
-                            elif s_name == 'weapon_vehicle_kills':
-                                temp_w[i_id]['vehicle_kills'] += val
-                            elif s_name == 'weapon_fire_count':
-                                temp_w[i_id]['shots'] += val
-                            elif s_name == 'weapon_hit_count':
-                                temp_w[i_id]['hits'] += val
-                            elif s_name == 'weapon_headshots':
-                                temp_w[i_id]['hs'] += val
+                    total_val = int(entry.get('value_vs', 0)) + int(entry.get('value_nc', 0)) + int(
+                        entry.get('value_tr', 0))
+                    s_name = entry.get('stat_name')
+                    if s_name in ['weapon_kills', 'weapon_vehicle_kills']:
+                        temp_w[i_id]['kills'] += total_val
+                    elif s_name == 'weapon_fire_count':
+                        temp_w[i_id]['shots'] += total_val
+                    elif s_name == 'weapon_hit_count':
+                        temp_w[i_id]['hits'] += total_val
+                    elif s_name == 'weapon_headshots':
+                        temp_w[i_id]['hs'] += total_val
 
-                        relevant_items = [w for w in temp_w.values() if (w['kills'] + w['vehicle_kills']) >= 2]
-                        relevant_items.sort(key=lambda x: x['kills'], reverse=True)
+                weapon_list = sorted([w for w in temp_w.values() if w['kills'] > 0],
+                                     key=lambda x: x['kills'], reverse=True)[:100]
 
-                        top_items = relevant_items[:100]
-                        if top_items:
-                            id_list = ",".join([w['id'] for w in top_items])
-                            n_r = requests.get(
-                                f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/item/?item_id={id_list}&c:show=item_id,name.en",
-                                timeout=15)
-                            name_map = {i['item_id']: i.get('name', {}).get('en', 'Unknown') for i in
-                                        n_r.json().get('item_list', [])}
-                            for w in top_items:
-                                if w['id'] in name_map: w['name'] = name_map[w['id']]
+                self.add_log(f"DEBUG: Processing complete. Found {len(weapon_list)} weapons.")
 
-                        ignore = ["Nano-Armor", "Repair Tool", "Medical Applicator", "Recon Device", "Shield Capacitor",
-                                  "Spawn Beacon"]
-                        weapon_list = [w for w in relevant_items if
-                                       not any(bad.lower() in w['name'].lower() for bad in ignore)]
-                except Exception as e:
-                    self.add_log(f"WARN: Weapons failed: {e}")
-
-                self.last_char_data = char_data
-                self.last_weapon_stats = weapon_list
-                self.root.after(0, self.show_characters)
-                self.add_log("Sync completed.")
+                # --- DER SICHERE TRANSFER VIA SIGNAL ---
+                # Wir "feuern" das Signal ab - Qt kümmert sich um den Rest
+                self.char_win.signals.search_finished.emit(custom_stats, weapon_list)
 
             except Exception as e:
-                self.add_log(f"ERROR: {e}")
-                traceback.print_exc()
+                self.add_log(f"WORKER FATAL: {e}")
+                # Falls es kracht, Button trotzdem wieder freigeben (via Signal oder direkt)
+                QTimer.singleShot(0, lambda: self.char_win.btn_search.setEnabled(True))
 
-        # Startet den Worker-Thread
+                # Thread starten
+
         threading.Thread(target=worker, daemon=True).start()
-
-    def load_weapon_data_worker(self, char_id):
-        """Holt die Waffendaten im Hintergrund und speichert sie."""
-        try:
-            data = self.fetch_weapon_stats(char_id)
-            self.last_weapon_stats = data if data else []
-            self.add_log(f"SYS: {len(self.last_weapon_stats)} weapons synchronized.")
-        except Exception as e:
-            self.add_log(f"ERR: Worker failed: {e}")
-
-    def fetch_weapon_stats(self, char_id):
-        url = (f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/characters_weapon_stat?"
-               f"character_id={char_id}&c:join=item^on:item_id^to:item_id^show:name.en&c:limit=500")
-        try:
-            r = requests.get(url, timeout=30)
-            data = r.json()
-            if 'characters_weapon_stat_list' in data:
-                raw_stats = data['characters_weapon_stat_list']
-                weapon_map = {}
-                for s in raw_stats:
-                    wid = s.get('item_id')
-                    if not wid: continue
-                    if wid not in weapon_map:
-                        w_name = s.get('item', {}).get('name', {}).get('en', f"ID: {wid}")
-                        weapon_map[wid] = {"name": w_name, "kills": 0, "hits": 0, "shots": 0, "hs": 0}
-
-                    st_name = s.get('stat_name')
-                    val = int(s.get('value', 0))
-                    if st_name == 'weapon_kills':
-                        weapon_map[wid]['kills'] += val
-                    elif st_name == 'weapon_hit_count':
-                        weapon_map[wid]['hits'] += val
-                    elif st_name == 'weapon_fire_count':
-                        weapon_map[wid]['shots'] += val
-                    elif st_name == 'weapon_headshots':
-                        weapon_map[wid]['hs'] += val
-
-                return [v for v in weapon_map.values() if v['kills'] > 0]
-        except Exception as e:
-            print(f"Fetch Error: {e}")
-        return []
-
-        # --- HELFERFUNKTION FÜR METRIKEN ---
-        def update_col(prefix, data):
-            k = data['kills']
-            d = data['deaths']
-            s = data['score']
-            t = data['time']  # in Sekunden
-
-            # Berechnungen
-            kd = round(k / d, 2) if d > 0 else k
-            play_minutes = t / 60
-            play_hours = t / 3600
-
-            kpm = round(k / play_minutes, 2) if play_minutes > 0 else 0.0
-            kph = round(k / play_hours, 2) if play_hours > 0 else 0.0
-            spm = round(s / play_minutes, 2) if play_minutes > 0 else 0.0  # SPM Berechnung
-
-            # Labels befüllen
-            self.life_labels[f'{prefix}_kills'].config(text=f"{k:,}")
-            self.life_labels[f'{prefix}_deaths'].config(text=f"{d:,}")
-            self.life_labels[f'{prefix}_kd'].config(text=f"{kd:.2f}", fg="#00ff00" if kd >= 1.0 else "#ff4444")
-            self.life_labels[f'{prefix}_kpm'].config(text=f"{kpm:.2f}")
-            self.life_labels[f'{prefix}_kph'].config(text=f"{kph:.2f}")
-            self.life_labels[f'{prefix}_spm'].config(text=f"{spm:.2f}")  # SPM Anzeige
-            self.life_labels[f'{prefix}_score'].config(text=f"{s:,}")
-
-        # --- UI UPDATE: RECHTE SPALTEN ---
-        # Lifetime Spalte aktualisieren
-        update_col("lifetime", stats_package['lt'])
-
-        # Last 30 Days Spalte aktualisieren
-        update_col("m30", stats_package['m30'])
 
 
 class EnforcerHandler(FileSystemEventHandler):
@@ -5556,6 +4829,17 @@ class EnforcerHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = DiorClientGUI(root)
-    root.mainloop()
+    try:
+
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")  # Sorgt für ein einheitliches Dark-Design
+
+        # Deine Logik-Klasse initialisieren (sie erstellt intern den MainHub)
+        client = DiorClientGUI()
+        sys.exit(app.exec())
+    except Exception as e:
+        import traceback
+
+        with open("error_log.txt", "w") as f:
+            f.write(traceback.format_exc())
+        print(traceback.format_exc())
