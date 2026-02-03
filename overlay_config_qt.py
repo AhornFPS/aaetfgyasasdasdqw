@@ -276,30 +276,60 @@ class OverlayConfigWindow(QWidget):
     def setup_identity_tab(self):
         layout = QVBoxLayout(self.tab_ident)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.setSpacing(20)
+
+        # --- SELECTION ---
+        sel_group = QFrame(objectName="Group")
+        sel_layout = QVBoxLayout(sel_group)
 
         header = QLabel("ACTIVE TRACKING IDENTITY")
         header.setObjectName("Header")
-        layout.addWidget(header)
-
-        layout.addWidget(QLabel("Select the character you are currently playing.", objectName="SubText"))
+        sel_layout.addWidget(header)
+        sel_layout.addWidget(QLabel("Select the character you are currently playing.", objectName="SubText"))
 
         self.char_combo = QComboBox()
         self.char_combo.setMinimumWidth(300)
-        layout.addWidget(self.char_combo)
+        sel_layout.addWidget(self.char_combo)
 
-        # Button accessible machen
         self.btn_del_char = QPushButton("DELETE SELECTED")
-        self.btn_del_char.setStyleSheet("background: #440000; color: #ff4444;")
-        layout.addWidget(self.btn_del_char)
+        self.btn_del_char.setStyleSheet("background: #440000; color: #ff4444; border: 1px solid #660000;")
+        sel_layout.addWidget(self.btn_del_char)
 
-        layout.addSpacing(40)
+        layout.addWidget(sel_group)
 
-        # Master Switch Group
+        # --- ADD NEW ---
+        add_group = QFrame(objectName="Group")
+        add_layout = QVBoxLayout(add_group)
+
+        add_header = QLabel("ADD NEW CHARACTER")
+        add_header.setObjectName("Header")
+        add_header.setStyleSheet("color: #ffcc00; font-size: 14px;")
+        add_layout.addWidget(add_header)
+
+        input_row = QHBoxLayout()
+        self.char_input = QLineEdit()
+        self.char_input.setPlaceholderText("Enter exact character name...")
+
+        self.btn_add_char = QPushButton("ADD")
+        self.btn_add_char.setFixedWidth(80)
+        self.btn_add_char.setStyleSheet(
+            "background: #004400; color: #00ff00; font-weight: bold; border: 1px solid #006600;")
+
+        input_row.addWidget(self.char_input)
+        input_row.addWidget(self.btn_add_char)
+        add_layout.addLayout(input_row)
+
+        layout.addWidget(add_group)
+
+        # --- MASTER SWITCH ---
         master_box = QFrame(objectName="Group")
+        master_box.setStyleSheet("background-color: #0f1a25; border: 1px solid #00f2ff;")
         m_layout = QVBoxLayout(master_box)
         self.check_master = QCheckBox("SYSTEM OVERLAY MASTER-SWITCH")
-        self.check_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 14px;")
+        self.check_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 16px; padding: 10px;")
         m_layout.addWidget(self.check_master)
+
+        layout.addStretch()  # Drückt alles nach oben
         layout.addWidget(master_box)
 
     def setup_events_tab(self):

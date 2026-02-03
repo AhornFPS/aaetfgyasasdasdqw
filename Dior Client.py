@@ -80,6 +80,10 @@ def get_asset_path(filename):
     if not filename: return ""
     return os.path.join(BASE_DIR, "assets", filename)
 
+class WorkerSignals(QObject):
+    # Signal: Erfolg (True/False), Name, Fehlernachricht
+    add_char_finished = pyqtSignal(bool, str, str)
+
 
 class DiorMainHub(QMainWindow):
     def __init__(self, controller):
@@ -1342,6 +1346,12 @@ class DiorClientGUI:
             "SolTech (Asia)": "40", "Jaeger": "19"
         }
 
+        # 1. Signale initialisieren
+        self.worker_signals = WorkerSignals()
+
+        # 2. Signal mit der GUI-Update-Funktion verbinden
+        self.worker_signals.add_char_finished.connect(self.finalize_add_char_slot)
+
         # Tracking Variables
         self.killstreak_count = 0
         self.kill_counter = 0
@@ -1598,6 +1608,13 @@ class DiorClientGUI:
         self.safe_connect(ui.char_combo.currentTextChanged, self.update_active_char)
         self.safe_connect(ui.check_master.toggled, self.toggle_master_switch_qt)
 
+        # Add & Delete Buttons
+        self.safe_connect(ui.btn_add_char.clicked, self.add_char_qt)
+        self.safe_connect(ui.btn_del_char.clicked, self.delete_char_qt)
+
+        # NEU: Auch Enter-Taste im Textfeld löst "add_char_qt" aus
+        self.safe_connect(ui.char_input.returnPressed, self.add_char_qt)
+
         # B) Event-Selection (Grid Klick)
         # KORREKTUR: Mehrzeiliges try/except
         try:
@@ -1779,6 +1796,135 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
 
         print("SYS: All signals routed via DiorMainHub.")
+
+    def add_char_qt(self):
+        """Startet den Thread."""
+        ui = self.ovl_config_win
+        name = ui.char_input.text().strip()
+
+        if not name:
+            self.add_log("INFO: Bitte einen Namen eingeben.")
+            return
+
+        self.add_log(f"SYS: Suche '{name}' in API...")
+
+        # UI sperren
+        ui.btn_add_char.setEnabled(False)
+        ui.btn_add_char.setText("...")
+        ui.char_input.setEnabled(False)
+
+        # Thread starten
+        threading.Thread(target=self._add_char_worker, args=(name,), daemon=True).start()
+
+    def _add_char_worker(self, name):
+        """Hintergrund-Thread (Sendet am Ende ein Signal)."""
+        success = False
+        real_name = ""
+        error_msg = ""
+
+        try:
+            url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}"
+            response = requests.get(url, timeout=10)
+            r = response.json()
+
+            if r['returned'] > 0:
+                c_list = r['character_list'][0]
+                cid = c_list['character_id']
+                real_name = c_list['name']['first']
+                world_id = c_list.get('world_id', '0')
+
+                # DB Operation
+                conn = sqlite3.connect("ps2_master.db")
+                conn.execute("INSERT OR REPLACE INTO player_cache (character_id, name, world_id) VALUES (?, ?, ?)",
+                             (cid, real_name, world_id))
+                conn.execute("INSERT OR REPLACE INTO my_chars (name, character_id) VALUES (?, ?)", (real_name, cid))
+                conn.commit()
+                conn.close()
+
+                # Dictionary Update
+                self.char_data[real_name] = cid
+                success = True
+            else:
+                error_msg = f"Charakter '{name}' nicht gefunden."
+
+        except Exception as e:
+            error_msg = f"API Fehler: {e}"
+
+        # WICHTIG: Statt QTimer nutzen wir jetzt das Signal (.emit)
+        # Das Signal kümmert sich automatisch um den Thread-Wechsel
+        self.worker_signals.add_char_finished.emit(success, real_name, error_msg)
+
+    def finalize_add_char_slot(self, success, real_name, error_msg):
+        """
+        Dieser Slot wird AUTOMATISCH im Haupt-Thread ausgeführt,
+        wenn das Signal empfangen wird.
+        """
+        ui = self.ovl_config_win
+
+        # UI entsperren
+        ui.btn_add_char.setEnabled(True)
+        ui.btn_add_char.setText("ADD")
+        ui.char_input.setEnabled(True)
+        ui.char_input.setFocus()
+
+        if success:
+            self.add_log(f"SYS: '{real_name}' hinzugefügt.")
+            ui.char_input.clear()
+
+            # Jetzt muss das Update funktionieren
+            self.refresh_char_list_ui(select_name=real_name)
+        else:
+            self.add_log(f"ERR: {error_msg}")
+            ui.char_input.selectAll()
+
+    def delete_char_qt(self):
+        """Löscht den aktuell ausgewählten Charakter"""
+        ui = self.ovl_config_win
+        name = ui.char_combo.currentText()
+
+        if name in self.char_data:
+            try:
+                conn = sqlite3.connect("ps2_master.db")
+                conn.execute("DELETE FROM my_chars WHERE name=?", (name,))
+                conn.commit()
+                conn.close()
+
+                del self.char_data[name]
+                self.add_log(f"SYS: {name} deleted.")
+
+                # GUI Update
+                self.refresh_char_list_ui()  # Kein Argument = Reset auf Index 0
+
+            except Exception as e:
+                self.add_log(f"ERR: Delete failed: {e}")
+
+    def refresh_char_list_ui(self, select_name=None):
+        """Aktualisiert das Dropdown und setzt den aktiven Charakter."""
+        ui = self.ovl_config_win
+
+        # 1. Signale blockieren (WICHTIG!)
+        # Damit das Leeren der Liste nicht versehentlich Events auslöst
+        ui.char_combo.blockSignals(True)
+
+        # 2. Liste neu aufbauen
+        ui.char_combo.clear()
+        names = list(self.char_data.keys())
+        ui.char_combo.addItems(names)
+
+        # 3. Auswahl setzen
+        if select_name and select_name in names:
+            ui.char_combo.setCurrentText(select_name)
+
+            # WICHTIG: Da Signale blockiert sind, müssen wir die Logik MANUELL rufen!
+            self.update_active_char(select_name)
+
+        elif names:
+            # Fallback: Den ersten nehmen
+            ui.char_combo.setCurrentIndex(0)
+            self.update_active_char(names[0])
+
+        # 4. Signale wieder freigeben
+        ui.char_combo.blockSignals(False)
 
     def pick_streak_color_qt(self):
         """Öffnet einen Qt-Farbwähler für die Killstreak-Zahl."""
@@ -4125,7 +4271,7 @@ class DiorClientGUI:
                     self.update_active_char(real_name)
 
                     # Alle Menüs updaten
-                    self.refresh_char_menus()
+                    self.refresh_char_list_ui()
 
                     # Textfelder leeren (beide, sicherheitshalber)
                     if hasattr(self, 'new_char_entry') and self.new_char_entry.winfo_exists():
@@ -4159,20 +4305,22 @@ class DiorClientGUI:
                 self.current_character_id = ""
 
                 # Alle Menüs updaten
-                self.refresh_char_menus()
+                self.refresh_char_list_ui()
 
             except Exception as e:
                 self.add_log(f"ERR: Delete failed: {e}")
 
     def update_active_char(self, name):
-        # UI-Check
-        if hasattr(self, 'char_var'):
-            self.char_var.set(name)
+        """Setzt die interne ID basierend auf dem Namen."""
+        if not name: return
 
+        # ID aus Dictionary holen
         cid = self.char_data.get(name, "")
         self.current_character_id = cid
-        self.add_log(f"SYS: Tracking {name}")  # Nutzt jetzt das neue sichere add_log
 
+        self.add_log(f"SYS: Tracking aktiv für: {name}")
+
+        # --- OPTIONAL: Server-Switch Logik (falls vorhanden) ---
         try:
             conn = sqlite3.connect("ps2_master.db")
             res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
@@ -4180,12 +4328,57 @@ class DiorClientGUI:
 
             if res and res[0]:
                 new_world_id = str(res[0])
+                # Nur wechseln, wenn unterschiedlich
                 if new_world_id != str(self.current_world_id):
                     s_name = self.get_server_name_by_id(new_world_id)
-                    # Sicherer Aufruf des Serverwechsels
-                    QTimer.singleShot(0, lambda n=s_name, i=new_world_id: self.switch_server(n, i))
+                    # Sicherer Aufruf (Server Logik)
+                    self.switch_server(s_name, new_world_id)
         except Exception as e:
-            self.add_log(f"Auto-Switch Error: {e}")
+            print(f"Server Auto-Switch Error: {e}")
+
+    def refresh_char_list_ui(self, select_name=None):
+        """
+        Aktualisiert die Charakter-Dropdown-Liste im Overlay-Config Fenster.
+        Ersetzt die alte 'refresh_char_menus'.
+        """
+        if not hasattr(self, 'ovl_config_win'): return
+
+        ui = self.ovl_config_win
+
+        # 1. Signale kurzzeitig blockieren
+        # (Verhindert, dass beim Leeren der Liste unnötige Events feuern)
+        ui.char_combo.blockSignals(True)
+
+        # 2. Liste leeren und neu füllen
+        ui.char_combo.clear()
+
+        # Namen aus dem Dictionary holen und sortieren (optional, aber schöner)
+        names = sorted(list(self.char_data.keys()))
+
+        if not names:
+            ui.char_combo.addItem("No Characters")
+        else:
+            ui.char_combo.addItems(names)
+
+        # 3. Den richtigen Charakter auswählen
+        if select_name and select_name in names:
+            # Wenn ein spezifischer Name gewünscht ist (z.B. nach dem Hinzufügen)
+            ui.char_combo.setCurrentText(select_name)
+            # Logik manuell anstoßen, da Signale blockiert sind
+            self.update_active_char(select_name)
+
+        elif names:
+            # Sonst einfach den aktuell aktiven beibehalten, falls er noch da ist
+            # Oder auf den ersten zurückfallen
+            current = getattr(self, "current_selected_char_name", names[0])
+            if current in names:
+                ui.char_combo.setCurrentText(current)
+            else:
+                ui.char_combo.setCurrentIndex(0)
+                self.update_active_char(names[0])
+
+        # 4. Signale wieder freigeben
+        ui.char_combo.blockSignals(False)
 
 
     def cache_worker(self):
