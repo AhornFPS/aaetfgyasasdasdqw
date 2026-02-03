@@ -1289,8 +1289,8 @@ PS2_EXP_DETECTION = {
 # Globale Konstanten
 S_ID = "s:1799912354"
 CONFIG_FILE = "config.json"
-CHAR_FILE = "characters.txt"
-PLAYER_BACKUP = "player_cache_backup.txt"
+
+
 
 CHEAT_OPTIONS = [
     "Aimbot", "Magic Bullet", "Hitbox Mod", "Triggerbot",
@@ -1664,6 +1664,26 @@ class DiorClientGUI:
         if self.overlay_win:
             self.safe_connect(self.overlay_win.signals.edit_mode_toggled, self.toggle_hud_edit_mode)
 
+        # --- 7. CROSSHAIR TAB SIGNALE ---
+        # A) Checkbox "Show Crosshair": Speichert sofort, wenn man klickt
+        self.safe_connect(ui.check_cross.toggled, self.save_crosshair_settings_qt)
+
+        # B) Pfad-Textfeld: Speichert, wenn sich der Text ändert
+        self.safe_connect(ui.cross_path.textChanged, self.save_crosshair_settings_qt)
+
+        # C) Browse Button: Öffnet den Datei-Browser für PNGs
+        try:
+            ui.btn_browse_cross.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_cross.clicked.connect(lambda: self.browse_file_qt(ui.cross_path, "png"))
+
+        # D) Auto-Center Button: Berechnet die Mitte neu
+        self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
+
+        # E) Edit Mode Button (bereits vorhanden, aber zur Sicherheit)
+        self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
+
         print("SYS: All signals routed via DiorMainHub.")
 
     def pick_streak_color_qt(self):
@@ -1894,6 +1914,16 @@ class DiorClientGUI:
             val = v_conf.get(key, "OFF")
             idx = combo.findText(str(val))
             if idx >= 0: combo.setCurrentIndex(idx)
+
+        # --- TAB CROSSHAIR ---
+        c_conf = self.config.get("crosshair", {})
+
+        # 1. Pfad laden
+        ui.cross_path.setText(c_conf.get("file", ""))
+
+        # 2. Checkbox Status laden (WICHTIG für deine Anforderung)
+        # Standard ist True, falls nichts gespeichert ist
+        ui.check_cross.setChecked(c_conf.get("active", True))
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
@@ -2167,76 +2197,38 @@ class DiorClientGUI:
         conn.commit()
         conn.close()
 
-    def center_crosshair(self):
-        """
-        Zentriert das Crosshair intelligent für JEDE Auflösung (2K, 4K, 4:3, 16:9).
-        Berücksichtigt die interne UI-Skalierung, damit es nicht unten rechts landet.
-        """
-        real_w = 0
-        real_h = 0
-        current_scale = 1.0
+    def center_crosshair_qt(self):
+        """Zentriert das Crosshair basierend auf der aktuellen Overlay-Größe."""
+        if not self.overlay_win:
+            self.add_log("ERR: Overlay nicht gestartet. Bitte PS2 starten oder Overlay aktivieren.")
+            return
 
-        # STRATEGIE 1: Wir fragen das Overlay direkt (Am genausten)
-        if self.overlay_win and self.overlay_win.isVisible():
-            real_w = self.overlay_win.width()
-            real_h = self.overlay_win.height()
-            current_scale = self.overlay_win.ui_scale
+        # 1. Tatsächliche Bildschirmgröße vom Overlay holen
+        screen_w = self.overlay_win.width()
+        screen_h = self.overlay_win.height()
+        current_ui_scale = self.overlay_win.ui_scale
 
-        # STRATEGIE 2: Fallback über ctypes (Wenn Overlay noch aus ist)
-        else:
-            try:
-                import ctypes
-                user32 = ctypes.windll.user32
-                user32.SetProcessDPIAware()  # Wichtig für echte 2K/4K Werte
-                real_w = user32.GetSystemMetrics(0)
-                real_h = user32.GetSystemMetrics(1)
-                # Skalierung simulieren (Basis 1080p wie im Overlay)
-                current_scale = real_h / 1080.0
-                current_scale = max(0.8, current_scale)
-            except:
-                # Notfall-Fallback auf Tkinter
-                real_w = self.root.winfo_screenwidth()
-                real_h = self.root.winfo_screenheight()
-                current_scale = 1.0
+        # 2. Die Mitte berechnen
+        mid_x = screen_w // 2
+        mid_y = screen_h // 2
 
-        # 1. Die echte Bildschirm-Mitte berechnen
-        mid_x = real_w // 2
-        mid_y = real_h // 2
+        # 3. WICHTIG: Rückrechnung auf die Config-Koordinaten (1080p Basis)
+        # Da update_crosshair() später wieder 'self.s()' (Skalierung) anwendet,
+        # müssen wir hier durch die Skalierung teilen.
+        config_x = int(mid_x / current_ui_scale)
+        config_y = int(mid_y / current_ui_scale)
 
-        # 2. WICHTIG: Den Wert "entskalieren" (Normalized auf 1080p Basis)
-        # Damit update_crosshair es später nicht doppelt skaliert.
-        config_x = int(mid_x / current_scale)
-        config_y = int(mid_y / current_scale)
-
-        if "crosshair" not in self.config:
-            self.config["crosshair"] = {}
-
-        # 3. Speichern
+        # 4. In Config schreiben
+        if "crosshair" not in self.config: self.config["crosshair"] = {}
         self.config["crosshair"]["x"] = config_x
         self.config["crosshair"]["y"] = config_y
-        self.save_config()
 
-        self.add_log(f"SYSTEM: Crosshair zentriert auf {real_w}x{real_h} (Logic: {config_x}x{config_y})")
+        # Aktivieren, damit man es sieht
+        self.ovl_config_win.check_cross.setChecked(True)
 
-        # 4. Overlay sofort aktualisieren (Feedback)
-        if self.overlay_win:
-            c = self.config["crosshair"]
-            path = get_asset_path(c.get("file", "crosshair.png"))
-            size = c.get("size", 32)
-
-            # Zeige es kurz an (True), dann Timer für Restore
-            self.overlay_win.update_crosshair(path, size, True)
-
-            def restore_state():
-                game_running = getattr(self, 'ps2_running', False)
-                user_wants = c.get("active", True)
-                is_editing = getattr(self, "is_hud_editing", False)
-                should_be_visible = (user_wants and game_running) or is_editing
-
-                if self.overlay_win:
-                    self.overlay_win.update_crosshair(path, size, should_be_visible)
-
-            self.root.after(2000, restore_state)
+        # 5. Speichern und Anzeigen
+        self.save_crosshair_settings_qt()
+        self.add_log(f"CROSSHAIR: Zentriert auf {config_x}x{config_y} (Screen: {screen_w}x{screen_h})")
 
     def apply_crosshair_settings(self):
         try:
@@ -2278,6 +2270,47 @@ class DiorClientGUI:
         except Exception as e:
             self.add_log(f"Error saving crosshair: {e}")
             traceback.print_exc()
+
+    def save_crosshair_settings_qt(self):
+        """Liest UI-Werte aus dem Crosshair-Tab, speichert in Config und updatet Overlay."""
+        ui = self.ovl_config_win
+
+        # 1. Werte aus der GUI lesen
+        is_active = ui.check_cross.isChecked()
+        file_path = ui.cross_path.text().strip()
+
+        # 2. Config Dictionary vorbereiten, falls nicht existent
+        if "crosshair" not in self.config:
+            self.config["crosshair"] = {}
+
+        # 3. Werte aktualisieren (alte Werte wie Größe/Position beibehalten)
+        self.config["crosshair"]["active"] = is_active
+        self.config["crosshair"]["file"] = file_path
+
+        # Fallback für Größe, falls noch nicht gesetzt
+        if "size" not in self.config["crosshair"]:
+            self.config["crosshair"]["size"] = 32
+
+        # 4. In datei speichern
+        self.save_config()
+
+        # 5. Overlay live aktualisieren (wenn Spiel läuft oder Edit Mode an ist)
+        if self.overlay_win:
+            # Pfad auflösen
+            full_path = get_asset_path(file_path)
+
+            # Soll es angezeigt werden? (User will es AN + (Spiel läuft ODER Edit Mode))
+            game_running = getattr(self, 'ps2_running', False)
+            edit_mode = getattr(self, 'is_hud_editing', False)
+            should_show = is_active and (game_running or edit_mode)
+
+            size = self.config["crosshair"].get("size", 32)
+
+            # Update Befehl an Overlay senden
+            self.overlay_win.update_crosshair(full_path, size, should_show)
+
+        # Log nur schreiben, wenn es kein automatisches Event beim Tippen ist (optional)
+        # self.add_log("CROSSHAIR: Einstellungen gespeichert.")
 
     def get_time_diff_str(self, past_date_str, mode="login"):
         if not past_date_str or past_date_str == "Unknown":
