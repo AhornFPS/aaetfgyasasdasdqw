@@ -75,7 +75,7 @@ QLineEdit, QComboBox {
     background-color: #111;
     border: 1px solid #444;
     color: #eee;
-    padding: 5px;
+    padding: 6px;
     border-radius: 3px;
 }
 
@@ -89,10 +89,11 @@ QPushButton {
     background-color: #2a2a2a;
     border: 1px solid #444;
     color: #ddd;
-    padding: 6px 12px;
+    padding: 8px 15px;      /* Mehr Innenabstand */
     border-radius: 4px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;       /* Mindesthöhe damit sie massiver wirken */
 }
 
 QPushButton:hover {
@@ -104,35 +105,36 @@ QPushButton:hover {
 QPushButton:pressed { 
     background-color: #00f2ff; 
     color: black; 
+    border-color: #00f2ff;
 }
 
 /* --- SPEZIAL-BUTTONS (TARGETED BY ID) --- */
 
-/* MOVE UI / EDIT (Blau) */
+/* MOVE UI / EDIT (Kräftiges Blau) */
 QPushButton#EditBtn { 
-    background-color: #0055aa; 
+    background-color: #004080; 
     color: white; 
-    border: 1px solid #0077cc; 
+    border: 1px solid #0055aa; 
     font-size: 12px;
 }
 QPushButton#EditBtn:hover { 
-    background-color: #0066ff; 
+    background-color: #0066cc; 
     border-color: #00f2ff; 
 }
 
-/* TEST BUTTON (Grau) */
+/* TEST BUTTON (Dunkelgrau) */
 QPushButton#TestBtn { 
-    background-color: #444; 
+    background-color: #333; 
     color: #eee; 
     border: 1px solid #555; 
     font-size: 12px;
 }
 QPushButton#TestBtn:hover { 
-    background-color: #555; 
+    background-color: #444; 
     border-color: #ccc; 
 }
 
-/* SAVE BUTTON (Grün) */
+/* SAVE BUTTON (Dunkelgrün) */
 QPushButton#SaveBtn { 
     background-color: #004400; 
     color: #00ff00; 
@@ -140,42 +142,42 @@ QPushButton#SaveBtn {
     font-size: 12px;
 }
 QPushButton#SaveBtn:hover { 
-    background-color: #005500; 
+    background-color: #006600; 
     border-color: #00ff00; 
     color: white; 
 }
 
 /* RECORD BUTTON (Orange/Rot) */
 QPushButton#RecordBtn { 
-    background-color: #aa4400; 
+    background-color: #883300; 
     color: white; 
-    border: 1px solid #cc5500; 
+    border: 1px solid #aa4400; 
 }
 QPushButton#RecordBtn:hover { 
-    background-color: #bb5500; 
+    background-color: #aa4400; 
     border-color: #ff8c00; 
 }
 
-/* CLEAR BUTTON (Dunkelgrau) */
+/* CLEAR BUTTON (Sehr dunkel) */
 QPushButton#ClearBtn { 
-    background-color: #222; 
+    background-color: #1a1a1a; 
     color: #888; 
     border: 1px solid #333; 
 }
 QPushButton#ClearBtn:hover { 
-    background-color: #333; 
+    background-color: #222; 
     border-color: #555; 
     color: #ccc;
 }
 
 /* COLOR PICKER (Lila) */
 QPushButton#ColorBtn { 
-    background-color: #5500aa; 
+    background-color: #440088; 
     color: white; 
-    border: 1px solid #7700cc; 
+    border: 1px solid #6600aa; 
 }
 QPushButton#ColorBtn:hover { 
-    background-color: #6600cc; 
+    background-color: #5500aa; 
     border-color: #ff00ff; 
 }
 
@@ -433,12 +435,19 @@ class OverlayConfigWindow(QWidget):
 
         # Action Buttons
         btn_box = QHBoxLayout()
+        btn_box.setSpacing(10)  # Abstand zwischen Buttons
 
-        # HIER WAR DER ALTE TEXT: "LAYOUT PER MAUS VERSCHIEBEN"
-        self.btn_edit_hud = QPushButton("MOVE UI", objectName="EditBtn")
+        self.btn_edit_hud = QPushButton("MOVE UI")
+        self.btn_edit_hud.setObjectName("EditBtn")  # -> Blau
+        self.btn_edit_hud.setMinimumHeight(35)  # Schön hoch
 
-        self.btn_test_preview = QPushButton("TEST PREVIEW", objectName="TestBtn")
-        self.btn_save_event = QPushButton("SAVE EVENT", objectName="SaveBtn")
+        self.btn_test_preview = QPushButton("TEST PREVIEW")
+        self.btn_test_preview.setObjectName("TestBtn")  # -> Grau
+        self.btn_test_preview.setMinimumHeight(35)
+
+        self.btn_save_event = QPushButton("SAVE EVENT")
+        self.btn_save_event.setObjectName("SaveBtn")  # -> Grün
+        self.btn_save_event.setMinimumHeight(35)
 
         btn_box.addWidget(self.btn_edit_hud)
         btn_box.addWidget(self.btn_test_preview)
@@ -502,69 +511,88 @@ class OverlayConfigWindow(QWidget):
 
     def setup_streak_tab(self):
         layout = QVBoxLayout(self.tab_streak)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(10, 10, 10, 10)  # Weniger Rand außen
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none; background: transparent;")
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #1a1a1a;")
         main_layout = QVBoxLayout(content_widget)
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(10)  # KOMPAKTER: Globaler Abstand zwischen Gruppen reduziert
 
         # --- 1. HEADER & MASTER SWITCH ---
-        header = QLabel("KILLSTREAK SYSTEM")
-        header.setObjectName("Header")
-        main_layout.addWidget(header)
+        header_layout = QHBoxLayout()
+        lbl_header = QLabel("KILLSTREAK SYSTEM")
+        lbl_header.setStyleSheet("color: #00f2ff; font-weight: bold; font-size: 16px;")
+        header_layout.addWidget(lbl_header)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
 
         sw_layout = QHBoxLayout()
-        self.check_streak_master = QCheckBox("ENABLE KILLSTREAK SYSTEM (Master)")
-        self.check_streak_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 12px;")
+        # Checkbox Styles etwas kompakter
+        cb_style = "QCheckBox { font-weight: bold; font-size: 11px; spacing: 5px; }"
+
+        self.check_streak_master = QCheckBox("ENABLE KILLSTREAK SYSTEM")
+        self.check_streak_master.setStyleSheet(cb_style + "QCheckBox { color: #00ff00; }")
 
         self.check_streak_anim = QCheckBox("ENABLE PULSE ANIMATION")
-        self.check_streak_anim.setStyleSheet("color: #ffcc00; font-size: 12px;")
+        self.check_streak_anim.setStyleSheet(cb_style + "QCheckBox { color: #ffcc00; }")
 
         sw_layout.addWidget(self.check_streak_master)
         sw_layout.addWidget(self.check_streak_anim)
         main_layout.addLayout(sw_layout)
 
-        # --- 2. MAIN VISUALS (Background & Speed) ---
-        vis_group = QFrame(objectName="Group")
+        # --- 2. MAIN VISUALS ---
+        vis_group = QFrame()
+        # KOMPAKTER: Padding reduziert
+        vis_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         vis_layout = QVBoxLayout(vis_group)
-        vis_layout.addWidget(QLabel("MAIN BACKGROUND & ANIMATION",
-                                    styleSheet="color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;"))
+        vis_layout.setSpacing(5)  # KOMPAKTER: Abstand innerhalb der Gruppe
 
-        # Image Row
+        vis_layout.addWidget(QLabel("MAIN BACKGROUND & ANIMATION",
+                                    styleSheet="color: #00f2ff; font-weight:bold; font-size: 11px; border: none; margin-bottom: 2px;"))
+
         img_row = QHBoxLayout()
-        img_row.addWidget(QLabel("Main Image (Skull/Icon):"))
+        img_row.setContentsMargins(0, 0, 0, 0)
+        img_row.addWidget(QLabel("Main Image:", styleSheet="border: none; color: #ddd;"))
         self.ent_streak_img = QLineEdit("KS_Counter.png")
+        self.ent_streak_img.setStyleSheet("background-color: #111; color: #eee; border: 1px solid #444; padding: 3px;")
+
         self.btn_browse_streak_img = QPushButton("...")
-        self.btn_browse_streak_img.setFixedWidth(40)
+        self.btn_browse_streak_img.setFixedWidth(30)
+        self.btn_browse_streak_img.setStyleSheet(
+            "background-color: #333; color: white; border: 1px solid #555; padding: 2px;")
 
         img_row.addWidget(self.ent_streak_img)
         img_row.addWidget(self.btn_browse_streak_img)
         vis_layout.addLayout(img_row)
 
-        # Speed Row
         speed_row = QHBoxLayout()
-        speed_row.addWidget(QLabel("Pulse Speed:"))
+        speed_row.setContentsMargins(0, 0, 0, 0)
+        speed_row.addWidget(QLabel("Pulse Speed:", styleSheet="border: none; color: #ddd;"))
         self.ent_streak_speed = QLineEdit("50")
-        self.ent_streak_speed.setFixedWidth(60)
+        self.ent_streak_speed.setFixedWidth(50)
+        self.ent_streak_speed.setStyleSheet(
+            "background-color: #111; color: #eee; border: 1px solid #444; padding: 3px;")
         speed_row.addWidget(self.ent_streak_speed)
 
-        lbl_info = QLabel("(Default: 50. Higher = Faster)")
-        lbl_info.setStyleSheet("color: #666; font-size: 10px; margin-left: 5px;")
+        lbl_info = QLabel("(Higher = Faster)")
+        lbl_info.setStyleSheet("color: #666; font-size: 10px; margin-left: 5px; border: none;")
         speed_row.addWidget(lbl_info)
         speed_row.addStretch()
-
         vis_layout.addLayout(speed_row)
         main_layout.addWidget(vis_group)
 
         # --- 3. FACTION KNIVES ---
-        knife_group = QFrame(objectName="Group")
+        knife_group = QFrame()
+        knife_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         knife_layout = QVBoxLayout(knife_group)
+        knife_layout.setSpacing(2)  # Sehr eng beieinander
+
         lbl_knife = QLabel("FACTION KNIVES / ICONS (PNG)")
-        lbl_knife.setStyleSheet("color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
+        lbl_knife.setStyleSheet("color: #00f2ff; font-weight:bold; font-size: 11px; border: none; margin-bottom: 2px;")
         knife_layout.addWidget(lbl_knife)
 
         self.knife_inputs = {}
@@ -572,10 +600,14 @@ class OverlayConfigWindow(QWidget):
 
         for faction in ["TR", "NC", "VS"]:
             f_row = QHBoxLayout()
-            f_row.addWidget(QLabel(f"{faction} Icon:", width=70))
+            f_row.setContentsMargins(0, 0, 0, 0)
+            f_row.addWidget(QLabel(f"{faction}:", styleSheet="border: none; color: #ddd; min-width: 30px;"))
             line_edit = QLineEdit()
+            line_edit.setStyleSheet("background-color: #111; color: #eee; border: 1px solid #444; padding: 3px;")
+
             btn_browse = QPushButton("...")
-            btn_browse.setFixedWidth(40)
+            btn_browse.setFixedWidth(30)
+            btn_browse.setStyleSheet("background-color: #333; color: white; border: 1px solid #555; padding: 2px;")
 
             f_row.addWidget(line_edit)
             f_row.addWidget(btn_browse)
@@ -587,105 +619,140 @@ class OverlayConfigWindow(QWidget):
         main_layout.addWidget(knife_group)
 
         # --- 4. PATH RECORDING ---
-        path_group = QFrame(objectName="Group")
+        path_group = QFrame()
+        path_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         path_layout = QVBoxLayout(path_group)
+        path_layout.setSpacing(5)
 
         lbl_path = QLabel("CUSTOM PATH RECORDING")
-        lbl_path.setStyleSheet("color: #ff8c00; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
+        lbl_path.setStyleSheet("color: #ff8c00; font-weight:bold; font-size: 11px; border: none;")
         path_layout.addWidget(lbl_path)
 
         path_desc = QLabel(
-            "Define where knives appear around the center.\n1. Click 'REC PATH'. 2. Click points on screen. 3. Press SPACE to stop & save.")
-        path_desc.setStyleSheet("color: #888; font-size: 11px; font-style: italic; margin-bottom: 10px;")
+            "1. Click 'REC PATH'. 2. Click points on screen. 3. Press SPACE to stop.")
+        path_desc.setStyleSheet("color: #888; font-size: 10px; font-style: italic; border: none;")
         path_layout.addWidget(path_desc)
 
         btn_path_row = QHBoxLayout()
-        self.btn_path_record = QPushButton("REC PATH")
-        self.btn_path_record.setObjectName("RecordBtn")
+        btn_path_row.setContentsMargins(0, 0, 0, 0)
 
-        self.btn_path_clear = QPushButton("CLEAR PATH (Reset to Circle)")
-        self.btn_path_clear.setObjectName("ClearBtn")
+        self.btn_path_record = QPushButton("REC PATH")
+        self.btn_path_record.setStyleSheet("""
+            QPushButton { background-color: #aa4400; color: white; border: 1px solid #cc5500; padding: 5px; font-weight: bold; border-radius: 3px; font-size: 11px;}
+            QPushButton:hover { background-color: #bb5500; border-color: #ff8c00; }
+        """)
+
+        self.btn_path_clear = QPushButton("CLEAR PATH")
+        self.btn_path_clear.setStyleSheet("""
+            QPushButton { background-color: #222; color: #888; border: 1px solid #333; padding: 5px; font-weight: bold; border-radius: 3px; font-size: 11px;}
+            QPushButton:hover { background-color: #333; color: #ccc; border-color: #555; }
+        """)
 
         btn_path_row.addWidget(self.btn_path_record)
         btn_path_row.addWidget(self.btn_path_clear)
         path_layout.addLayout(btn_path_row)
-
         main_layout.addWidget(path_group)
 
         # --- 5. POSITION & SCALE ---
-        pos_group = QFrame(objectName="Group")
+        pos_group = QFrame()
+        pos_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         pos_layout = QGridLayout(pos_group)
-        lbl_pos = QLabel("COUNTER POSITION & DESIGN")
-        lbl_pos.setStyleSheet("color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
+        pos_layout.setSpacing(5)
+
+        lbl_pos = QLabel("POSITION & DESIGN")
+        lbl_pos.setStyleSheet("color: #00f2ff; font-weight:bold; font-size: 11px; border: none;")
         pos_layout.addWidget(lbl_pos, 0, 0, 1, 3)
 
-        pos_layout.addWidget(QLabel("Offset X:"), 1, 0)
+        pos_layout.addWidget(QLabel("Offset X:", styleSheet="border:none; color:#ddd;"), 1, 0)
         self.slider_tx = QSlider(Qt.Orientation.Horizontal)
         self.slider_tx.setRange(-200, 200)
+        # Slider etwas kompakter machen (Höhe begrenzen)
+        self.slider_tx.setFixedHeight(15)
         pos_layout.addWidget(self.slider_tx, 1, 1, 1, 2)
 
-        pos_layout.addWidget(QLabel("Offset Y:"), 2, 0)
+        pos_layout.addWidget(QLabel("Offset Y:", styleSheet="border:none; color:#ddd;"), 2, 0)
         self.slider_ty = QSlider(Qt.Orientation.Horizontal)
         self.slider_ty.setRange(-200, 200)
+        self.slider_ty.setFixedHeight(15)
         pos_layout.addWidget(self.slider_ty, 2, 1, 1, 2)
 
-        pos_layout.addWidget(QLabel("Global Scale:"), 3, 0)
+        pos_layout.addWidget(QLabel("Scale:", styleSheet="border:none; color:#ddd;"), 3, 0)
         self.slider_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_scale.setRange(10, 300)
         self.slider_scale.setValue(100)
+        self.slider_scale.setFixedHeight(15)
         pos_layout.addWidget(self.slider_scale, 3, 1, 1, 2)
 
-        pos_layout.addWidget(QLabel("Design:"), 4, 0)
+        pos_layout.addWidget(QLabel("Style:", styleSheet="border:none; color:#ddd;"), 4, 0)
 
         design_box = QHBoxLayout()
-        self.btn_pick_color = QPushButton("🎨 TEXT COLOR")
-        self.btn_pick_color.setObjectName("ColorBtn")
+        design_box.setContentsMargins(0, 0, 0, 0)
+
+        self.btn_pick_color = QPushButton("COLOR")
+        self.btn_pick_color.setFixedWidth(70)
+        self.btn_pick_color.setStyleSheet("""
+            QPushButton { background-color: #5500aa; color: white; border: 1px solid #7700cc; padding: 3px; font-weight: bold; border-radius: 3px; font-size: 10px; }
+            QPushButton:hover { background-color: #6600cc; border-color: #ff00ff; }
+        """)
 
         self.combo_font_size = QComboBox()
         self.combo_font_size.addItems(["12", "16", "20", "24", "26", "28", "32", "36", "48", "72"])
         self.combo_font_size.setCurrentText("26")
-        self.combo_font_size.setFixedWidth(60)
+        self.combo_font_size.setFixedWidth(50)
+        self.combo_font_size.setStyleSheet(
+            "background-color: #111; color: #eee; border: 1px solid #444; padding: 1px; font-size: 11px;")
 
         design_box.addWidget(self.btn_pick_color)
-        design_box.addWidget(QLabel("Size:"))
+        design_box.addWidget(QLabel("Size:", styleSheet="border:none; color:#ddd; margin-left:10px; font-size: 11px;"))
         design_box.addWidget(self.combo_font_size)
         design_box.addStretch()
 
         pos_layout.addLayout(design_box, 4, 1, 1, 2)
-
         main_layout.addWidget(pos_group)
 
-        # --- 6. ACTION BUTTONS (FINAL SYNCED LOOK) ---
+        # --- 6. ACTION BUTTONS ---
         action_layout = QHBoxLayout()
-        action_layout.setSpacing(10)  # Abstand zwischen den Buttons
+        action_layout.setSpacing(10)
+        action_layout.setContentsMargins(0, 5, 0, 0)  # Nur wenig Abstand nach oben
+
+        # Button Style Templates (Kompakter)
+        style_base = "border-radius: 4px; font-weight: bold; font-size: 12px; padding: 5px;"
 
         # 1. MOVE UI (Blau)
         self.btn_edit_streak = QPushButton("MOVE UI")
-        self.btn_edit_streak.setObjectName("EditBtn")  # Dies aktiviert das Blau im CSS
         self.btn_edit_streak.setMinimumHeight(35)
+        self.btn_edit_streak.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_edit_streak.setStyleSheet(f"""
+            QPushButton {{ background-color: #004080; color: white; border: 1px solid #0055aa; {style_base} }}
+            QPushButton:hover {{ background-color: #0066cc; border: 1px solid #00f2ff; }}
+            QPushButton:pressed {{ background-color: #00f2ff; color: black; }}
+        """)
 
         # 2. TEST ANIMATION (Grau)
-        self.btn_test_streak = QPushButton("TEST ANIMATION")
-        self.btn_test_streak.setObjectName("TestBtn")  # Dies aktiviert das Grau
+        self.btn_test_streak = QPushButton("TEST")
         self.btn_test_streak.setMinimumHeight(35)
+        self.btn_test_streak.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_test_streak.setStyleSheet(f"""
+            QPushButton {{ background-color: #333; color: #eee; border: 1px solid #555; {style_base} }}
+            QPushButton:hover {{ background-color: #444; border: 1px solid #ccc; }}
+            QPushButton:pressed {{ background-color: #666; }}
+        """)
 
         # 3. SAVE SETTINGS (Grün)
         self.btn_save_streak = QPushButton("SAVE SETTINGS")
-        self.btn_save_streak.setObjectName("SaveBtn")  # Dies aktiviert das Grün
         self.btn_save_streak.setMinimumHeight(35)
+        self.btn_save_streak.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save_streak.setStyleSheet(f"""
+            QPushButton {{ background-color: #004400; color: #00ff00; border: 1px solid #006600; {style_base} }}
+            QPushButton:hover {{ background-color: #006600; border: 1px solid #00ff00; color: white; }}
+            QPushButton:pressed {{ background-color: #00ff00; color: black; }}
+        """)
 
         action_layout.addWidget(self.btn_edit_streak)
         action_layout.addWidget(self.btn_test_streak)
         action_layout.addWidget(self.btn_save_streak)
 
         main_layout.addLayout(action_layout)
-
-        action_layout.addWidget(self.btn_edit_streak)
-        action_layout.addWidget(self.btn_test_streak)
-        action_layout.addWidget(self.btn_save_streak)
-
-        main_layout.addLayout(action_layout)
-
         main_layout.addStretch()
 
         scroll.setWidget(content_widget)
@@ -770,19 +837,21 @@ class OverlayConfigWindow(QWidget):
 
 
         # --- ACTION BUTTONS (FINAL SYNCED LOOK) ---
+        # --- ACTION BUTTONS ---
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
+        btn_box.setContentsMargins(0, 15, 0, 0)
 
         self.btn_edit_hud_stats = QPushButton("MOVE UI")
-        self.btn_edit_hud_stats.setObjectName("EditBtn")
+        self.btn_edit_hud_stats.setObjectName("EditBtn")  # -> Blau
         self.btn_edit_hud_stats.setMinimumHeight(35)
 
         self.btn_test_stats = QPushButton("TEST UI")
-        self.btn_test_stats.setObjectName("TestBtn")
+        self.btn_test_stats.setObjectName("TestBtn")  # -> Grau
         self.btn_test_stats.setMinimumHeight(35)
 
         self.btn_save_stats = QPushButton("SAVE SETTINGS")
-        self.btn_save_stats.setObjectName("SaveBtn")
+        self.btn_save_stats.setObjectName("SaveBtn")  # -> Grün
         self.btn_save_stats.setMinimumHeight(35)
 
         btn_box.addWidget(self.btn_edit_hud_stats)
