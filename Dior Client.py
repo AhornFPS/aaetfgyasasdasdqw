@@ -17,50 +17,31 @@ import time
 import requests
 import threading
 import json
-import asyncio
-import websockets
 import tkinter as tk
 from tkinter import messagebox, filedialog, scrolledtext
 from queue import Queue, Empty
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-import traceback
 from PIL import Image, ImageTk, ImageSequence, ImageGrab
-import pyautogui
 import pydirectinput
-from ctypes import wintypes
 import sqlite3
-import tkinter.ttk as ttk  # Für die Tabs im Menü
-import PyQt6
 import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
 import launcher_qt
 import characters_qt
 import settings_qt
 import overlay_config_qt
-from census_worker import CensusWorker
-from PyQt6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QLabel,
-    QVBoxLayout,
-    QHBoxLayout,  # Neu hinzugefügt
-    QMainWindow,  # Neu hinzugefügt
-    QListWidget,  # Neu hinzugefügt
-    QStackedWidget,  # Neu hinzugefügt
-    QGraphicsDropShadowEffect
-)
+from census_worker import CensusWorker, S_ID, PS2_DETECTION
+from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
+from dior_utils import BASE_DIR, get_asset_path, log_exception, clean_path
+from dior_db import DatabaseHandler
+
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QMainWindow, QListWidget, QStackedWidget, QGraphicsDropShadowEffect,
     QColorDialog, QFileDialog # <--- QColorDialog und QFileDialog sicherstellen
 )
 from PyQt6.QtGui import (
-    QPixmap,
+
     QColor,
-    QPainter,  # Neu: Für das Zeichnen der Linie
-    QPen,  # Neu: Für die Linien-Dicke und Farbe
-    QBrush,  # Neu: Zum Ausfüllen der Kreise/Punkte
-    QTransform  # Neu: Zum Rotieren der Messer am Pfad
+
 )
 from PyQt6.QtCore import (
     Qt,
@@ -70,16 +51,8 @@ from PyQt6.QtCore import (
     QPoint  # Neu: Für die Koordinaten-Punkte
 )
 
-# Ermittelt den Ordner, in dem die EXE oder das Skript liegt
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def get_asset_path(filename):
-    if not filename: return ""
-    return os.path.join(BASE_DIR, "assets", filename)
 
 class WorkerSignals(QObject):
     # Signal: Erfolg (True/False), Name, Fehlernachricht
@@ -134,1045 +107,6 @@ class DiorMainHub(QMainWindow):
         # Startseite setzen
         self.nav_list.setCurrentRow(0)
 
-
-
-
-class PathDrawingLayer(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        # WICHTIG: Klicks abfangen erlauben
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.parent_ovl = parent
-
-    def mousePressEvent(self, event):
-        if self.parent_ovl.path_edit_active:
-            pos = event.pos()
-            # Wir holen das Zentrum vom Skull-Label
-            label_rect = self.parent_ovl.streak_bg_label.geometry()
-            center = label_rect.center()
-
-            # Offset berechnen
-            off_x = pos.x() - center.x()
-            off_y = pos.y() - center.y()
-
-            self.parent_ovl.custom_path.append((off_x, off_y))
-            self.parent_ovl.signals.path_points_updated.emit(self.parent_ovl.custom_path)
-            self.update()
-        else:
-            event.ignore()
-
-    def paintEvent(self, event):
-        if not self.parent_ovl.path_edit_active: return
-
-        from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
-        from PyQt6.QtCore import QPoint
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # 1. Klick-Fläche (Unsichtbar, aber nötig für Maus-Events)
-        painter.setBrush(QColor(0, 0, 0, 1))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRect(self.rect())
-
-        if len(self.parent_ovl.custom_path) == 0: return
-
-        skull_center = self.parent_ovl.streak_bg_label.geometry().center()
-
-        # --- STIFTE DEFINIEREN ---
-        # A) Der Schatten-Stift (Dick, Schwarz, halbtransparent)
-        shadow_pen = QPen(QColor(0, 0, 0, 180), 5, Qt.PenStyle.SolidLine)
-
-        # B) Der Haupt-Stift (Cyan, Gestrichelt)
-        cyan_color = QColor(0, 242, 255)
-        line_pen = QPen(cyan_color, 2, Qt.PenStyle.DashLine)
-
-        # C) Punkte Stifte
-        shadow_brush = QBrush(QColor(0, 0, 0, 180))
-        point_brush = QBrush(cyan_color)
-        point_pen = QPen(QColor(255, 255, 255), 1)
-
-        # --- HILFSFUNKTION ZUM ZEICHNEN DER LINIEN ---
-        def draw_path_lines(p):
-            if len(self.parent_ovl.custom_path) > 1:
-                for i in range(len(self.parent_ovl.custom_path) - 1):
-                    p1 = skull_center + QPoint(int(self.parent_ovl.custom_path[i][0]),
-                                               int(self.parent_ovl.custom_path[i][1]))
-                    p2 = skull_center + QPoint(int(self.parent_ovl.custom_path[i + 1][0]),
-                                               int(self.parent_ovl.custom_path[i + 1][1]))
-                    p.drawLine(p1, p2)
-                # Kreis schließen
-                p_last = skull_center + QPoint(int(self.parent_ovl.custom_path[-1][0]),
-                                               int(self.parent_ovl.custom_path[-1][1]))
-                p_first = skull_center + QPoint(int(self.parent_ovl.custom_path[0][0]),
-                                                int(self.parent_ovl.custom_path[0][1]))
-                p.drawLine(p_last, p_first)
-
-        # 2. SCHATTEN ZEICHNEN (Hintergrund)
-        painter.setPen(shadow_pen)
-        draw_path_lines(painter)
-
-        # 3. GLOW/HAUPTLINIE ZEICHNEN (Vordergrund)
-        painter.setPen(line_pen)
-        draw_path_lines(painter)
-
-        # 4. PUNKTE MIT SCHATTEN ZEICHNEN
-        for pt_data in self.parent_ovl.custom_path:
-            center = skull_center + QPoint(int(pt_data[0]), int(pt_data[1]))
-
-            # Erst der schwarze Klecks dahinter
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(shadow_brush)
-            painter.drawEllipse(center, 8, 8)
-
-            # Dann der bunte Punkt davor
-            painter.setPen(point_pen)
-            painter.setBrush(point_brush)
-            painter.drawEllipse(center, 5, 5)
-
-
-# WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
-# WICHTIG: Signal-Klasse MUSS außerhalb der GUI stehen
-class OverlaySignals(QObject):
-    # Bestehende Signale (von dir oben genannt)
-    show_image = pyqtSignal(str, str, int, int, int, float, bool)
-    killfeed_entry = pyqtSignal(str)
-    update_stats = pyqtSignal(str, str)
-    update_streak = pyqtSignal(str, int, list, dict, list)
-    path_points_updated = pyqtSignal(list)
-    clear_feed = pyqtSignal()
-
-    # ZUSÄTZLICH BENÖTIGTE SIGNALE (damit connect_all_qt_signals nicht abstürzt)
-    setting_changed = pyqtSignal(str, object)  # Für Grid-Auswahl
-    test_trigger = pyqtSignal(str)  # Für Preview-Buttons
-    edit_mode_toggled = pyqtSignal(str)  # FIX für den AttributeError!
-
-
-# --- STABILES QTOVERLAY (SINGLE LABEL METHODE) ---
-class QtOverlay(QWidget):
-    def __init__(self, gui_ref=None):
-        super().__init__()
-        self.gui_ref = gui_ref
-        self.edit_mode = False
-        self.dragging_widget = None
-        self.drag_offset = None
-        self.knife_labels = []
-
-        # 1. FENSTER-KONFIGURATION
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        screen = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen)
-
-        # AUFLÖSUNGSSKALIERUNG
-        self.base_height = 1080.0
-        self.ui_scale = screen.height() / self.base_height
-        self.ui_scale = max(0.8, self.ui_scale)
-        self.event_center_x = screen.width() // 2
-        self.event_center_y = (screen.height() // 2)
-
-        # Transparente Ebene für die Pfad-Zeichnung (Ganz oben)
-
-        # Initialisiere die Zeichen-Ebene
-        self.path_layer = PathDrawingLayer(self)
-        self.path_layer.setGeometry(self.rect())  # Füllt das ganze Fenster
-        self.path_layer.show()
-
-        # 3. WIDGETS
-        self.crosshair_label = QLabel(self)
-        self.crosshair_label.hide()
-
-        self.stats_bg_label = QLabel(self)
-        self.stats_bg_label.hide()
-        self.stats_text_label = QLabel(self)
-        self.stats_text_label.hide()
-
-        shadow_stats = QGraphicsDropShadowEffect()
-        shadow_stats.setBlurRadius(5 * self.ui_scale)
-        shadow_stats.setColor(QColor(0, 0, 0, 240))
-
-        shadow_stats.setXOffset(1 * self.ui_scale)
-        shadow_stats.setYOffset(1 * self.ui_scale)
-        self.stats_text_label.setGraphicsEffect(shadow_stats)
-
-        self.streak_bg_label = QLabel(self)
-        self.streak_bg_label.hide()
-        self.streak_text_label = QLabel(self)
-        self.streak_text_label.hide()
-
-        # --- KILLFEED: SINGLE LABEL (STABIL GEGEN GHOSTING) ---
-        self.feed_messages = []
-        self.feed_label = QLabel(self)
-        self.feed_w = int(600 * self.ui_scale)
-        self.feed_h = int(550 * self.ui_scale)
-        self.feed_label.setFixedSize(self.feed_w, self.feed_h)
-        self.feed_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        self.feed_label.setStyleSheet("background: transparent;")
-
-        shadow_feed = QGraphicsDropShadowEffect()
-        shadow_feed.setBlurRadius(4 * self.ui_scale)
-        shadow_feed.setXOffset(1 * self.ui_scale)
-        shadow_feed.setYOffset(1 * self.ui_scale)
-        shadow_feed.setColor(QColor(0, 0, 0, 255))
-        self.feed_label.setGraphicsEffect(shadow_feed)
-
-        self.event_preview_label = QLabel(self)
-        self.event_preview_label.hide()
-
-        # --- ZEICHEN-EBENE (WICHTIG: ALS LETZTES ERSTELLEN) ---
-        self.path_edit_active = False
-        self.custom_path = []
-        self.path_layer = PathDrawingLayer(self)
-        self.path_layer.setGeometry(self.rect())  # Einmalig setzen
-        self.path_layer.hide()  # Standardmäßig aus
-
-        # 4. SIGNALE
-        self.signals = OverlaySignals()
-        # Event Queue is the new connect.
-        # self.signals.show_image.connect(self.display_image)
-        self.signals.show_image.connect(self.add_event_to_queue)
-        self.signals.killfeed_entry.connect(self.add_killfeed_row)
-        self.signals.update_stats.connect(self.set_stats_html)
-        self.signals.update_streak.connect(self.draw_streak_ui)
-        self.signals.clear_feed.connect(self.clear_killfeed)
-
-        self.set_mouse_passthrough(True)
-
-        self.pulse_timer = QTimer(self)
-        self.pulse_timer.timeout.connect(self.animate_pulse)
-        self.pulse_timer.start(40)
-
-        # Repaint Timer gegen Artefakte (1 Sekunde)
-        self.redraw_timer = QTimer(self)
-        self.redraw_timer.timeout.connect(self.force_update)
-        self.redraw_timer.start(1000)
-
-        # --- QUEUE SYSTEM VARIABLEN ---
-        self.event_queue = []  # Hier speichern wir die Events: (path, duration, x, y)
-        self.is_showing = False  # Status: Läuft gerade eine Animation?
-        self.queue_enabled = True
-
-        # Timer für die Queue-Verarbeitung
-        self.queue_timer = QTimer()
-        self.queue_timer.setSingleShot(True)
-        self.queue_timer.timeout.connect(self.finish_current_event)
-
-        self.img_label = QLabel(self)
-        self.img_label.setScaledContents(True)
-        self.img_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.img_label.hide()
-        if self.gui_ref and hasattr(self.gui_ref, 'config'):
-            self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
-        else:
-            self.queue_enabled = True  # Fallback
-
-    def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, is_hitmarker=False):
-        """
-        Fügt Event hinzu, spielt Hitmarker sofort parallel ab oder beachtet den Queue-Status.
-        """
-
-        if is_hitmarker:
-            if sound_path:
-                try:
-                    pygame.mixer.Sound(sound_path).play()
-                except:
-                    pass
-
-            if img_path and os.path.exists(img_path):
-                self.display_image(img_path, duration, x, y, scale)
-            return
-
-        # --- NORMALER ABLAUF (Queue oder Instant) ---
-
-        # Falls queue_enabled aus irgendeinem Grund fehlt (sollte durch __init__ fix da sein)
-        if not hasattr(self, 'queue_enabled'):
-            self.queue_enabled = True
-
-        # MODUS: INSTANT (Queue ist AUSgeschaltet)
-        if not self.queue_enabled:
-            # Stoppt nur Bilder/Animationen, lässt Sounds weiterlaufen
-            self.clear_queue_now()
-
-            # Bild sofort anzeigen
-            self.display_image(img_path, duration, x, y, scale)
-
-            # Sound sofort spielen
-            if sound_path:
-                try:
-                    pygame.mixer.Sound(sound_path).play()
-                except Exception as e:
-                    print(f"Sound Error: {e}")
-            return
-
-        # MODUS: QUEUE (Queue ist EINGESCHALTET)
-        self.event_queue.append((img_path, sound_path, duration, x, y, scale))
-
-        if not self.is_showing:
-            self.process_next_event()
-
-    def process_next_event(self):
-        if not self.event_queue:
-            self.is_showing = False
-            return
-
-        self.is_showing = True
-        # Scale mit auspacken
-        img_path, sound_path, duration, x, y, scale = self.event_queue.pop(0)
-
-        # An display_image übergeben
-        self.display_image(img_path, duration, x, y, scale)
-
-        if sound_path:
-            try:
-                pygame.mixer.Sound(sound_path).play()
-            except:
-                pass
-
-        self.queue_timer.start(duration)
-
-    def finish_current_event(self):
-        self.process_next_event()
-
-    def clear_queue_now(self):
-        """Leert die Warteschlange und stoppt aktuelle Timer."""
-        self.event_queue.clear()
-        self.queue_timer.stop()
-        self.is_showing = False
-
-    def resizeEvent(self, event):
-        if hasattr(self, 'path_layer'):
-            self.path_layer.setGeometry(self.rect())
-        super().resizeEvent(event)
-
-    def force_update(self):
-        self.repaint()
-        # Falls Edit an ist, Layer immer nach vorne holen
-        if self.path_edit_active:
-            self.path_layer.raise_()
-
-    def s(self, value):
-        return int(float(value) * self.ui_scale)
-
-    def safe_move(self, widget, x, y):
-        """Bewegt ein Widget mit Clamping und Magnet-Effekt an den Rändern."""
-        screen_w = self.width()
-        screen_h = self.height()
-        w_w = widget.width()
-        w_h = widget.height()
-
-        # Konfigurierbare Magnet-Stärke (in Pixeln)
-        snap = 25
-
-        # --- Magnet-Logik (Snapping) ---
-        # Horizontales Snapping (Links, Mitte, Rechts)
-        if abs(x) < snap:
-            x = 0  # Snap an linken Rand
-        elif abs(x - (screen_w - w_w)) < snap:
-            x = screen_w - w_w  # Snap an rechten Rand
-        elif abs(x - (screen_w // 2 - w_w // 2)) < snap:
-            x = screen_w // 2 - w_w // 2  # Snap an Mitte
-
-        # Vertikales Snapping (Oben, Mitte, Unten)
-        if abs(y) < snap:
-            y = 0  # Snap an oberen Rand
-        elif abs(y - (screen_h - w_h)) < snap:
-            y = screen_h - w_h  # Snap an unteren Rand
-        elif abs(y - (screen_h // 2 - w_h // 2)) < snap:
-            y = screen_h // 2 - w_h // 2  # Snap an Mitte
-
-        # --- Sicherheits-Clamping (Die "Mauer") ---
-        # Dies verhindert, dass Werte jemals außerhalb des gültigen Bereichs landen
-        final_x = max(0, min(int(x), screen_w - w_w))
-        final_y = max(0, min(int(y), screen_h - w_h))
-
-        widget.move(final_x, final_y)
-
-    def set_mouse_passthrough(self, enabled=True, active_targets=None):
-        try:
-            hwnd = self.winId().__int__()
-            GWL_EXSTYLE = -20
-            WS_EX_LAYERED = 0x80000
-            WS_EX_TRANSPARENT = 0x20
-            extended_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-
-            self.feed_label.setStyleSheet("background: transparent;")
-            self.stats_bg_label.setStyleSheet("background: transparent;")
-            self.streak_bg_label.setStyleSheet("background: transparent;")
-            self.crosshair_label.setStyleSheet("background: transparent;")
-
-            if enabled:
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
-                                                    extended_style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-                self.edit_mode = False
-            else:
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
-                                                    (extended_style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
-                self.edit_mode = True
-                style = "border: 2px solid #00ff00; background: rgba(0, 255, 0, 0.1);"
-                targets = active_targets if active_targets else []
-
-                # WICHTIG: Hier fügen wir .show() hinzu, damit die Box sichtbar wird
-                if "feed" in targets:
-                    self.feed_label.setStyleSheet(style)
-                    self.feed_label.show()  # Zeigt den Feed-Bereich
-                if "stats" in targets:
-                    self.stats_bg_label.setStyleSheet(style)
-                    self.stats_bg_label.show()  # Zeigt den Stats-Bereich
-                if "streak" in targets:
-                    self.streak_bg_label.setStyleSheet(style)
-                    self.streak_bg_label.show()  # Zeigt den Streak-Bereich
-                if "crosshair" in targets:
-                    self.crosshair_label.setStyleSheet(style)
-                    self.crosshair_label.show()  # Zeigt das Crosshair
-        except Exception as e:
-            print(f"Passthrough Error: {e}")
-
-    # In der QtOverlay Klasse:
-    def mousePressEvent(self, event):
-        # Falls wir im Pfad-Edit Modus sind, bricht hier ab (PathDrawingLayer übernimmt)
-        if getattr(self, "path_edit_active", False):
-            return
-
-        if not self.edit_mode: return
-        pos = event.pos()
-
-        # 1. EVENT LABEL CHECK (Das hat gefehlt!)
-        # Wir prüfen, ob das Label sichtbar ist UND der Klick innerhalb des Rahmens liegt
-        if self.event_preview_label.isVisible() and self.event_preview_label.geometry().contains(pos):
-            self.dragging_widget = "event"
-            self.drag_offset = pos - self.event_preview_label.pos()
-
-        # 2. FEED CHECK
-        elif "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
-            self.dragging_widget = "feed"
-            self.drag_offset = pos - self.feed_label.pos()
-
-        # 3. STATS CHECK
-        elif "border" in self.stats_bg_label.styleSheet() and self.stats_bg_label.geometry().contains(pos):
-            self.dragging_widget = "stats"
-            self.drag_offset = pos - self.stats_bg_label.pos()
-
-        # 4. STREAK CHECK
-        elif "border" in self.streak_bg_label.styleSheet() and self.streak_bg_label.geometry().contains(pos):
-            self.dragging_widget = "streak"
-            self.drag_offset = pos - self.streak_bg_label.pos()
-
-        # 5. CROSSHAIR CHECK
-        elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
-            self.dragging_widget = "crosshair"
-            self.drag_offset = pos - self.crosshair_label.pos()
-
-    def paintEvent(self, event):
-        # Wir nutzen ein internes Zeichnen auf dem path_layer, falls aktiv
-        if getattr(self, "path_edit_active", False) and len(self.custom_path) > 0:
-            from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
-            from PyQt6.QtCore import QPoint
-
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-            cyan_color = QColor(0, 242, 255)
-            line_pen = QPen(cyan_color, 2, Qt.PenStyle.DashLine)
-            point_brush = QBrush(cyan_color)
-            point_pen = QPen(QColor(255, 255, 255), 1)
-
-            # Mitte des Schädels als Nullpunkt für die Offsets
-            skull_center = self.streak_bg_label.geometry().center()
-
-            # 1. LINIEN ZEICHNEN
-            if len(self.custom_path) > 1:
-                painter.setPen(line_pen)
-                for i in range(len(self.custom_path) - 1):
-                    p1 = skull_center + QPoint(int(self.custom_path[i][0]), int(self.custom_path[i][1]))
-                    p2 = skull_center + QPoint(int(self.custom_path[i + 1][0]), int(self.custom_path[i + 1][1]))
-                    painter.drawLine(p1, p2)
-
-                # Kreis schließen (letzter zu erstem)
-                p_last = skull_center + QPoint(int(self.custom_path[-1][0]), int(self.custom_path[-1][1]))
-                p_first = skull_center + QPoint(int(self.custom_path[0][0]), int(self.custom_path[0][1]))
-                painter.drawLine(p_last, p_first)
-
-            # 2. PUNKTE ZEICHNEN (Immer ganz oben)
-            painter.setPen(point_pen)
-            painter.setBrush(point_brush)
-            for pt_data in self.custom_path:
-                center = skull_center + QPoint(int(pt_data[0]), int(pt_data[1]))
-                painter.drawEllipse(center, 5, 5)  # Etwas größere Punkte
-
-    def mouseMoveEvent(self, event):
-        if not self.edit_mode or not self.dragging_widget or not self.drag_offset:
-            return
-
-        # Position berechnen
-        curr_mouse_pos = event.globalPosition().toPoint()
-        new_pos = curr_mouse_pos - self.drag_offset
-
-        # 1. EVENT BEWEGEN (Das hat gefehlt!)
-        if self.dragging_widget == "event":
-            self.safe_move(self.event_preview_label, new_pos.x(), new_pos.y())
-
-        elif self.dragging_widget == "feed":
-            self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
-
-        elif self.dragging_widget == "stats":
-            self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
-            # Text mitbewegen
-            if self.gui_ref:
-                cfg = self.gui_ref.config.get("stats_widget", {})
-                tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
-                cy = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
-                self.safe_move(self.stats_text_label,
-                               cx + tx - (self.stats_text_label.width() // 2),
-                               cy + ty - (self.stats_text_label.height() // 2))
-
-        elif self.dragging_widget == "streak":
-            self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
-            if self.gui_ref:
-                cfg = self.gui_ref.config.get("streak", {})
-                tx, ty = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx = self.streak_bg_label.x() + (self.streak_bg_label.width() // 2)
-                cy = self.streak_bg_label.y() + (self.streak_bg_label.height() // 2)
-                self.safe_move(self.streak_text_label,
-                               cx + tx - (self.streak_text_label.width() // 2),
-                               cy + ty - (self.streak_text_label.height() // 2))
-
-        elif self.dragging_widget == "crosshair":
-            self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
-
-    def mouseReleaseEvent(self, event):
-        if not self.edit_mode or not self.dragging_widget:
-            return
-
-        def uns(val):
-            return int(val / self.ui_scale)
-
-        if self.gui_ref:
-            # Aktuellen Event-Namen aus dem Qt-Label der GUI holen
-            current_event_name = self.gui_ref.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
-
-            if self.dragging_widget == "event":
-                curr = self.event_preview_label.pos()
-
-                # Config Struktur sichern
-                if "events" not in self.gui_ref.config: self.gui_ref.config["events"] = {}
-                if current_event_name not in self.gui_ref.config["events"]:
-                    self.gui_ref.config["events"][current_event_name] = {}
-
-                # Koordinaten unskaliert speichern
-                self.gui_ref.config["events"][current_event_name]["x"] = uns(curr.x())
-                self.gui_ref.config["events"][current_event_name]["y"] = uns(curr.y())
-                self.gui_ref.save_config()
-                print(f"DEBUG: Event '{current_event_name}' moved to {uns(curr.x())}, {uns(curr.y())}")
-
-            elif self.dragging_widget == "crosshair":
-                curr = self.crosshair_label.pos()
-                center_x = curr.x() + (self.crosshair_label.width() // 2)
-                center_y = curr.y() + (self.crosshair_label.height() // 2)
-                if "crosshair" not in self.gui_ref.config: self.gui_ref.config["crosshair"] = {}
-                self.gui_ref.config["crosshair"]["x"] = uns(center_x)
-                self.gui_ref.config["crosshair"]["y"] = uns(center_y)
-                self.gui_ref.save_config()
-
-            elif self.dragging_widget == "feed":
-                curr = self.feed_label.pos()
-                if "killfeed" not in self.gui_ref.config: self.gui_ref.config["killfeed"] = {}
-                self.gui_ref.config["killfeed"]["x"] = uns(curr.x())
-                self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
-                self.gui_ref.save_config()
-
-            elif self.dragging_widget == "stats":
-                curr = self.stats_bg_label.pos()
-                if "stats_widget" not in self.gui_ref.config: self.gui_ref.config["stats_widget"] = {}
-                self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
-                self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
-                self.gui_ref.save_config()
-
-            elif self.dragging_widget == "streak":
-                curr = self.streak_bg_label.pos()
-                if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
-                self.gui_ref.config["streak"]["x"] = uns(curr.x())
-                self.gui_ref.config["streak"]["y"] = uns(curr.y())
-                self.gui_ref.save_config()
-
-        self.dragging_widget = None
-        self.drag_offset = None
-
-    # --- TASTATUR-STEUERUNG (SPACE ZUM STOPPEN) ---
-    def keyPressEvent(self, event):
-        if self.path_edit_active and event.key() == Qt.Key.Key_Space:
-            # Ruft die Toggle-Funktion in der GUI auf -> Stoppt die Aufnahme
-            if self.gui_ref:
-                print("DEBUG: Space gedrückt -> Beende Path Record")
-                self.gui_ref.start_path_record()
-            event.accept()
-            return
-        super().keyPressEvent(event)
-
-    # --- RENDERING LOGIK ---
-    def add_killfeed_row(self, html_msg):
-        """Aktualisiert den gesamten Killfeed-Block als Paket"""
-        scaled_msg = html_msg
-        for size in [19, 16]:
-            scaled_msg = scaled_msg.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
-
-        if "style=\"" in scaled_msg:
-            scaled_msg = scaled_msg.replace("style=\"", "style=\"line-height: 100%; ")
-
-        self.feed_messages.insert(0, scaled_msg)
-        self.feed_messages = self.feed_messages[:6]
-
-        full_html = f'<div style="text-align: right; margin-right: 5px;">{"".join(self.feed_messages)}</div>'
-
-        self.feed_label.setText(full_html)
-        self.feed_label.show()
-        QApplication.processEvents()
-        self.repaint()
-
-    def clear_killfeed(self):
-        self.feed_messages = []
-        self.feed_label.clear()
-        self.repaint()
-
-    def update_killfeed_pos(self):
-        if not self.gui_ref: return
-        kf_conf = self.gui_ref.config.get("killfeed", {})
-
-        # --- NEU: Absolute Position (0,0 = Oben Links) ---
-        # Standardwert z.B. 50, 200 (nicht mehr -800)
-        abs_x = kf_conf.get("x", 50)
-        abs_y = kf_conf.get("y", 200)
-
-        # Nur noch Skalierung anwenden, keine Bildschirmmitte mehr draufrechnen
-        self.safe_move(self.feed_label, self.s(abs_x), self.s(abs_y))
-
-    def set_stats_html(self, html_content, img_path):
-        cfg = {}
-        if self.gui_ref and hasattr(self.gui_ref, 'config'):
-            cfg = self.gui_ref.config.get("stats_widget", {})
-
-        # Absolute Position aus Config laden
-        base_x = self.s(cfg.get("x", 50))
-        base_y = self.s(cfg.get("y", 500))
-
-        has_image = os.path.exists(img_path)
-
-        # --- HINTERGRUND ---
-        if has_image or self.edit_mode:
-            if has_image:
-                pix = QPixmap(img_path);
-                final_scale = cfg.get("scale", 1.0) * self.ui_scale
-                if not pix.isNull():
-                    pix = pix.scaled(int(pix.width() * final_scale), int(pix.height() * final_scale),
-                                     Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    self.stats_bg_label.setPixmap(pix);
-                    self.stats_bg_label.adjustSize()
-            else:
-                self.stats_bg_label.clear();
-                self.stats_bg_label.resize(int(400 * self.ui_scale), int(50 * self.ui_scale))
-
-            # WICHTIG: Nur bewegen, wenn wir NICHT im Edit-Modus sind!
-            # Im Edit-Modus hat die Maus die Kontrolle.
-            if not self.edit_mode:
-                self.safe_move(self.stats_bg_label, base_x, base_y);
-
-            self.stats_bg_label.show()
-        else:
-            self.stats_bg_label.hide()
-
-        # --- TEXT ---
-        scaled_html = html_content
-        for size in [28, 22, 20, 19, 16, 14]:
-            scaled_html = scaled_html.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
-
-        self.stats_text_label.setText(scaled_html);
-        self.stats_text_label.adjustSize()
-
-        # Positionierung berechnen
-        # Wenn wir im Edit-Modus sind, nehmen wir die AKTUELLE Position des Hintergrunds als Referenz
-        if self.edit_mode:
-            bg_center_x = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
-            bg_center_y = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
-        else:
-            # Sonst nehmen wir die Config-Werte (base_x/base_y sind Top-Left)
-            bg_center_x = base_x + (self.stats_bg_label.width() // 2)
-            bg_center_y = base_y + (self.stats_bg_label.height() // 2)
-
-        # Text Feinjustierung (tx/ty) anwenden
-        text_x = bg_center_x + self.s(cfg.get("tx", 0)) - (self.stats_text_label.width() // 2)
-        text_y = bg_center_y + self.s(cfg.get("ty", 0)) - (self.stats_text_label.height() // 2)
-
-        # Text immer bewegen (er muss ja dem Hintergrund folgen, auch beim Ziehen)
-        # Aber nur wenn wir nicht gerade den Text selbst ziehen würden (was wir aktuell nicht tun, wir ziehen den BG)
-        self.safe_move(self.stats_text_label, text_x, text_y);
-
-        self.stats_text_label.show();
-        self.stats_text_label.raise_()
-
-    def display_image(self, img_path, duration, abs_x, abs_y, scale=1.0):
-        """Zeigt Bild an, nutzt safe_move und versteckt es sicher nach 'duration'."""
-
-        # 1. Altes Bild/Timer aufräumen
-        if hasattr(self, 'hide_timer') and self.hide_timer.isActive():
-            self.hide_timer.stop()
-
-        # Falls kein Bild da ist -> Verstecken und raus
-        if not img_path or not os.path.exists(img_path):
-            self.img_label.hide()
-            return
-
-        pixmap = QPixmap(img_path)
-        if pixmap.isNull(): return
-
-        # 2. SKALIERUNG BERECHNEN (Deine Logik, unverändert)
-        final_scale = self.ui_scale * scale
-
-        if final_scale != 1.0:
-            w = int(pixmap.width() * final_scale)
-            h = int(pixmap.height() * final_scale)
-            pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-
-        # 3. LABEL UPDATEN
-        self.img_label.setPixmap(pixmap)
-        self.img_label.adjustSize()
-
-        # 4. POSITIONIEREN (Hier nutzen wir safe_move für korrekten Sitz!)
-        x = self.s(abs_x)
-        y = self.s(abs_y)
-
-        # self.safe_move statt self.img_label.move nutzen!
-        # Falls du safe_move nicht hast, nutze move(x,y), aber safe_move ist präziser.
-        if hasattr(self, 'safe_move'):
-            self.safe_move(self.img_label, x, y)
-        else:
-            self.img_label.move(x, y)
-
-        self.img_label.show()
-        self.img_label.raise_()
-
-        # 5. TIMER ZUM AUSBLENDEN (WICHTIG!)
-        # Wir erstellen einen Timer, der das Bild nach 'duration' ausblendet.
-        # Wir speichern ihn in self, damit wir ihn beim nächsten Bild abbrechen können (siehe oben).
-        if not hasattr(self, 'hide_timer'):
-            self.hide_timer = QTimer(self)
-            self.hide_timer.setSingleShot(True)
-            self.hide_timer.timeout.connect(self.img_label.hide)
-
-        self.hide_timer.start(duration)
-
-    def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
-        """
-        Haupt-Anzeige für den Killstreak.
-        JETZT MIT ABSOLUTER POSITIONIERUNG (0,0 = Oben Links).
-        """
-        import math
-        import time
-        from PyQt6.QtGui import QTransform
-        from PyQt6.QtCore import QPoint
-
-        # --- 1. Check Active ---
-        if not cfg.get("active", True) and not self.edit_mode:
-            self.streak_bg_label.hide()
-            self.streak_text_label.hide()
-            for l in self.knife_labels: l.hide()
-            return
-
-        if count <= 0 and not self.edit_mode:
-            self.streak_bg_label.hide()
-            self.streak_text_label.hide()
-            for l in self.knife_labels:
-                l.hide()
-                l._is_active = False
-            return
-
-        display_count = count if count > 0 else 10
-        final_scale = cfg.get("scale", 1.0) * self.ui_scale
-
-        # --- 2. Haupt-Hintergrund (Skull) ---
-        if os.path.exists(img_path):
-            pix = QPixmap(img_path)
-            if not pix.isNull():
-                pix = pix.scaled(int(pix.width() * final_scale), int(pix.height() * final_scale),
-                                 Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.streak_bg_label.setPixmap(pix)
-                self.streak_bg_label.adjustSize()
-
-                # --- ÄNDERUNG: Absolute Positionierung ---
-                # Wir laden die Werte direkt (Standard z.B. 100, 100)
-                # Keine Bildschirmmitte-Berechnung mehr!
-                abs_x = self.s(cfg.get("x", 100))
-                abs_y = self.s(cfg.get("y", 100))
-
-                # Wir setzen das Label an diese Position (Top-Left)
-                self.safe_move(self.streak_bg_label, abs_x, abs_y)
-                self.streak_bg_label.show()
-
-                # WICHTIG: Skull Center neu berechnen für die Messer
-                skull_center = self.streak_bg_label.geometry().center()
-                bx, by = abs_x, abs_y  # Für Text-Referenz
-
-                path_data = cfg.get("custom_path", [])
-
-                # Sicherstellen, dass genug Messer-Labels existieren
-                while len(self.knife_labels) < len(factions):
-                    lbl = QLabel(self)
-                    lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-                    self.knife_labels.append(lbl)
-
-                # ==========================================
-                # MODUS 1: CUSTOM PATH (Messer auf Pfad)
-                # ==========================================
-                if len(path_data) > 2:
-                    segments = []
-                    total_l = 0
-                    pts = [QPoint(int(p[0]), int(p[1])) for p in path_data]
-                    for i in range(len(pts)):
-                        p1, p2 = pts[i], pts[(i + 1) % len(pts)]
-                        d = math.sqrt((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2)
-                        segments.append((p1, p2, d, total_l))
-                        total_l += d
-
-                    knives_per_ring_path = 50
-                    for i in range(len(factions)):
-                        label = self.knife_labels[i]
-                        is_new_spawn = not label.isVisible()
-                        f_tag = factions[i]
-                        k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
-                        k_path = get_asset_path(k_file)
-
-                        if not os.path.exists(k_path): label.hide(); continue
-
-                        slot_idx = slot_map[i] if slot_map and i < len(slot_map) else i
-                        ring_idx = slot_idx // knives_per_ring_path
-                        pos_in_ring = slot_idx % knives_per_ring_path
-                        ring_scale = 1.0 + (ring_idx * 0.28)
-                        target_dist = (pos_in_ring / knives_per_ring_path) * total_l
-
-                        kx_off, ky_off = 0, 0
-                        for p1, p2, seg_d, start_l in segments:
-                            if start_l <= target_dist <= start_l + seg_d:
-                                t = (target_dist - start_l) / seg_d
-                                kx_off = (p1.x() + t * (p2.x() - p1.x())) * ring_scale
-                                ky_off = (p1.y() + t * (p2.y() - p1.y())) * ring_scale
-                                break
-
-                        kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
-                        angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
-                        k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle),
-                                                            Qt.TransformationMode.SmoothTransformation)
-                        k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
-                                             Qt.TransformationMode.SmoothTransformation)
-
-                        label.setPixmap(k_pix)
-                        label.adjustSize()
-                        label._base_off_x, label._base_off_y = kx - skull_center.x(), ky - skull_center.y()
-                        label._is_active = True
-                        if is_new_spawn: label._spawn_time = time.time()
-                        self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
-                        label.show()
-
-                # ==========================================
-                # MODUS 2: SCHILD-KRANZ (DEFAULT KREIS)
-                # ==========================================
-                else:
-                    knives_per_circle = 50
-                    radius_step = self.s(22)
-                    start_radius_x = (self.streak_bg_label.width() // 2) - self.s(15)
-                    start_radius_y = (self.streak_bg_label.height() // 2) - self.s(15)
-
-                    for i in range(len(factions)):
-                        label = self.knife_labels[i]
-                        is_new_spawn = not label.isVisible()
-                        f_tag = factions[i]
-                        k_file = cfg.get(f"knife_{f_tag.lower()}", f"knife_{f_tag.lower()}.png")
-                        k_path = get_asset_path(k_file)
-                        if not os.path.exists(k_path): label.hide(); continue
-
-                        slot_idx = slot_map[i] if slot_map and i < len(slot_map) else i
-                        ring_idx = slot_idx // knives_per_circle
-                        pos_in_ring = slot_idx % knives_per_circle
-                        angle = (pos_in_ring * (360 / knives_per_circle)) - 90
-                        rad = math.radians(angle)
-
-                        s_val = math.sin(rad)
-                        jaw_narrowing = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
-                        curr_rx = (start_radius_x + (ring_idx * radius_step)) * jaw_narrowing
-                        curr_ry = (start_radius_y + (ring_idx * radius_step))
-
-                        # Position relativ zum aktuellen Skull-Center berechnen
-                        kx = skull_center.x() + int(curr_rx * math.cos(rad))
-                        ky = skull_center.y() - self.s(20) + int(curr_ry * math.sin(rad))
-
-                        k_pix = QPixmap(k_path).transformed(QTransform().rotate(angle + 90),
-                                                            Qt.TransformationMode.SmoothTransformation)
-                        k_pix = k_pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
-                                             Qt.TransformationMode.SmoothTransformation)
-
-                        label.setPixmap(k_pix)
-                        label.adjustSize()
-                        label._base_off_x, label._base_off_y = kx - skull_center.x(), ky - skull_center.y()
-                        label._is_active = True
-                        if is_new_spawn: label._spawn_time = time.time()
-                        self.safe_move(label, kx - (label.width() // 2), ky - (label.height() // 2))
-                        label.show()
-
-                # Cleanup alter Labels
-                for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
-
-                # --- 3. DIE ZAHL ANZEIGEN ---
-                f_color = cfg.get("color", "#ffffff")
-                f_size = cfg.get("size", 26)
-                sh_size = int(cfg.get("shadow_size", 0))
-
-                style_parts = [
-                    f"font-family: 'Black Ops One', sans-serif",
-                    f"font-size: {int(f_size * final_scale)}px",
-                    f"color: {f_color}"
-                ]
-                if sh_size > 0:
-                    style_parts.append(f"text-shadow: {sh_size}px {sh_size}px 0 #000")
-                else:
-                    style_parts.append("text-shadow: none")
-
-                if cfg.get("bold", False): style_parts.append("font-weight: bold")
-                if cfg.get("underline", False): style_parts.append("text-decoration: underline")
-
-                self.streak_text_label.setText(f'<div style="{"; ".join(style_parts)}">{display_count}</div>')
-                self.streak_text_label.adjustSize()
-
-                # Positionierung der Zahl (Relativ zum Skull Center)
-                # Skull Center + TextOffset - Halbe Textbreite
-                tx = skull_center.x() + self.s(cfg.get("tx", 0))
-                ty = skull_center.y() + self.s(cfg.get("ty", 0))
-
-                self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
-                               ty - (self.streak_text_label.height() // 2))
-
-                self.streak_text_label.show()
-                self.streak_bg_label.raise_()
-                self.streak_text_label.raise_()
-
-                if self.path_edit_active:
-                    self.path_layer.setGeometry(self.rect())
-                    self.path_layer.show()
-                    self.path_layer.raise_()
-
-    def animate_pulse(self):
-        """Kombiniert Spawn-Animation (Einfliegen) und Pulsieren"""
-        if not self.streak_bg_label.isVisible(): return
-
-        s_conf = {}
-        if self.gui_ref:
-            s_conf = self.gui_ref.config.get("streak", {})
-
-        # 1. MASTER CHECK
-        if not s_conf.get("active", True):
-            return
-
-        # Basis-Prüfung für Animation
-        anim_enabled = s_conf.get("anim_active", True)
-
-        try:
-            user_val = int(s_conf.get("speed", 50))
-            speed_factor = user_val / 20.0
-        except:
-            speed_factor = 2.5
-
-        import time, math
-        now = time.time()
-
-        # Berechnung für das normale Pulsieren
-        pulse_val = math.sin(now * speed_factor) * 0.04
-        normal_pulse_scale = 1.0 + pulse_val
-
-        center = self.streak_bg_label.geometry().center()
-        cx, cy = center.x(), center.y()
-
-        spawn_duration = 0.4  # Dauer des "Einfliegens" in Sekunden
-
-        for lbl in self.knife_labels:
-            if getattr(lbl, "_is_active", False) and lbl.isVisible():
-                ox = getattr(lbl, "_base_off_x", 0)
-                oy = getattr(lbl, "_base_off_y", 0)
-
-                # Wann wurde dieses Messer gespawnt?
-                spawn_time = getattr(lbl, "_spawn_time", 0)
-                alive_time = now - spawn_time
-
-                current_scale = 1.0
-
-                # --- PHASE 1: SPAWN ANIMATION (Einfliegen) ---
-                if alive_time < spawn_duration:
-                    # Fortschritt 0.0 bis 1.0
-                    progress = alive_time / spawn_duration
-
-                    # Ease-Out Effekt (schnell starten, langsam landen)
-                    # Wir starten bei Faktor 1.8 (weit draußen) und enden bei 1.0
-                    start_dist_factor = 1.8
-                    current_scale = start_dist_factor - (
-                            (start_dist_factor - 1.0) * (math.sin(progress * (math.pi / 2))))
-
-                # --- PHASE 2: NORMALES PULSIEREN ---
-                else:
-                    if anim_enabled:
-                        current_scale = normal_pulse_scale
-                    else:
-                        current_scale = 1.0  # Stillstand, aber Spawn-Animation ist fertig
-
-                # Neue Position berechnen
-                new_x = cx + int(ox * current_scale)
-                new_y = cy + int(oy * current_scale)
-
-                lbl.move(new_x - (lbl.width() // 2), new_y - (lbl.height() // 2))
-
-    def update_crosshair(self, path, size, enabled):
-        """Aktualisiert das Crosshair: JETZT MIT ABSOLUTER POSITIONIERUNG"""
-        # Wenn deaktiviert (und nicht im Edit-Modus) oder Datei fehlt -> Verstecken
-        if (not enabled and not self.edit_mode) or not os.path.exists(path):
-            self.crosshair_label.hide()
-            return
-
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            # Skalieren
-            pixmap = pixmap.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
-                                   Qt.TransformationMode.SmoothTransformation)
-            self.crosshair_label.setPixmap(pixmap)
-            self.crosshair_label.adjustSize()
-
-            # --- FIX: Absolute Koordinaten verwenden ---
-            target_x = 0
-            target_y = 0
-
-            if self.gui_ref:
-                c = self.gui_ref.config.get("crosshair", {})
-
-                # Werte aus Config laden (Das sind jetzt absolute Werte, z.B. 960)
-                raw_x = c.get("x", 0)
-                raw_y = c.get("y", 0)
-
-                # FALLBACK: Wenn X und Y beide 0 sind (z.B. frisch nach Reset oder neu),
-                # setzen wir es automatisch in die Bildschirmmitte.
-                if raw_x == 0 and raw_y == 0:
-                    target_x = self.width() // 2
-                    target_y = self.height() // 2
-                else:
-                    # Skalierung anwenden, falls UI-Scale aktiv ist
-                    target_x = self.s(raw_x)
-                    target_y = self.s(raw_y)
-
-            # Label so verschieben, dass seine Mitte genau auf target_x/target_y liegt
-            final_x = target_x - (self.crosshair_label.width() // 2)
-            final_y = target_y - (self.crosshair_label.height() // 2)
-
-            self.safe_move(self.crosshair_label, final_x, final_y)
-            self.crosshair_label.show()
-
-
 try:
     import pygame
 
@@ -1182,64 +116,27 @@ except ImportError:
     HAS_SOUND = False
     print("ACHTUNG: 'pygame' fehlt. Sounds werden nicht abgespielt.")
 
-
-# --- ERROR LOGGER ---
-def log_exception(exc_type, exc_value, exc_traceback):
-    with open("error_log.txt", "a") as f:
-        f.write(f"\n--- CRASH LOG {time.ctime()} ---\n")
-        traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
-
-
 def get_short_name(path):
     """Gibt nur den Dateinamen ohne den kompletten Pfad zurück"""
     return os.path.basename(path) if path else "No file selected"
 
-
 sys.excepthook = log_exception
 
-
-
 # Globale Konstanten
-S_ID = "s:1799912354"
 CONFIG_FILE = "config.json"
-
-
-
-CHEAT_OPTIONS = [
-    "Aimbot", "Magic Bullet", "Hitbox Mod", "Triggerbot",
-    "Wallhack (ESP)", "Radar Hack", "Speedhack", "Flying",
-    "Teleport", "No Recoil/Spread", "Fire Rate Mod", "Unlimited Heat",
-    "Instant Hit", "No Collision", "Invincibility", "Stat Padding"
-]
-
-CHEAT_DESCRIPTIONS = {
-    "Aimbot": "Automated target acquisition that unnaturally snaps the crosshair to critical hit zones.",
-    "Magic Bullet": "Manipulation of projectile vectors, allowing shots to hit targets even when not directly aimed at them.",
-    "Hitbox Mod": "Artificial enlargement of player hitboxes, resulting in an unnaturally high hit-rate.",
-    "Triggerbot": "Automated firing system that triggers the weapon instantly when a target enters the reticle.",
-    "Wallhack (ESP)": "Tactical overlay showing player positions, health, and distances through solid terrain.",
-    "Radar Hack": "External real-time position tracking of all units far beyond the range of in-game detection tools.",
-    "Speedhack": "Illegal modification of movement speed (client-speed) exceeding normal gameplay mechanics.",
-    "Flying": "Suspension of gravity constants, allowing the character to move freely through the air without a jetpack.",
-    "Teleport": "Instantaneous movement between coordinates or snapping to a target's position.",
-    "No Recoil/Spread": "Complete elimination of weapon kick and bullet spread for perfect accuracy at any range.",
-    "Fire Rate Mod": "Technical increase of the weapon's rate of fire beyond the server-defined maximum.",
-    "Unlimited Heat": "Manipulation of the heat mechanic to allow continuous firing without cooldown or ammo depletion.",
-    "Instant Hit": "Removal of projectile travel time (bullet velocity), making shots hit the target instantaneously.",
-    "No Collision": "Modification allowing the player to walk through walls and solid objects (NoClip).",
-    "Invincibility": "Exploiting game memory to prevent taking damage from any source (God Mode).",
-    "Stat Padding": "Coordinated actions to artificially inflate character statistics outside of normal competitive play."
-}
-
 
 class DiorClientGUI:
     def __init__(self):
-        # 1. BASIS-DATEN LADEN
-        self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        self.init_db()
+        # 1. BASIS & DB INITIALISIERUNG
+        self.BASE_DIR = BASE_DIR  # Kommt jetzt aus dem Import 'dior_utils'
+        self.db = DatabaseHandler()  # Kommt aus 'dior_db'
+
+        # 2. DATEN LADEN
         self.config = self.load_config()
-        self.char_data = self.load_chars_from_db() or {}
-        self.name_cache = self.load_cache_from_db() or {}
+        self.char_data = self.db.load_my_chars()
+
+        # Cache laden (Gibt jetzt 2 Dictionaries zurück: Namen und Outfits)
+        self.name_cache, self.outfit_cache = self.db.load_player_cache()
 
         # 2. LOGIK-VARIABLEN
         self.ps2_dir = self.config.get("ps2_path", "")
@@ -1726,12 +623,20 @@ class DiorClientGUI:
         self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
 
         # Settings
-        self.safe_connect(self.settings_win.signals.browse_obs_requested, self.browse_folder)
         self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
         self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
-        self.safe_connect(self.settings_win.signals.save_requested, self.save_enforcer_config_qt)
+
 
         print("SYS: All signals routed successfully.")
+
+    def browse_ps2_folder(self):
+        path = filedialog.askdirectory(title="PlanetSide 2 Installationsordner wählen")
+        if path:
+            self.ps2_dir = path
+            if hasattr(self, 'ps2_path_label'):
+                self.ps2_path_label.config(text=path)
+            self.add_log(f"SYS: PS2 Path set to {path}")
+            self.save_enforcer_config()
 
     def add_char_qt(self):
         """Startet den Thread."""
@@ -1753,7 +658,7 @@ class DiorClientGUI:
         threading.Thread(target=self._add_char_worker, args=(name,), daemon=True).start()
 
     def _add_char_worker(self, name):
-        """Hintergrund-Thread (Sendet am Ende ein Signal)."""
+        """Hintergrund-Thread: Sucht Charakter und speichert ihn via DB-Handler."""
         success = False
         real_name = ""
         error_msg = ""
@@ -1763,21 +668,17 @@ class DiorClientGUI:
             response = requests.get(url, timeout=10)
             r = response.json()
 
-            if r['returned'] > 0:
+            if r.get('returned', 0) > 0:
                 c_list = r['character_list'][0]
                 cid = c_list['character_id']
                 real_name = c_list['name']['first']
                 world_id = c_list.get('world_id', '0')
 
-                # DB Operation
-                conn = sqlite3.connect("ps2_master.db")
-                conn.execute("INSERT OR REPLACE INTO player_cache (character_id, name, world_id) VALUES (?, ?, ?)",
-                             (cid, real_name, world_id))
-                conn.execute("INSERT OR REPLACE INTO my_chars (name, character_id) VALUES (?, ?)", (real_name, cid))
-                conn.commit()
-                conn.close()
+                # --- DB OPERATION (NEU & SAUBER) ---
+                # Wir nutzen die Methode aus dior_db.py
+                self.db.save_char_to_db(cid, real_name, world_id)
 
-                # Dictionary Update
+                # Dictionary Update (RAM)
                 self.char_data[real_name] = cid
                 success = True
             else:
@@ -1786,8 +687,7 @@ class DiorClientGUI:
         except Exception as e:
             error_msg = f"API Fehler: {e}"
 
-        # WICHTIG: Statt QTimer nutzen wir jetzt das Signal (.emit)
-        # Das Signal kümmert sich automatisch um den Thread-Wechsel
+        # Signal senden
         self.worker_signals.add_char_finished.emit(success, real_name, error_msg)
 
     def finalize_add_char_slot(self, success, real_name, error_msg):
@@ -1814,22 +714,20 @@ class DiorClientGUI:
             ui.char_input.selectAll()
 
     def delete_char_qt(self):
-        """Löscht den aktuell ausgewählten Charakter"""
+        """Löscht den aktuell ausgewählten Charakter."""
         ui = self.ovl_config_win
         name = ui.char_combo.currentText()
 
         if name in self.char_data:
             try:
-                conn = sqlite3.connect("ps2_master.db")
-                conn.execute("DELETE FROM my_chars WHERE name=?", (name,))
-                conn.commit()
-                conn.close()
+                # --- DB OPERATION (NEU) ---
+                self.db.remove_my_char(name)
 
                 del self.char_data[name]
                 self.add_log(f"SYS: {name} deleted.")
 
                 # GUI Update
-                self.refresh_char_list_ui()  # Kein Argument = Reset auf Index 0
+                self.refresh_char_list_ui()
 
             except Exception as e:
                 self.add_log(f"ERR: Delete failed: {e}")
@@ -2110,7 +1008,8 @@ class DiorClientGUI:
         ui.ent_evt_snd.clear()
 
         # --- TAB 3: KILLSTREAK ---
-        # Slider Signale blockieren
+
+        # 1. Slider-Werte setzen (Signale blockieren, um Performance zu sparen)
         ui.slider_tx.blockSignals(True)
         ui.slider_ty.blockSignals(True)
         ui.slider_scale.blockSignals(True)
@@ -2123,29 +1022,41 @@ class DiorClientGUI:
         ui.slider_ty.blockSignals(False)
         ui.slider_scale.blockSignals(False)
 
-        # Checkboxen (Hier war dein Problem mit der Animation)
+        # 2. Checkboxen laden
+        # Hier stand vorher vielleicht ein Standardwert, der deine Config überschrieben hat
         ui.check_streak_master.setChecked(s_conf.get("active", True))
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
 
-        # Font & Design
+        # 3. Schriftgröße
         current_size = str(s_conf.get("size", 26))
         idx = ui.combo_font_size.findText(current_size)
         if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
 
+        # 4. Farbe (Button einfärben)
         c_hex = s_conf.get("color", "#ffffff")
         text_col = "black" if QColor(c_hex).lightness() > 128 else "white"
         ui.btn_pick_color.setStyleSheet(
-            f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555;")
+            f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555; padding: 3px; border-radius: 3px;")
 
-        # Hauptbild & Speed
-        ui.ent_streak_img.setText(s_conf.get("img", "KS_Counter.png"))
+        # 5. HAUPTBILD & SPEED (WICHTIG!)
+        # Wir prüfen explizit auf den gespeicherten Wert. Nur wenn leer, nehmen wir Default.
+        saved_img = s_conf.get("img", "")
+        if not saved_img: saved_img = "KS_Counter.png"
+
+        ui.ent_streak_img.setText(saved_img)
         ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
 
-        # Messer Icons (Mapping: TR -> knife_tr)
+        # 6. MESSER ICONS (DER KNACKPUNKT)
+        # Die Keys in der Config sind klein geschrieben (knife_tr), die UI-Dict Keys groß (TR).
         for fac in ["TR", "NC", "VS"]:
             if fac in ui.knife_inputs:
-                config_key = f"knife_{fac.lower()}"  # z.B. knife_tr
+                # Wir bauen den Key: "knife_" + "tr" = "knife_tr"
+                config_key = f"knife_{fac.lower()}"
+
+                # Wert laden (kann leer sein, das ist ok)
                 saved_val = s_conf.get(config_key, "")
+
+                # Ins Textfeld setzen
                 ui.knife_inputs[fac].setText(saved_val)
 
         # --- TAB 4: CROSSHAIR (Gefixter Bereich) ---
@@ -2254,46 +1165,6 @@ class DiorClientGUI:
         self.save_config()
         self.start_websocket_thread()
 
-    def reset_ui_layout(self):
-        """Setzt alle HUD-Positionen zurück."""
-        if not messagebox.askyesno("HUD Reset", "Möchtest du alle HUD-Positionen auf Standardwerte zurücksetzen?"):
-            return
-
-        mid_x = self.root.winfo_screenwidth() // 2
-        mid_y = self.root.winfo_screenheight() // 2
-
-        # 1. Standardwerte definieren (ABSOLUT)
-        defaults = {
-            "stats_widget": {"x": 50, "y": 800, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
-            "killfeed": {"x": 1400, "y": 50, "hs_icon": "headshot.png", "show_revives": True},
-            # HIER: Streak Standard (z.B. Oben Mitte)
-            "streak": {"x": mid_x - 50, "y": 100, "tx": 0, "ty": 0, "scale": 1.0, "active": True},
-            "crosshair": {"x": mid_x, "y": mid_y, "size": 32, "active": True}
-        }
-
-        # 2. Config aktualisieren
-        for key, val in defaults.items():
-            if key not in self.config: self.config[key] = {}
-            self.config[key].update(val)
-
-        # 3. GUI-Elemente aktualisieren (Nur noch die, die es gibt)
-        # Stats und Feed Slider gibt es nicht mehr -> Nichts zu tun hier für die.
-
-        # 4. Speichern und Overlay triggern
-        self.save_config()
-        self.add_log("HUD: Alle Positionen wurden zurückgesetzt.")
-
-        if self.overlay_win:
-            self.overlay_win.update_killfeed_pos()
-
-            c = self.config["crosshair"]
-            game_running = getattr(self, 'ps2_running', False)
-            should_show = c.get("active", True) and game_running
-            path = get_asset_path(c.get("file", "crosshair.png"))
-            self.overlay_win.update_crosshair(path, c.get("size", 32), should_show)
-
-            self.refresh_ingame_overlay()
-
     def ps2_process_monitor(self):
         """Überwacht den Prozess und nutzt Signale."""
         self.ps2_running = None
@@ -2393,96 +1264,7 @@ class DiorClientGUI:
             self.update_streak_display()
             self.add_log("PATH: Pfad gelöscht.")
 
-    def auto_enable_overlay(self):
-        """Wird gerufen, wenn PS2 startet."""
-        if not self.overlay_win:
-            # Hier musst du deine Overlay-Fenster Klasse importieren (z.B. QtOverlay)
-            # self.overlay_win = QtOverlay(self)
-            self.add_log("ERR: Overlay Fenster Objekt nicht initialisiert!")
-            return
 
-        # Sichtbar machen
-        self.overlay_win.showFullScreen()
-
-        # Crosshair laden aus Config
-        c = self.config.get("crosshair", {})
-        if c.get("active", True) and hasattr(self.overlay_win, 'update_crosshair'):
-            self.overlay_win.update_crosshair(
-                os.path.join(self.BASE_DIR, "assets", c.get("file", "crosshair.png")),
-                c.get("size", 32),
-                True
-            )
-        self.add_log("SYS: Overlay HUD synchronisiert.")
-
-    def auto_disable_overlay(self):
-        """Wird aufgerufen, wenn das Spiel geschlossen wird."""
-        if self.overlay_win:
-            # Wir verstecken nur das Crosshair, das Overlay selbst
-            # bleibt für Event-Logs im Hintergrund aktiv (optional)
-            self.overlay_win.crosshair_label.hide()
-            self.add_log("GAME: PlanetSide 2 beendet. Crosshair ausgeblendet.")
-
-    def start_qt_overlay(self):
-        try:
-            if self.overlay_win is None:
-                self.overlay_win = QtOverlay(self)
-                self.overlay_win.gui_ref = self
-            self.overlay_win.update_killfeed_pos()
-            self.overlay_win.showFullScreen()
-            self.add_log("OVERLAY: UI System bereit.")
-        except Exception as e:
-            self.add_log(f"QT Error: {e}")
-
-    def pump_qt(self):
-        if self.qt_app:
-            self.qt_app.processEvents()
-        self.root.after(10, self.pump_qt)
-
-    def toggle_overlay(self):
-        """Startet oder stoppt das Ingame-Overlay Fenster."""
-        # Falls das Fenster noch nie erstellt wurde
-        if self.overlay_win is None:
-            try:
-                  # Importiere deine Overlay-Klasse
-                self.overlay_win = QtOverlay(self)  # Übergib 'self' für den Datenzugriff
-                self.add_log("SYS: Overlay-Instanz erstellt.")
-            except Exception as e:
-                self.add_log(f"ERR: Overlay konnte nicht erstellt werden: {e}")
-                return
-
-        # Umschalten der Sichtbarkeit
-        if self.overlay_win.isVisible():
-            self.overlay_win.hide()
-            self.add_log("SYS: Overlay versteckt.")
-        else:
-            # Overlay anzeigen und in den Vordergrund bringen
-            self.overlay_win.showFullScreen()
-            self.overlay_win.setWindowFlags(
-                Qt.WindowType.WindowStaysOnTopHint |
-                Qt.WindowType.FramelessWindowHint |
-                Qt.WindowType.WindowTransparentForInput  # Wichtig für 'Durchklicken'
-            )
-            self.overlay_win.show()
-            self.add_log("SYS: Overlay aktiviert.")
-
-    def init_db(self):
-        conn = sqlite3.connect("ps2_master.db")
-        cursor = conn.cursor()
-
-        # 1. Tabelle für alle gesuchten Spieler (Cache)
-        cursor.execute('''CREATE TABLE IF NOT EXISTS player_cache 
-                          (character_id TEXT PRIMARY KEY, name TEXT, name_lower TEXT, 
-                           faction_id INTEGER, world_id INTEGER, outfit_tag TEXT, 
-                           battle_rank INTEGER, created_date TEXT, last_login TEXT, 
-                           kills INTEGER, deaths INTEGER, score INTEGER, playtime INTEGER,
-                           m30_kills INTEGER, m30_deaths INTEGER, m30_score INTEGER, m30_time INTEGER)''')
-
-        # 2. Tabelle für DEINE Charaktere (Diese hat gefehlt!)
-        cursor.execute('''CREATE TABLE IF NOT EXISTS my_chars 
-                          (character_id TEXT PRIMARY KEY, name TEXT)''')
-
-        conn.commit()
-        conn.close()
 
     def center_crosshair_qt(self):
         """Zentriert das Crosshair basierend auf der aktuellen Overlay-Größe."""
@@ -2652,32 +1434,6 @@ class DiorClientGUI:
         except Exception as e:
             print(f"Fehler beim Laden der Item-DB: {e}")
 
-    def load_chars_from_db(self):
-        conn = sqlite3.connect("ps2_master.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT name, character_id FROM my_chars")
-        data = {row[0]: row[1] for row in cursor.fetchall()}
-        conn.close()
-        return data
-
-    def load_cache_from_db(self):
-        try:
-            conn = sqlite3.connect("ps2_master.db")
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            # ÄNDERUNG: Wir laden jetzt auch outfit_tag
-            cursor.execute("SELECT character_id, name, outfit_tag FROM player_cache")
-            rows = cursor.fetchall()
-            conn.close()
-
-            # Wir füllen direkt den Cache für Outfits
-            self.outfit_cache = {row['character_id']: row['outfit_tag'] for row in rows}
-
-            return {row['character_id']: row['name'] for row in rows}
-        except Exception as e:
-            self.add_log(f"DB Error: {e}")
-            self.outfit_cache = {}  # Fallback
-            return {}
 
     def load_config(self):
         """Lädt die zentrale Konfiguration."""
@@ -2956,109 +1712,8 @@ class DiorClientGUI:
             self.overlay_enabled = True
             self.add_log("Overlay: aktiviert.")
 
-    def refresh_preview_graphics(self, _=None):
-        """Zeigt die Bilder permanent an, damit man sie verschieben kann"""
-        if not hasattr(self, 'preview_mode') or not self.preview_mode.get():
-            return
-        if not hasattr(self, 'ovl_canvas'):
-            return
 
-        # 1. Das Crosshair an die aktuelle Slider-Position setzen
-        self.apply_crosshair_settings()
 
-        # 2. Das aktuell gewählte Event-Bild (Kill/Death) anzeigen
-        etype = self.var_event_sel.get()
-        img_path = self.ent_evt_img.get()  # Pfad aus dem Textfeld lesen
-
-        if img_path and os.path.exists(img_path):
-            try:
-                # Altes Vorschaubild löschen, damit es nicht doppelt da ist
-                self.ovl_canvas.delete("preview_event")
-
-                img = Image.open(img_path)
-                # Position berechnen: Bildschirmmitte + Slider-Werte
-                x = (self.ovl_win.winfo_screenwidth() // 2) + self.scale_ex.get()
-                y = (self.ovl_win.winfo_screenheight() // 2) + self.scale_ey.get()
-
-                self.preview_photo = ImageTk.PhotoImage(img)
-                # Hier wird das Bild mit dem Tag 'preview_event' gezeichnet
-                self.ovl_canvas.create_image(x, y, image=self.preview_photo, tags="preview_event")
-            except Exception as e:
-                print(f"Preview Draw Error: {e}")
-
-    def toggle_preview(self):
-        if not hasattr(self, 'ovl_win'): return
-
-        hwnd = ctypes.windll.user32.GetParent(self.ovl_win.winfo_id())
-        GWL_EXSTYLE = -20
-        WS_EX_LAYERED = 0x00080000
-        WS_EX_TRANSPARENT = 0x00000020
-        WS_EX_NOACTIVATE = 0x08000000
-
-        if self.preview_mode.get():
-            # EDIT-MODUS AN: Click-Through AUS (damit Maus greifen kann)
-            style = WS_EX_LAYERED | WS_EX_NOACTIVATE
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-
-            # Maus-Events an das Canvas binden
-            self.ovl_canvas.bind("<Button-1>", self.start_drag)
-            self.ovl_canvas.bind("<B1-Motion>", self.do_drag)
-            self.ovl_canvas.bind("<ButtonRelease-1>", self.stop_drag)
-
-            self.refresh_preview_graphics()
-            self.add_log("Edit-Modus: Du kannst Bilder jetzt mit der Maus verschieben!")
-        else:
-            # SPIEL-MODUS: Click-Through AN
-            style = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-
-            # Events lösen
-            self.ovl_canvas.unbind("<Button-1>")
-            self.ovl_canvas.unbind("<B1-Motion>")
-            self.ovl_canvas.unbind("<ButtonRelease-1>")
-
-            if hasattr(self, 'ovl_canvas'):
-                self.ovl_canvas.delete("preview_event")
-            self.add_log("Edit-Modus AUS: Klicks gehen wieder ins Spiel.")
-
-    def start_drag(self, event):
-        """Merkt sich die Startposition beim Anklicken"""
-        item = self.ovl_canvas.find_closest(event.x, event.y)
-        if item:
-            self.dragging_item = item
-            self.drag_data["x"] = event.x
-            self.drag_data["y"] = event.y
-
-    def stop_drag(self, event):
-        """Speichert die neue Position in die Config, wenn man loslässt"""
-        if self.dragging_item:
-            # Berechne Offset zur Mitte
-            mid_x = self.ovl_win.winfo_screenwidth() // 2
-            mid_y = self.ovl_win.winfo_screenheight() // 2
-
-            new_x = event.x - mid_x
-            new_y = event.y - mid_y
-
-            # Prüfen, was verschoben wurde (Crosshair oder Event)
-            tags = self.ovl_canvas.gettags(self.dragging_item)
-            if "crosshair" in tags:
-                self.scale_cx.set(new_x)
-                self.scale_cy.set(new_y)
-            elif "preview_event" in tags:
-                self.scale_ex.set(new_x)
-                self.scale_ey.set(new_y)
-
-            self.dragging_item = None
-            self.save_event_ui_data()  # Automatisch speichern
-
-    def do_drag(self, event):
-        """Verschiebt das Bild live mit der Maus"""
-        if self.dragging_item:
-            dx = event.x - self.drag_data["x"]
-            dy = event.y - self.drag_data["y"]
-            self.ovl_canvas.move(self.dragging_item, dx, dy)
-            self.drag_data["x"] = event.x
-            self.drag_data["y"] = event.y
 
     def trigger_overlay_event(self, event_type):
         """Triggert Bild/Sound im Overlay. Findet Config-Eintrag robust & erlaubt Sound-Only."""
@@ -3274,34 +1929,9 @@ class DiorClientGUI:
         self.save_config()
         self.add_log(f"UI: '{etype}' gespeichert ({save_x}/{save_y}).")
 
-    def save_overlay_ui_data(self):
-        """Speichert Crosshair Settings"""
-        self.config["crosshair"] = {
-            "file": self.ent_cross_path.get(),
-            "x": self.scale_cx.get(),
-            "y": self.scale_cy.get()
-        }
-        self.save_overlay_config()
-        self.add_log("Crosshair Settings gespeichert.")
 
-    def start_overlay_logic(self):
-        """Aktiviert das Statistik-Overlay im PyQt-Fenster"""
-        if not self.overlay_win:
-            self.add_log("ERROR: Overlay-System nicht initialisiert!")
-            return
 
-        # In der Config als aktiv markieren
-        if "stats_widget" not in self.config:
-            self.config["stats_widget"] = {"active": True}
-        self.config["stats_widget"]["active"] = True
 
-        # Status-Anzeige im Hauptmenü (Tkinter UI)
-        if hasattr(self, 'ovl_status_label'):
-            self.ovl_status_label.config(text="STATUS: AKTIV", fg="#00ff00")
-
-        self.add_log("SYSTEM: Live-Stats Overlay aktiviert.")
-        # Erste Aktualisierung triggern
-        self.refresh_ingame_overlay()
 
     def stop_overlay_logic(self):
         """Versteckt alle Overlay-Elemente (Stats, Crosshair, Feed, Streak)"""
@@ -3417,58 +2047,9 @@ class DiorClientGUI:
         else:
             self.stop_overlay_logic()
 
-    def save_stats_config(self):
-        """Speichert Einstellungen (Position wird nur noch durch Maus geändert)"""
-        raw_path = self.ent_stats_img.get()
-        clean_name = get_short_name(raw_path)
 
-        # 1. Stats Config Update
-        if "stats_widget" not in self.config: self.config["stats_widget"] = {}
 
-        # WICHTIG: Wir updaten NICHT MEHR 'x' und 'y' von Sliders!
-        self.config["stats_widget"].update({
-            "active": self.var_stats_active.get(),
-            "img": clean_name,
-            "tx": self.scale_st_tx.get(),  # Das existiert noch (Text-Intern)
-            "ty": self.scale_st_ty.get(),
-            "scale": self.scale_st_scale.get()
-        })
 
-        # 2. Killfeed Config Update
-        if "killfeed" not in self.config: self.config["killfeed"] = {}
-        self.config["killfeed"].update({
-            # Auch hier kein X/Y Update mehr aus Sliders
-            "hs_icon": get_short_name(self.ent_hs_icon.get()),
-            "show_revives": self.var_show_revives.get()
-        })
-
-        self.save_config()
-        self.add_log("SYSTEM: UI Settings saved.")
-
-        # --- UPDATE ERZWINGEN ---
-        if self.overlay_win:
-            # Killfeed Position updaten (nutzt jetzt gespeicherte Werte aus Config)
-            if hasattr(self.overlay_win, 'update_killfeed_pos'):
-                self.overlay_win.update_killfeed_pos()
-
-            # Session Stats Visuals updaten
-            if self.var_stats_active.get():
-                was_testing = getattr(self, 'is_stats_test', False)
-                self.is_stats_test = True  # Erzwingt Refresh
-                self.refresh_ingame_overlay()
-                self.is_stats_test = was_testing
-            else:
-                self.stop_overlay_logic()
-
-    def save_voice_config(self):
-        """Speichert die Voice-Macro Einstellungen"""
-        new_conf = {}
-        for key, var in self.voice_vars.items():
-            new_conf[key] = var.get()
-
-        self.config["auto_voice"] = new_conf
-        self.save_overlay_config()
-        self.add_log("Voice Macros saved.")
 
     def trigger_auto_voice(self, trigger_key):
         """Drückt V + Zahl basierend auf der Config"""
@@ -3594,104 +2175,92 @@ class DiorClientGUI:
             return []
 
     def toggle_hud_edit_mode(self):
-        """Startet den Edit-Modus und zeigt das aktive Element mit grünem Rahmen an."""
+        """
+        Der moderne Ersatz für 'toggle_preview'.
+        Startet den Edit-Modus, zeigt Rahmen an und ermöglicht Drag & Drop.
+        """
         if not self.overlay_win:
             self.add_log("ERR: Overlay läuft nicht! Bitte erst Overlay starten.")
             return
 
-        # Prüfen, ob wir schon im Edit-Modus sind
-        is_editing = getattr(self, "is_hud_editing", False)
-        ui = self.ovl_config_win
+        # Status umschalten
+        self.is_hud_editing = not getattr(self, "is_hud_editing", False)
+        is_editing = self.is_hud_editing
 
-        # Alle Edit-Buttons aus allen Tabs sammeln, um sie synchron zu schalten
+        ui = self.ovl_config_win
+        targets = self.get_current_tab_targets()
+
+        if not targets:
+            self.add_log("INFO: Bitte erst einen Tab (Events, Streak, etc.) auswählen.")
+            self.is_hud_editing = False
+            return
+
+        # Buttons zum Färben
         btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats]
 
-        # --- START EDIT MODE ---
-        if not is_editing:
-            targets = self.get_current_tab_targets()
+        if is_editing:
+            # --- START EDIT ---
 
-            # WICHTIG: Wenn targets leer ist (User ist in falschem Tab), Abbruch
-            if not targets:
-                self.add_log("INFO: Bitte wählen Sie einen Tab (Events, Streak, etc.) aus.")
-                return
+            # 1. Overlay klickbar machen
+            self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
 
-            self.is_hud_editing = True
-
-            # 1. Buttons ROT färben & Text ändern
+            # 2. Buttons rot färben
             for btn in btn_list:
                 btn.setText("STOP EDIT (SAVE)")
-                # Explizites Rot für den aktiven Modus
                 btn.setStyleSheet(
                     "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;")
 
-            # 2. Overlay für Maus klickbar machen
-            self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
-
-            # 3. EVENT HIGHLIGHTING (Das Bild laden & grün umranden)
+            # 3. Spezialfall EVENTS: Bild anzeigen (Ersatz für refresh_preview_graphics)
             if "event" in targets:
-                # Name und Bildpfad aus den Feldern holen
-                img_name = ui.ent_evt_img.text().strip()
-
-                # Falls Feld leer, aus Config laden
-                evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
-                evt_data = self.config.get("events", {}).get(evt_name, {})
-
+                img_name = clean_path(ui.ent_evt_img.text())
                 if not img_name:
-                    img_name = evt_data.get("img", "kill.png")  # Fallback
+                    # Fallback auf Config
+                    evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+                    evt_data = self.config.get("events", {}).get(evt_name, {})
+                    img_name = evt_data.get("img", "kill.png")
 
                 img_path = get_asset_path(img_name)
 
-                # Koordinaten & Scale laden
-                pos_x = evt_data.get("x", 100)
-                pos_y = evt_data.get("y", 200)
-                scale_val = ui.slider_evt_scale.value() / 100.0
+                # Das Overlay hat ein spezielles Preview-Label dafür
+                if hasattr(self.overlay_win, 'event_preview_label'):
+                    self.overlay_win.event_preview_label.show()
+                    # Wir nutzen display_image mit langer Dauer (999999) für die Vorschau
+                    current_x = self.config.get("events", {}).get(evt_name, {}).get("x", 100)
+                    current_y = self.config.get("events", {}).get(evt_name, {}).get("y", 100)
+                    scale = ui.slider_evt_scale.value() / 100.0
 
-                # Bild im Overlay anzeigen (Dauer unendlich = 999999)
-                self.overlay_win.display_image(img_path, 9999999, pos_x, pos_y, scale_val)
+                    self.overlay_win.display_image(img_path, 9999999, current_x, current_y, scale)
 
-                # GRÜNER RAHMEN & SICHTBAR MACHEN
-                if self.overlay_win.img_label.isVisible():
-                    # Wir nutzen das img_label als "Preview Label"
-                    self.overlay_win.event_preview_label = self.overlay_win.img_label
-                    self.overlay_win.event_preview_label.setStyleSheet(
-                        "border: 3px solid #00ff00; background: rgba(0, 255, 0, 0.2);")
-                    self.overlay_win.event_preview_label.raise_()
-                else:
-                    self.add_log(f"WARN: Bild '{img_name}' konnte nicht geladen werden.")
+            self.add_log(f"UI: Edit-Modus für {targets}")
 
-            self.add_log(f"UI: Edit-Modus gestartet für: {targets}")
-
-        # --- STOP EDIT MODE ---
         else:
-            self.is_hud_editing = False
-            targets = self.get_current_tab_targets()
+            # --- STOP EDIT ---
 
-            # 1. Buttons zurücksetzen (Blau/Standard)
+            # 1. Overlay wieder durchlässig machen
+            self.overlay_win.set_mouse_passthrough(True)
+
+            # 2. Buttons zurücksetzen
             for btn in btn_list:
                 btn.setText("MOVE UI")
-                # Stylesheet leeren -> Fällt zurück auf die CSS-ID #EditBtn (Blau)
+                # Reset auf Default-Style (Blau via #EditBtn ID im CSS)
                 btn.setStyleSheet("")
 
-                # 2. Overlay wieder durchlässig machen
-            if self.overlay_win:
-                self.overlay_win.set_mouse_passthrough(True)
+                # 3. Explizit Speichern je nach Tab
+            if "event" in targets:
+                self.save_event_ui_data()
+            elif "streak" in targets:
+                self.save_streak_settings_from_qt()
+            elif "stats" in targets:
+                self.save_stats_config_from_qt()
+            elif "crosshair" in targets:
+                self.update_crosshair_from_qt()
 
-                # Rahmen entfernen und Bild ausblenden
-                if hasattr(self.overlay_win, 'event_preview_label'):
-                    self.overlay_win.event_preview_label.setStyleSheet("background: transparent;")
-                    self.overlay_win.event_preview_label.hide()
+            # Event Preview verstecken
+            if hasattr(self.overlay_win, 'event_preview_label'):
+                self.overlay_win.event_preview_label.hide()
+            self.overlay_win.img_label.hide()
 
-                # Zur Sicherheit auch das img_label verstecken
-                self.overlay_win.img_label.hide()
-
-            # 3. Speichern je nach aktivem Tab
-            if "event" in targets: self.save_event_ui_data()
-            if "streak" in targets: self.save_streak_settings_from_qt()
-            if "stats" in targets or "feed" in targets: self.save_stats_config_from_qt()
-            if "crosshair" in targets: self.save_config()
-
-            self.save_config()
-            self.add_log("UI: Positionen gespeichert & Edit-Modus beendet.")
+            self.add_log("UI: Positionen gespeichert.")
 
 
     def on_overlay_tab_change(self, event):
@@ -3704,10 +2273,6 @@ class DiorClientGUI:
     def update_stats_widget_position(self):
         # Wird vom Loop erledigt, dient nur als Dummy oder Trigger für sofortigen Refresh
         self.refresh_ingame_overlay()
-
-
-
-
 
 
 
@@ -3967,93 +2532,6 @@ class DiorClientGUI:
             self.add_log("ERROR: Launcher window not initialized.")
 
 
-    def show_nso_teleporter(self):
-        self.current_tab = "nso_teleporter"
-        self.clear_content()
-        mid = self.root.winfo_width() // 2
-        CYAN = "#00f2ff"
-
-        nso_frame = tk.LabelFrame(self.root, text=" > NSO_FRACTION_TELEPORTER ", bg="#1e1e1e", fg=CYAN,
-                                  font=("Consolas", 10), bd=1, padx=20, pady=20)
-
-        # Fraction Selection (FIX: self.frac_var wird hier nur noch benutzt, nicht neu erstellt)
-        tk.Label(nso_frame, text="SELECT FRACTION:", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 9)).pack(pady=(0, 5))
-        frac_menu = tk.OptionMenu(nso_frame, self.frac_var, "TR", "VS", "NC")
-        frac_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0,
-                         activebackground="#1a2b3c", activeforeground=CYAN)
-        frac_menu["menu"].config(bg="#0a141d", fg=CYAN, font=("Consolas", 10))
-        frac_menu.pack(pady=5)
-
-        # Continent Selection
-        tk.Label(nso_frame, text="SELECT CONTINENT:", bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 9)).pack(
-            pady=(10, 5))
-        cont_menu = tk.OptionMenu(nso_frame, self.cont_var, "Indar", "Hossin", "Amerish", "Esamir", "Oshur")
-        cont_menu.config(bg="#0a141d", fg=CYAN, font=("Consolas", 10), width=20, bd=0, highlightthickness=0,
-                         activebackground="#1a2b3c", activeforeground=CYAN)
-        cont_menu["menu"].config(bg="#0a141d", fg=CYAN, font=("Consolas", 10))
-        cont_menu.pack(pady=5)
-
-        # Controls
-        btn_container = tk.Frame(nso_frame, bg="#1e1e1e")
-        btn_container.pack(pady=20)
-        tk.Button(btn_container, text="START", width=12, bg="#004400", fg="white", font=("Consolas", 10, "bold"),
-                  command=self.start_nso_teleport).pack(side="left", padx=10)
-        tk.Button(btn_container, text="STOP", width=12, bg="#440000", fg="white", font=("Consolas", 10, "bold"),
-                  command=self.stop_nso_teleport).pack(side="left", padx=10)
-
-        id1 = self.canvas.create_window(mid, 350, window=nso_frame, width=450)
-
-        # Log area für NSO
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff",
-                                                  font=("Consolas", 9))
-        id2 = self.canvas.create_window(mid, 700, window=self.log_area)
-
-        self.content_ids.extend([id1, id2])
-
-    def show_enforcer(self):
-        self.current_tab = "enforcer"
-        self.clear_content()
-        mid = self.root.winfo_width() // 2
-
-        unit_frame = tk.LabelFrame(self.root, text=" > UNIT_TRACKING ", bg="#1e1e1e", fg="#00f2ff",
-                                   font=("Consolas", 10), bd=1, padx=10, pady=10)
-        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
-        self.char_menu = tk.OptionMenu(unit_frame, self.char_var, *opts, command=self.update_active_char)
-        self.char_option_menus.append(self.char_menu)
-        self.char_menu.config(bg="#0a141d", fg="#00f2ff", bd=0, highlightthickness=0)
-        self.char_menu["menu"].config(bg="#0a141d", fg="#00f2ff")
-        self.char_menu.pack(side="left", padx=5)
-        self.new_char_entry = tk.Entry(unit_frame, bg="#0a141d", fg="#00f2ff", width=12)
-        self.new_char_entry.pack(side="left", padx=5)
-        tk.Button(unit_frame, text="ADD", command=self.add_char, bg="#1a2b3c", fg="#00f2ff").pack(side="left")
-        id1 = self.canvas.create_window(mid, 220, window=unit_frame)
-
-        self.cache_label = tk.Label(self.root, text=f"Characters in db: {len(self.name_cache)}", fg="#4a6a7a",
-                                    bg="#1e1e1e", font=("Consolas", 14, "bold"))
-        id_counter = self.canvas.create_window(mid, 270, window=self.cache_label)
-
-        self.live_killer_label = tk.Label(self.root, text=f"[ TARGET: {self.last_killer_name} ]", fg="#ff4444",
-                                          bg="#1e1e1e", font=("Consolas", 16, "bold"))
-        id3 = self.canvas.create_window(mid, 320, window=self.live_killer_label)
-
-        rep_frame = tk.LabelFrame(self.root, text=" > INCIDENT_CLASSIFICATION ", bg="#1e1e1e", fg="#ff8c00",
-                                  font=("Consolas", 10), bd=1, padx=10, pady=5)
-        cb_grid = tk.Frame(rep_frame, bg="#1e1e1e")
-        for i, opt in enumerate(CHEAT_OPTIONS):
-            var = tk.BooleanVar();
-            self.check_vars[opt] = var
-            tk.Checkbutton(cb_grid, text=opt, variable=var, bg="#1e1e1e", fg="#7a8a9a", selectcolor="black",
-                           font=("Consolas", 8)).grid(row=i // 4, column=i % 4, sticky="w")
-        cb_grid.pack()
-        self.btn_report = tk.Button(rep_frame, text="GENERATE REPORT", command=self.manual_save_report, bg="#1a1a1a",
-                                    fg="#444", font=("Consolas", 11, "bold"), width=40, state="disabled")
-        self.btn_report.pack(pady=5)
-        id4 = self.canvas.create_window(mid, 450, window=rep_frame)
-
-        self.log_area = scrolledtext.ScrolledText(self.root, width=85, height=15, bg="#020508", fg="#00f2ff",
-                                                  font=("Consolas", 9))
-        id5 = self.canvas.create_window(mid, 700, window=self.log_area)
-        self.content_ids.extend([id1, id3, id4, id5, id_counter])
 
     def show_settings(self):
         self.clear_content()
@@ -4065,32 +2543,6 @@ class DiorClientGUI:
         self.settings_win.show()
         self.settings_win.raise_()
 
-    def save_enforcer_config_qt(self, data):
-        # Wir aktualisieren das interne config dictionary
-        self.config.update(data)
-        # Dann rufen wir deine originale Speicherfunktion auf
-        self.save_enforcer_config()
-        self.add_log("SYS: Configuration locked and saved.")
-
-    def refresh_tab_content_base(self, tab_name):
-        self.current_tab = tab_name
-        # Alle registrierten IDs vom Canvas löschen
-        for oid in self.content_ids:
-            self.canvas.delete(oid)
-        # Liste leeren für den nächsten Tab
-        self.content_ids = []
-
-        if hasattr(self, 'sub_menu_frame'):
-            self.sub_menu_frame.place_forget()
-
-    def switch_sub_tab(self, name):
-        # Wir speichern es immer gleich ab, um Fehler zu vermeiden
-        if name.lower() == "weapon stats":
-            self.current_sub_tab = "Weapon Stats"
-        else:
-            self.current_sub_tab = name
-
-        self.show_characters()
 
     def show_characters(self):
         self.clear_content()
@@ -4098,143 +2550,6 @@ class DiorClientGUI:
         if hasattr(self, 'char_win'):
             self.char_win.show()
             self.char_win.raise_()
-
-    def load_enforcer_config(self):
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f: return json.load(f)
-        return {}
-
-    def save_enforcer_config(self):
-        # Wir aktualisieren nur die spezifischen Werte, anstatt alles zu löschen
-        self.config["watch_folder"] = self.folder_entry.get() if hasattr(self, 'folder_entry') else self.config.get(
-            "watch_folder", "")
-        self.config["email"] = self.email_entry.get() if hasattr(self, 'email_entry') else self.config.get("email", "")
-        self.config["pw"] = self.pw_entry.get() if hasattr(self, 'pw_entry') else self.config.get("pw", "")
-        self.config["ps2_path"] = self.ps2_dir
-
-        # Jetzt die saubere Speicherfunktion nutzen
-        self.save_config()
-        self.add_log("SYS: Configuration updated (Background & Overlay preserved).")
-        self.restart_observer()
-
-        with open(CONFIG_FILE, "w") as f: json.dump(self.config, f)
-        self.add_log("SYS: Configuration updated.")
-        self.restart_observer()
-
-    def browse_folder(self):
-        path = filedialog.askdirectory()
-        if path: self.folder_entry.delete(0, tk.END); self.folder_entry.insert(0, path)
-
-    def browse_ps2_folder(self):
-        path = filedialog.askdirectory(title="PlanetSide 2 Installationsordner wählen")
-        if path:
-            self.ps2_dir = path
-            if hasattr(self, 'ps2_path_label'):
-                self.ps2_path_label.config(text=path)
-            self.add_log(f"SYS: PS2 Path set to {path}")
-            self.save_enforcer_config()
-
-    def load_chars(self):
-        chars = {}
-        return chars
-
-    def refresh_char_menus(self):
-        """Aktualisiert ALLE Dropdown-Menüs (Enforcer UND Overlay) gleichzeitig"""
-        # Liste der Namen holen
-        options = list(self.char_data.keys()) if self.char_data else ["N/A"]
-
-        # Durch alle registrierten Menüs gehen
-        # Wir filtern vorher zerstörte Widgets heraus (falls man Tabs gewechselt hat)
-        self.char_option_menus = [m for m in self.char_option_menus if m.winfo_exists()]
-
-        for menu_widget in self.char_option_menus:
-            menu = menu_widget["menu"]
-            menu.delete(0, "end")
-
-            for name in options:
-                # Lambda Fix: x=name bindet den aktuellen Wert
-                menu.add_command(label=name, command=lambda x=name: self.update_active_char(x))
-
-    def add_char(self):
-        """Fügt einen Charakter hinzu (funktioniert aus beiden Tabs)"""
-        name = ""
-
-        # 1. Prüfen, ob im ENFORCER Tab etwas steht
-        if hasattr(self, 'new_char_entry') and self.new_char_entry.winfo_exists():
-            val = self.new_char_entry.get().strip()
-            if val: name = val
-
-        # 2. Falls nicht, prüfen ob im OVERLAY Tab (Identity) etwas steht
-        # (Nur wenn wir noch keinen Namen gefunden haben)
-        if not name and hasattr(self, 'ovl_char_entry') and self.ovl_char_entry.winfo_exists():
-            val = self.ovl_char_entry.get().strip()
-            if val: name = val
-
-        if name:
-            try:
-                # API Abfrage
-                url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}"
-                r = requests.get(url, timeout=10).json()
-
-                if r['returned'] > 0:
-                    c_list = r['character_list'][0]
-                    cid = c_list['character_id']
-                    real_name = c_list['name']['first']
-                    world_id = c_list.get('world_id', '0')  # World ID mitnehmen
-
-                    # In Cache speichern, damit Auto-Switch sofort funktioniert
-                    conn = sqlite3.connect("ps2_master.db")
-                    conn.execute("INSERT OR REPLACE INTO player_cache (character_id, name, world_id) VALUES (?, ?, ?)",
-                                 (cid, real_name, world_id))
-                    conn.execute("INSERT OR REPLACE INTO my_chars (name, character_id) VALUES (?, ?)", (real_name, cid))
-                    conn.commit()
-                    conn.close()
-
-                    self.char_data[real_name] = cid
-                    self.add_log(f"SYS: {real_name} added to tracking.")
-
-                    # Sofort auswählen
-                    self.update_active_char(real_name)
-
-                    # Alle Menüs updaten
-                    self.refresh_char_list_ui()
-
-                    # Textfelder leeren (beide, sicherheitshalber)
-                    if hasattr(self, 'new_char_entry') and self.new_char_entry.winfo_exists():
-                        self.new_char_entry.delete(0, tk.END)
-                    if hasattr(self, 'ovl_char_entry') and self.ovl_char_entry.winfo_exists():
-                        self.ovl_char_entry.delete(0, tk.END)
-                else:
-                    self.add_log(f"ERR: Character '{name}' not found via API.")
-            except Exception as e:
-                self.add_log(f"ERR: Add failed: {e}")
-        else:
-            self.add_log("INFO: Bitte einen Namen eingeben.")
-
-    def delete_char(self):
-        """Löscht den aktuell ausgewählten Charakter"""
-        name = self.char_var.get()
-        if name in self.char_data:
-            try:
-                # Aus DB löschen
-                conn = sqlite3.connect("ps2_master.db")
-                conn.execute("DELETE FROM my_chars WHERE name=?", (name,))
-                conn.commit()
-                conn.close()
-
-                # Aus internem Speicher löschen
-                del self.char_data[name]
-                self.add_log(f"SYS: {name} deleted.")
-
-                # Variable zurücksetzen
-                self.char_var.set("Select Character...")
-                self.current_character_id = ""
-
-                # Alle Menüs updaten
-                self.refresh_char_list_ui()
-
-            except Exception as e:
-                self.add_log(f"ERR: Delete failed: {e}")
 
     def update_active_char(self, name):
         """Setzt die interne ID basierend auf dem Namen."""
@@ -4380,31 +2695,6 @@ class DiorClientGUI:
                 except Exception as e:
                     self.add_log(f"DB-ERROR (Cache): {e}")
 
-    def on_closing(self):
-        if self.observer:
-            self.observer.stop()
-        self.root.destroy()
-
-
-
-    def get_top_5(self, faction):
-        # Alle Spieler dieser Fraktion filtern
-        f_players = [p for p in self.session_stats.values() if p["faction"] == faction]
-
-        # Sortieren nach Kills (primär)
-        f_players.sort(key=lambda x: x["k"], reverse=True)
-
-        return f_players[:5]
-
-    def manual_save_report(self):
-        if not os.path.exists("Reports"): os.makedirs("Reports")
-        fn = f"Reports/Report_{self.last_killer_name}_{int(time.time())}.txt"
-        selected = [o for o, v in self.check_vars.items() if v.get()]
-        with open(fn, "w", encoding="utf-8") as f:
-            f.write(f"SUSPECT: {self.last_killer_name}\nEVIDENCE: {self.last_evidence_url}\nVIOLATIONS:\n")
-            for c in selected: f.write(f"* {c}: {CHEAT_DESCRIPTIONS.get(c)}\n")
-        os.startfile(fn);
-        self.add_log("SYS: Report generated.")
 
     def add_log(self, text):
 
@@ -4418,62 +2708,6 @@ class DiorClientGUI:
         if hasattr(self, 'char_win'):
             self.char_win.add_log(text)
 
-    def _safe_log_insert(self, msg):
-        """Interne Hilfsfunktion für sicheres Schreiben"""
-        if hasattr(self, 'log_area') and self.log_area.winfo_exists():
-            self.log_area.insert(tk.END, f"> {time.strftime('%H:%M:%S')} | {msg}\n")
-            self.log_area.see(tk.END)
-
-    def restart_observer(self):
-        path = self.config.get("watch_folder")
-        if path and os.path.exists(path):
-            if self.observer: self.observer.stop()
-            self.observer = Observer();
-            self.observer.schedule(EnforcerHandler(self), path, recursive=False);
-            self.observer.start()
-
-    def load_ps2_path(self):
-        s = r"C:\Program Files (x86)\Steam\steamapps\common\PlanetSide 2"
-        return s if os.path.exists(s) else ""
-
-    def on_resize(self, event):
-        if not hasattr(self, 'last_size'):
-            return
-
-        w, h = self.root.winfo_width(), self.root.winfo_height()
-        if abs(w - self.last_size[0]) > 20 or abs(h - self.last_size[1]) > 20:
-            self.last_size = (w, h)
-            mid = w // 2
-            self.canvas.coords(self.title_id, mid, 50)
-            self.canvas.coords(self.nav_id, mid, 110)
-            self.update_background_view(w, h)
-            self.refresh_tab_content()
-
-    def on_closing(self):
-        # FIX: Sicherer Shutdown durch Prüfung, ob observer existiert
-        try:
-            if hasattr(self, 'observer') and self.observer:
-                self.observer.stop()
-                self.observer.join()
-        except:
-            pass
-        self.root.destroy()
-
-    def refresh_tab_content(self):
-        if hasattr(self, 'sub_menu_frame'): self.sub_menu_frame.place_forget()
-
-        if self.current_tab == "Dashboard":  # Groß/Kleinschreibung beachten!
-            self.show_dashboard()
-        elif self.current_tab == "launcher":
-            self.show_launcher()
-        elif self.current_tab == "enforcer":
-            self.show_enforcer()
-        # elif self.current_tab == "nso_teleporter":
-        #    self.show_nso_teleporter()
-        elif self.current_tab == "characters":
-            self.show_characters()
-        else:
-            self.show_settings()
 
     def change_background_file(self):
         # Filter für statische Bilder (JPG/PNG)
@@ -4639,49 +2873,6 @@ class DiorClientGUI:
                 # Thread starten
 
         threading.Thread(target=worker, daemon=True).start()
-
-
-class EnforcerHandler(FileSystemEventHandler):
-    def __init__(self, gui):
-        self.gui = gui
-
-    def on_created(self, event):
-        if event.src_path.lower().endswith(".mp4"):
-            threading.Thread(target=self.safe_process, args=(event.src_path,), daemon=True).start()
-
-    def safe_process(self, path):
-        time.sleep(5)
-        # Dateinamen bereinigen
-        killer_name = getattr(self.gui, 'last_killer_name', "Unknown")
-        new_path = os.path.join(os.path.dirname(path), f"REPORT_{killer_name}.mp4")
-
-        try:
-            os.rename(path, new_path)
-            self.gui.add_log("UPLINK: Transmitting to Streamable...")
-
-            # Prüfen ob Credentials da sind
-            email = self.gui.config.get('email', '')
-            pw = self.gui.config.get('pw', '')
-
-            if email and pw:
-                with open(new_path, 'rb') as f:
-                    r = requests.post('https://api.streamable.com/upload',
-                                      auth=(email, pw), files={'file': f})
-                    if r.status_code == 200:
-                        shortcode = r.json()['shortcode']
-                        self.gui.last_evidence_url = f"https://streamable.com/{shortcode}"
-                        self.gui.add_log(f"LINK: {self.gui.last_evidence_url}")
-
-                        # --- HIER WAR DER TKINTER CODE ---
-                        # Da wir noch kein Qt-Fenster für den Enforcer haben,
-                        # loggen wir den Erfolg nur.
-                        self.gui.add_log("SUCCESS: Evidence uploaded.")
-            else:
-                self.gui.add_log("ERR: Keine Streamable-Daten in Config.")
-
-        except Exception as e:
-            self.gui.add_log(f"ERR: {e}")
-
 
 if __name__ == "__main__":
     try:
