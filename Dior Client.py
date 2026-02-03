@@ -1415,6 +1415,10 @@ class DiorClientGUI:
         self.start_websocket_thread()
         threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
 
+        self.id_queue = Queue()  # Sicherstellen, dass die Queue existiert
+        threading.Thread(target=self.cache_worker, daemon=True).start()
+        print("SYS: Cache Worker Thread gestartet.")
+
         # Item DB
         csv_path = os.path.join(self.BASE_DIR, "assets", "sanction-list.csv")
         if os.path.exists(csv_path):
@@ -1429,7 +1433,6 @@ class DiorClientGUI:
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
-        threading.Thread(target=self.cache_worker, daemon=True).start()
 
         # Manuelle connects entfernt! -> Macht connect_all_qt_signals jetzt.
 
