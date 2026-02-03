@@ -37,6 +37,7 @@ import launcher_qt
 import characters_qt
 import settings_qt
 import overlay_config_qt
+from census_worker import CensusWorker
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -83,6 +84,8 @@ def get_asset_path(filename):
 class WorkerSignals(QObject):
     # Signal: Erfolg (True/False), Name, Fehlernachricht
     add_char_finished = pyqtSignal(bool, str, str)
+    # NEUES SIGNAL für den Monitor
+    game_status_changed = pyqtSignal(bool)  # True = Start, False = Stop
 
 
 class DiorMainHub(QMainWindow):
@@ -131,10 +134,7 @@ class DiorMainHub(QMainWindow):
         # Startseite setzen
         self.nav_list.setCurrentRow(0)
 
-    # --- HILFSMETHODE FÜR DEN CONTROLLER ---
-    def switch_to_tab(self, index):
-        """Wechselt den Tab und aktualisiert die Seitenleiste visuell."""
-        self.nav_list.setCurrentRow(index)
+
 
 
 class PathDrawingLayer(QWidget):
@@ -1197,98 +1197,7 @@ def get_short_name(path):
 
 sys.excepthook = log_exception
 
-# 1. Mapping der Item-IDs aus sanction-list.csv
-PS2_DETECTION = {
-    "CATEGORIES": {
-        "Knife": "Knife Kill",
-        "Grenade": "Nade Kill",
-        "MAX": "Max Kill"
-    },
 
-    "NAMES": {
-        "SpitFire Turret": "Spitfire Kill",
-        "Spitfire Auto-Turret": "Spitfire Kill"
-    },
-
-    "SPECIAL_IDS": {
-        "802512": "Spitfire Kill",
-        "802514": "Spitfire Kill",
-        "802515": "Spitfire Kill",
-        "802516": "Spitfire Kill",
-        "802517": "Spitfire Kill",
-        "802518": "Spitfire Kill",
-        "6005426": "Spitfire Kill",
-        "6005427": "Spitfire Kill",
-        "6009294": "Spitfire Kill",
-        "6016202": "Spitfire Kill",
-        "6016216": "Spitfire Kill",
-        "6016217": "Spitfire Kill",
-        "6016218": "Spitfire Kill",
-        "6016219": "Spitfire Kill",
-        "6015075": "Spitfire Kill",
-        "6015076": "Spitfire Kill",
-        "6015077": "Spitfire Kill",
-        "6015078": "Spitfire Kill",
-        "6015086": "Spitfire Kill",
-        "6015087": "Spitfire Kill",
-        "6015088": "Spitfire Kill",
-        "6015089": "Spitfire Kill",
-        "650": "Tankmine Kill",
-        "6005961": "Tankmine Kill",
-        "6005962": "Tankmine Kill",
-        "6011878": "AP-Mine Kill",
-        "6011923": "AP-Mine Kill",
-        "6005243": "AP-Mine Kill",
-        "6009995": "AP-Mine Kill",
-        "6011915": "AP-Mine Kill",
-        "6011924": "AP-Mine Kill",
-        "1045": "AP-Mine Kill",
-        "6005422": "AP-Mine Kill",
-        "6005963": "AP-Mine Kill",
-        "429": "AP-Mine Kill",
-        "1044": "AP-Mine Kill"
-    }
-}
-
-LOADOUT_MAP = {
-    "infil": ["1", "8", "15", "28"],
-    "max": ["7", "14", "21", "45"]
-}
-
-HSR_WEAPON_CATEGORY = {
-    "AI MAX (Left)", "AI MAX (Right)", "Amphibious Rifle", "Anti-Materiel Rifle", "Assault Rifle", "Carbine",
-    "Heavy Weapon",
-    "Hybrid Rifle", "LMG", "Pistol", "Scout Rifle", "Shotgun", "SMG", "Sniper Rifle", "Amphibious Sidearm", "Knife"
-}
-
-# 2. Mapping für Aktionen (Experience IDs)IDs
-PS2_EXP_DETECTION = {
-    # --- SUPPORT ---
-    "Revive": ["7", "53"],  # Normal & Squad Revive
-    "Heal": ["4", "51"],  # Heal & Squad Heal
-    "Resupply": ["34", "55"],  # Ammo Resupply
-    "Repair": ["6", "28", "31", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100",
-               "129", "130", "131", "132", "133", "134", "135", "136", "137", "138", "139", "140", "141", "142", "276",
-               "302", "303", "358", "359", "438", "439", "503", "505", "581", "584", "605", "606", "617", "618", "629",
-               "630", "641", "642", "653", "656", "1375", "1378", "1451", "1452", "1481", "1482", "1545", "1549",
-               "1562", "1571", "1638", "1639", "1740", "1743", "1806", "1809", "1871", "1873", "1991", "1994", "2153",
-               "2156"],  # MAX, Turret, Flash Repair
-
-    # --- OBJECTIVE ---
-    "Point Control": ["15", "16", "272", "556", "557"],  # Attack/Defend/Convert Control Point
-    "Sunderer Spawn": ["233"],  # Jemand spawnt an deinem Bus  (Logistics)
-    "Base Capture": ["19", "598"],  # Facility Captured
-    "Break Construction": ["604", "616", "628"],
-    # Construction zerstört# Construction zerstört# Construction zerstört# Construction zerstört
-    "Alert End": ["328"],
-
-    # --- COMBAT & SPECIAL ----
-    "Road Kill": ["26"],  # Bestätigter Roadkill XP
-    "Domination": ["10"],  # Domination Kill
-    "Revenge": ["11"],  # Revenge Kill
-    "Killstreak Stop": ["8"],  # "Stop the Killing"
-    "Gunner Assist": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"]  # Assist XP für Piloten
-}
 
 # Globale Konstanten
 S_ID = "s:1799912354"
@@ -1329,28 +1238,25 @@ class DiorClientGUI:
         self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.init_db()
         self.config = self.load_config()
-        self.overlay_config = self.config
         self.char_data = self.load_chars_from_db() or {}
         self.name_cache = self.load_cache_from_db() or {}
 
-        # 2. LOGIK-VARIABLEN (Vor der GUI!)
-        self.overlay_active_state = self.config.get("overlay_master_active", False)
+        # 2. LOGIK-VARIABLEN
         self.ps2_dir = self.config.get("ps2_path", "")
         self.current_world_id = self.config.get("world_id", "10")
         self.current_character_id = ""
-        self.is_hud_editing = False  # Status für Edit-Modus
-        self.overlay_win = None  # Vor-Definition gegen AttributeErrors
+        self.is_hud_editing = False
+        self.overlay_win = None
 
         self.server_map = {
             "Wainwright (EU)": "10", "Osprey (US)": "1",
             "SolTech (Asia)": "40", "Jaeger": "19"
         }
 
-        # 1. Signale initialisieren
+        # Signale für Worker
         self.worker_signals = WorkerSignals()
-
-        # 2. Signal mit der GUI-Update-Funktion verbinden
         self.worker_signals.add_char_finished.connect(self.finalize_add_char_slot)
+        self.worker_signals.game_status_changed.connect(self.handle_game_status_change)
 
         # Tracking Variables
         self.killstreak_count = 0
@@ -1373,7 +1279,7 @@ class DiorClientGUI:
         self.last_killer_id = "0"
         self.last_evidence_url = ""
         self.item_db = {}
-        self.id_queue = Queue()
+        self.id_queue = Queue()  # WICHTIG: Hier initialisieren für Cache Worker
         self.websocket = None
         self.loop = None
 
@@ -1386,33 +1292,30 @@ class DiorClientGUI:
         self.qt_app = QApplication.instance() or QApplication(sys.argv)
         self.qt_app.setStyle("Fusion")
 
-        # Die Unter-Fenster erstellen
-        self.dash_window = dashboard_qt.DashboardWidget(self)  # Widget, nicht Window!
+        # Unter-Fenster erstellen
+        self.dash_window = dashboard_qt.DashboardWidget(self)
         self.dash_controller = dashboard_qt.DashboardController(self.dash_window)
         self.launcher_win = launcher_qt.LauncherWidget(self)
         self.char_win = characters_qt.CharacterWidget(self)
         self.ovl_config_win = overlay_config_qt.OverlayConfigWindow(self)
         self.settings_win = settings_qt.SettingsWidget(self)
 
-        # WICHTIG: Overlay erstellen, BEVOR wir Signale verbinden
-        # from Dior_Client import QtOverlay
+        # Overlay erstellen
         self.overlay_win = QtOverlay(self)
 
         # 4. MAIN HUB (Die Hülle)
         self.main_hub = DiorMainHub(self)
 
-        # 5. SIGNALE VERBINDEN (Das Herzstück)
-        # Jetzt existieren alle Fenster (inkl. Overlay), daher klappt das Routing
+        # 5. SIGNALE VERBINDEN
         self.connect_all_qt_signals()
 
         # 6. DATEN IN DIE FENSTER LADEN
+        # WICHTIG: Das hier lädt die Checkboxen UND erzwingt die Config-Werte
         self.load_overlay_config_to_qt()
         self.settings_win.load_config(self.config, self.ps2_dir)
 
-        # Dropdown füllen
-        opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
-        self.ovl_config_win.char_combo.clear()
-        self.ovl_config_win.char_combo.addItems(opts)
+        # --- GELÖSCHT: Der manuelle Dropdown-Reset war hier! ---
+        # load_overlay_config_to_qt macht das schon richtig.
 
         # Positionen initialisieren
         if self.overlay_win:
@@ -1421,13 +1324,14 @@ class DiorClientGUI:
         # 7. ANZEIGEN
         self.main_hub.show()
 
-        # 8. HINTERGRUND-THREADS & TIMER
-        self.start_websocket_thread()
-        threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
-
-        self.id_queue = Queue()  # Sicherstellen, dass die Queue existiert
+        # 8. HINTERGRUND-THREADS
         threading.Thread(target=self.cache_worker, daemon=True).start()
         print("SYS: Cache Worker Thread gestartet.")
+
+        self.census = CensusWorker(self)
+        self.census.start()
+
+        threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
 
         # Item DB
         csv_path = os.path.join(self.BASE_DIR, "assets", "sanction-list.csv")
@@ -1443,13 +1347,69 @@ class DiorClientGUI:
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
+    def clean_path(self, path_str):
+        """Entfernt 'No file selected' und leere Pfade."""
+        if not path_str or "No file selected" in path_str:
+            return ""
+        return os.path.basename(path_str)  # Nur Dateiname speichern
 
-        # Manuelle connects entfernt! -> Macht connect_all_qt_signals jetzt.
+    def handle_game_status_change(self, is_running):
+        """Dieser Slot läuft garantiert im Main-Thread!"""
+        if is_running:
+            self.on_game_started()
+        else:
+            self.on_game_stopped()
+
+    # --- HILFSMETHODE FÜR DEN CONTROLLER ---
+    def switch_to_tab(self, index):
+        """Wechselt den Tab und aktualisiert die Seitenleiste visuell."""
+        self.nav_list.setCurrentRow(index)
+
+    def on_game_started(self):
+        """Wird aufgerufen, wenn PS2 gestartet wurde (läuft im Main-Thread)."""
+        self.add_log("MONITOR: PlanetSide 2 erkannt. Prüfe Einstellungen...")
+
+        # 1. Master Switch prüfen
+        master_active = self.config.get("overlay_master_active", True)
+
+        if master_active:
+            self.add_log("MONITOR: Master-Switch ist AN -> Starte Overlay.")
+
+            if self.overlay_win:
+                # Fenster zeigen
+                self.overlay_win.showFullScreen()
+                self.overlay_win.raise_()
+
+                # Crosshair Status aktualisieren (Checkbox auslesen & anwenden)
+                self.update_crosshair_from_qt()
+
+                # Stats-Loop starten
+                self.refresh_ingame_overlay()
+
+                # Feed leeren und zeigen
+                if hasattr(self.overlay_win, 'feed_label'):
+                    self.overlay_win.feed_label.show()
+                    self.overlay_win.feed_label.setText("")
+        else:
+            self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt versteckt.")
+
+    def on_game_stopped(self):
+        """Wird aufgerufen, wenn PS2 beendet wurde."""
+        self.add_log("MONITOR: PlanetSide 2 geschlossen.")
+
+        # Logik stoppen
+        self.stop_overlay_logic()
+
+        if self.overlay_win:
+            # Nur verstecken, wenn wir nicht gerade editieren
+            if not getattr(self, "is_hud_editing", False):
+                self.overlay_win.crosshair_label.hide()
+                # Optional: Overlay ganz ausblenden (spart Ressourcen)
+                # self.overlay_win.hide()
 
     # --- CROSSHAIR LOGIK (NEU) ---
-
     def browse_crosshair_qt(self):
-        """Öffnet Datei-Dialog für Crosshair und aktualisiert sofort."""
+        """Datei auswählen, kopieren und Textfeld setzen."""
         from PyQt6.QtWidgets import QFileDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1457,72 +1417,62 @@ class DiorClientGUI:
         )
 
         if file_path:
-            # 1. Pfad im UI setzen
             filename = os.path.basename(file_path)
             target_path = get_asset_path(filename)
 
-            # Falls Datei nicht in assets liegt -> kopieren
+            # In Assets kopieren, falls nötig
             if os.path.abspath(file_path) != os.path.abspath(target_path):
                 try:
                     shutil.copy2(file_path, target_path)
                 except Exception as e:
                     print(f"Copy Error: {e}")
 
-            # UI Update
+            # WICHTIG: Signale kurz blockieren, damit update_crosshair_from_qt
+            # nicht doppelt aufgerufen wird (einmal durch setText, einmal manuell)
+            self.ovl_config_win.cross_path.blockSignals(True)
             self.ovl_config_win.cross_path.setText(filename)
+            self.ovl_config_win.cross_path.blockSignals(False)
 
-            # 2. Config & Overlay sofort aktualisieren
+            # Jetzt einmal sauber speichern
             self.update_crosshair_from_qt()
 
     def update_crosshair_from_qt(self):
-        """Liest UI-Werte (Checkbox, Pfad) und speichert sie in Config & Overlay."""
+        """Liest UI-Werte, bereinigt den Pfad und speichert."""
         ui = self.ovl_config_win
 
-        # 1. Daten aus der UI auslesen
+        # 1. Rohdaten aus UI
         is_active = ui.check_cross.isChecked()
-        raw_path = ui.cross_path.text().strip()
+        raw_text = ui.cross_path.text().strip()
 
-        # Fallback, falls Pfad leer ist
-        if not raw_path:
-            raw_path = "crosshair.png"
+        # 2. Bereinigen: Wir wollen nur den Dateinamen speichern!
+        # Falls der User einen vollen Pfad reinkopiert hat, schneiden wir ihn ab.
+        filename = os.path.basename(raw_text)
 
-            # 2. Config Dictionary aktualisieren
+        # Leerer Pfad -> Standard
+        if not filename:
+            filename = "crosshair.png"
+
+        # 3. Config Update
         if "crosshair" not in self.config:
             self.config["crosshair"] = {}
 
-        # Alte Werte bewahren (z.B. Größe, Position x/y), nur Active & File überschreiben
-        current_size = self.config["crosshair"].get("size", 32)
-        current_x = self.config["crosshair"].get("x", 0)
-        current_y = self.config["crosshair"].get("y", 0)
+        self.config["crosshair"]["active"] = is_active
+        self.config["crosshair"]["file"] = filename  # Nur der Name!
 
-        self.config["crosshair"].update({
-            "active": is_active,
-            "file": raw_path,
-            "size": current_size,
-            "x": current_x,
-            "y": current_y
-        })
-
-        # 3. Permanent in config.json speichern
+        # Speichern
         self.save_config()
+        # print(f"DEBUG: Crosshair saved -> Active: {is_active}, File: {filename}")
 
-        # 4. Live-Update an das Overlay senden
+        # 4. Live Update (Hier brauchen wir den vollen Pfad für Qt)
         if self.overlay_win:
-            full_path = get_asset_path(raw_path)
+            full_path = get_asset_path(filename)
 
-            # Logik: Wann soll es sichtbar sein?
-            # A: User hat es aktiviert UND Spiel läuft
-            # B: User ist im Edit-Modus (dann immer sichtbar, damit man es verschieben kann)
             game_running = getattr(self, 'ps2_running', False)
             edit_mode = getattr(self, "is_hud_editing", False)
-
             should_show = (is_active and game_running) or edit_mode
 
-            # Update Aufruf
+            current_size = self.config["crosshair"].get("size", 32)
             self.overlay_win.update_crosshair(full_path, current_size, should_show)
-
-            # Debug Log (optional, kannst du später entfernen)
-            # print(f"CROSSHAIR SAVED: Active={is_active}, File={raw_path}")
 
     def center_crosshair_qt(self):
         """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
@@ -1595,22 +1545,32 @@ class DiorClientGUI:
             self.add_log(f"RENDER ERROR: {e}")
 
     def toggle_master_switch_qt(self, checked):
-        """Speichert den Status des Master-Switches sofort."""
-        self.overlay_active_state = checked  # Lokale Variable aktualisieren
+        """Speichert den Master-Switch Status."""
         self.config["overlay_master_active"] = checked
         self.save_config()
-        self.add_log(f"SYS: Global Overlay {'ENABLED' if checked else 'DISABLED'}")
+
+        state = "AKTIVIERT" if checked else "DEAKTIVIERT"
+        self.add_log(f"SYS: Master-Switch {state}")
+
+        # Sofort reagieren, falls Spiel schon läuft
+        if getattr(self, 'ps2_running', False):
+            if checked:
+                self.on_game_started()
+            else:
+                self.on_game_stopped()
 
     def connect_all_qt_signals(self):
-        """Zentrales Management aller PyQt6 Signale (Vollständig & Syntax-Korrigiert)."""
+        """Zentrales Management aller PyQt6 Signale (Strukturiert & Clean)."""
         print("SYS: Connecting GUI signals...")
 
-        # Shortcuts für weniger Schreibarbeit
-        hub = self.main_hub  # Das Hauptfenster (Navigation)
-        ui = self.ovl_config_win  # Overlay Config Fenster
-        dash = self.dash_controller  # Das Dashboard (Buttons)
+        # Shortcuts
+        hub = self.main_hub
+        ui = self.ovl_config_win
+        dash = self.dash_controller
 
-        # --- 1. DASHBOARD NAVIGATION (Vom Dashboard zum Hub) ---
+        # ---------------------------------------------------------
+        # 1. NAVIGATION & HAUPTFENSTER
+        # ---------------------------------------------------------
         if hasattr(dash, 'btn_play'):
             self.safe_connect(dash.btn_play.clicked, lambda: hub.switch_to_tab(1))
         if hasattr(dash, 'btn_chars'):
@@ -1620,59 +1580,40 @@ class DiorClientGUI:
         if hasattr(dash, 'btn_settings'):
             self.safe_connect(dash.btn_settings.clicked, lambda: hub.switch_to_tab(4))
 
-        # Server-Wechsel im Dashboard
         if hasattr(dash, 'signals') and hasattr(dash.signals, 'server_changed'):
             self.safe_connect(dash.signals.server_changed, self.change_server_logic)
 
-        # --- 2. OVERLAY CONFIG (Buttons im Index 3) ---
+        if self.overlay_win:
+            self.safe_connect(self.overlay_win.signals.edit_mode_toggled, self.toggle_hud_edit_mode)
 
-        # A) Identität & Master Switch
+        # ---------------------------------------------------------
+        # 2. OVERLAY TAB: IDENTITY
+        # ---------------------------------------------------------
+        # Char Select
         self.safe_connect(ui.char_combo.currentTextChanged, self.update_active_char)
-        self.safe_connect(ui.check_master.toggled, self.toggle_master_switch_qt)
-
-        # Add & Delete Buttons
+        # Add & Delete
         self.safe_connect(ui.btn_add_char.clicked, self.add_char_qt)
         self.safe_connect(ui.btn_del_char.clicked, self.delete_char_qt)
-
-        # NEU: Auch Enter-Taste im Textfeld löst "add_char_qt" aus
         self.safe_connect(ui.char_input.returnPressed, self.add_char_qt)
+        # Master Switch
+        self.safe_connect(ui.check_master.toggled, self.toggle_master_switch_qt)
 
-        # B) Event-Selection (Grid Klick)
-        # KORREKTUR: Mehrzeiliges try/except
+        # ---------------------------------------------------------
+        # 3. OVERLAY TAB: EVENTS
+        # ---------------------------------------------------------
+        # Event Auswahl im Grid
         try:
             ui.signals.setting_changed.disconnect()
         except:
             pass
-
         ui.signals.setting_changed.connect(
             lambda key, val: self.load_event_ui_data(val) if key == "event_selection" else None
         )
 
-        # --- FIX: Live-Preview wenn man tippt ---
-        # Wenn sich der Text ändert -> Pfad suchen -> Bild im Config-Fenster updaten
-        ui.ent_evt_img.textChanged.connect(
-            lambda text: ui.update_preview_image(get_asset_path(text))
-        )
+        # Live-Preview bei Texteingabe
+        ui.ent_evt_img.textChanged.connect(lambda text: ui.update_preview_image(get_asset_path(text)))
 
-        # C) Slider Auto-Save (Streak & Stats)
-        for slider in [ui.slider_scale, ui.slider_tx, ui.slider_ty]:
-            self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
-
-        for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
-            self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
-
-        # D) Manuelle Save Buttons
-        self.safe_connect(ui.btn_save_streak.clicked, self.save_streak_settings_from_qt)
-        self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
-        self.safe_connect(ui.btn_save_voice.clicked, self.save_voice_config_from_qt)
-        self.safe_connect(ui.btn_save_event.clicked, self.save_event_ui_data)
-
-        # E) Voice Macros
-        for combo in ui.voice_combos.values():
-            self.safe_connect(combo.currentIndexChanged, self.save_voice_config_from_qt)
-
-        # F) Browse Buttons (Image / Sound)
-        # KORREKTUR: Mehrzeiliges try/except
+        # Browse Buttons
         try:
             ui.btn_browse_evt_img.clicked.disconnect()
         except:
@@ -1685,139 +1626,112 @@ class DiorClientGUI:
             pass
         ui.btn_browse_evt_snd.clicked.connect(lambda: self.browse_file_qt(ui.ent_evt_snd, "audio"))
 
-        # --- KILLSTREAK TAB SIGNALE ---
+        # Save Button
+        self.safe_connect(ui.btn_save_event.clicked, self.save_event_ui_data)
 
-        # 1. Main Background Image Browse
+        # Test / Edit / Special Buttons
+        self.safe_connect(ui.btn_test_preview.clicked,
+                          lambda: self.trigger_overlay_event(ui.lbl_editing.text().replace("EDITING: ", "")))
+        self.safe_connect(ui.btn_edit_hud.clicked, self.toggle_hud_edit_mode)
+
+        if hasattr(ui, 'btn_apply_all'):
+            self.safe_connect(ui.btn_apply_all.clicked, self.apply_event_layout_to_all)
+        if hasattr(ui, 'btn_queue_toggle'):
+            self.safe_connect(ui.btn_queue_toggle.clicked, lambda: self.toggle_event_queue_qt())
+
+        # ---------------------------------------------------------
+        # 4. OVERLAY TAB: KILLSTREAK
+        # ---------------------------------------------------------
+        # Hauptbild Browse
         try:
             ui.btn_browse_streak_img.clicked.disconnect()
         except:
             pass
         ui.btn_browse_streak_img.clicked.connect(lambda: self.browse_file_qt(ui.ent_streak_img, "png"))
 
-        # 2. Path Recording Controls
-        self.safe_connect(ui.btn_path_record.clicked, self.start_path_record)
-        self.safe_connect(ui.btn_path_clear.clicked, self.clear_path)
-
-        # 1. Checkboxen (Sofortiges Speichern bei Klick)
-        self.safe_connect(ui.check_streak_master.toggled, self.save_streak_settings_from_qt)
-        self.safe_connect(ui.check_streak_anim.toggled, self.save_streak_settings_from_qt)
-
-        # 2. Messer-Browse Buttons (Dynamisch verbinden)
-        # Wir nutzen eine kleine Helper-Schleife für TR, NC, VS
+        # Messer Icons Browse (Dynamisch)
         for faction, btn in ui.knife_browse_btns.items():
-            # Wir holen das passende Textfeld dazu
-            line_edit = ui.knife_inputs[faction]
-            # Lambda: Wir binden 'line_edit' fest an den Aufruf
-            # disconnect ist hier wichtig, falls die Methode mehrfach aufgerufen wird
+            target_field = ui.knife_inputs[faction]
             try:
                 btn.clicked.disconnect()
             except:
                 pass
-            btn.clicked.connect(lambda _, le=line_edit: self.browse_file_qt(le, "png"))
+            btn.clicked.connect(lambda _, tf=target_field: self.browse_file_qt(tf, "png"))
 
-        # 3. Design: Color Picker & Font Size
-        self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
-        self.safe_connect(ui.combo_font_size.currentTextChanged, self.save_streak_settings_from_qt)
+        # Auto-Save bei Checkboxen & Slidern
+        self.safe_connect(ui.check_streak_master.toggled, self.save_streak_settings_from_qt)
+        self.safe_connect(ui.check_streak_anim.toggled, self.save_streak_settings_from_qt)
 
-        # 4. Slider (Live Update) - Hattest du schon, hier nochmal zur Sicherheit vollständig
         for slider in [ui.slider_tx, ui.slider_ty, ui.slider_scale]:
             self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
 
-        # 5. Action Buttons
+        # Design (Farbe/Größe)
+        self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
+        self.safe_connect(ui.combo_font_size.currentTextChanged, self.save_streak_settings_from_qt)
+
+        # Path Recording
+        self.safe_connect(ui.btn_path_record.clicked, self.start_path_record)
+        self.safe_connect(ui.btn_path_clear.clicked, self.clear_path)
+
+        # Action Buttons
         self.safe_connect(ui.btn_save_streak.clicked, self.save_streak_settings_from_qt)
         self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
 
-        # G) Edit-Mode Buttons (Hud verschieben)
-        self.safe_connect(ui.btn_edit_hud.clicked, self.toggle_hud_edit_mode)
-        self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
-        self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
-        self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
-
-        # H) Spezial-Funktionen (Apply All, Queue)
-        if hasattr(ui, 'btn_apply_all'):
-            self.safe_connect(ui.btn_apply_all.clicked, self.apply_event_layout_to_all)
-
-        if hasattr(ui, 'btn_queue_toggle'):
-            # Achtung: clicked sendet einen boolean, den fangen wir mit lambda ab oder ignorieren ihn
-            # Am besten direkt verbinden, da unsere Funktion keine Argumente braucht
-            self.safe_connect(ui.btn_queue_toggle.clicked, lambda: self.toggle_event_queue_qt())
-
-        # --- 3. CHARACTERS & LAUNCHER (Index 2 & 1) ---
-        self.safe_connect(self.char_win.signals.search_requested, self.run_search)
-        self.safe_connect(self.char_win.signals.search_finished, self.process_search_results_qt)
-        self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
-
-        # --- 4. SETTINGS (Index 4) ---
-        self.safe_connect(self.settings_win.signals.browse_obs_requested, self.browse_folder)
-        self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
-        self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
-        self.safe_connect(self.settings_win.signals.save_requested, self.save_enforcer_config_qt)
-
-        # --- 5. TEST BUTTONS ---
-        self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
-        self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
-
-        # Preview Event Button (KORREKTUR: Mehrzeilig)
-        try:
-            ui.btn_test_preview.clicked.disconnect()
-        except:
-            pass
-
-        ui.btn_test_preview.clicked.connect(
-            lambda: self.trigger_overlay_event(ui.lbl_editing.text().replace("EDITING: ", ""))
-        )
-
-        # --- 6. RÜCKKANAL VOM INGAME OVERLAY ---
-        if self.overlay_win:
-            self.safe_connect(self.overlay_win.signals.edit_mode_toggled, self.toggle_hud_edit_mode)
-
-        # --- 7. CROSSHAIR TAB SIGNALE ---
-        # A) Checkbox "Show Crosshair": Speichert sofort, wenn man klickt
-        self.safe_connect(ui.check_cross.toggled, self.save_crosshair_settings_qt)
-
-        # B) Pfad-Textfeld: Speichert, wenn sich der Text ändert
-        self.safe_connect(ui.cross_path.textChanged, self.save_crosshair_settings_qt)
-
-        # C) Browse Button: Öffnet den Datei-Browser für PNGs
-        try:
-            ui.btn_browse_cross.clicked.disconnect()
-        except:
-            pass
-        ui.btn_browse_cross.clicked.connect(lambda: self.browse_file_qt(ui.cross_path, "png"))
-
-        # D) Auto-Center Button: Berechnet die Mitte neu
-        self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
-
-        # E) Edit Mode Button (bereits vorhanden, aber zur Sicherheit)
-        self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
-
-        # --- I) CROSSHAIR TAB CONNECTIONS ---
-        ui = self.ovl_config_win  # Nur zur Sicherheit, falls 'ui' Variable nicht im Scope ist
-
-        # 1. Checkbox Toggle -> Sofort speichern & updaten
+        # ---------------------------------------------------------
+        # 5. OVERLAY TAB: CROSSHAIR
+        # ---------------------------------------------------------
+        # Checkbox & Textfeld Änderung -> Sofort speichern
         self.safe_connect(ui.check_cross.toggled, self.update_crosshair_from_qt)
-
-        # 2. Textfeld Änderung -> Sofort speichern & updaten
         self.safe_connect(ui.cross_path.textChanged, self.update_crosshair_from_qt)
 
-        # 3. Browse Button
-        # Vorher disconnecten um Mehrfachaufrufe zu vermeiden
+        # Browse
         try:
             ui.btn_browse_cross.clicked.disconnect()
         except:
             pass
         ui.btn_browse_cross.clicked.connect(self.browse_crosshair_qt)
 
-        # 4. Center Button
+        # Center & Edit
         self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
-
-        # 5. Move UI Button (Edit Mode)
-        # Hinweis: toggle_hud_edit_mode prüft automatisch, welcher Tab offen ist.
-        # Da wir im Crosshair Tab sind, wird "CROSSHAIR" als Target erkannt.
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
 
-        print("SYS: All signals routed via DiorMainHub.")
+        # ---------------------------------------------------------
+        # 6. OVERLAY TAB: STATS & FEED
+        # ---------------------------------------------------------
+        # Sliders
+        for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
+            self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
+
+        # Save & Edit
+        self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
+        self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
+
+        # ---------------------------------------------------------
+        # 7. OVERLAY TAB: VOICE MACROS
+        # ---------------------------------------------------------
+        self.safe_connect(ui.btn_save_voice.clicked, self.save_voice_config_from_qt)
+        for combo in ui.voice_combos.values():
+            self.safe_connect(combo.currentIndexChanged, self.save_voice_config_from_qt)
+
+        # ---------------------------------------------------------
+        # 8. SUB-FENSTER (CHARACTERS, LAUNCHER, SETTINGS)
+        # ---------------------------------------------------------
+        # Character Search
+        self.safe_connect(self.char_win.signals.search_requested, self.run_search)
+        self.safe_connect(self.char_win.signals.search_finished, self.process_search_results_qt)
+
+        # Launcher
+        self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
+
+        # Settings
+        self.safe_connect(self.settings_win.signals.browse_obs_requested, self.browse_folder)
+        self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
+        self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
+        self.safe_connect(self.settings_win.signals.save_requested, self.save_enforcer_config_qt)
+
+        print("SYS: All signals routed successfully.")
 
     def add_char_qt(self):
         """Startet den Thread."""
@@ -2007,47 +1921,95 @@ class DiorClientGUI:
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
 
     def save_streak_settings_from_qt(self):
-        """Liest Killstreak-Settings komplett aus Qt und speichert sie."""
+        """
+        Liest Killstreak-Settings aus der GUI, sichert den Live-Pfad
+        und bewahrt versteckte Einstellungen (Bold/Shadow).
+        """
         s_ui = self.ovl_config_win
 
-        saved_color = self.config.get("streak", {}).get("color", "#ffffff")
-
-        # Speed validieren
-        try:
-            speed_val = int(s_ui.ent_streak_speed.text())
-        except:
-            speed_val = 50
-
-        # Neues Datenpaket schnüren
-        new_streak = {
-            "active": s_ui.check_streak_master.isChecked(),
-            "anim_active": s_ui.check_streak_anim.isChecked(),
-
-            # NEU: Main Image & Speed aus UI lesen
-            "img": s_ui.ent_streak_img.text(),
-            "speed": speed_val,
-
-            "tx": s_ui.slider_tx.value(),
-            "ty": s_ui.slider_ty.value(),
-            "scale": s_ui.slider_scale.value() / 100.0,
-            "knife_tr": s_ui.knife_inputs["TR"].text(),
-            "knife_nc": s_ui.knife_inputs["NC"].text(),
-            "knife_vs": s_ui.knife_inputs["VS"].text(),
-            "size": int(s_ui.combo_font_size.currentText()),
-            "color": saved_color,
-
-            # Pfad bleibt erhalten (wird via Record Button separat gesetzt)
-            "custom_path": self.config.get("streak", {}).get("custom_path", [])
-        }
-
+        # 1. Config Initialisieren
         if "streak" not in self.config: self.config["streak"] = {}
-        self.config["streak"].update(new_streak)
+        current_conf = self.config["streak"]
+
+        def clean_path(text):
+            if not text or "No file selected" in text:
+                return ""
+            return os.path.basename(text.strip())
+
+        # --- A) DATEN AUS DEM LIVE-OVERLAY HOLEN ---
+        final_path_data = current_conf.get("custom_path", [])
+        if self.overlay_win and hasattr(self.overlay_win, 'custom_path'):
+            final_path_data = self.overlay_win.custom_path
+
+        # --- B) DATEN AUS DER GUI LESEN ---
+        is_active = s_ui.check_streak_master.isChecked()
+        anim_active = s_ui.check_streak_anim.isChecked()
+
+        main_img = clean_path(s_ui.ent_streak_img.text())
+        if not main_img: main_img = "KS_Counter.png"
+
+        try:
+            speed = int(s_ui.ent_streak_speed.text())
+        except ValueError:
+            speed = 50
+
+        tx = s_ui.slider_tx.value()
+        ty = s_ui.slider_ty.value()
+        scale = s_ui.slider_scale.value() / 100.0
+
+        try:
+            size_val = int(s_ui.combo_font_size.currentText())
+        except ValueError:
+            size_val = 26
+
+        knife_tr = clean_path(s_ui.knife_inputs["TR"].text())
+        knife_nc = clean_path(s_ui.knife_inputs["NC"].text())
+        knife_vs = clean_path(s_ui.knife_inputs["VS"].text())
+
+        # --- C) FARBE (SPECIAL CASE) ---
+        # Die Farbe wird vom Color-Picker direkt in die Config geschrieben.
+        # Wir laden sie hier also neu, damit sie beim Speichern nicht mit einem alten Wert überschrieben wird.
+        current_color = current_conf.get("color", "#ffffff")
+
+        # --- D) LEGACY WERTE BEWAHREN (NICHT IN GUI VORHANDEN) ---
+        # Diese Werte gibt es in der Qt-GUI nicht mehr (keine Checkboxen dafür),
+        # daher dürfen wir sie nicht nullen/löschen, sondern behalten die alten bei.
+        keep_shadow = current_conf.get("shadow_size", 0)
+        keep_bold = current_conf.get("bold", False)
+        keep_underline = current_conf.get("underline", False)
+
+        # --- E) FINAL UPDATE ---
+        self.config["streak"].update({
+            "active": is_active,
+            "anim_active": anim_active,
+            "img": main_img,
+            "speed": speed,
+            "tx": tx,
+            "ty": ty,
+            "scale": scale,
+            "size": size_val,
+
+            # Die aktuelle Farbe (vom Picker gesetzt)
+            "color": current_color,
+
+            # Die bewahrten Legacy-Werte
+            "shadow_size": keep_shadow,
+            "bold": keep_bold,
+            "underline": keep_underline,
+
+            # Pfade
+            "knife_tr": knife_tr,
+            "knife_nc": knife_nc,
+            "knife_vs": knife_vs,
+
+            # Pfad-Daten
+            "custom_path": final_path_data
+        })
 
         self.save_config()
-        self.add_log("SYS: Killstreak settings updated.")
+        self.update_streak_display()
 
-        if self.overlay_win:
-            self.update_streak_display()
+        self.add_log("SYS: Killstreak-Einstellungen gespeichert.")
 
     def save_stats_config_from_qt(self):
         """Liest Stats & Feed Settings aus Qt und speichert sie."""
@@ -2068,8 +2030,8 @@ class DiorClientGUI:
             "show_revives": s_ui.check_show_revives.isChecked()
         }
 
-        self.overlay_config["stats_widget"].update(st_data)
-        self.overlay_config["killfeed"].update(kf_data)
+        self.config["stats_widget"].update(st_data)
+        self.config["killfeed"].update(kf_data)
         self.save_config()
         self.add_log("SYS: Stats & Killfeed configuration updated.")
 
@@ -2079,12 +2041,12 @@ class DiorClientGUI:
         for key, combo in self.ovl_config_win.voice_combos.items():
             new_v[key] = combo.currentText()
 
-        self.overlay_config["auto_voice"] = new_v
+        self.config["auto_voice"] = new_v
         self.save_config()
         self.add_log("SYS: Auto-Voice Macros saved.")
 
     def load_overlay_config_to_qt(self):
-        """Überträgt ALLE Config-Werte in die Qt-Oberfläche (Nur Setzen, kein Connecten!)"""
+        """Überträgt ALLE Config-Werte in die Qt-Oberfläche (Safe Loading)"""
 
         # 1. REFERENZEN HOLEN
         ui = self.ovl_config_win
@@ -2093,7 +2055,7 @@ class DiorClientGUI:
         st_conf = self.config.get("stats_widget", {"active": True})
         kf_conf = self.config.get("killfeed", {})
         v_conf = self.config.get("auto_voice", {})
-        c_conf = self.config.get("crosshair", {})  # Crosshair Config holen
+        c_conf = self.config.get("crosshair", {})
         ev_conf = self.config.get("events", {})
 
         # --- QUEUE BUTTON ---
@@ -2109,43 +2071,63 @@ class DiorClientGUI:
             ui.btn_queue_toggle.setStyleSheet(
                 "background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px;")
 
-        # Status auch direkt ans Overlay senden
         if self.overlay_win:
             self.overlay_win.queue_enabled = queue_active
 
-        # --- TAB 1: IDENTITY ---
-        active_char = getattr(self, 'current_selected_char_name', "SELECT_UNIT...")
-        # Falls der Name im Dropdown existiert, auswählen
-        idx = ui.char_combo.findText(active_char)
-        if idx >= 0:
-            ui.char_combo.setCurrentIndex(idx)
-        else:
-            # Fallback: Den Text einfach setzen (z.B. "WAITING...")
-            ui.char_combo.setCurrentText(active_char)
+            # --- TAB 1: IDENTITY & MASTER SWITCH ---
+            active_char = getattr(self, 'current_selected_char_name', "SELECT_UNIT...")
 
-        ui.check_master.setChecked(self.config.get("overlay_master_active", False))
+            ui.char_combo.blockSignals(True)
+            idx = ui.char_combo.findText(active_char)
+            if idx >= 0:
+                ui.char_combo.setCurrentIndex(idx)
+            else:
+                ui.char_combo.setCurrentText(active_char)
+            ui.char_combo.blockSignals(False)
 
-        # --- TAB 2: EVENTS (GRID) ---
-        # (Dies setzt Checkboxen im Event Grid, falls du welche implementiert hast)
+            # FIX FÜR DAS DOPPEL-KLICKEN PROBLEM:
+            # 1. Wert holen (Standard True!)
+            master_state = self.config.get("overlay_master_active", True)
+
+            # 2. GUI setzen (ohne Signale zu triggern)
+            ui.check_master.blockSignals(True)
+            ui.check_master.setChecked(master_state)
+            ui.check_master.blockSignals(False)
+
+            # 3. ENTSCHEIDEND: Interne Variable erzwingen!
+            # Damit weiß der Monitor-Thread sofort Bescheid, ohne Klick.
+            self.config["overlay_master_active"] = master_state
+
+        # --- TAB 2: EVENTS ---
         if hasattr(ui, 'event_checkboxes'):
             for ev_name, checkbox in ui.event_checkboxes.items():
                 entry = ev_conf.get(ev_name, {})
                 is_active = entry.get("active", True) if isinstance(entry, dict) else True
                 checkbox.setChecked(is_active)
 
-        # Sidebar leeren
         if hasattr(ui, 'lbl_editing'): ui.lbl_editing.setText("EDITING: NONE")
         ui.ent_evt_img.clear()
         ui.ent_evt_snd.clear()
 
         # --- TAB 3: KILLSTREAK ---
+        # Slider Signale blockieren
+        ui.slider_tx.blockSignals(True)
+        ui.slider_ty.blockSignals(True)
+        ui.slider_scale.blockSignals(True)
+
         ui.slider_tx.setValue(s_conf.get("tx", 0))
         ui.slider_ty.setValue(s_conf.get("ty", 0))
         ui.slider_scale.setValue(int(s_conf.get("scale", 1.0) * 100))
+
+        ui.slider_tx.blockSignals(False)
+        ui.slider_ty.blockSignals(False)
+        ui.slider_scale.blockSignals(False)
+
+        # Checkboxen (Hier war dein Problem mit der Animation)
         ui.check_streak_master.setChecked(s_conf.get("active", True))
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
 
-        # Font Größe & Farbe
+        # Font & Design
         current_size = str(s_conf.get("size", 26))
         idx = ui.combo_font_size.findText(current_size)
         if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
@@ -2155,28 +2137,54 @@ class DiorClientGUI:
         ui.btn_pick_color.setStyleSheet(
             f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555;")
 
-        # Bild & Speed
+        # Hauptbild & Speed
         ui.ent_streak_img.setText(s_conf.get("img", "KS_Counter.png"))
         ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
 
-        # Messer Icons
+        # Messer Icons (Mapping: TR -> knife_tr)
         for fac in ["TR", "NC", "VS"]:
             if fac in ui.knife_inputs:
-                ui.knife_inputs[fac].setText(s_conf.get(f"knife_{fac.lower()}", ""))
+                config_key = f"knife_{fac.lower()}"  # z.B. knife_tr
+                saved_val = s_conf.get(config_key, "")
+                ui.knife_inputs[fac].setText(saved_val)
 
-        # --- TAB 4: CROSSHAIR (Bereinigt) ---
-        # 1. Checkbox (Aktiviert?)
+        # --- TAB 4: CROSSHAIR (Gefixter Bereich) ---
+
+        # 1. Signale blockieren (EXTREM WICHTIG hier!)
+        # Verhindert, dass setText sofort 'update_crosshair_from_qt' aufruft und speichert
+        ui.check_cross.blockSignals(True)
+        ui.cross_path.blockSignals(True)
+
+        # 2. Checkbox setzen
         ui.check_cross.setChecked(c_conf.get("active", True))
 
-        # 2. Pfad (Dateiname)
-        ui.cross_path.setText(c_conf.get("file", "crosshair.png"))
+        # 3. Pfad intelligent laden
+        saved_file = c_conf.get("file", "")
+        # Wenn der String leer ist, Standard erzwingen
+        if not saved_file:
+            saved_file = "crosshair.png"
+
+        ui.cross_path.setText(saved_file)
+
+        # 4. Signale wieder freigeben
+        ui.check_cross.blockSignals(False)
+        ui.cross_path.blockSignals(False)
 
         # --- TAB 5: STATS & FEED ---
         ui.check_stats_active.setChecked(st_conf.get("active", True))
         ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
+
+        ui.slider_st_tx.blockSignals(True)
+        ui.slider_st_ty.blockSignals(True)
+        ui.slider_st_scale.blockSignals(True)
+
         ui.slider_st_tx.setValue(st_conf.get("tx", 0))
         ui.slider_st_ty.setValue(st_conf.get("ty", 0))
         ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
+
+        ui.slider_st_tx.blockSignals(False)
+        ui.slider_st_ty.blockSignals(False)
+        ui.slider_st_scale.blockSignals(False)
 
         ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
         ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
@@ -2186,6 +2194,29 @@ class DiorClientGUI:
             val = v_conf.get(key, "OFF")
             idx = combo.findText(str(val))
             if idx >= 0: combo.setCurrentIndex(idx)
+
+        if self.overlay_win:
+            # 1. Crosshair initialisieren
+            ch_active = c_conf.get("active", True)
+            ch_file = c_conf.get("file", "crosshair.png")
+            if not ch_file: ch_file = "crosshair.png"
+
+            full_path = get_asset_path(ch_file)
+            current_size = c_conf.get("size", 32)
+
+            # Prüfen: Soll es sichtbar sein? (Active + Game läuft ODER Edit Mode)
+            game_running = getattr(self, 'ps2_running', False)
+            edit_mode = getattr(self, "is_hud_editing", False)
+            should_show = (ch_active and game_running) or edit_mode
+
+            self.overlay_win.update_crosshair(full_path, current_size, should_show)
+
+            # 2. Killstreak initialisieren (optional, aber gut für Konsistenz)
+            self.update_streak_display()
+
+            # 3. Stats Widget Position updaten
+            if hasattr(self.overlay_win, 'update_killfeed_pos'):
+                self.overlay_win.update_killfeed_pos()
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
@@ -2264,45 +2295,39 @@ class DiorClientGUI:
             self.refresh_ingame_overlay()
 
     def ps2_process_monitor(self):
-        self.ps2_running = False
+        """Überwacht den Prozess und nutzt Signale."""
+        self.ps2_running = None
+        import subprocess
+        import time
+
+        print("MONITOR: Thread wartet auf GUI...")
+        time.sleep(2.0)
+        print("MONITOR: Thread gestartet.")
+
         while True:
             try:
-                # Tasklist-Abfrage
+                # Tasklist Abfrage
                 output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
                     "cp1252", errors="ignore")
                 is_now_running = "PlanetSide2_x64.exe" in output
 
-                if is_now_running != self.ps2_running:
+                if self.ps2_running is None or is_now_running != self.ps2_running:
                     self.ps2_running = is_now_running
 
                     if is_now_running:
-                        self.add_log("MONITOR: PlanetSide 2 gestartet.")
-                        if self.overlay_active_state:
-                            # Wir nutzen die Methode, die wir für Qt gebaut haben
-                            # WICHTIG: Aufruf über das Hauptfenster/MainHub sicherstellen
-                            from PyQt6.QtCore import QMetaObject, Q_ARG, Qt
-                            QMetaObject.invokeMethod(self.overlay_win, "showFullScreen",
-                                                     Qt.ConnectionType.QueuedConnection)
-                            QMetaObject.invokeMethod(self, "auto_enable_overlay", Qt.ConnectionType.QueuedConnection)
-
-                            # Stats Refresh starten (Falls vorhanden)
-                            if hasattr(self, 'refresh_ingame_overlay'):
-                                QMetaObject.invokeMethod(self, "refresh_ingame_overlay",
-                                                         Qt.ConnectionType.QueuedConnection)
-                        else:
-                            self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt inaktiv.")
+                        print("MONITOR: Spiel erkannt -> Sende Signal START")
+                        # STATT QTIMER: Signal senden!
+                        self.worker_signals.game_status_changed.emit(True)
                     else:
-                        self.add_log("MONITOR: PlanetSide 2 beendet.")
-                        # Sicherer Aufruf der Stop-Logik
-                        if hasattr(self, 'stop_overlay_logic'):
-                            QMetaObject.invokeMethod(self, "stop_overlay_logic", Qt.ConnectionType.QueuedConnection)
-                        elif self.overlay_win:
-                            QMetaObject.invokeMethod(self.overlay_win, "hide", Qt.ConnectionType.QueuedConnection)
+                        if self.ps2_running is not None:
+                            print("MONITOR: Spiel weg -> Sende Signal STOP")
+                        # STATT QTIMER: Signal senden!
+                        self.worker_signals.game_status_changed.emit(False)
 
             except Exception as e:
-                print(f"Monitor Loop Error: {e}")
+                print(f"Monitor Error: {e}")
 
-            time.sleep(5)
+            time.sleep(4)
 
     def start_path_edit(self):
         """Aktiviert den Klick-Modus für die Messer-Linie"""
@@ -2655,44 +2680,28 @@ class DiorClientGUI:
             return {}
 
     def load_config(self):
-        """Lädt die zentrale Konfiguration aus der config.json"""
+        """Lädt die zentrale Konfiguration."""
         config_path = os.path.join(BASE_DIR, "config.json")
+        default_conf = {
+            "ps2_path": "",
+            "overlay_master_active": True,  # <--- WICHTIG: Standard auf True setzen!
+            "crosshair": {"file": "crosshair.png", "size": 32, "active": True},
+            "events": {},
+            "streak": {"img": "KS_Counter.png", "active": True}
+        }
+
+        loaded_conf = {}
         if os.path.exists(config_path):
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded_conf = json.load(f)
             except Exception as e:
-                print(f"Fehler beim Laden der config.json: {e}")
+                print(f"Config Load Error: {e}")
 
-        # Falls die Datei nicht existiert, geben wir ein Standard-Skelett zurück
-        return {
-            "ps2_path": "",
-            "watch_folder": "",
-            "crosshair": {"file": "", "size": 32, "active": True},
-            "events": {},
-            "streak": {"img": "KS_Counter.png", "x": 0, "y": 100, "scale": 1.5}
-        }
+        # Fehlende Werte mit Standards auffüllen (Merge)
+        default_conf.update(loaded_conf)
+        return default_conf
 
-    def toggle_master_switch(self):
-        """Speichert den Master-Switch Zustand und aktualisiert sofort"""
-        is_active = self.overlay_active.get()
-        self.config["overlay_master_active"] = is_active
-        self.save_config()
-
-        if is_active:
-            self.add_log("MASTER: Overlay aktiviert.")
-            if getattr(self, 'ps2_running', False):
-                self.auto_enable_overlay()  # Crosshair an
-                self.refresh_ingame_overlay()  # Stats an
-                if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
-                    self.overlay_win.feed_label.show()
-        else:
-            self.add_log("MASTER: Overlay deaktiviert.")
-            self.stop_overlay_logic()  # Versteckt Stats, Feed & Streak (Zahl + Bild)
-
-            # Crosshair auch explizit verstecken
-            if self.overlay_win:
-                self.overlay_win.crosshair_label.hide()
 
     def save_overlay_config(self):
         """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
@@ -3267,7 +3276,7 @@ class DiorClientGUI:
 
     def save_overlay_ui_data(self):
         """Speichert Crosshair Settings"""
-        self.overlay_config["crosshair"] = {
+        self.config["crosshair"] = {
             "file": self.ent_cross_path.get(),
             "x": self.scale_cx.get(),
             "y": self.scale_cy.get()
@@ -3457,14 +3466,14 @@ class DiorClientGUI:
         for key, var in self.voice_vars.items():
             new_conf[key] = var.get()
 
-        self.overlay_config["auto_voice"] = new_conf
+        self.config["auto_voice"] = new_conf
         self.save_overlay_config()
         self.add_log("Voice Macros saved.")
 
     def trigger_auto_voice(self, trigger_key):
         """Drückt V + Zahl basierend auf der Config"""
         # 1. Config prüfen
-        cfg = self.overlay_config.get("auto_voice", {})
+        cfg = self.config.get("auto_voice", {})
         val = cfg.get(trigger_key, "OFF")
 
         if val == "OFF": return
@@ -3696,107 +3705,11 @@ class DiorClientGUI:
         # Wird vom Loop erledigt, dient nur als Dummy oder Trigger für sofortigen Refresh
         self.refresh_ingame_overlay()
 
-    def pick_streak_color(self):
-        """Öffnet den Windows-Farbdialog und aktualisiert das HUD."""
-        from tkinter import colorchooser
-        color = colorchooser.askcolor(title="Wähle Farbe für die Streak-Zahl", color=self.streak_color_var.get())
 
-        if color[1]:  # Wenn User nicht abgebrochen hat
-            self.streak_color_var.set(color[1])
-            # Button-Farbe anpassen
-            self.btn_streak_color.config(bg=color[1])
-            # Textfarbe auf Button lesbar halten (schwarz bei hellen Farben)
-            self.btn_streak_color.config(fg="black" if color[1].lower() in ["#ffffff", "#ffff00"] else "white")
-            # Speichern & Vorschau triggern
-            self.save_streak_settings(preview=True)
 
-    def streak_font_debounce(self, *args):
-        """Wartet 500ms nach der letzten Eingabe, bevor der Test gestartet wird."""
-        if self._streak_debounce_timer:
-            self.root.after_cancel(self._streak_debounce_timer)
 
-        # Starte den Test erst nach 500ms Inaktivität
-        self._streak_debounce_timer = self.root.after(500, lambda: self.save_streak_settings(preview=True))
 
-    def save_streak_settings(self, preview=False):
-        """Speichert Messer-Bilder, das GLOBALE Design der Zahl und den aufgenommenen Pfad."""
-        if "streak" not in self.config:
-            self.config["streak"] = {}
 
-        # --- NEU: PFAD AUS DEM OVERLAY SICHERN (WICHTIG: Damit Aufnahmen nicht verloren gehen) ---
-        if self.overlay_win and hasattr(self.overlay_win, 'custom_path'):
-            # Wir übertragen die Koordinaten aus dem Live-Overlay in die Konfiguration
-            self.config["streak"]["custom_path"] = self.overlay_win.custom_path
-
-        # --- 1. WERTE AUS UI-FELDERN LESEN (Mit Fallback) ---
-        try:
-            # Puls-Geschwindigkeit validieren
-            raw_speed = int(self.ent_streak_speed.get()) if hasattr(self, 'ent_streak_speed') else 50
-        except:
-            raw_speed = 50
-
-        # Design-Werte sicher auslesen (Farbe, Größe, Schatten)
-        global_color = self.streak_color_var.get() if hasattr(self, 'streak_color_var') else "#ffffff"
-        try:
-            global_size = int(self.streak_fontsize_var.get()) if hasattr(self, 'streak_fontsize_var') else 26
-        except:
-            global_size = 26
-
-        try:
-            sh_size = int(self.streak_shadow_size_var.get()) if hasattr(self, 'streak_shadow_size_var') else 2
-        except:
-            sh_size = 2
-
-        # Style-Checkboxen (Fett & Unterstrichen)
-        is_bold = self.var_streak_bold.get() if hasattr(self, 'var_streak_bold') else False
-        is_underline = self.var_streak_underline.get() if hasattr(self, 'var_streak_underline') else False
-
-        if hasattr(self, 'temp_streak_backup'):
-            self.killstreak_count = self.temp_streak_backup
-            self.streak_factions = getattr(self, 'temp_factions_backup', [])
-            # Backups nach Wiederherstellung löschen
-            del self.temp_streak_backup
-            if hasattr(self, 'temp_factions_backup'):
-                del self.temp_factions_backup
-        else:
-            # Falls kein Backup da ist, sicherstellen dass Variablen existieren
-            if not hasattr(self, 'killstreak_count'):
-                self.killstreak_count = 0
-
-        # --- 2. CONFIG AKTUALISIEREN ---
-        # .update() stellt sicher, dass bestehende Werte (wie x/y vom Drag&Drop) erhalten bleiben
-        self.config["streak"].update({
-            "active": self.var_streak_master.get() if hasattr(self, 'var_streak_master') else True,
-            "anim_active": self.var_streak_anim.get() if hasattr(self, 'var_streak_anim') else True,
-            "speed": raw_speed,
-            "img": get_short_name(self.ent_streak_img.get()) if hasattr(self, 'ent_streak_img') else "KS_Counter.png",
-            "color": global_color,
-            "size": global_size,
-            "shadow_size": sh_size,
-            "shadow_active": sh_size > 0,  # Schatten ist nur aktiv, wenn Größe > 0
-            "bold": is_bold,
-            "underline": is_underline,
-            "tx": self.scale_tx.get() if hasattr(self, 'scale_tx') else 0,
-            "ty": self.scale_ty.get() if hasattr(self, 'scale_ty') else 0,
-            "scale": self.scale_s_size.get() if hasattr(self, 'scale_s_size') else 1.0
-        })
-
-        # Messer-Bilder pro Fraktion speichern
-        if hasattr(self, 'knife_entries'):
-            for f_tag, ent in self.knife_entries.items():
-                self.config["streak"][f"knife_{f_tag}"] = get_short_name(ent.get())
-
-        # Daten permanent in config.json schreiben
-        self.save_config()
-        # Das Live-Overlay über die Änderungen informieren
-        self.update_streak_display()
-
-        # Optionalen Test-Lauf starten (bei manuellem Save oder Checkbox-Klick)
-        if preview:
-            self.test_streak_visuals()
-
-        # Erfolgsmeldung im Log (FIX: nutzt jetzt korrekt 'global_color')
-        self.add_log(f"STREAK: Gespeichert (Farbe: {global_color}, Schatten: {sh_size})")
 
     def _get_random_slot(self):
         import random
@@ -4472,514 +4385,7 @@ class DiorClientGUI:
             self.observer.stop()
         self.root.destroy()
 
-    def start_websocket_thread(self):
-        """Startet den Census-Listener in einem eigenen Hintergrund-Thread"""
 
-        def run_loop():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.census_listener())
-
-        # Startet den Thread genau EINMAL
-        t = threading.Thread(target=run_loop, daemon=True)
-        t.start()
-
-    async def census_listener(self):
-        self.loop = asyncio.get_running_loop()
-        sid = S_ID
-        uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={sid}"
-        print("debugtest")
-        # Initialisiere den Duplikat-Filter
-        self.event_cache = set()
-        self.event_history = []
-
-        while True:
-            try:
-                async with websockets.connect(uri, ping_interval=20, ping_timeout=20, close_timeout=10) as websocket:
-                    self.websocket = websocket
-
-                    # GLOBAL SUBSCRIPTION
-                    msg = {
-                        "service": "event",
-                        "action": "subscribe",
-                        "characters": ["all"],
-                        "worlds": ["all"],
-                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
-                    }
-                    await websocket.send(json.dumps(msg))
-                    self.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
-
-                    # --- OPTIMIERUNG: HIER DEFINIERT (Einmal pro Verbindung) ---
-                    def get_stat_obj(cid, tid):
-                        if cid not in self.session_stats:
-                            faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-                            self.session_stats[cid] = {
-                                "id": cid,
-                                "name": self.name_cache.get(cid, "Searching..."),
-                                "faction": faction_name,
-                                "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
-                                "start": time.time(),
-                                "last_kill_time": time.time()
-                            }
-                        return self.session_stats[cid]
-
-                    async for message in websocket:
-                        if getattr(self, "needs_reconnect", False):
-                            self.needs_reconnect = False
-                            await websocket.close()
-                            break
-
-                        data = json.loads(message)
-                        if "payload" in data:
-                            p = data["payload"]
-                            e_name = p.get("event_name")
-                            payload_world = str(p.get("world_id", "0"))
-                            ts = p.get("timestamp")
-                            char_id = p.get("character_id", "0")
-                            attacker_id = p.get("attacker_character_id", "0")
-                            exp_id = p.get("experience_id", "0")
-
-                            # ROBUSTER DUPLIKAT-FILTER
-                            uid = f"{e_name}_{ts}_{char_id}_{attacker_id}_{exp_id}_{payload_world}"
-                            if uid in self.event_cache:
-                                continue
-
-                            self.event_cache.add(uid)
-                            self.event_history.append(uid)
-                            if len(self.event_history) > 500:
-                                old_uid = self.event_history.pop(0)
-                                self.event_cache.discard(old_uid)
-
-                            # =========================================================
-                            # 1. PLAYER LOGIN / LOGOUT (Globaler Check)
-                            # =========================================================
-                            if e_name == "PlayerLogin":
-                                c_id = p.get("character_id")
-
-                                def sync_faction_and_play(char_id, char_name):
-                                    try:
-                                        # 1. Aktuelle Faction von Census abfragen
-                                        url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?character_id={char_id}&c:show=faction_id"
-                                        r = requests.get(url, timeout=5).json()
-
-                                        f_id = "0"
-                                        if r.get('returned', 0) > 0:
-                                            character_list = r.get('character_list')
-                                            if character_list and len(character_list) > 0:
-                                                f_id = character_list[0].get('faction_id', "0")
-                                            else:
-                                                f_id = "0"  # Fallback
-
-                                            # 2. Datenbank mit der richtigen Faction aktualisieren
-                                            conn = sqlite3.connect("ps2_master.db")
-                                            conn.execute("UPDATE player_cache SET faction_id=? WHERE character_id=?",
-                                                         (f_id, char_id))
-                                            conn.commit()
-                                            conn.close()
-
-                                        f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
-
-                                        # 3. QT-ÄNDERUNG: Direktaufruf (trigger_overlay_event sollte thread-sicher sein)
-                                        self.trigger_overlay_event(f"Login {f_tag}")
-                                        self.add_log(f"AUTO-TRACK: {char_name} eingeloggt ({f_tag}).")
-
-                                    except Exception as e:
-                                        print(f"Login-Sync Error: {e}")
-
-                                for name, saved_id in self.char_data.items():
-                                    if saved_id == c_id:
-                                        self.current_character_id = c_id
-
-                                        # QT-ÄNDERUNG: Einfache Zuweisung statt .set()
-                                        self.current_selected_char_name = name
-
-                                        # NEU: Wir müssen das Label im Dashboard/Overlay-Fenster aktualisieren
-                                        # Falls du ein Dropdown hast:
-                                        if hasattr(self, 'ovl_config_win'):
-                                            # Wir nutzen das Signal-System, falls wir aus einem Thread kommen,
-                                            # oder wir rufen eine Methode auf, die das UI sicher updatet.
-                                            self.ovl_config_win.char_combo.setCurrentText(name)
-
-                                        threading.Thread(target=sync_faction_and_play, args=(c_id, name),
-                                                         daemon=True).start()
-
-                                        if payload_world != "0" and payload_world != str(self.current_world_id):
-                                            s_name = self.get_server_name_by_id(payload_world)
-                                            self.add_log(f"AUTO-SWITCH: Wechsel zu {s_name}...")
-                                            # QT-ÄNDERUNG: Direkter Aufruf statt after()
-                                            self.switch_server(s_name, payload_world)
-                                        break
-
-
-
-                            elif e_name == "PlayerLogout":
-                                logout_id = p.get("character_id")
-                                if logout_id == self.current_character_id:
-                                    self.current_character_id = ""
-                                    self.current_selected_char_name = "WAITING FOR LOGIN..."
-                                    # UI Update für das Dropdown
-                                    if hasattr(self, 'ovl_config_win'):
-                                        self.ovl_config_win.char_combo.setPlaceholderText("WAITING FOR LOGIN...")
-                                    self.add_log("AUTO-TRACK: Eigener Charakter ausgeloggt.")
-                                # 2. JEDEN Spieler sofort aus der Live-Anzeige entfernen
-                                if logout_id in self.active_players:
-                                    del self.active_players[logout_id]
-                                if logout_id in self.session_stats:
-                                    # Wir löschen die Stats nicht (Session!), aber markieren sie als inaktiv
-                                    self.session_stats[logout_id]["last_kill_time"] = 0
-
-                            # =========================================================
-                            # 2. DER SERVER-FILTER
-                            # =========================================================
-                            if payload_world != "0" and payload_world != str(self.current_world_id):
-                                continue
-
-                            # -------------------------------------------------
-                            # ALLGEMEINES TRACKING (Population Dashboard)
-                            # -------------------------------------------------
-                            track_id = p.get("character_id") or p.get("attacker_character_id")
-                            if track_id and track_id != "0":
-                                tid = p.get("team_id") or p.get("attacker_team_id")
-                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-
-                                # Speichern in der Logik-Variable (DiorClientGUI)
-                                self.active_players[track_id] = (time.time(), f_name)
-
-                                # Namens-Abfrage in die Queue werfen (falls unbekannt)
-                                if track_id not in self.name_cache:
-                                    self.id_queue.put(track_id)
-
-                                # --- NEU FÜR QT: DASHBOARD UPDATE TRIGGER ---
-                                # Wir rufen hier keine GUI-Befehle direkt auf, aber wir stellen sicher,
-                                # dass das Dashboard-Fenster Zugriff auf die frischen Stats hat.
-                                # Da das Dashboard meist über einen QTimer aktualisiert wird,
-                                # müssen wir hier meistens gar nichts aktiv "pushen".
-
-                                # =========================================================
-                                # EVENT: DEATH (PyQt6 Optimized)
-                                # =========================================================
-                            if e_name == "Death":
-                                killer_id = p.get("attacker_character_id")
-                                victim_id = p.get("character_id")
-                                my_id = self.current_character_id
-                                is_hs = (p.get("is_headshot") == "1")
-                                weapon_id = p.get("attacker_weapon_id")
-                                w_info = self.item_db.get(weapon_id, {})
-                                category = w_info.get("type", "Unknown")
-
-                                # --- GLOBALE STATISTIKEN ---
-                                if p.get("attacker_team_id") != p.get("team_id"):
-                                    if killer_id and killer_id != "0" and killer_id != victim_id:
-                                        k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
-                                        k_obj["k"] += 1
-                                        k_obj["last_kill_time"] = time.time()
-                                        if category in HSR_WEAPON_CATEGORY:
-                                            k_obj["hsrkill"] += 1
-                                            if is_hs: k_obj["hs"] += 1
-                                    if victim_id and victim_id != "0":
-                                        v_obj = get_stat_obj(victim_id, p.get("team_id"))
-                                        v_obj["d"] += 1
-
-                                if my_id:
-                                    # Icon Vorbereitung (HS Icon)
-                                    icon_html = ""
-                                    if is_hs:
-                                        # Pfad-Handling bleibt gleich, aber wir nutzen BASE_DIR
-                                        hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
-                                        hs_path = get_asset_path(hs_icon).replace("\\", "/")
-                                        if os.path.exists(hs_path):
-                                            icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
-
-                                    # --- FALL A: ICH BIN DER KILLER ---
-                                    if killer_id == my_id and victim_id != my_id:
-
-                                        curr_time = time.time()
-
-                                        # 1. Dubletten-Schutz (Muss immer laufen)
-                                        if getattr(self, "last_victim_id", None) == victim_id and (
-                                                curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
-                                            continue
-                                        self.last_victim_id = victim_id
-                                        self.last_victim_time = curr_time
-
-                                        # 2. Team-Kill Check
-                                        if p.get("attacker_team_id") == p.get("team_id"):
-                                            self.trigger_auto_voice("tk")
-                                            self.trigger_overlay_event("Team Kill")
-                                        else:
-                                            # =================================================
-                                            # TEIL 1: KILLSTREAK LOGIK (Nur wenn aktiv!)
-                                            # =================================================
-                                            if self.config.get("streak", {}).get("active", True):
-                                                if self.killstreak_count == 0:
-                                                    self.killstreak_count = 1
-                                                    self.streak_factions = []
-                                                    self.streak_slot_map = []
-                                                else:
-                                                    self.killstreak_count += 1
-
-                                                v_team = p.get("team_id")
-                                                v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team),
-                                                                                                  "NSO")
-                                                self.streak_factions.append(v_faction)
-
-                                                # Slot-Vergabe
-                                                new_slot = self._get_random_slot()
-                                                self.streak_slot_map.append(new_slot)
-
-                                                self.is_dead = False
-                                                self.was_revived = False
-
-                                                # Messer-Anzeige im Qt-Overlay aktualisieren
-                                                self.update_streak_display()
-
-                                            # Multi-Kill Counter (Läuft im Hintergrund immer mit)
-                                            if curr_time - getattr(self, "last_kill_time",
-                                                                   0) <= self.streak_timeout:
-                                                self.kill_counter += 1
-                                            else:
-                                                self.kill_counter = 1
-                                            self.last_kill_time = curr_time
-
-                                            # =================================================
-                                            # TEIL 2: EVENTS & SOUNDS (Läuft immer)
-                                            # =================================================
-                                            weapon_name = w_info.get("name", "Unknown")
-                                            special_event = None
-
-                                            if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
-                                                special_event = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
-                                            elif category in PS2_DETECTION["CATEGORIES"]:
-                                                special_event = PS2_DETECTION["CATEGORIES"][category]
-                                            elif weapon_name in PS2_DETECTION["NAMES"]:
-                                                special_event = PS2_DETECTION["NAMES"][weapon_name]
-
-                                            if is_hs and not special_event:
-                                                special_event = "Headshot"
-
-                                            # Streak-Meilensteine nur triggern, wenn Streak aktiv ist
-                                            if self.config.get("streak", {}).get("active", True):
-                                                streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
-                                                              36: "Squad Lead's Nightmare",
-                                                              48: "One Man Platoon"}
-                                                if self.killstreak_count in streak_map:
-                                                    special_event = streak_map[self.killstreak_count]
-
-                                            # Multi-Kills immer anzeigen
-                                            if self.kill_counter > 1:
-                                                multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill",
-                                                             5: "Ultra Kill", 6: "Monster Kill",
-                                                             7: "Ludicrous Kill",
-                                                             9: "Holy Shit"}
-                                                if self.kill_counter in multi_map:
-                                                    special_event = multi_map[self.kill_counter]
-
-                                            # Overlay triggern (Bilder/Sounds)
-                                            if special_event:
-                                                self.trigger_overlay_event(special_event)
-
-                                            # Hitmarker (Immer!)
-                                            self.trigger_overlay_event("Hitmarker")
-
-                                            # =================================================
-                                            # TEIL 3: KILLFEED (Läuft immer)
-                                            # =================================================
-                                            v_name = self.name_cache.get(victim_id, "Unknown")
-
-                                            # Outfit Tag sicher holen
-                                            raw_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
-                                            if raw_tag is None: raw_tag = ""
-                                            v_tag_display = f"[{raw_tag}] " if raw_tag else ""
-
-                                            s_vic = self.session_stats.get(victim_id, {})
-
-                                            try:
-                                                v_kd_val = s_vic.get('k', 0) / max(1, s_vic.get('d', 1))
-                                                v_kd = f"{v_kd_val:.1f}"
-                                            except:
-                                                v_kd = "0.0"
-
-                                            msg = f"""
-                                                                        <div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
-                                                                            {icon_html}
-                                                                            <span style="color: #888;">{v_tag_display}</span>
-                                                                            <span style="color: #ffffff;">{v_name}</span> 
-                                                                            <span style="color: #aaaaaa; font-size: 16px;"> ({v_kd})</span>
-                                                                        </div>
-                                                                        """
-
-                                            if self.overlay_win:
-                                                self.overlay_win.signals.killfeed_entry.emit(msg)
-
-                                            # =================================================
-                                            # TEIL 4: AUTO VOICE (Läuft immer)
-                                            # =================================================
-                                            kd_triggered = False
-                                            v_loadout = p.get("character_loadout_id")
-                                            if victim_id in self.session_stats:
-                                                v_stat = self.session_stats[victim_id]
-                                                if (v_stat.get("k", 0) / max(1, v_stat.get("d", 1))) >= 2.0:
-                                                    self.trigger_auto_voice("kill_high_kd")
-                                                    kd_triggered = True
-
-                                            if not kd_triggered:
-                                                if v_loadout in LOADOUT_MAP["max"]:
-                                                    self.trigger_auto_voice("kill_max")
-                                                elif v_loadout in LOADOUT_MAP["infil"]:
-                                                    self.trigger_auto_voice("kill_infil")
-                                                elif is_hs:
-                                                    self.trigger_auto_voice("kill_hs")
-
-                                    # --- FALL B: ICH BIN DAS OPFER ---
-                                    elif victim_id == my_id:
-                                        # 1. STREAK SICHERN (Wichtig für Revive-Logik)
-                                        if self.killstreak_count > 0:
-                                            self.saved_streak = self.killstreak_count
-                                            self.saved_factions = getattr(self, 'streak_factions', [])
-                                            self.saved_slots = getattr(self, 'streak_slot_map', [])
-
-                                        # 2. STATUS RESET
-                                        self.killstreak_count = 0
-                                        self.streak_factions = []
-                                        self.streak_slot_map = []
-                                        self.is_dead = True
-
-                                        # Direktes UI-Update statt root.after
-                                        self.update_streak_display()
-
-                                        # 3. KILLER-INFOS FÜR DEN FEED
-                                        if killer_id and killer_id != "0":
-                                            k_name = self.name_cache.get(killer_id, "Unknown")
-                                            k_tag = getattr(self, "outfit_cache", {}).get(killer_id, "")
-                                            k_vic = self.session_stats.get(killer_id, {})
-                                            k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
-
-                                            # HTML-Formatierung für den roten "Death-Eintrag" im Killfeed
-                                            msg = f"""<div style="font-family: 'Black Ops One', sans-serif; font-size: 19px; 
-                                                                                         text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                                                                                         {icon_html}
-                                                                                         <span style="color: #888;">[{"".join(k_tag)}]</span>
-                                                                                         <span style="color: #ff4444;">{k_name}</span>
-                                                                                         <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
-
-                                            # Signal an das Qt-Overlay senden
-                                            if self.overlay_win:
-                                                self.overlay_win.signals.killfeed_entry.emit(msg)
-
-                                        # 4. DEATH-EVENT TRIGGERN (Sound & Bild "You Died")
-                                        self.trigger_overlay_event("Death")
-
-                            # =========================================================
-                            # EVENT: EXPERIENCE (Revive, Assists)
-                            # =========================================================
-                            elif e_name == "GainExperience":
-                                exp_id = str(p.get("experience_id", "0"))
-                                other_id = p.get("other_id")
-                                char_id = p.get("character_id")
-                                my_id = self.current_character_id
-
-                                # 1. Globale Statistik-Updates (Assists)
-                                if exp_id in ["2", "3", "371", "372"]:
-                                    a_obj = get_stat_obj(char_id, p.get("team_id"))
-                                    a_obj["a"] += 1
-
-                                # 2. Globale Statistik-Updates (Revives korrigieren Deaths)
-                                if exp_id in ["7", "53"]:
-                                    r_obj = get_stat_obj(other_id, p.get("team_id"))
-                                    if r_obj["d"] > 0:
-                                        r_obj["d"] -= 1
-
-                                # 3. LOGIK: ICH WURDE WIEDERBELEBT
-                                if my_id and other_id == my_id:
-                                    if exp_id in ["7", "53"]:
-                                        self.was_revived = True
-                                        self.is_dead = False
-
-                                        # Killstreak aus dem "Sicherungs-Speicher" wiederherstellen
-                                        self.killstreak_count = getattr(self, 'saved_streak', 0)
-                                        self.streak_factions = getattr(self, 'saved_factions', [])
-                                        self.streak_slot_map = getattr(self, 'saved_slots', [])
-
-                                        # UI-Updates (Direktaufruf statt .after)
-                                        self.update_streak_display()
-                                        self.trigger_overlay_event("Revive Taken")
-                                        self.trigger_auto_voice("revived")
-
-                                        # Killfeed-Eintrag für Revive
-                                        if self.config.get("killfeed", {}).get("show_revives", True):
-                                            m_name = self.name_cache.get(char_id, "Medic")
-                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
-                                            if self.overlay_win:
-                                                self.overlay_win.signals.killfeed_entry.emit(msg)
-
-                                # 4. LOGIK: ICH GEBE SUPPORT ODER ERHALTE EXP
-                                if my_id and char_id == my_id:
-                                    try:
-                                        # Standort-Daten für Alerts/Metagame synchronisieren
-                                        self.myTeamId = int(p.get("team_id", 0))
-                                        self.myWorldID = int(p.get("world_id", 0))
-                                        self.currentZone = int(p.get("zone_id", 0))
-                                    except:
-                                        pass
-
-                                    if exp_id in ["7", "53"]:
-                                        self.trigger_overlay_event("Revive Given")
-                                    else:
-                                        # Spezial-Erkennung (z.B. Resupply, Repair, Point Control)
-                                        # PS2_EXP_DETECTION muss in Dior Client.py definiert sein
-                                        for event_name, id_list in PS2_EXP_DETECTION.items():
-                                            if exp_id in id_list:
-                                                self.trigger_overlay_event(event_name)
-                                                break
-
-                            # =========================================================
-                            # EVENT: METAGAME (Alerts)
-                            # =========================================================
-                            elif e_name == "MetagameEvent":
-                                state = p.get("metagame_event_state_name")
-
-                                # Typenumwandlung sicherstellen
-                                try:
-                                    world = int(p.get("world_id", 0))
-                                    zone = int(p.get("zone_id", 0))
-                                    # Scores kommen oft als String ("33.5")
-                                    VS = float(p.get("faction_vs", 0))
-                                    TR = float(p.get("faction_tr", 0))
-                                    NC = float(p.get("faction_nc", 0))
-                                except (ValueError, TypeError):
-                                    continue
-
-                                    # Debugging (Konsole)
-                                print(
-                                    f"DEBUG ALERT: State={state}, World={world}/{self.myWorldID}, Zone={zone}/{self.currentZone}")
-
-                                # Prüfen, ob der Alert auf deinem Server & deiner Zone geendet ist
-                                if state == "ended" and world == getattr(self, 'myWorldID', 0) and zone == getattr(self,
-                                                                                                                   'currentZone',
-                                                                                                                   0):
-                                    print("ALERT ENDED - CHECKING WINNER...")
-
-                                    # Gewinner-Logik basierend auf deiner Team-ID (1=VS, 2=NC, 3=TR)
-                                    won = False
-                                    if VS > TR and VS > NC and self.myTeamId == 1:
-                                        won = True
-                                    elif NC > TR and NC > VS and self.myTeamId == 2:
-                                        won = True
-                                    elif TR > VS and TR > NC and self.myTeamId == 3:
-                                        won = True
-
-                                    if won:
-                                        # QT-ÄNDERUNG: Direktaufruf (Bilder & Victory-Sound)
-                                        self.trigger_overlay_event("Alert Win")
-                                        self.add_log(f"EVENT: Alert Win for Faction {self.myTeamId}")
-                                    else:
-                                        # Entweder verloren oder Unentschieden
-                                        self.trigger_overlay_event("Alert End")
-                                        self.add_log("EVENT: Alert Ended (No Win recorded)")
-
-            except Exception as e:
-                self.add_log(f"Websocket Error: {e}")
-                await asyncio.sleep(5)
 
     def get_top_5(self, faction):
         # Alle Spieler dieser Fraktion filtern
