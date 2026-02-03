@@ -1475,32 +1475,54 @@ class DiorClientGUI:
             self.update_crosshair_from_qt()
 
     def update_crosshair_from_qt(self):
-        """Liest UI-Werte (Checkbox, Pfad) und aktualisiert Config & Overlay."""
+        """Liest UI-Werte (Checkbox, Pfad) und speichert sie in Config & Overlay."""
         ui = self.ovl_config_win
 
-        # Daten aus UI lesen
+        # 1. Daten aus der UI auslesen
         is_active = ui.check_cross.isChecked()
-        img_name = ui.cross_path.text()
+        raw_path = ui.cross_path.text().strip()
 
-        # Config Update
-        if "crosshair" not in self.config: self.config["crosshair"] = {}
+        # Fallback, falls Pfad leer ist
+        if not raw_path:
+            raw_path = "crosshair.png"
 
-        self.config["crosshair"]["active"] = is_active
-        self.config["crosshair"]["file"] = img_name
+            # 2. Config Dictionary aktualisieren
+        if "crosshair" not in self.config:
+            self.config["crosshair"] = {}
 
-        # Größe beibehalten (wird aktuell nicht im UI geändert, aber wir wollen es nicht verlieren)
+        # Alte Werte bewahren (z.B. Größe, Position x/y), nur Active & File überschreiben
         current_size = self.config["crosshair"].get("size", 32)
+        current_x = self.config["crosshair"].get("x", 0)
+        current_y = self.config["crosshair"].get("y", 0)
 
+        self.config["crosshair"].update({
+            "active": is_active,
+            "file": raw_path,
+            "size": current_size,
+            "x": current_x,
+            "y": current_y
+        })
+
+        # 3. Permanent in config.json speichern
         self.save_config()
 
-        # Overlay Live-Update
+        # 4. Live-Update an das Overlay senden
         if self.overlay_win:
-            full_path = get_asset_path(img_name)
-            # Nur anzeigen, wenn Checkbox AN ist UND Spiel läuft (oder Edit Mode)
-            game_running = getattr(self, 'ps2_running', False)
-            should_show = (is_active and game_running) or getattr(self, "is_hud_editing", False)
+            full_path = get_asset_path(raw_path)
 
+            # Logik: Wann soll es sichtbar sein?
+            # A: User hat es aktiviert UND Spiel läuft
+            # B: User ist im Edit-Modus (dann immer sichtbar, damit man es verschieben kann)
+            game_running = getattr(self, 'ps2_running', False)
+            edit_mode = getattr(self, "is_hud_editing", False)
+
+            should_show = (is_active and game_running) or edit_mode
+
+            # Update Aufruf
             self.overlay_win.update_crosshair(full_path, current_size, should_show)
+
+            # Debug Log (optional, kannst du später entfernen)
+            # print(f"CROSSHAIR SAVED: Active={is_active}, File={raw_path}")
 
     def center_crosshair_qt(self):
         """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
@@ -2063,116 +2085,107 @@ class DiorClientGUI:
 
     def load_overlay_config_to_qt(self):
         """Überträgt ALLE Config-Werte in die Qt-Oberfläche (Nur Setzen, kein Connecten!)"""
-        # 1. DATEN HOLEN
+
+        # 1. REFERENZEN HOLEN
+        ui = self.ovl_config_win
+
         s_conf = self.config.get("streak", {})
         st_conf = self.config.get("stats_widget", {"active": True})
         kf_conf = self.config.get("killfeed", {})
         v_conf = self.config.get("auto_voice", {})
+        c_conf = self.config.get("crosshair", {})  # Crosshair Config holen
         ev_conf = self.config.get("events", {})
 
-        ui = self.ovl_config_win
-
-        # --- QUEUE BUTTON INITIALISIEREN ---
+        # --- QUEUE BUTTON ---
         queue_active = self.config.get("event_queue_active", True)
         ui.btn_queue_toggle.setChecked(queue_active)
 
         if queue_active:
             ui.btn_queue_toggle.setText("QUEUE: ON")
             ui.btn_queue_toggle.setStyleSheet(
-                "background-color: #004400; color: white; font-weight: bold; padding: 10px;"
-            )
+                "background-color: #004400; color: white; font-weight: bold; padding: 10px;")
         else:
             ui.btn_queue_toggle.setText("QUEUE: OFF")
             ui.btn_queue_toggle.setStyleSheet(
-                "background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px;"
-            )
+                "background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px;")
 
-        # WICHTIG: Den Status auch direkt ans Overlay senden, falls es schon läuft
+        # Status auch direkt ans Overlay senden
         if self.overlay_win:
             self.overlay_win.queue_enabled = queue_active
 
-        # --- 2. TAB 1: IDENTITY ---
-        active_char = getattr(self, 'char_var_value', "SELECT_UNIT...")
+        # --- TAB 1: IDENTITY ---
+        active_char = getattr(self, 'current_selected_char_name', "SELECT_UNIT...")
+        # Falls der Name im Dropdown existiert, auswählen
         idx = ui.char_combo.findText(active_char)
-        if idx >= 0: ui.char_combo.setCurrentIndex(idx)
+        if idx >= 0:
+            ui.char_combo.setCurrentIndex(idx)
+        else:
+            # Fallback: Den Text einfach setzen (z.B. "WAITING...")
+            ui.char_combo.setCurrentText(active_char)
+
         ui.check_master.setChecked(self.config.get("overlay_master_active", False))
 
-        # --- 3. TAB 3: KILLSTREAK ---
-        ui.slider_tx.setValue(s_conf.get("tx", 0))
-        ui.slider_ty.setValue(s_conf.get("ty", 0))
-        ui.slider_scale.setValue(int(s_conf.get("scale", 1.0) * 100))
-        ui.check_streak_master.setChecked(s_conf.get("active", True))
-        ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
-        # Font Größe setzen
-        current_size = str(s_conf.get("size", 26))
-        idx = ui.combo_font_size.findText(current_size)
-        if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
-
-        # NEU: Main Image & Speed laden
-        ui.ent_streak_img.setText(s_conf.get("img", "KS_Counter.png"))
-        ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
-
-        # Bestehendes...
-        ui.slider_tx.setValue(s_conf.get("tx", 0))
-        ui.slider_ty.setValue(s_conf.get("ty", 0))
-
-        # Button Farbe initialisieren
-        c_hex = s_conf.get("color", "#ffffff")
-        col = QColor(c_hex)
-        text_col = "black" if col.lightness() > 128 else "white"
-        ui.btn_pick_color.setStyleSheet(
-            f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555;"
-        )
-        for fac in ["TR", "NC", "VS"]:
-            if fac in ui.knife_inputs:
-                ui.knife_inputs[fac].setText(s_conf.get(f"knife_{fac.lower()}", ""))
-
-        # --- 4. TAB 5: STATS & FEED ---
-        ui.check_stats_active.setChecked(st_conf.get("active", True))
-        ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
-        ui.slider_st_tx.setValue(st_conf.get("tx", 0))
-        ui.slider_st_ty.setValue(st_conf.get("ty", 0))
-        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
-        ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
-        ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
-
-        # --- 5. TAB 2: EVENTS (GRID) ---
+        # --- TAB 2: EVENTS (GRID) ---
+        # (Dies setzt Checkboxen im Event Grid, falls du welche implementiert hast)
         if hasattr(ui, 'event_checkboxes'):
             for ev_name, checkbox in ui.event_checkboxes.items():
                 entry = ev_conf.get(ev_name, {})
                 is_active = entry.get("active", True) if isinstance(entry, dict) else True
                 checkbox.setChecked(is_active)
 
-        # --- 6. SIDEBAR REINIGEN (Sicherer Zugriff) ---
+        # Sidebar leeren
         if hasattr(ui, 'lbl_editing'): ui.lbl_editing.setText("EDITING: NONE")
-        for attr_name in ['ent_text', 'ent_img', 'ent_sound']:
-            field = getattr(ui, attr_name, None)
-            if field: field.clear()
+        ui.ent_evt_img.clear()
+        ui.ent_evt_snd.clear()
 
-        # --- 7. TAB 6: VOICE MACROS ---
+        # --- TAB 3: KILLSTREAK ---
+        ui.slider_tx.setValue(s_conf.get("tx", 0))
+        ui.slider_ty.setValue(s_conf.get("ty", 0))
+        ui.slider_scale.setValue(int(s_conf.get("scale", 1.0) * 100))
+        ui.check_streak_master.setChecked(s_conf.get("active", True))
+        ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
+
+        # Font Größe & Farbe
+        current_size = str(s_conf.get("size", 26))
+        idx = ui.combo_font_size.findText(current_size)
+        if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
+
+        c_hex = s_conf.get("color", "#ffffff")
+        text_col = "black" if QColor(c_hex).lightness() > 128 else "white"
+        ui.btn_pick_color.setStyleSheet(
+            f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555;")
+
+        # Bild & Speed
+        ui.ent_streak_img.setText(s_conf.get("img", "KS_Counter.png"))
+        ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
+
+        # Messer Icons
+        for fac in ["TR", "NC", "VS"]:
+            if fac in ui.knife_inputs:
+                ui.knife_inputs[fac].setText(s_conf.get(f"knife_{fac.lower()}", ""))
+
+        # --- TAB 4: CROSSHAIR (Bereinigt) ---
+        # 1. Checkbox (Aktiviert?)
+        ui.check_cross.setChecked(c_conf.get("active", True))
+
+        # 2. Pfad (Dateiname)
+        ui.cross_path.setText(c_conf.get("file", "crosshair.png"))
+
+        # --- TAB 5: STATS & FEED ---
+        ui.check_stats_active.setChecked(st_conf.get("active", True))
+        ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
+        ui.slider_st_tx.setValue(st_conf.get("tx", 0))
+        ui.slider_st_ty.setValue(st_conf.get("ty", 0))
+        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
+
+        ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
+        ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
+
+        # --- TAB 6: VOICE MACROS ---
         for key, combo in ui.voice_combos.items():
             val = v_conf.get(key, "OFF")
             idx = combo.findText(str(val))
             if idx >= 0: combo.setCurrentIndex(idx)
-
-        # --- TAB CROSSHAIR ---
-        c_conf = self.config.get("crosshair", {})
-
-        # 1. Pfad laden
-        ui.cross_path.setText(c_conf.get("file", ""))
-
-        # 2. Checkbox Status laden (WICHTIG für deine Anforderung)
-        # Standard ist True, falls nichts gespeichert ist
-        ui.check_cross.setChecked(c_conf.get("active", True))
-
-        # --- CROSSHAIR DATEN LADEN ---
-        c_conf = self.config.get("crosshair", {})
-
-        # 1. Checkbox
-        ui.check_cross.setChecked(c_conf.get("active", True))
-
-        # 2. Pfad Textfeld
-        ui.cross_path.setText(c_conf.get("file", "crosshair.png"))
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
@@ -4680,46 +4693,47 @@ class DiorClientGUI:
                                     # --- FALL A: ICH BIN DER KILLER ---
                                     if killer_id == my_id and victim_id != my_id:
 
-                                        # [LOGIK] Check: Ist Killstreak aktiviert?
-                                        if not self.config.get("streak", {}).get("active", True):
-                                            continue
-
                                         curr_time = time.time()
-                                        # Dubletten-Schutz
+
+                                        # 1. Dubletten-Schutz (Muss immer laufen)
                                         if getattr(self, "last_victim_id", None) == victim_id and (
                                                 curr_time - getattr(self, "last_victim_time", 0)) < 0.5:
                                             continue
                                         self.last_victim_id = victim_id
                                         self.last_victim_time = curr_time
 
+                                        # 2. Team-Kill Check
                                         if p.get("attacker_team_id") == p.get("team_id"):
                                             self.trigger_auto_voice("tk")
-                                            self.trigger_overlay_event("Team Kill")  # Kein .after() mehr
+                                            self.trigger_overlay_event("Team Kill")
                                         else:
-                                            # Killstreak Logik (Messer-System)
-                                            if self.killstreak_count == 0:
-                                                self.killstreak_count = 1
-                                                self.streak_factions = []
-                                                self.streak_slot_map = []
-                                            else:
-                                                self.killstreak_count += 1
+                                            # =================================================
+                                            # TEIL 1: KILLSTREAK LOGIK (Nur wenn aktiv!)
+                                            # =================================================
+                                            if self.config.get("streak", {}).get("active", True):
+                                                if self.killstreak_count == 0:
+                                                    self.killstreak_count = 1
+                                                    self.streak_factions = []
+                                                    self.streak_slot_map = []
+                                                else:
+                                                    self.killstreak_count += 1
 
-                                            v_team = p.get("team_id")
-                                            v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team),
-                                                                                              "NSO")
-                                            self.streak_factions.append(v_faction)
+                                                v_team = p.get("team_id")
+                                                v_faction = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team),
+                                                                                                  "NSO")
+                                                self.streak_factions.append(v_faction)
 
-                                            # Slot-Vergabe
-                                            new_slot = self._get_random_slot()
-                                            self.streak_slot_map.append(new_slot)
+                                                # Slot-Vergabe
+                                                new_slot = self._get_random_slot()
+                                                self.streak_slot_map.append(new_slot)
 
-                                            self.is_dead = False
-                                            self.was_revived = False
+                                                self.is_dead = False
+                                                self.was_revived = False
 
-                                            # Messer-Anzeige im Qt-Overlay aktualisieren
-                                            self.update_streak_display()
+                                                # Messer-Anzeige im Qt-Overlay aktualisieren
+                                                self.update_streak_display()
 
-                                            # Multi-Kill Zeitfenster
+                                            # Multi-Kill Counter (Läuft im Hintergrund immer mit)
                                             if curr_time - getattr(self, "last_kill_time",
                                                                    0) <= self.streak_timeout:
                                                 self.kill_counter += 1
@@ -4727,7 +4741,9 @@ class DiorClientGUI:
                                                 self.kill_counter = 1
                                             self.last_kill_time = curr_time
 
-                                            # --- Spezial-Event Erkennung ---
+                                            # =================================================
+                                            # TEIL 2: EVENTS & SOUNDS (Läuft immer)
+                                            # =================================================
                                             weapon_name = w_info.get("name", "Unknown")
                                             special_event = None
 
@@ -4741,12 +4757,16 @@ class DiorClientGUI:
                                             if is_hs and not special_event:
                                                 special_event = "Headshot"
 
-                                            # Streak-Meilensteine (Squad Wipe etc.)
-                                            streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
-                                                          36: "Squad Lead's Nightmare", 48: "One Man Platoon"}
-                                            if self.killstreak_count in streak_map:
-                                                special_event = streak_map[self.killstreak_count]
-                                            elif self.kill_counter > 1:
+                                            # Streak-Meilensteine nur triggern, wenn Streak aktiv ist
+                                            if self.config.get("streak", {}).get("active", True):
+                                                streak_map = {12: "Squad Wiper", 24: "Double Squad Wipe",
+                                                              36: "Squad Lead's Nightmare",
+                                                              48: "One Man Platoon"}
+                                                if self.killstreak_count in streak_map:
+                                                    special_event = streak_map[self.killstreak_count]
+
+                                            # Multi-Kills immer anzeigen
+                                            if self.kill_counter > 1:
                                                 multi_map = {2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill",
                                                              5: "Ultra Kill", 6: "Monster Kill",
                                                              7: "Ludicrous Kill",
@@ -4758,10 +4778,42 @@ class DiorClientGUI:
                                             if special_event:
                                                 self.trigger_overlay_event(special_event)
 
-                                            # Hitmarker immer kurz verzögert (direkt aufrufen ist in Qt ok)
+                                            # Hitmarker (Immer!)
                                             self.trigger_overlay_event("Hitmarker")
 
-                                            # --- Auto Voice Logic (V-Macros) ---
+                                            # =================================================
+                                            # TEIL 3: KILLFEED (Läuft immer)
+                                            # =================================================
+                                            v_name = self.name_cache.get(victim_id, "Unknown")
+
+                                            # Outfit Tag sicher holen
+                                            raw_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
+                                            if raw_tag is None: raw_tag = ""
+                                            v_tag_display = f"[{raw_tag}] " if raw_tag else ""
+
+                                            s_vic = self.session_stats.get(victim_id, {})
+
+                                            try:
+                                                v_kd_val = s_vic.get('k', 0) / max(1, s_vic.get('d', 1))
+                                                v_kd = f"{v_kd_val:.1f}"
+                                            except:
+                                                v_kd = "0.0"
+
+                                            msg = f"""
+                                                                        <div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
+                                                                            {icon_html}
+                                                                            <span style="color: #888;">{v_tag_display}</span>
+                                                                            <span style="color: #ffffff;">{v_name}</span> 
+                                                                            <span style="color: #aaaaaa; font-size: 16px;"> ({v_kd})</span>
+                                                                        </div>
+                                                                        """
+
+                                            if self.overlay_win:
+                                                self.overlay_win.signals.killfeed_entry.emit(msg)
+
+                                            # =================================================
+                                            # TEIL 4: AUTO VOICE (Läuft immer)
+                                            # =================================================
                                             kd_triggered = False
                                             v_loadout = p.get("character_loadout_id")
                                             if victim_id in self.session_stats:
@@ -4777,18 +4829,6 @@ class DiorClientGUI:
                                                     self.trigger_auto_voice("kill_infil")
                                                 elif is_hs:
                                                     self.trigger_auto_voice("kill_hs")
-
-                                            # --- Killfeed Eintrag senden ---
-                                            v_name = self.name_cache.get(victim_id, "Unknown")
-                                            v_tag = getattr(self, "outfit_cache", {}).get(victim_id, "")
-                                            s_vic = self.session_stats.get(victim_id, {})
-                                            v_kd = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
-
-                                            # HTML String für das Qt-Overlay Killfeed
-                                            msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;">{icon_html}<span style="color: #888;">[{"".join(v_tag)}] </span>{v_name} <span style="color: #aaa; font-size: 19px;">({v_kd})</span></div>'
-
-                                            if self.overlay_win:
-                                                self.overlay_win.signals.killfeed_entry.emit(msg)
 
                                     # --- FALL B: ICH BIN DAS OPFER ---
                                     elif victim_id == my_id:
