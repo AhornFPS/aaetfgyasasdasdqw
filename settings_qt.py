@@ -3,14 +3,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QFrame, QFileDialog)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 
-
-class SettingsSignals(QObject):
-    save_requested = pyqtSignal(dict)
-    browse_obs_requested = pyqtSignal()
-    browse_ps2_requested = pyqtSignal()
-    change_bg_requested = pyqtSignal()
-
-
+# --- STYLING ---
 SETTING_STYLE = """
 QWidget#Settings { background-color: #1a1a1a; }
 QFrame#Group { 
@@ -50,14 +43,25 @@ QPushButton#SaveBtn {
 }
 """
 
+class SettingsSignals(QObject):
+    save_requested = pyqtSignal(dict)
+    browse_obs_requested = pyqtSignal()
+    browse_ps2_requested = pyqtSignal()
+    change_bg_requested = pyqtSignal()
 
-class SettingsWindow(QWidget):
-    def __init__(self):
+
+class SettingsWidget(QWidget):
+    def __init__(self, controller=None):
         super().__init__()
+        self.controller = controller
         self.setObjectName("Settings")
         self.resize(600, 750)
         self.signals = SettingsSignals()
 
+        # WICHTIG: Stylesheet anwenden!
+        self.setStyleSheet(SETTING_STYLE)
+
+        # WICHTIG: Layout direkt auf self setzen (kein setCentralWidget bei QWidget)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(30, 30, 30, 30)
         main_layout.setSpacing(20)
@@ -139,3 +143,10 @@ class SettingsWindow(QWidget):
             "pw": self.pw_entry.text()
         }
         self.signals.save_requested.emit(data)
+
+# Test-Block für Standalone-Ausführung
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = SettingsWidget()
+    window.show()
+    sys.exit(app.exec())

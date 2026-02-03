@@ -96,15 +96,20 @@ class ProfileCard(QFrame):
         self.signal.launch_requested.emit(self.mode)
 
 
-class LauncherWindow(QWidget):
-    def __init__(self):
+class LauncherWidget(QWidget):
+    def __init__(self, controller=None):
         super().__init__()
+        self.controller = controller
         self.setObjectName("Launcher")
         self.setWindowTitle("Dior Client - Launcher")
         self.resize(1100, 650)
 
+        # WICHTIG: Stylesheet anwenden
+        self.setStyleSheet(LAUNCHER_STYLE)
+
         self.signals = LauncherSignals()
 
+        # Layout direkt auf self (Korrekt!)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(50, 50, 50, 50)
         main_layout.setSpacing(30)
@@ -146,7 +151,10 @@ class LauncherWindow(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    # Style ist jetzt in __init__, aber schadet hier nicht:
     app.setStyleSheet(LAUNCHER_STYLE)
-    launcher = LauncherWindow()
+
+    # KORREKTUR: Klassenname angepasst (war LauncherWindow)
+    launcher = LauncherWidget()
     launcher.show()
     sys.exit(app.exec())

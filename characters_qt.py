@@ -16,7 +16,7 @@ class CharacterSignals(QObject):
     search_finished = pyqtSignal(dict, list)
 
 
-# --- STYLESHEET (Unverändert) ---
+# --- STYLESHEET ---
 CHAR_STYLE = """
 QWidget#Characters { background-color: #1a1a1a; }
 QTabWidget::pane { border: 1px solid #333; background: #121212; top: -1px; }
@@ -32,15 +32,21 @@ QTextEdit#LogArea { background-color: #020508; color: #00f2ff; font-family: 'Con
 QLineEdit { background-color: #222; color: white; border: 1px solid #444; padding: 5px; }
 """
 
-class CharactersWindow(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.signals = CharacterSignals()
 
+class CharacterWidget(QWidget):
+    def __init__(self, controller=None):
+        super().__init__()
+        self.controller = controller
         self.setObjectName("Characters")
         self.resize(1000, 900)
+
+        # WICHTIG: Stylesheet anwenden
+        self.setStyleSheet(CHAR_STYLE)
+
+        # Signale initialisieren
         self.signals = CharacterSignals()
 
+        # Layout direkt auf self anwenden
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -87,7 +93,7 @@ class CharactersWindow(QWidget):
         self.stats_ui = {}
 
         # General Info
-        gen_box = QFrame();
+        gen_box = QFrame()
         gen_box.setObjectName("StatCard")
         gen_layout = QVBoxLayout(gen_box)
         gen_layout.addWidget(QLabel("GENERAL INFORMATION", objectName="GroupTitle"))
@@ -99,11 +105,11 @@ class CharactersWindow(QWidget):
             row.addWidget(QLabel(field, objectName="StatLabel"))
             row.addWidget(val)
             gen_layout.addLayout(row)
-        gen_layout.addStretch();
+        gen_layout.addStretch()
         layout.addWidget(gen_box, 1)
 
         # Performance
-        perf_box = QFrame();
+        perf_box = QFrame()
         perf_box.setObjectName("StatCard")
         perf_layout = QHBoxLayout(perf_box)
         for group in ["LIFETIME PERFORMANCE", "LAST 30 DAYS"]:
@@ -114,7 +120,7 @@ class CharactersWindow(QWidget):
                 val = QLabel("-", objectName="StatValue")
                 self.stats_ui[f"{group}_{stat}"] = val
                 col.addWidget(val)
-            col.addStretch();
+            col.addStretch()
             perf_layout.addLayout(col)
         layout.addWidget(perf_box, 2)
 
@@ -146,11 +152,12 @@ class CharactersWindow(QWidget):
 
     def update_overview(self, c_stats):
         # Stammdaten
-        for label_name, key in [("Name:", 'name'), ("Faction:", 'fac_short'), ("Server:", 'server'), ("Outfit:", 'outfit'), ("Rank:", 'rank'), ("Time Played:", 'time_played')]:
+        for label_name, key in [("Name:", 'name'), ("Faction:", 'fac_short'), ("Server:", 'server'),
+                                ("Outfit:", 'outfit'), ("Rank:", 'rank'), ("Time Played:", 'time_played')]:
             if label_name in self.info_labels:
                 self.info_labels[label_name].setText(str(c_stats.get(key, '-')))
 
-        # Performance Stats mit Sicherheitsabfrage
+        # Performance Stats
         for group in ["LIFETIME PERFORMANCE", "LAST 30 DAYS"]:
             prefix = "lt" if group == "LIFETIME PERFORMANCE" else "m30"
             for stat in ["Kills", "Deaths", "K/D", "KPM", "KPH", "SPM", "Score"]:
@@ -159,8 +166,6 @@ class CharactersWindow(QWidget):
                     clean_stat = stat.lower().replace("/", "")
                     val = c_stats.get(f"{prefix}_{clean_stat}", "-")
                     self.stats_ui[ui_key].setText(str(val))
-                else:
-                    print(f"DEBUG: Key {ui_key} missing in stats_ui!")
 
     def update_weapons(self, weapon_list):
         self.weapon_table.setRowCount(0)
@@ -181,7 +186,7 @@ class CharactersWindow(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet(CHAR_STYLE)
-    win = CharactersWindow();
+    # Stylesheet wird jetzt in __init__ geladen, aber für Standalone Test:
+    win = CharacterWidget()  # Name korrigiert
     win.show()
     sys.exit(app.exec())

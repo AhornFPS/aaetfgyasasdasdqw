@@ -1,9 +1,11 @@
 import sys
+import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QFrame, QTabWidget,
-                             QCheckBox, QComboBox, QSlider, QScrollArea, QGridLayout)
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
-from PyQt6.QtGui import QColor
+                             QCheckBox, QComboBox, QSlider, QScrollArea, QGridLayout,
+                             QSizePolicy)
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
+from PyQt6.QtGui import QColor, QPixmap
 
 
 # --- SIGNALE ---
@@ -15,26 +17,219 @@ class OverlaySignals(QObject):
 
 # --- STYLESHEET ---
 OVERLAY_STYLE = """
+/* --- HAUPTFENSTER & TABS --- */
 QWidget#Overlay { background-color: #1a1a1a; }
-QTabWidget::pane { border: 1px solid #333; background: #1a1a1a; }
-QTabBar::tab { background: #252525; color: #888; padding: 12px; min-width: 100px; border: 1px solid #333; }
-QTabBar::tab:selected { background: #00f2ff; color: black; font-weight: bold; }
 
-QFrame#Group { background-color: #222; border: 1px solid #333; border-radius: 5px; margin: 5px; }
-QLabel#Header { color: #00f2ff; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-QLabel#SubText { color: #888; font-size: 11px; }
+QTabWidget::pane { 
+    border: 1px solid #333; 
+    background-color: #1a1a1a; 
+    top: -1px; 
+}
 
-QPushButton#EditBtn { background-color: #0066ff; color: white; font-weight: bold; padding: 10px; border-radius: 4px; }
-QPushButton#TestBtn { background-color: #444; color: white; padding: 10px; }
-QPushButton#SaveBtn { background-color: #004400; color: white; font-weight: bold; padding: 10px; }
+QTabBar::tab { 
+    background-color: #252525; 
+    color: #888; 
+    padding: 12px; 
+    min-width: 100px; 
+    border: 1px solid #333; 
+    border-bottom: none; 
+    border-top-left-radius: 4px; 
+    border-top-right-radius: 4px; 
+}
+
+QTabBar::tab:selected { 
+    background-color: #1a1a1a; 
+    color: #00f2ff; 
+    font-weight: bold; 
+    border-bottom: 2px solid #00f2ff; 
+}
+
+QTabBar::tab:hover:!selected { 
+    background-color: #333; 
+    color: #eee; 
+}
+
+/* --- CONTAINER & GRUPPEN --- */
+QFrame#Group { 
+    background-color: #222; 
+    border: 1px solid #333; 
+    border-radius: 5px; 
+    margin: 5px; 
+    padding: 5px; 
+}
+
+QLabel#Header { 
+    color: #00f2ff; 
+    font-weight: bold; 
+    font-size: 16px; 
+    margin-bottom: 10px; 
+}
+
+QLabel#SubText { 
+    color: #888; 
+    font-size: 11px; 
+}
+
+/* --- EINGABEFELDER --- */
+QLineEdit, QComboBox {
+    background-color: #111;
+    border: 1px solid #444;
+    color: #eee;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+QLineEdit:focus { 
+    border: 1px solid #00f2ff; 
+    background-color: #000; 
+}
+
+/* --- BUTTONS BASICS --- */
+QPushButton {
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    color: #ddd;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QPushButton:hover {
+    background-color: #3a3a3a;
+    border-color: #00f2ff;
+    color: white;
+}
+
+QPushButton:pressed { 
+    background-color: #00f2ff; 
+    color: black; 
+}
+
+/* --- SPEZIAL-BUTTONS (TARGETED BY ID) --- */
+
+/* MOVE UI / EDIT (Blau) */
+QPushButton#EditBtn { 
+    background-color: #0055aa; 
+    color: white; 
+    border: 1px solid #0077cc; 
+    font-size: 12px;
+}
+QPushButton#EditBtn:hover { 
+    background-color: #0066ff; 
+    border-color: #00f2ff; 
+}
+
+/* TEST BUTTON (Grau) */
+QPushButton#TestBtn { 
+    background-color: #444; 
+    color: #eee; 
+    border: 1px solid #555; 
+    font-size: 12px;
+}
+QPushButton#TestBtn:hover { 
+    background-color: #555; 
+    border-color: #ccc; 
+}
+
+/* SAVE BUTTON (Grün) */
+QPushButton#SaveBtn { 
+    background-color: #004400; 
+    color: #00ff00; 
+    border: 1px solid #006600; 
+    font-size: 12px;
+}
+QPushButton#SaveBtn:hover { 
+    background-color: #005500; 
+    border-color: #00ff00; 
+    color: white; 
+}
+
+/* RECORD BUTTON (Orange/Rot) */
+QPushButton#RecordBtn { 
+    background-color: #aa4400; 
+    color: white; 
+    border: 1px solid #cc5500; 
+}
+QPushButton#RecordBtn:hover { 
+    background-color: #bb5500; 
+    border-color: #ff8c00; 
+}
+
+/* CLEAR BUTTON (Dunkelgrau) */
+QPushButton#ClearBtn { 
+    background-color: #222; 
+    color: #888; 
+    border: 1px solid #333; 
+}
+QPushButton#ClearBtn:hover { 
+    background-color: #333; 
+    border-color: #555; 
+    color: #ccc;
+}
+
+/* COLOR PICKER (Lila) */
+QPushButton#ColorBtn { 
+    background-color: #5500aa; 
+    color: white; 
+    border: 1px solid #7700cc; 
+}
+QPushButton#ColorBtn:hover { 
+    background-color: #6600cc; 
+    border-color: #ff00ff; 
+}
+
+/* --- PREVIEW BOX --- */
+QLabel#PreviewBox, QLabel#AspectRatioLabel { 
+    border: 2px dashed #444; 
+    background-color: #000; 
+    color: #555; 
+    font-weight: bold;
+}
 """
 
 
+# --- HELPER CLASS: RESPONSIVE IMAGE LABEL ---
+class AspectRatioLabel(QLabel):
+    """Ein Label, das sein Bild proportional skaliert, wenn sich die Fenstergröße ändert."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(1, 1)  # Wichtig, damit es auch kleiner werden kann
+        self.setScaledContents(False)
+        self.pixmap_cache = None
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("border: 2px dashed #444; background-color: #000; color: #555;")
+        self.setText("NO PREVIEW")
+
+    def setPixmap(self, p):
+        self.pixmap_cache = p
+        self.update_scaled()
+
+    def resizeEvent(self, e):
+        self.update_scaled()
+        super().resizeEvent(e)
+
+    def update_scaled(self):
+        if self.pixmap_cache:
+            # Skaliert das Bild auf die aktuelle Größe des Labels (KeepAspectRatio)
+            scaled = self.pixmap_cache.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation)
+            super().setPixmap(scaled)
+        else:
+            self.setText("NO PREVIEW")
+
+
 class OverlayConfigWindow(QWidget):
-    def __init__(self):
+    def __init__(self, controller=None):
         super().__init__()
+        self.controller = controller
         self.setObjectName("Overlay")
-        self.resize(1150, 850) # Etwas höher für die Voice-Liste
+        self.resize(1150, 850)
+
+        # Stylesheet direkt hier laden
+        self.setStyleSheet(OVERLAY_STYLE)
+
         self.signals = OverlaySignals()
 
         layout = QVBoxLayout(self)
@@ -42,34 +237,34 @@ class OverlayConfigWindow(QWidget):
         # Das Herzstück: Das Tab-System
         self.tabs = QTabWidget()
 
-        # --- TAB 1: IDENTITY (Wer bist du?) ---
+        # --- TAB 1: IDENTITY ---
         self.tab_ident = QWidget()
         self.setup_identity_tab()
         self.tabs.addTab(self.tab_ident, " IDENTITY ")
 
-        # --- TAB 2: EVENTS (Bilder & Sounds bei Kills) ---
+        # --- TAB 2: EVENTS ---
         self.tab_events = QWidget()
         self.setup_events_tab()
         self.tabs.addTab(self.tab_events, " EVENTS ")
 
-        # --- TAB 3: KILLSTREAK (Messer-System) ---
+        # --- TAB 3: KILLSTREAK ---
         self.tab_streak = QWidget()
         self.setup_streak_tab()
         self.tabs.addTab(self.tab_streak, " KILLSTREAK ")
 
-        # --- TAB 4: CROSSHAIR (Fadenkreuz) ---
+        # --- TAB 4: CROSSHAIR ---
         self.tab_cross = QWidget()
         self.setup_crosshair_tab()
         self.tabs.addTab(self.tab_cross, " CROSSHAIR ")
 
-        # --- TAB 5: SESSION STATS & FEED (NEU) ---
+        # --- TAB 5: SESSION STATS & FEED ---
         self.tab_stats = QWidget()
-        self.setup_stats_tab() # Die Methode haben wir im vorletzten Schritt gebaut
+        self.setup_stats_tab()
         self.tabs.addTab(self.tab_stats, " STATS & FEED ")
 
-        # --- TAB 6: AUTO VOICE (NEU) ---
+        # --- TAB 6: AUTO VOICE ---
         self.tab_voice = QWidget()
-        self.setup_voice_tab() # Die Methode haben wir im letzten Schritt gebaut
+        self.setup_voice_tab()
         self.tabs.addTab(self.tab_voice, " VOICE MACROS ")
 
         layout.addWidget(self.tabs)
@@ -90,9 +285,10 @@ class OverlayConfigWindow(QWidget):
         self.char_combo.setMinimumWidth(300)
         layout.addWidget(self.char_combo)
 
-        btn_del = QPushButton("DELETE SELECTED")
-        btn_del.setStyleSheet("background: #440000; color: #ff4444;")
-        layout.addWidget(btn_del)
+        # Button accessible machen
+        self.btn_del_char = QPushButton("DELETE SELECTED")
+        self.btn_del_char.setStyleSheet("background: #440000; color: #ff4444;")
+        layout.addWidget(self.btn_del_char)
 
         layout.addSpacing(40)
 
@@ -113,19 +309,20 @@ class OverlayConfigWindow(QWidget):
 
         # Queue Toggle
         self.btn_queue_toggle = QPushButton("QUEUE: ON")
+        self.btn_queue_toggle.setCheckable(True)
+        self.btn_queue_toggle.setChecked(True)
         self.btn_queue_toggle.setStyleSheet(
             "background-color: #004400; color: white; font-weight: bold; padding: 10px;")
 
         # Bulk Action
-        btn_apply_all = QPushButton("APPLY LAYOUT TO ALL (Except Hitmarker)")
-        btn_apply_all.setStyleSheet("background-color: #552200; color: #ffdddd; padding: 10px;")
+        self.btn_apply_all = QPushButton("APPLY LAYOUT TO ALL (Except Hitmarker)")
+        self.btn_apply_all.setStyleSheet("background-color: #552200; color: #ffdddd; padding: 10px;")
 
         global_ctrl_layout.addWidget(self.btn_queue_toggle)
-        global_ctrl_layout.addWidget(btn_apply_all)
+        global_ctrl_layout.addWidget(self.btn_apply_all)
         layout.addLayout(global_ctrl_layout)
 
         # --- 2. EVENT SELECTION GRID (Mitte) ---
-        # Wir nutzen eine ScrollArea, falls die Liste zu lang wird
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("background-color: #1a1a1a; border: none;")
@@ -147,6 +344,8 @@ class OverlayConfigWindow(QWidget):
             "SYSTEM": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
 
+        self.event_buttons = {}
+
         for cat_name, items in self.event_categories.items():
             cat_box = QFrame(objectName="Group")
             cat_vbox = QVBoxLayout(cat_box)
@@ -163,31 +362,37 @@ class OverlayConfigWindow(QWidget):
                     QPushButton { background-color: #1a1a1a; color: #ccc; border: none; padding: 4px; font-size: 11px; }
                     QPushButton:hover { background-color: #00f2ff; color: black; }
                 """)
-                # Beim Klick rufen wir eine Funktion auf, die die Auswahl ändert
-                btn.clicked.connect(lambda checked, i=item: self.select_event(i))
+                btn.clicked.connect(lambda _, x=item: self.select_event(x))
                 cat_vbox.addWidget(btn)
+                self.event_buttons[item] = btn
 
             cat_vbox.addStretch()
             grid_layout.addWidget(cat_box)
 
         scroll.setWidget(grid_widget)
-        layout.addWidget(scroll, 3)  # Nimmt mehr Platz ein
+        layout.addWidget(scroll, 3)
 
         # --- 3. EDIT AREA (Unten) ---
         edit_box = QFrame(objectName="Group")
         edit_layout = QVBoxLayout(edit_box)
 
-        self.lbl_editing = QLabel("EDITING: Kill")
+        self.lbl_editing = QLabel("EDITING: NONE")
         self.lbl_editing.setStyleSheet("color: #00ff00; font-size: 16px; font-weight: bold;")
         edit_layout.addWidget(self.lbl_editing)
 
+        # Container Split: Links Input, Rechts Preview
+        editor_split = QHBoxLayout()
+
+        # --- LINKS: INPUTS ---
+        input_container = QWidget()
+        input_layout = QVBoxLayout(input_container)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+
         # Image & Sound Row
         io_grid = QGridLayout()
-
         io_grid.addWidget(QLabel("Image (PNG/JPG):"), 0, 0)
         self.ent_evt_img = QLineEdit()
         io_grid.addWidget(self.ent_evt_img, 0, 1)
-        # Button benannt
         self.btn_browse_evt_img = QPushButton("...")
         self.btn_browse_evt_img.setFixedWidth(30)
         io_grid.addWidget(self.btn_browse_evt_img, 0, 2)
@@ -195,12 +400,11 @@ class OverlayConfigWindow(QWidget):
         io_grid.addWidget(QLabel("Sound (MP3/OGG):"), 1, 0)
         self.ent_evt_snd = QLineEdit()
         io_grid.addWidget(self.ent_evt_snd, 1, 1)
-        # Button benannt
         self.btn_browse_evt_snd = QPushButton("...")
         self.btn_browse_evt_snd.setFixedWidth(30)
         io_grid.addWidget(self.btn_browse_evt_snd, 1, 2)
 
-        edit_layout.addLayout(io_grid)
+        input_layout.addLayout(io_grid)
 
         # Scale & Duration Row
         sd_layout = QHBoxLayout()
@@ -208,40 +412,75 @@ class OverlayConfigWindow(QWidget):
         sd_layout.addWidget(QLabel("Scale:"))
         self.slider_evt_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_evt_scale.setRange(10, 300)
+        self.slider_evt_scale.setValue(100)
+
+        # Scale Value Label
+        self.lbl_scale_val = QLabel("1.00")
+        self.lbl_scale_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
+        self.lbl_scale_val.setFixedWidth(40)
+        # Direktes Update beim Schieben
+        self.slider_evt_scale.valueChanged.connect(lambda val: self.lbl_scale_val.setText(f"{val / 100:.2f}"))
+
         sd_layout.addWidget(self.slider_evt_scale)
+        sd_layout.addWidget(self.lbl_scale_val)
 
         sd_layout.addWidget(QLabel("Duration (ms):"))
         self.ent_evt_duration = QLineEdit("3000")
         self.ent_evt_duration.setFixedWidth(60)
         sd_layout.addWidget(self.ent_evt_duration)
 
-        edit_layout.addLayout(sd_layout)
+        input_layout.addLayout(sd_layout)
 
         # Action Buttons
         btn_box = QHBoxLayout()
-        self.btn_edit_hud = QPushButton("LAYOUT PER MAUS VERSCHIEBEN", objectName="EditBtn")
+
+        # HIER WAR DER ALTE TEXT: "LAYOUT PER MAUS VERSCHIEBEN"
+        self.btn_edit_hud = QPushButton("MOVE UI", objectName="EditBtn")
+
         self.btn_test_preview = QPushButton("TEST PREVIEW", objectName="TestBtn")
-        self.btn_save_event = QPushButton("SAVE EVENT", objectName="SaveBtn")  # NEU
+        self.btn_save_event = QPushButton("SAVE EVENT", objectName="SaveBtn")
 
         btn_box.addWidget(self.btn_edit_hud)
         btn_box.addWidget(self.btn_test_preview)
-        btn_box.addWidget(self.btn_save_event)  # NEU
+        btn_box.addWidget(self.btn_save_event)
 
-        edit_layout.addLayout(btn_box)
+        input_layout.addLayout(btn_box)
+
+        # --- RECHTS: PREVIEW ---
+        # Wir nutzen unsere Custom Class AspectRatioLabel
+        self.lbl_event_preview = AspectRatioLabel()
+        # SizePolicy: Expanding sagt dem Layout "Nimm dir so viel Platz wie möglich"
+        self.lbl_event_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Zusammenbau
+        editor_split.addWidget(input_container, 60)  # 60% Breite
+        editor_split.addWidget(self.lbl_event_preview, 40)  # 40% Breite
+
+        edit_layout.addLayout(editor_split)
         layout.addWidget(edit_box, 2)
 
     def select_event(self, event_name):
         """Wird aufgerufen, wenn man im Grid auf ein Event klickt"""
         self.lbl_editing.setText(f"EDITING: {event_name}")
-        # Hier senden wir ein Signal an das Hauptprogramm,
-        # damit dieses die passenden Pfade/Werte in die Felder lädt
         self.signals.setting_changed.emit("event_selection", event_name)
+
+    def update_preview_image(self, image_path):
+        """Helper: Lädt das Bild in die Responsive Preview-Box"""
+        if image_path and os.path.exists(image_path):
+            pix = QPixmap(image_path)
+            self.lbl_event_preview.setPixmap(pix)
+            self.lbl_event_preview.setStyleSheet("border: 2px solid #00f2ff; background-color: black;")
+        else:
+            self.lbl_event_preview.setText("IMG NOT FOUND")
+            self.lbl_event_preview.pixmap_cache = None
+            self.lbl_event_preview.update_scaled()  # Reset
+            self.lbl_event_preview.setStyleSheet("border: 2px dashed #444; background-color: #000; color: #555;")
 
     def setup_crosshair_tab(self):
         layout = QVBoxLayout(self.tab_cross)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.check_cross = QCheckBox("CROSSHAIR ANZEIGEN")
+        self.check_cross = QCheckBox("Show Crosshair")
         self.check_cross.setObjectName("Header")
         layout.addWidget(self.check_cross)
 
@@ -249,116 +488,215 @@ class OverlayConfigWindow(QWidget):
         img_layout = QHBoxLayout()
         self.cross_path = QLineEdit()
         img_layout.addWidget(self.cross_path)
-        img_layout.addWidget(QPushButton("Browse"))
+
+        self.btn_browse_cross = QPushButton("Browse")
+        img_layout.addWidget(self.btn_browse_cross)
         layout.addLayout(img_layout)
 
-        self.btn_edit_cross = QPushButton("LAYOUT PER MAUS VERSCHIEBEN", objectName="EditBtn")
+        # HIER WAR DER ALTE TEXT
+        self.btn_edit_cross = QPushButton("MOVE UI", objectName="EditBtn")
         layout.addWidget(self.btn_edit_cross)
 
-        self.btn_center = QPushButton("AUTO-CENTER (MITTE)")
-        layout.addWidget(self.btn_center)
+        self.btn_center_cross = QPushButton("AUTO-CENTER (Middle)")
+        layout.addWidget(self.btn_center_cross)
 
     def setup_streak_tab(self):
         layout = QVBoxLayout(self.tab_streak)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- HEADER & MASTER SWITCH ---
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background: transparent;")
+
+        content_widget = QWidget()
+        main_layout = QVBoxLayout(content_widget)
+        main_layout.setSpacing(15)
+
+        # --- 1. HEADER & MASTER SWITCH ---
         header = QLabel("KILLSTREAK SYSTEM")
         header.setObjectName("Header")
-        layout.addWidget(header)
+        main_layout.addWidget(header)
 
-        self.check_streak_master = QCheckBox("KILLSTREAK SYSTEM AKTIVIEREN (Master)")
-        self.check_streak_master.setStyleSheet("color: #00ff00; font-weight: bold;")
-        layout.addWidget(self.check_streak_master)
+        sw_layout = QHBoxLayout()
+        self.check_streak_master = QCheckBox("ENABLE KILLSTREAK SYSTEM (Master)")
+        self.check_streak_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 12px;")
 
-        self.check_streak_anim = QCheckBox("PULSIERENDE ANIMATION AKTIVIEREN")
-        self.check_streak_anim.setStyleSheet("color: #ffcc00;")
-        layout.addWidget(self.check_streak_anim)
+        self.check_streak_anim = QCheckBox("ENABLE PULSE ANIMATION")
+        self.check_streak_anim.setStyleSheet("color: #ffcc00; font-size: 12px;")
 
-        # --- MESSER KONFIGURATION (Fraktionen) ---
+        sw_layout.addWidget(self.check_streak_master)
+        sw_layout.addWidget(self.check_streak_anim)
+        main_layout.addLayout(sw_layout)
+
+        # --- 2. MAIN VISUALS (Background & Speed) ---
+        vis_group = QFrame(objectName="Group")
+        vis_layout = QVBoxLayout(vis_group)
+        vis_layout.addWidget(QLabel("MAIN BACKGROUND & ANIMATION",
+                                    styleSheet="color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;"))
+
+        # Image Row
+        img_row = QHBoxLayout()
+        img_row.addWidget(QLabel("Main Image (Skull/Icon):"))
+        self.ent_streak_img = QLineEdit("KS_Counter.png")
+        self.btn_browse_streak_img = QPushButton("...")
+        self.btn_browse_streak_img.setFixedWidth(40)
+
+        img_row.addWidget(self.ent_streak_img)
+        img_row.addWidget(self.btn_browse_streak_img)
+        vis_layout.addLayout(img_row)
+
+        # Speed Row
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel("Pulse Speed:"))
+        self.ent_streak_speed = QLineEdit("50")
+        self.ent_streak_speed.setFixedWidth(60)
+        speed_row.addWidget(self.ent_streak_speed)
+
+        lbl_info = QLabel("(Default: 50. Higher = Faster)")
+        lbl_info.setStyleSheet("color: #666; font-size: 10px; margin-left: 5px;")
+        speed_row.addWidget(lbl_info)
+        speed_row.addStretch()
+
+        vis_layout.addLayout(speed_row)
+        main_layout.addWidget(vis_group)
+
+        # --- 3. FACTION KNIVES ---
         knife_group = QFrame(objectName="Group")
         knife_layout = QVBoxLayout(knife_group)
-        lbl_knife = QLabel("FRAKTIONS-MESSER (PNG)")
-        lbl_knife.setStyleSheet("color: #00f2ff; font-size: 10px;")
+        lbl_knife = QLabel("FACTION KNIVES / ICONS (PNG)")
+        lbl_knife.setStyleSheet("color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
         knife_layout.addWidget(lbl_knife)
 
         self.knife_inputs = {}
+        self.knife_browse_btns = {}
+
         for faction in ["TR", "NC", "VS"]:
             f_row = QHBoxLayout()
-            f_row.addWidget(QLabel(f"{faction}:", width=30))
+            f_row.addWidget(QLabel(f"{faction} Icon:", width=70))
             line_edit = QLineEdit()
-            btn_browse = QPushButton("📁")
+            btn_browse = QPushButton("...")
             btn_browse.setFixedWidth(40)
 
             f_row.addWidget(line_edit)
             f_row.addWidget(btn_browse)
             knife_layout.addLayout(f_row)
+
             self.knife_inputs[faction] = line_edit
+            self.knife_browse_btns[faction] = btn_browse
 
-        layout.addWidget(knife_group)
+        main_layout.addWidget(knife_group)
 
-        # --- POSITION & SKALIERUNG ---
+        # --- 4. PATH RECORDING ---
+        path_group = QFrame(objectName="Group")
+        path_layout = QVBoxLayout(path_group)
+
+        lbl_path = QLabel("CUSTOM PATH RECORDING")
+        lbl_path.setStyleSheet("color: #ff8c00; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
+        path_layout.addWidget(lbl_path)
+
+        path_desc = QLabel(
+            "Define where knives appear around the center.\n1. Click 'REC PATH'. 2. Click points on screen. 3. Press SPACE to stop & save.")
+        path_desc.setStyleSheet("color: #888; font-size: 11px; font-style: italic; margin-bottom: 10px;")
+        path_layout.addWidget(path_desc)
+
+        btn_path_row = QHBoxLayout()
+        self.btn_path_record = QPushButton("REC PATH")
+        self.btn_path_record.setObjectName("RecordBtn")
+
+        self.btn_path_clear = QPushButton("CLEAR PATH (Reset to Circle)")
+        self.btn_path_clear.setObjectName("ClearBtn")
+
+        btn_path_row.addWidget(self.btn_path_record)
+        btn_path_row.addWidget(self.btn_path_clear)
+        path_layout.addLayout(btn_path_row)
+
+        main_layout.addWidget(path_group)
+
+        # --- 5. POSITION & SCALE ---
         pos_group = QFrame(objectName="Group")
         pos_layout = QGridLayout(pos_group)
-        lbl_pos = QLabel("ZAHL-POSITION (RELATIV):")
-        lbl_pos.setStyleSheet("color: #00f2ff;")
-        pos_layout.addWidget(lbl_pos, 0, 0, 1, 2)
+        lbl_pos = QLabel("COUNTER POSITION & DESIGN")
+        lbl_pos.setStyleSheet("color: #00f2ff; font-weight:bold; border-bottom: 1px solid #333; padding-bottom: 5px;")
+        pos_layout.addWidget(lbl_pos, 0, 0, 1, 3)
 
-        # X-Position
-        pos_layout.addWidget(QLabel("X-Achse:"), 1, 0)
+        pos_layout.addWidget(QLabel("Offset X:"), 1, 0)
         self.slider_tx = QSlider(Qt.Orientation.Horizontal)
         self.slider_tx.setRange(-200, 200)
-        pos_layout.addWidget(self.slider_tx, 1, 1)
+        pos_layout.addWidget(self.slider_tx, 1, 1, 1, 2)
 
-        # Y-Position
-        pos_layout.addWidget(QLabel("Y-Achse:"), 2, 0)
+        pos_layout.addWidget(QLabel("Offset Y:"), 2, 0)
         self.slider_ty = QSlider(Qt.Orientation.Horizontal)
         self.slider_ty.setRange(-200, 200)
-        pos_layout.addWidget(self.slider_ty, 2, 1)
+        pos_layout.addWidget(self.slider_ty, 2, 1, 1, 2)
 
-        # Skalierung
-        pos_layout.addWidget(QLabel("HUD-SKALIERUNG:"), 3, 0)
+        pos_layout.addWidget(QLabel("Global Scale:"), 3, 0)
         self.slider_scale = QSlider(Qt.Orientation.Horizontal)
-        self.slider_scale.setRange(10, 300)  # 0.1 bis 3.0
-        pos_layout.addWidget(self.slider_scale, 3, 1)
+        self.slider_scale.setRange(10, 300)
+        self.slider_scale.setValue(100)
+        pos_layout.addWidget(self.slider_scale, 3, 1, 1, 2)
 
-        layout.addWidget(pos_group)
+        pos_layout.addWidget(QLabel("Design:"), 4, 0)
 
-        # --- DESIGN & FARBE ---
-        design_group = QFrame(objectName="Group")
-        design_layout = QHBoxLayout(design_group)
-
-        self.btn_pick_color = QPushButton("🎨 ZAHL-FARBE WÄHLEN")
-        self.btn_pick_color.setObjectName("ActionBtn")
+        design_box = QHBoxLayout()
+        self.btn_pick_color = QPushButton("🎨 TEXT COLOR")
+        self.btn_pick_color.setObjectName("ColorBtn")
 
         self.combo_font_size = QComboBox()
         self.combo_font_size.addItems(["12", "16", "20", "24", "26", "28", "32", "36", "48", "72"])
+        self.combo_font_size.setCurrentText("26")
+        self.combo_font_size.setFixedWidth(60)
 
-        design_layout.addWidget(self.btn_pick_color)
-        design_layout.addWidget(QLabel("Größe:"))
-        design_layout.addWidget(self.combo_font_size)
+        design_box.addWidget(self.btn_pick_color)
+        design_box.addWidget(QLabel("Size:"))
+        design_box.addWidget(self.combo_font_size)
+        design_box.addStretch()
 
-        layout.addWidget(design_group)
+        pos_layout.addLayout(design_box, 4, 1, 1, 2)
 
-        # --- ACTION BUTTONS ---
+        main_layout.addWidget(pos_group)
+
+        # --- 6. ACTION BUTTONS (FINAL SYNCED LOOK) ---
         action_layout = QHBoxLayout()
-        self.btn_save_streak = QPushButton("SAVE", objectName="SaveBtn")
-        self.btn_edit_streak = QPushButton("EDIT UI", objectName="EditBtn")
-        self.btn_test_streak = QPushButton("TEST", objectName="TestBtn")
+        action_layout.setSpacing(10)  # Abstand zwischen den Buttons
 
-        action_layout.addWidget(self.btn_save_streak)
+        # 1. MOVE UI (Blau)
+        self.btn_edit_streak = QPushButton("MOVE UI")
+        self.btn_edit_streak.setObjectName("EditBtn")  # Dies aktiviert das Blau im CSS
+        self.btn_edit_streak.setMinimumHeight(35)
+
+        # 2. TEST ANIMATION (Grau)
+        self.btn_test_streak = QPushButton("TEST ANIMATION")
+        self.btn_test_streak.setObjectName("TestBtn")  # Dies aktiviert das Grau
+        self.btn_test_streak.setMinimumHeight(35)
+
+        # 3. SAVE SETTINGS (Grün)
+        self.btn_save_streak = QPushButton("SAVE SETTINGS")
+        self.btn_save_streak.setObjectName("SaveBtn")  # Dies aktiviert das Grün
+        self.btn_save_streak.setMinimumHeight(35)
+
         action_layout.addWidget(self.btn_edit_streak)
         action_layout.addWidget(self.btn_test_streak)
-        layout.addLayout(action_layout)
+        action_layout.addWidget(self.btn_save_streak)
 
-        layout.addStretch()
+        main_layout.addLayout(action_layout)
+
+        action_layout.addWidget(self.btn_edit_streak)
+        action_layout.addWidget(self.btn_test_streak)
+        action_layout.addWidget(self.btn_save_streak)
+
+        main_layout.addLayout(action_layout)
+
+        main_layout.addStretch()
+
+        scroll.setWidget(content_widget)
+        layout.addWidget(scroll)
 
     def setup_stats_tab(self):
         layout = QVBoxLayout(self.tab_stats)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # --- SESSION STATS WIDGET BEREICH ---
+        # --- SESSION STATS WIDGET ---
         stats_group = QFrame(objectName="Group")
         st_layout = QVBoxLayout(stats_group)
 
@@ -370,18 +708,17 @@ class OverlayConfigWindow(QWidget):
         self.check_stats_active.setStyleSheet("color: #00ff00; font-weight: bold;")
         st_layout.addWidget(self.check_stats_active)
 
-        # Hintergrund Bild Wahl
-        st_layout.addWidget(QLabel("Hintergrund (PNG):", objectName="SubText"))
+        st_layout.addWidget(QLabel("Background (PNG):", objectName="SubText"))
         st_img_h = QHBoxLayout()
         self.ent_stats_img = QLineEdit()
-        btn_st_browse = QPushButton("...")
-        btn_st_browse.setFixedWidth(40)
+
+        self.btn_browse_stats_bg = QPushButton("...")
+        self.btn_browse_stats_bg.setFixedWidth(40)
         st_img_h.addWidget(self.ent_stats_img)
-        st_img_h.addWidget(btn_st_browse)
+        st_img_h.addWidget(self.btn_browse_stats_bg)
         st_layout.addLayout(st_img_h)
 
-        # Feinjustierung Text (X/Y Slider)
-        lbl_adj = QLabel("Text Feinjustierung (Innerhalb des Bildes):")
+        lbl_adj = QLabel("Text Adjust Number:")
         lbl_adj.setStyleSheet("color: #ffcc00;")
         st_layout.addWidget(lbl_adj)
         adj_grid = QGridLayout()
@@ -398,15 +735,15 @@ class OverlayConfigWindow(QWidget):
 
         st_layout.addLayout(adj_grid)
 
-        # Skalierung
-        st_layout.addWidget(QLabel("Bild Skalierung:"))
+        st_layout.addWidget(QLabel("Image scale:"))
         self.slider_st_scale = QSlider(Qt.Orientation.Horizontal)
-        self.slider_st_scale.setRange(10, 200)  # 0.1 bis 2.0
+        self.slider_st_scale.setRange(10, 200)
+        self.slider_st_scale.setValue(100)
         st_layout.addWidget(self.slider_st_scale)
 
         layout.addWidget(stats_group)
 
-        # --- KILLFEED BEREICH ---
+        # --- KILLFEED ---
         feed_group = QFrame(objectName="Group")
         kf_layout = QVBoxLayout(feed_group)
 
@@ -414,31 +751,44 @@ class OverlayConfigWindow(QWidget):
         kf_header.setStyleSheet("color: #ff4444; font-weight: bold; font-size: 16px;")
         kf_layout.addWidget(kf_header)
 
-        # Headshot Icon
         kf_layout.addWidget(QLabel("Headshot Icon (PNG):", objectName="SubText"))
         hs_h = QHBoxLayout()
         self.ent_hs_icon = QLineEdit()
-        btn_hs_browse = QPushButton("...")
-        btn_hs_browse.setFixedWidth(40)
+
+        self.btn_browse_hs_icon = QPushButton("...")
+        self.btn_browse_hs_icon.setFixedWidth(40)
+
         hs_h.addWidget(self.ent_hs_icon)
-        hs_h.addWidget(btn_hs_browse)
+        hs_h.addWidget(self.btn_browse_hs_icon)
         kf_layout.addLayout(hs_h)
 
-        self.check_show_revives = QCheckBox("Revives im Killfeed anzeigen")
+        self.check_show_revives = QCheckBox("Show Revives")
         self.check_show_revives.setStyleSheet("color: #00ff00;")
         kf_layout.addWidget(self.check_show_revives)
 
         layout.addWidget(feed_group)
 
-        # --- AKTION BUTTONS ---
-        btn_box = QHBoxLayout()
-        self.btn_save_stats = QPushButton("SAVE SETTINGS", objectName="SaveBtn")
-        self.btn_edit_hud_stats = QPushButton("LAYOUT PER MAUS VERSCHIEBEN", objectName="EditBtn")
-        self.btn_test_stats = QPushButton("TEST UI", objectName="TestBtn")
 
-        btn_box.addWidget(self.btn_save_stats)
+        # --- ACTION BUTTONS (FINAL SYNCED LOOK) ---
+        btn_box = QHBoxLayout()
+        btn_box.setSpacing(10)
+
+        self.btn_edit_hud_stats = QPushButton("MOVE UI")
+        self.btn_edit_hud_stats.setObjectName("EditBtn")
+        self.btn_edit_hud_stats.setMinimumHeight(35)
+
+        self.btn_test_stats = QPushButton("TEST UI")
+        self.btn_test_stats.setObjectName("TestBtn")
+        self.btn_test_stats.setMinimumHeight(35)
+
+        self.btn_save_stats = QPushButton("SAVE SETTINGS")
+        self.btn_save_stats.setObjectName("SaveBtn")
+        self.btn_save_stats.setMinimumHeight(35)
+
         btn_box.addWidget(self.btn_edit_hud_stats)
         btn_box.addWidget(self.btn_test_stats)
+        btn_box.addWidget(self.btn_save_stats)
+
         layout.addLayout(btn_box)
 
         layout.addStretch()
@@ -498,6 +848,13 @@ class OverlayConfigWindow(QWidget):
         # Save Button
         self.btn_save_voice = QPushButton("SAVE VOICE MACROS", objectName="SaveBtn")
         self.btn_save_voice.setFixedWidth(250)
-        layout.addWidget(self.btn_save_voice, alignment=Qt.AlignmentFlag.AlignCenter)  # Hier ist es korrektr)
+        layout.addWidget(self.btn_save_voice, alignment=Qt.AlignmentFlag.AlignCenter)
 
         layout.addStretch()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = OverlayConfigWindow()
+    window.show()
+    sys.exit(app.exec())

@@ -48,6 +48,11 @@ from PyQt6.QtWidgets import (
     QStackedWidget,  # Neu hinzugefügt
     QGraphicsDropShadowEffect
 )
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QListWidget, QStackedWidget, QGraphicsDropShadowEffect,
+    QColorDialog, QFileDialog # <--- QColorDialog und QFileDialog sicherstellen
+)
 from PyQt6.QtGui import (
     QPixmap,
     QColor,
@@ -94,9 +99,9 @@ class DiorMainHub(QMainWindow):
         self.nav_list = QListWidget()
         self.nav_list.setFixedWidth(200)
         self.nav_list.setObjectName("NavBar")
+        # WICHTIG: Die Reihenfolge muss mit dem Stack übereinstimmen!
         self.nav_list.addItems(["DASHBOARD", "LAUNCHER", "CHARACTERS", "OVERLAY", "SETTINGS"])
 
-        # Styling für die Seitenleiste
         self.nav_list.setStyleSheet("""
             QListWidget { background-color: #1a1a1a; border: none; outline: none; }
             QListWidget::item { padding: 25px; color: #4a6a7a; font-family: 'Consolas'; font-weight: bold; }
@@ -106,7 +111,7 @@ class DiorMainHub(QMainWindow):
         # --- CONTENT BEREICH (Stacked Widget) ---
         self.stack = QStackedWidget()
 
-        # Hier fügen wir die Fenster hinzu, die du bereits erstellt hast
+        # Wir holen uns die Fenster aus dem Controller (DiorClientGUI)
         self.stack.addWidget(self.controller.dash_window)  # Index 0
         self.stack.addWidget(self.controller.launcher_win)  # Index 1
         self.stack.addWidget(self.controller.char_win)  # Index 2
@@ -116,8 +121,16 @@ class DiorMainHub(QMainWindow):
         main_layout.addWidget(self.nav_list)
         main_layout.addWidget(self.stack)
 
-        # Verbindung: Klick in der Liste wechselt das Fenster im Stack
+        # Interne Verbindung: Klick auf Liste -> Stack wechselt
         self.nav_list.currentRowChanged.connect(self.stack.setCurrentIndex)
+
+        # Startseite setzen
+        self.nav_list.setCurrentRow(0)
+
+    # --- HILFSMETHODE FÜR DEN CONTROLLER ---
+    def switch_to_tab(self, index):
+        """Wechselt den Tab und aktualisiert die Seitenleiste visuell."""
+        self.nav_list.setCurrentRow(index)
 
 
 class PathDrawingLayer(QWidget):
@@ -1309,7 +1322,6 @@ CHEAT_DESCRIPTIONS = {
 class DiorClientGUI:
     def __init__(self):
         # 1. BASIS-DATEN LADEN
-        # Wir definieren BASE_DIR, falls noch nicht geschehen, für relative Pfade
         self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.init_db()
         self.config = self.load_config()
@@ -1317,21 +1329,20 @@ class DiorClientGUI:
         self.char_data = self.load_chars_from_db() or {}
         self.name_cache = self.load_cache_from_db() or {}
 
-        # 2. LOGIK-VARIABLEN INITIALISIEREN (Sehr wichtig: VOR der GUI!)
-        # Diese Variablen ersetzen die alten tk.BooleanVar / tk.StringVar
+        # 2. LOGIK-VARIABLEN (Vor der GUI!)
         self.overlay_active_state = self.config.get("overlay_master_active", False)
         self.ps2_dir = self.config.get("ps2_path", "")
         self.current_world_id = self.config.get("world_id", "10")
         self.current_character_id = ""
+        self.is_hud_editing = False  # Status für Edit-Modus
+        self.overlay_win = None  # Vor-Definition gegen AttributeErrors
 
         self.server_map = {
-            "Wainwright (EU)": "10",
-            "Osprey (US)": "1",
-            "SolTech (Asia)": "40",
-            "Jaeger": "19"
+            "Wainwright (EU)": "10", "Osprey (US)": "1",
+            "SolTech (Asia)": "40", "Jaeger": "19"
         }
 
-        # Tracking & Stats
+        # Tracking Variables
         self.killstreak_count = 0
         self.kill_counter = 0
         self.is_dead = False
@@ -1342,148 +1353,132 @@ class DiorClientGUI:
         self.currentZone = 0
         self.myWorldID = self.current_world_id
         self.last_kill_time = 0
-
         self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
         self.session_stats = {}
         self.active_players = {}
 
-        # Enforcer / Watchdog
+        # Enforcer / Watchdog / Network
         self.observer = None
         self.last_killer_name = "None"
         self.last_killer_id = "0"
         self.last_evidence_url = ""
-
-        # Assets & Netzwerk
         self.item_db = {}
         self.id_queue = Queue()
         self.websocket = None
         self.loop = None
 
-        # Pfade für Inis
+        # Pfade
         self.assets_path = os.path.join("assets", "Planetside 2 ini")
         self.source_high = os.path.join(self.assets_path, "UserOptions_high.ini")
         self.source_low = os.path.join(self.assets_path, "UserOptions_low.ini")
 
-        # 3. QT APP & MODULE INITIALISIEREN
+        # 3. QT APP & FENSTER INITIALISIEREN
         self.qt_app = QApplication.instance() or QApplication(sys.argv)
         self.qt_app.setStyle("Fusion")
 
-        # Fenster erstellen
-        self.dash_window = dashboard_qt.DashboardWindow()
-        self.dash_controller = dashboard_qt.DashboardController(self.dash_window)  # Falls benötigt
-        self.launcher_win = launcher_qt.LauncherWindow()
-        self.char_win = characters_qt.CharactersWindow()
-        self.ovl_config_win = overlay_config_qt.OverlayConfigWindow()
-        self.settings_win = settings_qt.SettingsWindow()
+        # Die Unter-Fenster erstellen
+        self.dash_window = dashboard_qt.DashboardWidget(self)  # Widget, nicht Window!
+        self.dash_controller = dashboard_qt.DashboardController(self.dash_window)
+        self.launcher_win = launcher_qt.LauncherWidget(self)
+        self.char_win = characters_qt.CharacterWidget(self)
+        self.ovl_config_win = overlay_config_qt.OverlayConfigWindow(self)
+        self.settings_win = settings_qt.SettingsWidget(self)
 
-        # 4. MAIN HUB STARTEN (Die Hülle, die alles zusammenhält)
+        # WICHTIG: Overlay erstellen, BEVOR wir Signale verbinden
+        # from Dior_Client import QtOverlay
+        self.overlay_win = QtOverlay(self)
+
+        # 4. MAIN HUB (Die Hülle)
         self.main_hub = DiorMainHub(self)
 
-        # 5. SIGNALE VERBINDEN
+        # 5. SIGNALE VERBINDEN (Das Herzstück)
+        # Jetzt existieren alle Fenster (inkl. Overlay), daher klappt das Routing
         self.connect_all_qt_signals()
 
         # 6. DATEN IN DIE FENSTER LADEN
-        # Jetzt existieren alle Variablen, load_overlay_config_to_qt wird nicht mehr abstürzen
         self.load_overlay_config_to_qt()
         self.settings_win.load_config(self.config, self.ps2_dir)
 
-        # Charakter-Dropdown im Overlay-Fenster füllen
+        # Dropdown füllen
         opts = list(self.char_data.keys()) if self.char_data else ["N/A"]
         self.ovl_config_win.char_combo.clear()
         self.ovl_config_win.char_combo.addItems(opts)
 
+        # Positionen initialisieren
+        if self.overlay_win:
+            self.overlay_win.update_killfeed_pos()
+
         # 7. ANZEIGEN
         self.main_hub.show()
-        self.overlay_win = None  # Initial leer
 
-        # 8. HINTERGRUND-THREADS STARTEN
-        # Erst ganz am Ende, wenn die GUI bereit ist, Daten zu empfangen
+        # 8. HINTERGRUND-THREADS & TIMER
         self.start_websocket_thread()
         threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
 
-        # Item DB laden
+        # Item DB
         csv_path = os.path.join(self.BASE_DIR, "assets", "sanction-list.csv")
         if os.path.exists(csv_path):
             self.load_item_db(csv_path)
 
+        # Stats Timer
         self.stats_timer = QTimer()
-        self.stats_timer.timeout.connect(self.update_live_graph)  # Die Logik-Funktion
-        self.stats_timer.start(1000)  # Jede Sekunde (1000ms)
+        self.stats_timer.timeout.connect(self.update_live_graph)
+        self.stats_timer.start(1000)
 
-        # Wichtig: Startzeit für KPM-Berechnung setzen
+        # Session Startzeit
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
-        self.overlay_win = QtOverlay(self)  # Deine Klasse instanziieren
-        # WICHTIG: Signale der Overlay-Klasse mit der Logik verbinden
-        ui = self.ovl_config_win
-        # ui.btn_save_evt.clicked.connect(self.save_event_ui_data)
-        ui.btn_edit_hud.clicked.connect(self.toggle_hud_edit_mode)  # Im Event Tab
-        ui.btn_edit_streak.clicked.connect(self.toggle_hud_edit_mode)
-        ui.btn_edit_cross.clicked.connect(self.toggle_hud_edit_mode)
-        ui.btn_edit_hud_stats.clicked.connect(self.toggle_hud_edit_mode)
-        self.ovl_config_win.btn_save_event.clicked.connect(self.save_event_ui_data)
-
-        # Grid-Klicks (Falls du das Grid in Qt hast)
-        ui.signals.test_trigger.connect(self.load_event_ui_data)
-
-        # Initialisierung der Positionen
-        self.overlay_win.update_killfeed_pos()
+        # Manuelle connects entfernt! -> Macht connect_all_qt_signals jetzt.
 
     def apply_event_layout_to_all(self):
-        """Überträgt Position und Skalierung des aktuellen Events auf ALLE anderen."""
+        """Kopiert Position & Größe des aktuellen Events auf ALLE anderen."""
         from PyQt6.QtWidgets import QMessageBox
 
-        # 1. Quell-Daten aus der UI holen
+        # Welches Event ist gerade offen?
         ui = self.ovl_config_win
         source_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
 
         if source_name == "NONE" or not source_name:
-            self.add_log("WARN: Kein Quell-Event ausgewählt.")
             return
 
         # Sicherheitsabfrage
-        confirm = QMessageBox.question(
-            self.ovl_config_win,
-            "Layout übertragen?",
-            f"Sollen Skalierung und Position von '{source_name}' auf ALLE anderen Events übertragen werden?\n(Bilder und Sounds bleiben erhalten!)",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+        reply = QMessageBox.question(ui, "Layout übertragen?",
+                                     f"Soll das Layout von '{source_name}' (Position & Größe) auf ALLE anderen Events übertragen werden?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
 
-        if confirm != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # 2. Aktuelle Werte ermitteln (Live vom Overlay oder aus Feldern)
+        # Werte ermitteln
+        # Entweder vom Overlay (falls Edit Mode an) oder aus Config
         if self.overlay_win and self.overlay_win.event_preview_label.isVisible():
             pos = self.overlay_win.event_preview_label.pos()
             new_x = int(pos.x() / self.overlay_win.ui_scale)
             new_y = int(pos.y() / self.overlay_win.ui_scale)
         else:
-            # Fallback auf Config des Quell-Events
             src_data = self.config.get("events", {}).get(source_name, {})
             new_x = src_data.get("x", 100)
             new_y = src_data.get("y", 200)
 
         new_scale = ui.slider_evt_scale.value() / 100.0
 
-        # 3. Auf alle Events anwenden
+        # Auf alle anwenden
+        count = 0
         if "events" not in self.config: self.config["events"] = {}
 
-        count = 0
         for evt_key in self.config["events"]:
-            if evt_key == source_name: continue  # Quelle überspringen
+            if evt_key == source_name: continue
 
-            # Bestehende Daten laden, damit Bild/Sound NICHT überschrieben werden
+            # Nur Layout ändern, Bilder/Sounds behalten!
             self.config["events"][evt_key]["x"] = new_x
             self.config["events"][evt_key]["y"] = new_y
             self.config["events"][evt_key]["scale"] = new_scale
             count += 1
 
         self.save_config()
-        self.add_log(f"SYS: Layout von '{source_name}' auf {count} Events übertragen.")
-
-        # Visuelles Feedback
-        QMessageBox.information(self.ovl_config_win, "Erfolg", f"Layout auf {count} Events übertragen!")
+        self.add_log(f"SYS: Layout auf {count} Events übertragen.")
+        QMessageBox.information(ui, "Erfolg", f"Layout erfolgreich übertragen!")
 
     def process_search_results_qt(self, stats, weapons):
         """Wird im Haupt-Thread aufgerufen, wenn der Worker fertig ist."""
@@ -1506,88 +1501,205 @@ class DiorClientGUI:
         self.add_log(f"SYS: Global Overlay {'ENABLED' if checked else 'DISABLED'}")
 
     def connect_all_qt_signals(self):
-        """Zentrales Management aller PyQt6 Signale."""
+        """Zentrales Management aller PyQt6 Signale (Vollständig & Syntax-Korrigiert)."""
+        print("SYS: Connecting GUI signals...")
 
-        # --- CHARACTERS WINDOW ---
-        self.char_win.signals.search_requested.connect(self.run_search)
-        self.char_win.signals.search_finished.connect(self.process_search_results_qt)
+        # Shortcuts für weniger Schreibarbeit
+        hub = self.main_hub  # Das Hauptfenster (Navigation)
+        ui = self.ovl_config_win  # Overlay Config Fenster
+        dash = self.dash_controller  # Das Dashboard (Buttons)
 
-        # --- LAUNCHER WINDOW ---
-        self.launcher_win.signals.launch_requested.connect(self.execute_launch)
+        # --- 1. DASHBOARD NAVIGATION (Vom Dashboard zum Hub) ---
+        if hasattr(dash, 'btn_play'):
+            self.safe_connect(dash.btn_play.clicked, lambda: hub.switch_to_tab(1))
+        if hasattr(dash, 'btn_chars'):
+            self.safe_connect(dash.btn_chars.clicked, lambda: hub.switch_to_tab(2))
+        if hasattr(dash, 'btn_overlay'):
+            self.safe_connect(dash.btn_overlay.clicked, lambda: hub.switch_to_tab(3))
+        if hasattr(dash, 'btn_settings'):
+            self.safe_connect(dash.btn_settings.clicked, lambda: hub.switch_to_tab(4))
 
-        # --- SETTINGS WINDOW ---
-        self.settings_win.signals.browse_obs_requested.connect(self.browse_folder)
-        self.settings_win.signals.browse_ps2_requested.connect(self.browse_ps2_folder)
-        self.settings_win.signals.change_bg_requested.connect(self.change_background_file)
-        self.settings_win.signals.save_requested.connect(self.save_enforcer_config_qt)
+        # Server-Wechsel im Dashboard
+        if hasattr(dash, 'signals') and hasattr(dash.signals, 'server_changed'):
+            self.safe_connect(dash.signals.server_changed, self.change_server_logic)
 
-        # --- OVERLAY CONFIG WINDOW ---
-        # Identität & Master Switch
-        self.ovl_config_win.char_combo.currentTextChanged.connect(self.update_active_char)
-        self.ovl_config_win.check_master.toggled.connect(self.toggle_master_switch_qt)
+        # --- 2. OVERLAY CONFIG (Buttons im Index 3) ---
 
-        # Event-Selection & Grid-Klick (Nur einmal verbinden!)
-        self.ovl_config_win.signals.setting_changed.connect(
-            lambda key, val: self.on_event_selected_in_qt(val) if key == "event_selection" else None
-        )
+        # A) Identität & Master Switch
+        self.safe_connect(ui.char_combo.currentTextChanged, self.update_active_char)
+        self.safe_connect(ui.check_master.toggled, self.toggle_master_switch_qt)
 
-        # Slider für Killstreak (Tab 3) - AUTOMATISCHES SPEICHERN BEI ÄNDERUNG
-        self.ovl_config_win.slider_scale.valueChanged.connect(self.save_streak_settings_from_qt)
-        self.ovl_config_win.slider_tx.valueChanged.connect(self.save_streak_settings_from_qt)
-        self.ovl_config_win.slider_ty.valueChanged.connect(self.save_streak_settings_from_qt)
+        # B) Event-Selection (Grid Klick)
+        # KORREKTUR: Mehrzeiliges try/except
+        try:
+            ui.signals.setting_changed.disconnect()
+        except:
+            pass
 
-        # Slider für Stats-Widget (Tab 5) - AUTOMATISCHES SPEICHERN BEI ÄNDERUNG
-        self.ovl_config_win.slider_st_scale.valueChanged.connect(self.save_stats_config_from_qt)
-        self.ovl_config_win.slider_st_tx.valueChanged.connect(self.save_stats_config_from_qt)
-        self.ovl_config_win.slider_st_ty.valueChanged.connect(self.save_stats_config_from_qt)
-
-        # Manuelle Save-Buttons (als Backup oder für Texteingaben)
-        self.ovl_config_win.btn_save_streak.clicked.connect(self.save_streak_settings_from_qt)
-        self.ovl_config_win.btn_save_stats.clicked.connect(self.save_stats_config_from_qt)
-        self.ovl_config_win.btn_save_voice.clicked.connect(self.save_voice_config_from_qt)
-
-        # Test- & Preview-Buttons
-        self.ovl_config_win.btn_test_preview.clicked.connect(
-            lambda: self.trigger_overlay_event(self.ovl_config_win.lbl_editing.text().replace("EDITING: ", ""))
-        )
-        self.ovl_config_win.btn_test_streak.clicked.connect(self.test_streak_visuals)
-        self.ovl_config_win.btn_test_stats.clicked.connect(self.test_stats_visuals)
-
-        # HUD Edit-Modus
-        self.ovl_config_win.btn_edit_hud.clicked.connect(self.toggle_hud_edit_mode)
-        self.ovl_config_win.btn_edit_hud_stats.clicked.connect(self.toggle_hud_edit_mode)
-        self.ovl_config_win.btn_edit_cross.clicked.connect(self.toggle_hud_edit_mode)
-
-        # --- BROWSE BUTTONS IM EVENT TAB ---
-
-        self.ovl_config_win.btn_browse_evt_img.clicked.connect(
-            lambda: self.browse_file_qt(self.ovl_config_win.ent_evt_img, "png")
-        )
-        self.ovl_config_win.btn_browse_evt_snd.clicked.connect(
-            lambda: self.browse_file_qt(self.ovl_config_win.ent_evt_snd, "audio")
-        )
-
-
-
-        self.ovl_config_win.signals.setting_changed.connect(
+        ui.signals.setting_changed.connect(
             lambda key, val: self.load_event_ui_data(val) if key == "event_selection" else None
         )
-        if hasattr(self.ovl_config_win, 'btn_apply_all'):
-            self.ovl_config_win.btn_apply_all.clicked.connect(self.apply_event_layout_to_all)
 
-            # 2. Queue Toggle (Wichtig für Sound-Management)
-        if hasattr(self.ovl_config_win, 'btn_queue_toggle'):
-            self.ovl_config_win.btn_queue_toggle.clicked.connect(self.toggle_event_queue_qt)
+        # --- FIX: Live-Preview wenn man tippt ---
+        # Wenn sich der Text ändert -> Pfad suchen -> Bild im Config-Fenster updaten
+        ui.ent_evt_img.textChanged.connect(
+            lambda text: ui.update_preview_image(get_asset_path(text))
+        )
 
-            # 3. Save Event (Hatten wir schon, aber zur Sicherheit)
-        self.ovl_config_win.btn_save_event.clicked.connect(self.save_event_ui_data)
+        # C) Slider Auto-Save (Streak & Stats)
+        for slider in [ui.slider_scale, ui.slider_tx, ui.slider_ty]:
+            self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
 
-        # --- DASHBOARD ---
-        self.dash_controller.signals.server_changed.connect(self.change_server_logic)
+        for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
+            self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
 
-        print("SYS: All Qt signals successfully routed.")
+        # D) Manuelle Save Buttons
+        self.safe_connect(ui.btn_save_streak.clicked, self.save_streak_settings_from_qt)
+        self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
+        self.safe_connect(ui.btn_save_voice.clicked, self.save_voice_config_from_qt)
+        self.safe_connect(ui.btn_save_event.clicked, self.save_event_ui_data)
 
+        # E) Voice Macros
+        for combo in ui.voice_combos.values():
+            self.safe_connect(combo.currentIndexChanged, self.save_voice_config_from_qt)
 
+        # F) Browse Buttons (Image / Sound)
+        # KORREKTUR: Mehrzeiliges try/except
+        try:
+            ui.btn_browse_evt_img.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_evt_img.clicked.connect(lambda: self.browse_file_qt(ui.ent_evt_img, "png"))
+
+        try:
+            ui.btn_browse_evt_snd.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_evt_snd.clicked.connect(lambda: self.browse_file_qt(ui.ent_evt_snd, "audio"))
+
+        # --- KILLSTREAK TAB SIGNALE ---
+
+        # 1. Main Background Image Browse
+        try:
+            ui.btn_browse_streak_img.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_streak_img.clicked.connect(lambda: self.browse_file_qt(ui.ent_streak_img, "png"))
+
+        # 2. Path Recording Controls
+        self.safe_connect(ui.btn_path_record.clicked, self.start_path_record)
+        self.safe_connect(ui.btn_path_clear.clicked, self.clear_path)
+
+        # 1. Checkboxen (Sofortiges Speichern bei Klick)
+        self.safe_connect(ui.check_streak_master.toggled, self.save_streak_settings_from_qt)
+        self.safe_connect(ui.check_streak_anim.toggled, self.save_streak_settings_from_qt)
+
+        # 2. Messer-Browse Buttons (Dynamisch verbinden)
+        # Wir nutzen eine kleine Helper-Schleife für TR, NC, VS
+        for faction, btn in ui.knife_browse_btns.items():
+            # Wir holen das passende Textfeld dazu
+            line_edit = ui.knife_inputs[faction]
+            # Lambda: Wir binden 'line_edit' fest an den Aufruf
+            # disconnect ist hier wichtig, falls die Methode mehrfach aufgerufen wird
+            try:
+                btn.clicked.disconnect()
+            except:
+                pass
+            btn.clicked.connect(lambda _, le=line_edit: self.browse_file_qt(le, "png"))
+
+        # 3. Design: Color Picker & Font Size
+        self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
+        self.safe_connect(ui.combo_font_size.currentTextChanged, self.save_streak_settings_from_qt)
+
+        # 4. Slider (Live Update) - Hattest du schon, hier nochmal zur Sicherheit vollständig
+        for slider in [ui.slider_tx, ui.slider_ty, ui.slider_scale]:
+            self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
+
+        # 5. Action Buttons
+        self.safe_connect(ui.btn_save_streak.clicked, self.save_streak_settings_from_qt)
+        self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
+
+        # G) Edit-Mode Buttons (Hud verschieben)
+        self.safe_connect(ui.btn_edit_hud.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
+
+        # H) Spezial-Funktionen (Apply All, Queue)
+        if hasattr(ui, 'btn_apply_all'):
+            self.safe_connect(ui.btn_apply_all.clicked, self.apply_event_layout_to_all)
+
+        if hasattr(ui, 'btn_queue_toggle'):
+            # Achtung: clicked sendet einen boolean, den fangen wir mit lambda ab oder ignorieren ihn
+            # Am besten direkt verbinden, da unsere Funktion keine Argumente braucht
+            self.safe_connect(ui.btn_queue_toggle.clicked, lambda: self.toggle_event_queue_qt())
+
+        # --- 3. CHARACTERS & LAUNCHER (Index 2 & 1) ---
+        self.safe_connect(self.char_win.signals.search_requested, self.run_search)
+        self.safe_connect(self.char_win.signals.search_finished, self.process_search_results_qt)
+        self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
+
+        # --- 4. SETTINGS (Index 4) ---
+        self.safe_connect(self.settings_win.signals.browse_obs_requested, self.browse_folder)
+        self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
+        self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
+        self.safe_connect(self.settings_win.signals.save_requested, self.save_enforcer_config_qt)
+
+        # --- 5. TEST BUTTONS ---
+        self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
+        self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
+
+        # Preview Event Button (KORREKTUR: Mehrzeilig)
+        try:
+            ui.btn_test_preview.clicked.disconnect()
+        except:
+            pass
+
+        ui.btn_test_preview.clicked.connect(
+            lambda: self.trigger_overlay_event(ui.lbl_editing.text().replace("EDITING: ", ""))
+        )
+
+        # --- 6. RÜCKKANAL VOM INGAME OVERLAY ---
+        if self.overlay_win:
+            self.safe_connect(self.overlay_win.signals.edit_mode_toggled, self.toggle_hud_edit_mode)
+
+        print("SYS: All signals routed via DiorMainHub.")
+
+    def pick_streak_color_qt(self):
+        """Öffnet einen Qt-Farbwähler für die Killstreak-Zahl."""
+        # Aktuelle Farbe aus Config holen (als Startwert)
+        current_hex = self.config.get("streak", {}).get("color", "#ffffff")
+        initial = QColor(current_hex)
+
+        # Dialog öffnen
+        color = QColorDialog.getColor(initial, self.main_hub, "Wähle HUD Farbe")
+
+        if color.isValid():
+            hex_color = color.name()  # Gibt z.B. "#ff0000" zurück
+
+            # 1. In Config schreiben
+            if "streak" not in self.config: self.config["streak"] = {}
+            self.config["streak"]["color"] = hex_color
+
+            # 2. Button-Farbe im UI aktualisieren (visuelles Feedback)
+            # Wir setzen den Hintergrund des Buttons auf die gewählte Farbe
+            # Und die Textfarbe auf Schwarz oder Weiß je nach Helligkeit
+            text_col = "black" if color.lightness() > 128 else "white"
+            self.ovl_config_win.btn_pick_color.setStyleSheet(
+                f"background-color: {hex_color}; color: {text_col}; font-weight: bold; border: 1px solid #555;"
+            )
+
+            # 3. Speichern und Overlay updaten
+            self.save_streak_settings_from_qt()
+
+    def safe_connect(self, signal, slot):
+        """Trennt eine Verbindung sicherheitshalber, bevor sie neu gesetzt wird."""
+        try:
+            signal.disconnect(slot)
+        except TypeError:
+            pass  # War noch nicht verbunden, alles gut
+        signal.connect(slot)
 
     def on_event_selected_in_qt(self, event_name):
         """Wird gerufen, wenn man im Grid auf ein Event klickt."""
@@ -1613,25 +1725,47 @@ class DiorClientGUI:
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
 
     def save_streak_settings_from_qt(self):
-        """Liest Streak-Settings aus Qt und speichert sie."""
+        """Liest Killstreak-Settings komplett aus Qt und speichert sie."""
         s_ui = self.ovl_config_win
+
+        saved_color = self.config.get("streak", {}).get("color", "#ffffff")
+
+        # Speed validieren
+        try:
+            speed_val = int(s_ui.ent_streak_speed.text())
+        except:
+            speed_val = 50
 
         # Neues Datenpaket schnüren
         new_streak = {
             "active": s_ui.check_streak_master.isChecked(),
             "anim_active": s_ui.check_streak_anim.isChecked(),
+
+            # NEU: Main Image & Speed aus UI lesen
+            "img": s_ui.ent_streak_img.text(),
+            "speed": speed_val,
+
             "tx": s_ui.slider_tx.value(),
             "ty": s_ui.slider_ty.value(),
             "scale": s_ui.slider_scale.value() / 100.0,
             "knife_tr": s_ui.knife_inputs["TR"].text(),
             "knife_nc": s_ui.knife_inputs["NC"].text(),
-            "knife_vs": s_ui.knife_inputs["VS"].text()
+            "knife_vs": s_ui.knife_inputs["VS"].text(),
+            "size": int(s_ui.combo_font_size.currentText()),
+            "color": saved_color,
+
+            # Pfad bleibt erhalten (wird via Record Button separat gesetzt)
+            "custom_path": self.config.get("streak", {}).get("custom_path", [])
         }
 
-        # In die Config übernehmen
-        self.overlay_config["streak"].update(new_streak)
-        self.save_config()  # Deine existierende Funktion
-        self.add_log("SYS: Killstreak settings locked.")
+        if "streak" not in self.config: self.config["streak"] = {}
+        self.config["streak"].update(new_streak)
+
+        self.save_config()
+        self.add_log("SYS: Killstreak settings updated.")
+
+        if self.overlay_win:
+            self.update_streak_display()
 
     def save_stats_config_from_qt(self):
         """Liest Stats & Feed Settings aus Qt und speichert sie."""
@@ -1678,6 +1812,25 @@ class DiorClientGUI:
 
         ui = self.ovl_config_win
 
+        # --- QUEUE BUTTON INITIALISIEREN ---
+        queue_active = self.config.get("event_queue_active", True)
+        ui.btn_queue_toggle.setChecked(queue_active)
+
+        if queue_active:
+            ui.btn_queue_toggle.setText("QUEUE: ON")
+            ui.btn_queue_toggle.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; padding: 10px;"
+            )
+        else:
+            ui.btn_queue_toggle.setText("QUEUE: OFF")
+            ui.btn_queue_toggle.setStyleSheet(
+                "background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px;"
+            )
+
+        # WICHTIG: Den Status auch direkt ans Overlay senden, falls es schon läuft
+        if self.overlay_win:
+            self.overlay_win.queue_enabled = queue_active
+
         # --- 2. TAB 1: IDENTITY ---
         active_char = getattr(self, 'char_var_value', "SELECT_UNIT...")
         idx = ui.char_combo.findText(active_char)
@@ -1690,7 +1843,26 @@ class DiorClientGUI:
         ui.slider_scale.setValue(int(s_conf.get("scale", 1.0) * 100))
         ui.check_streak_master.setChecked(s_conf.get("active", True))
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
+        # Font Größe setzen
+        current_size = str(s_conf.get("size", 26))
+        idx = ui.combo_font_size.findText(current_size)
+        if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
 
+        # NEU: Main Image & Speed laden
+        ui.ent_streak_img.setText(s_conf.get("img", "KS_Counter.png"))
+        ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
+
+        # Bestehendes...
+        ui.slider_tx.setValue(s_conf.get("tx", 0))
+        ui.slider_ty.setValue(s_conf.get("ty", 0))
+
+        # Button Farbe initialisieren
+        c_hex = s_conf.get("color", "#ffffff")
+        col = QColor(c_hex)
+        text_col = "black" if col.lightness() > 128 else "white"
+        ui.btn_pick_color.setStyleSheet(
+            f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555;"
+        )
         for fac in ["TR", "NC", "VS"]:
             if fac in ui.knife_inputs:
                 ui.knife_inputs[fac].setText(s_conf.get(f"knife_{fac.lower()}", ""))
@@ -1853,50 +2025,48 @@ class DiorClientGUI:
 
     def start_path_record(self):
         if not self.overlay_win: return
+        ui = self.ovl_config_win
 
         is_recording = getattr(self.overlay_win, "path_edit_active", False)
 
         if not is_recording:
             # --- START ---
             self.overlay_win.path_edit_active = True
-
-            # 1. Overlay durchklickbar machen (außer unsere Layer)
             self.overlay_win.set_mouse_passthrough(False)
             self.overlay_win.custom_path = []
 
-            # 2. Die Zeichen-Ebene aktivieren
+            # Layer aktivieren & Fokus holen
             self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             self.overlay_win.path_layer.setGeometry(self.overlay_win.rect())
             self.overlay_win.path_layer.show()
             self.overlay_win.path_layer.raise_()
-
-            # --- NEU: FOKUS SETZEN DAMIT SPACEBAR GEHT ---
             self.overlay_win.activateWindow()
             self.overlay_win.setFocus()
-            # ---------------------------------------------
 
-            self.btn_path_record.config(text="STOP PATH RECORD (SPACE)", bg="#ff0000", fg="white")
+            # QT BUTTON UPDATE
+            ui.btn_path_record.setText("STOP RECORDING (SPACE)")
+            ui.btn_path_record.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
 
-            # Dummy-Streak anzeigen
+            # Dummy Streak anzeigen
             self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
-            self.temp_factions_backup = getattr(self, 'streak_factions', [])
             self.killstreak_count = 10
             self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
             self.update_streak_display()
 
-            self.add_log("PATH: Modus AN. Drücke SPACE zum Speichern & Beenden.")
+            self.add_log("PATH: Recording started. Click points -> Press SPACE to save.")
         else:
-            # --- STOP DER AUFNAHME ---
-            self.overlay_win.path_edit_active = False  # WICHTIG: Status zurücksetzen!
+            # --- STOP ---
+            self.overlay_win.path_edit_active = False
             self.overlay_win.set_mouse_passthrough(True)
             self.overlay_win.path_layer.hide()
 
-            # Button zurücksetzen
-            self.btn_path_record.config(text="REC PATH", bg="#ff8c00", fg="black")
+            # QT BUTTON RESET
+            ui.btn_path_record.setText("REC PATH")
+            ui.btn_path_record.setStyleSheet("background-color: #aa4400; color: white; font-weight: bold;")
 
-            # Pfad in Config speichern
-            self.save_streak_settings()
-            self.add_log("PATH: Aufnahme beendet und Pfad gespeichert.")
+            # Pfad speichern (übernimmt custom_path automatisch aus Overlay)
+            self.save_streak_settings_from_qt()
+            self.add_log("PATH: Recording stopped and saved.")
 
     def clear_path(self):
         if "streak" in self.config:
@@ -2665,56 +2835,70 @@ class DiorClientGUI:
         if hasattr(self, 'active_event_photos') and tag in self.active_event_photos:
             del self.active_event_photos[tag]
 
-    def toggle_event_queue(self):
-        """Schaltet das Queue-System an oder aus und speichert es."""
-        # Aktuellen Status umkehren
+    def toggle_event_queue_qt(self):
+        """Schaltet das Queue-System an oder aus (PyQt6 Portierung)."""
+        # 1. Aktuellen Status aus der Config holen (Source of Truth)
         current_state = self.config.get("event_queue_active", True)
         new_state = not current_state
 
-        # Speichern
+        # 2. Speichern
         self.config["event_queue_active"] = new_state
         self.save_config()
 
-        # Button Optik updaten
+        # 3. GUI aktualisieren (Zugriff auf das Overlay-Config Fenster)
+        ui = self.ovl_config_win
+
+        # Button Status synchronisieren
+        ui.btn_queue_toggle.setChecked(new_state)
+
         if new_state:
-            self.btn_queue_toggle.config(text="EVENT QUEUE: ON", bg="#004400")
+            ui.btn_queue_toggle.setText("QUEUE: ON")
+            ui.btn_queue_toggle.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; padding: 10px;"
+            )
             self.add_log("SYS: Event Queue ENABLED (Sequential Playback)")
         else:
-            self.btn_queue_toggle.config(text="EVENT QUEUE: OFF", bg="#440000")
+            ui.btn_queue_toggle.setText("QUEUE: OFF")
+            ui.btn_queue_toggle.setStyleSheet(
+                "background-color: #440000; color: #ffcccc; font-weight: bold; padding: 10px;"
+            )
             self.add_log("SYS: Event Queue DISABLED (Instant Overwrite)")
 
-        # --- WICHTIGE ÄNDERUNG HIER ---
+        # 4. Overlay informieren (WICHTIG!)
         if self.overlay_win:
-            # 1. Dem Overlay den neuen Status mitteilen
+            # Variable im Overlay setzen
             self.overlay_win.queue_enabled = new_state
 
-            # 2. Wenn ausgeschaltet, sofort aufräumen
+            # Wenn ausgeschaltet, Warteschlange sofort leeren
             if not new_state:
-                self.overlay_win.clear_queue_now()
+                if hasattr(self.overlay_win, 'clear_queue_now'):
+                    self.overlay_win.clear_queue_now()
+                else:
+                    # Fallback, falls die Methode im QtOverlay anders heißt
+                    # (Löscht die interne Liste von Events)
+                    if hasattr(self.overlay_win, 'event_queue'):
+                        self.overlay_win.event_queue.clear()
 
     def browse_file_qt(self, line_edit_widget, type_):
         # Filter für PyQt6 QFileDialog
-        ft = "Images (*.png)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
+        ft = "Images (*.png *.jpg)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
 
-        # 1. Datei auswählen (nutzt jetzt Qt statt filedialog)
         from PyQt6.QtWidgets import QFileDialog
-        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Datei auswählen", "", ft)
+        # self.main_hub als Parent nutzen, damit das Fenster zentriert ist
+        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Datei auswählen", self.BASE_DIR, ft)
 
         if file_path:
-            # 2. Dateinamen extrahieren
             filename = os.path.basename(file_path)
-
-            # 3. Zielpfad bestimmen (Nutzt deine get_asset_path Funktion)
             target_path = get_asset_path(filename)
 
-            # 4. Datei kopieren
             try:
+                # Datei in assets kopieren, falls sie woanders herkommt
                 if os.path.abspath(file_path) != os.path.abspath(target_path):
                     shutil.copy2(file_path, target_path)
             except Exception as e:
                 self.add_log(f"ERR: Kopier-Fehler: {e}")
 
-            # 5. Nur den Dateinamen ins PyQt6 Textfeld eintragen
+            # Textfeld setzen (Das löst automatisch das textChanged Signal aus Schritt 2 aus!)
             line_edit_widget.setText(filename)
 
     def load_event_ui_data(self, event_type):
@@ -2724,8 +2908,10 @@ class DiorClientGUI:
         data = self.config.get("events", {}).get(event_type, {})
         ui = self.ovl_config_win
 
-        # Felder füllen (Qt-Syntax)
-        ui.ent_evt_img.setText(data.get("img", ""))
+        # Felder füllen
+        img_name = data.get("img", "")
+        ui.ent_evt_img.setText(img_name)
+
         ui.ent_evt_snd.setText(data.get("snd", ""))
         ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
 
@@ -2736,12 +2922,20 @@ class DiorClientGUI:
         # Label aktualisieren
         ui.lbl_editing.setText(f"EDITING: {event_type}")
 
-        # Falls wir im Edit-Modus sind: Preview sofort an die gespeicherte Stelle schieben
+        # --- FIX: VORSCHAU IM CONFIG-FENSTER AKTUALISIEREN ---
+        # Wir bauen den vollen Pfad, damit das Label das Bild findet
+        if img_name:
+            full_path = get_asset_path(img_name)
+            ui.update_preview_image(full_path)
+        else:
+            ui.update_preview_image(None)
+
+        # Falls wir im Edit-Modus sind: Preview im Overlay verschieben
         if getattr(self, "is_hud_editing", False) and self.overlay_win:
-            # Skalieren: Basis-Pixel * UI_Scale = Monitor-Position
             ax = int(data.get("x", 100) * self.overlay_win.ui_scale)
             ay = int(data.get("y", 200) * self.overlay_win.ui_scale)
             self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
+
 
     def save_event_ui_data(self):
         """Speichert die UI-Eingaben für das aktuell gewählte Event in die Config"""
@@ -3073,18 +3267,17 @@ class DiorClientGUI:
         self.root.after(6000, end_test)
 
     def get_current_tab_targets(self):
-        """Ermittelt anhand des Qt-Tabs, was editiert werden soll"""
+        """Ermittelt sicher, welcher Tab gerade offen ist."""
         try:
-            # 1. Zugriff auf das Qt TabWidget
             ui = self.ovl_config_win
             idx = ui.tabs.currentIndex()
-            tab_text = ui.tabs.tabText(idx).upper().strip()
+            # .strip() ist entscheidend, da deine Tabs " EVENTS " heißen (mit Leerzeichen)
+            tab_text = ui.tabs.tabText(idx).strip().upper()
 
             targets = []
-            # 2. Abfrage basierend auf deinen neuen Tab-Namen
             if "CROSSHAIR" in tab_text:
                 targets = ["crosshair"]
-            elif "STATS" in tab_text:  # Deckt "STATS & FEED" ab
+            elif "STATS" in tab_text:
                 targets = ["stats", "feed"]
             elif "KILLSTREAK" in tab_text:
                 targets = ["streak"]
@@ -3093,87 +3286,107 @@ class DiorClientGUI:
 
             return targets
         except Exception as e:
-            self.add_log(f"ERR: get_current_tab_targets failed: {e}")
+            print(f"DEBUG: Tab Error: {e}")
             return []
 
     def toggle_hud_edit_mode(self):
-        """Startet/Stoppt den Edit-Modus für das Overlay (PyQt6)"""
+        """Startet den Edit-Modus und zeigt das aktive Element mit grünem Rahmen an."""
         if not self.overlay_win:
-            self.add_log("ERR: Overlay läuft nicht! Starten Sie erst das Spiel oder Overlay.")
+            self.add_log("ERR: Overlay läuft nicht! Bitte erst Overlay starten.")
             return
 
-        # Status prüfen
+        # Prüfen, ob wir schon im Edit-Modus sind
         is_editing = getattr(self, "is_hud_editing", False)
         ui = self.ovl_config_win
 
-        # Liste aller Edit-Buttons in der UI
+        # Alle Edit-Buttons aus allen Tabs sammeln, um sie synchron zu schalten
         btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats]
 
+        # --- START EDIT MODE ---
         if not is_editing:
-            # --- AKTIVIEREN ---
-            targets = self.get_current_tab_targets()  # Die Hilfsfunktion von vorhin
+            targets = self.get_current_tab_targets()
+
+            # WICHTIG: Wenn targets leer ist (User ist in falschem Tab), Abbruch
             if not targets:
-                self.add_log("INFO: Bitte erst den passenden Tab (Events, Streak, etc.) auswählen.")
+                self.add_log("INFO: Bitte wählen Sie einen Tab (Events, Streak, etc.) aus.")
                 return
 
             self.is_hud_editing = True
 
-            # Buttons rot färben
+            # 1. Buttons ROT färben & Text ändern
             for btn in btn_list:
-                btn.setText("STOP EDIT (SPEICHERN)")
-                btn.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
+                btn.setText("STOP EDIT (SAVE)")
+                # Explizites Rot für den aktiven Modus
+                btn.setStyleSheet(
+                    "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;")
 
-            # Overlay für Maus durchlässig machen (False = fängt Maus ab)
+            # 2. Overlay für Maus klickbar machen
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
 
-            # Wenn wir Events bearbeiten, müssen wir das Dummy-Bild anzeigen
+            # 3. EVENT HIGHLIGHTING (Das Bild laden & grün umranden)
             if "event" in targets:
-                # Daten aus UI holen
-                img_path = get_asset_path(ui.ent_evt_img.text().strip())  # Achtung: Feldname prüfen!
-                if not os.path.exists(img_path): img_path = ""  # Leeres Bild triggert "Missing"
+                # Name und Bildpfad aus den Feldern holen
+                img_name = ui.ent_evt_img.text().strip()
 
-                # Position aus Config laden (oder 0,0 falls neu)
+                # Falls Feld leer, aus Config laden
                 evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
                 evt_data = self.config.get("events", {}).get(evt_name, {})
 
-                # Preview anzeigen
-                self.overlay_win.display_image(
-                    img_path,
-                    999999,  # Endlose Dauer
-                    evt_data.get("x", 100),
-                    evt_data.get("y", 200),
-                    (ui.slider_evt_scale.value() / 100.0)
-                )
-                # Grünen Rahmen drumherum
-                self.overlay_win.event_preview_label.setStyleSheet(
-                    "border: 2px solid #00ff00; background: rgba(0,0,0,0.2);")
-                self.overlay_win.event_preview_label.show()
+                if not img_name:
+                    img_name = evt_data.get("img", "kill.png")  # Fallback
 
-            self.add_log(f"UI: Edit-Modus für {targets} gestartet.")
+                img_path = get_asset_path(img_name)
 
+                # Koordinaten & Scale laden
+                pos_x = evt_data.get("x", 100)
+                pos_y = evt_data.get("y", 200)
+                scale_val = ui.slider_evt_scale.value() / 100.0
+
+                # Bild im Overlay anzeigen (Dauer unendlich = 999999)
+                self.overlay_win.display_image(img_path, 9999999, pos_x, pos_y, scale_val)
+
+                # GRÜNER RAHMEN & SICHTBAR MACHEN
+                if self.overlay_win.img_label.isVisible():
+                    # Wir nutzen das img_label als "Preview Label"
+                    self.overlay_win.event_preview_label = self.overlay_win.img_label
+                    self.overlay_win.event_preview_label.setStyleSheet(
+                        "border: 3px solid #00ff00; background: rgba(0, 255, 0, 0.2);")
+                    self.overlay_win.event_preview_label.raise_()
+                else:
+                    self.add_log(f"WARN: Bild '{img_name}' konnte nicht geladen werden.")
+
+            self.add_log(f"UI: Edit-Modus gestartet für: {targets}")
+
+        # --- STOP EDIT MODE ---
         else:
-            # --- SPEICHERN & DEAKTIVIEREN ---
             self.is_hud_editing = False
-
-            # Wir müssen wissen, WAS wir gerade editiert haben, um es zu speichern
             targets = self.get_current_tab_targets()
 
-            # Buttons zurücksetzen
+            # 1. Buttons zurücksetzen (Blau/Standard)
             for btn in btn_list:
-                btn.setText("LAYOUT PER MAUS VERSCHIEBEN")
-                btn.setStyleSheet("background-color: #0066ff; color: white;")
+                btn.setText("MOVE UI")
+                # Stylesheet leeren -> Fällt zurück auf die CSS-ID #EditBtn (Blau)
+                btn.setStyleSheet("")
 
-            # Overlay Maus-Durchlässigkeit wiederherstellen
-            self.overlay_win.set_mouse_passthrough(True)
-            self.overlay_win.event_preview_label.hide()  # Preview weg
+                # 2. Overlay wieder durchlässig machen
+            if self.overlay_win:
+                self.overlay_win.set_mouse_passthrough(True)
 
-            # SPEICHERN
+                # Rahmen entfernen und Bild ausblenden
+                if hasattr(self.overlay_win, 'event_preview_label'):
+                    self.overlay_win.event_preview_label.setStyleSheet("background: transparent;")
+                    self.overlay_win.event_preview_label.hide()
+
+                # Zur Sicherheit auch das img_label verstecken
+                self.overlay_win.img_label.hide()
+
+            # 3. Speichern je nach aktivem Tab
             if "event" in targets: self.save_event_ui_data()
             if "streak" in targets: self.save_streak_settings_from_qt()
             if "stats" in targets or "feed" in targets: self.save_stats_config_from_qt()
-            if "crosshair" in targets: self.save_config()  # Crosshair speichert direkt bei MouseRelease
+            if "crosshair" in targets: self.save_config()
 
-            self.save_config()  # Alles auf Festplatte schreiben
+            self.save_config()
             self.add_log("UI: Positionen gespeichert & Edit-Modus beendet.")
 
 
