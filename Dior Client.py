@@ -1429,7 +1429,73 @@ class DiorClientGUI:
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
+        threading.Thread(target=self.cache_worker, daemon=True).start()
+
         # Manuelle connects entfernt! -> Macht connect_all_qt_signals jetzt.
+
+    # --- CROSSHAIR LOGIK (NEU) ---
+
+    def browse_crosshair_qt(self):
+        """Öffnet Datei-Dialog für Crosshair und aktualisiert sofort."""
+        from PyQt6.QtWidgets import QFileDialog
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_hub, "Wähle Crosshair Bild", self.BASE_DIR, "Images (*.png *.jpg *.jpeg)"
+        )
+
+        if file_path:
+            # 1. Pfad im UI setzen
+            filename = os.path.basename(file_path)
+            target_path = get_asset_path(filename)
+
+            # Falls Datei nicht in assets liegt -> kopieren
+            if os.path.abspath(file_path) != os.path.abspath(target_path):
+                try:
+                    shutil.copy2(file_path, target_path)
+                except Exception as e:
+                    print(f"Copy Error: {e}")
+
+            # UI Update
+            self.ovl_config_win.cross_path.setText(filename)
+
+            # 2. Config & Overlay sofort aktualisieren
+            self.update_crosshair_from_qt()
+
+    def update_crosshair_from_qt(self):
+        """Liest UI-Werte (Checkbox, Pfad) und aktualisiert Config & Overlay."""
+        ui = self.ovl_config_win
+
+        # Daten aus UI lesen
+        is_active = ui.check_cross.isChecked()
+        img_name = ui.cross_path.text()
+
+        # Config Update
+        if "crosshair" not in self.config: self.config["crosshair"] = {}
+
+        self.config["crosshair"]["active"] = is_active
+        self.config["crosshair"]["file"] = img_name
+
+        # Größe beibehalten (wird aktuell nicht im UI geändert, aber wir wollen es nicht verlieren)
+        current_size = self.config["crosshair"].get("size", 32)
+
+        self.save_config()
+
+        # Overlay Live-Update
+        if self.overlay_win:
+            full_path = get_asset_path(img_name)
+            # Nur anzeigen, wenn Checkbox AN ist UND Spiel läuft (oder Edit Mode)
+            game_running = getattr(self, 'ps2_running', False)
+            should_show = (is_active and game_running) or getattr(self, "is_hud_editing", False)
+
+            self.overlay_win.update_crosshair(full_path, current_size, should_show)
+
+    def center_crosshair_qt(self):
+        """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
+        # 1. Logik ausführen
+        self.center_crosshair()  # Diese Methode existiert bereits in Teil 3 deines Codes
+
+        # 2. Feedback
+        self.add_log("CROSSHAIR: Auf Bildschirmmitte zurückgesetzt.")
 
     def apply_event_layout_to_all(self):
         """Kopiert Position & Größe des aktuellen Events auf ALLE anderen."""
@@ -1684,6 +1750,31 @@ class DiorClientGUI:
         # E) Edit Mode Button (bereits vorhanden, aber zur Sicherheit)
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
 
+        # --- I) CROSSHAIR TAB CONNECTIONS ---
+        ui = self.ovl_config_win  # Nur zur Sicherheit, falls 'ui' Variable nicht im Scope ist
+
+        # 1. Checkbox Toggle -> Sofort speichern & updaten
+        self.safe_connect(ui.check_cross.toggled, self.update_crosshair_from_qt)
+
+        # 2. Textfeld Änderung -> Sofort speichern & updaten
+        self.safe_connect(ui.cross_path.textChanged, self.update_crosshair_from_qt)
+
+        # 3. Browse Button
+        # Vorher disconnecten um Mehrfachaufrufe zu vermeiden
+        try:
+            ui.btn_browse_cross.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_cross.clicked.connect(self.browse_crosshair_qt)
+
+        # 4. Center Button
+        self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
+
+        # 5. Move UI Button (Edit Mode)
+        # Hinweis: toggle_hud_edit_mode prüft automatisch, welcher Tab offen ist.
+        # Da wir im Crosshair Tab sind, wird "CROSSHAIR" als Target erkannt.
+        self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
+
         print("SYS: All signals routed via DiorMainHub.")
 
     def pick_streak_color_qt(self):
@@ -1924,6 +2015,15 @@ class DiorClientGUI:
         # 2. Checkbox Status laden (WICHTIG für deine Anforderung)
         # Standard ist True, falls nichts gespeichert ist
         ui.check_cross.setChecked(c_conf.get("active", True))
+
+        # --- CROSSHAIR DATEN LADEN ---
+        c_conf = self.config.get("crosshair", {})
+
+        # 1. Checkbox
+        ui.check_cross.setChecked(c_conf.get("active", True))
+
+        # 2. Pfad Textfeld
+        ui.cross_path.setText(c_conf.get("file", "crosshair.png"))
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
@@ -3758,105 +3858,6 @@ class DiorClientGUI:
         tk.Label(self.root, text="DASHBOARD IS RUNNING IN SEPARATE WINDOW",
                  font=("Arial", 16), fg="#444").pack(expand=True)
 
-    # def show_dashboard ausgeklammert:
-    """
-    def show_dashboard(self):
-        # 1. Zuerst das UI komplett leeren und Widgets zerstören
-        self.clear_content()
-        self.current_tab = "Dashboard"
-
-        # Alte Graphen-Referenzen löschen
-        if hasattr(self, 'graph_line'): del self.graph_line
-        if hasattr(self, 'graph_glow'): del self.graph_glow
-
-        # Fenstergröße setzen und Berechnung erzwingen, damit 'mid' stimmt
-        self.root.geometry("1600x1000")
-        self.root.update_idletasks()
-        mid = self.root.winfo_width() // 2
-
-        # 2. Haupt-Frame erstellen (WICHTIG: Er wird in clear_content jetzt mit-zerstört)
-        dash_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="solid", highlightbackground="#00f2ff")
-        self.dash_widgets = {"frame": dash_frame, "factions": {}}
-
-        # ================= HEADER =================
-        head_frame = tk.Frame(dash_frame, bg="#1a1a1a")
-        head_frame.pack(pady=15)
-
-        header_text = f"{self.current_server_name.upper()} LIVE TELEMETRY ▾"
-        self.lbl_server_title = tk.Label(head_frame, text=header_text,
-                                         font=("Arial", 24, "bold"),
-                                         bg="#1a1a1a", fg="#00f2ff",
-                                         cursor="hand2")
-        self.lbl_server_title.pack(side="left")
-        self.lbl_server_title.bind("<Button-1>", self.open_server_menu)
-
-        # 3. Canvas für den Graphen
-        g_canvas = tk.Canvas(dash_frame, width=800, height=200, bg="#050505", highlightthickness=0)
-        g_canvas.pack(pady=10, padx=20)
-        self.dash_widgets["canvas"] = g_canvas
-
-        self.total_players_label = tk.Label(dash_frame, text="Total Players: 0", font=("Consolas", 22, "bold"),
-                                            bg="#1a1a1a", fg="#00f2ff")
-        self.total_players_label.pack(pady=10)
-
-        # 4. Fraktionen Grid
-        f_frame = tk.Frame(dash_frame, bg="#111", pady=10)
-        f_frame.pack(fill="x", padx=10)
-
-        for name, color in [("TR", "#ff0000"), ("NC", "#0066ff"), ("VS", "#9900ff")]:
-            f_box = tk.Frame(f_frame, bg="#1a1a1a", bd=1, relief="flat")
-            f_box.pack(side="left", expand=True, fill="both", padx=5)
-
-            # 1. Name der Fraktion
-            tk.Label(f_box, text=name, font=("Arial", 16, "bold"), bg="#1a1a1a", fg=color).pack(pady=(5, 0))
-
-            # 2. Prozent-Anzeige
-            p_lab = tk.Label(f_box, text="0.0%", font=("Consolas", 20, "bold"), bg="#1a1a1a", fg="white")
-            p_lab.pack()
-
-            # 3. [NEU] Anzahl der Spieler (Das hat gefehlt!)
-            c_lab = tk.Label(f_box, text="0 Players", font=("Consolas", 10), bg="#1a1a1a", fg="#888")
-            c_lab.pack(pady=(0, 5))
-
-            # 4. Balken
-            bar_bg = tk.Frame(f_box, bg="#333", height=8, width=180)
-            bar_bg.pack(pady=5)
-            bar_bg.pack_propagate(False)
-            bar = tk.Frame(bar_bg, bg=color, height=8)
-            bar.place(x=0, y=0, width=0)
-
-            tk.Label(f_box, text="TOP PERFORMERS", font=("Arial", 10, "bold"), bg="#1a1a1a", fg="#555").pack(
-                pady=(15, 0))
-
-            list_frame = tk.Frame(f_box, bg="#1a1a1a")
-            list_frame.pack(fill="x", padx=5, pady=5)
-
-            headers = [("PLAYER", 0, 32), ("K", 1, 4), ("KPM", 2, 5), ("D", 3, 4), ("A", 4, 4), ("K/D", 5, 5),
-                       ("KDA", 6, 5)]
-            for text, col, width in headers:
-                h_lbl = tk.Label(list_frame, text=text, font=("Consolas", 8, "bold"),
-                                 bg="#141414", fg="#00f2ff", anchor="w" if col == 0 else "center", width=width)
-                h_lbl.grid(row=0, column=col, sticky="nsew", padx=1)
-
-            # WICHTIG: Hier registrieren wir das Label 'count', damit die Update-Funktion es findet
-            self.dash_widgets["factions"][name] = {
-                "label": p_lab,
-                "count": c_lab,  # <--- HIER MUSS ES REIN
-                "bar": bar,
-                "list_frame": list_frame
-            }
-
-        # Footer
-        self.dash_widgets["footer"] = tk.Label(dash_frame, text="", font=("Arial", 10), bg="#1a1a1a", fg="#00f2ff")
-        self.dash_widgets["footer"].pack(pady=10)
-
-        # Canvas-Fenster erstellen
-        id_dash = self.canvas.create_window(mid, 620, window=dash_frame, width=1450, height=850)
-        self.content_ids.append(id_dash)
-
-        # Dashboard-Werte befüllen
-        self.update_dashboard_elements()
-    """
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
         import math
@@ -3890,42 +3891,6 @@ class DiorClientGUI:
         else:
             self.add_log("ERROR: Launcher window not initialized.")
 
-    """
-    def show_launcher(self):
-        self.current_tab = "launcher"
-        self.clear_content()
-        mid = self.root.winfo_width() // 2
-        CYAN = "#00f2ff"
-
-        launcher_frame = tk.LabelFrame(self.root, text=" > GAME_START_DASHBOARD ", bg="#1e1e1e", fg=CYAN,
-                                       font=("Consolas", 10), bd=1, padx=20, pady=20)
-
-        high_box = tk.LabelFrame(launcher_frame, text=" [ Vehicle  ] ", bg="#1e1e1e", fg="#00ff00",
-                                 font=("Consolas", 9), bd=1, padx=10, pady=10)
-        high_box.pack(fill="x", pady=10)
-        tk.Label(high_box, text="Load High Fidelity Assets & Maximum Visual Range", bg="#1e1e1e", fg="#4a6a7a",
-                 font=("Consolas", 8)).pack()
-        btn_high = tk.Button(high_box, text="INITIALIZE: High Settings", width=30, height=2, bg="#004400", fg="white",
-                             font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("high"))
-        btn_high.pack(pady=5)
-
-        low_box = tk.LabelFrame(launcher_frame, text=" [ Infantry ] ", bg="#1e1e1e", fg="#ff4444", font=("Consolas", 9),
-                                bd=1, padx=10, pady=10)
-        low_box.pack(fill="x", pady=10)
-        tk.Label(low_box, text="Disable Shadows & Particles for Peak Framerates & Potato", bg="#1e1e1e", fg="#4a6a7a",
-                 font=("Consolas", 8)).pack()
-        btn_low = tk.Button(low_box, text="INITIALIZE: Low Settings", width=30, height=2, bg="#440000", fg="white",
-                            font=("Consolas", 10, "bold"), command=lambda: self.execute_launch("low"))
-        btn_low.pack(pady=5)
-
-        info_text = "STATUS: SYSTEM_READY\nINTEGRITY: OPTIMAL\nTARGET_PATH: " + (
-            self.ps2_dir if self.ps2_dir else "NOT_FOUND")
-        tk.Label(launcher_frame, text=info_text, bg="#1e1e1e", fg="#4a6a7a", font=("Consolas", 8), justify="left").pack(
-            fill="x", pady=10)
-
-        id1 = self.canvas.create_window(mid, 350, window=launcher_frame, width=450)
-        self.content_ids.append(id1)
-    """
 
     def show_nso_teleporter(self):
         self.current_tab = "nso_teleporter"
@@ -4096,10 +4061,6 @@ class DiorClientGUI:
 
     def load_chars(self):
         chars = {}
-        if os.path.exists(CHAR_FILE):
-            with open(CHAR_FILE, "r") as f:
-                for l in f:
-                    if ":" in l: n, c = l.strip().split(":", 1); chars[n] = c
         return chars
 
     def refresh_char_menus(self):
@@ -4223,15 +4184,6 @@ class DiorClientGUI:
         except Exception as e:
             self.add_log(f"Auto-Switch Error: {e}")
 
-    def load_player_backup(self):
-        c = {}
-        if os.path.exists(PLAYER_BACKUP):
-            with open(PLAYER_BACKUP, "r", encoding="utf-8") as f:
-                for l in f:
-                    if ":" in l:
-                        p = l.strip().split(":", 1)
-                        if len(p) == 2: c[p[0]] = p[1]
-        return c
 
     def cache_worker(self):
         while True:
@@ -5057,19 +5009,34 @@ class EnforcerHandler(FileSystemEventHandler):
 
     def safe_process(self, path):
         time.sleep(5)
-        new_path = os.path.join(os.path.dirname(path), f"REPORT_{self.gui.last_killer_name}.mp4")
+        # Dateinamen bereinigen
+        killer_name = getattr(self.gui, 'last_killer_name', "Unknown")
+        new_path = os.path.join(os.path.dirname(path), f"REPORT_{killer_name}.mp4")
+
         try:
             os.rename(path, new_path)
             self.gui.add_log("UPLINK: Transmitting to Streamable...")
-            with open(new_path, 'rb') as f:
-                r = requests.post('https://api.streamable.com/upload',
-                                  auth=(self.gui.config['email'], self.gui.config['pw']), files={'file': f})
-                if r.status_code == 200:
-                    self.gui.last_evidence_url = f"https://streamable.com/{r.json()['shortcode']}"
-                    self.gui.add_log(f"LINK: {self.gui.last_evidence_url}")
-                    if hasattr(self.gui, 'btn_report'):
-                        self.gui.root.after(0, lambda: self.gui.btn_report.config(state="normal", bg="#ff8c00",
-                                                                                  fg="black"))
+
+            # Prüfen ob Credentials da sind
+            email = self.gui.config.get('email', '')
+            pw = self.gui.config.get('pw', '')
+
+            if email and pw:
+                with open(new_path, 'rb') as f:
+                    r = requests.post('https://api.streamable.com/upload',
+                                      auth=(email, pw), files={'file': f})
+                    if r.status_code == 200:
+                        shortcode = r.json()['shortcode']
+                        self.gui.last_evidence_url = f"https://streamable.com/{shortcode}"
+                        self.gui.add_log(f"LINK: {self.gui.last_evidence_url}")
+
+                        # --- HIER WAR DER TKINTER CODE ---
+                        # Da wir noch kein Qt-Fenster für den Enforcer haben,
+                        # loggen wir den Erfolg nur.
+                        self.gui.add_log("SUCCESS: Evidence uploaded.")
+            else:
+                self.gui.add_log("ERR: Keine Streamable-Daten in Config.")
+
         except Exception as e:
             self.gui.add_log(f"ERR: {e}")
 
