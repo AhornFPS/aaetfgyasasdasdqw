@@ -256,6 +256,7 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
 
+
     def update_stats_position_safe(self):
         """Berechnet die Position des Stats-Widgets sicher und konsistent."""
         if not self.overlay_win: return
@@ -310,6 +311,29 @@ class DiorClientGUI:
 
         # Damit das Text-Label immer VOR dem Hintergrund liegt
         self.overlay_win.stats_text_label.raise_()
+
+    def update_main_config_from_settings(self, data):
+        """Empfängt die bereinigten Daten aus settings_qt."""
+
+        # Audio Volume speichern
+        if "audio_volume" in data:
+            vol = data["audio_volume"]
+            self.config["audio_volume"] = vol
+
+            # Falls du PyGame Sound nutzt, hier direkt Volume setzen
+            if globals().get("HAS_SOUND", False):
+                try:
+                    # Pygame Volume ist float 0.0 bis 1.0
+                    import pygame
+                    # Wir setzen einen globalen Mix, falls Sounds abgespielt werden
+                    # (Hinweis: pygame.mixer.Sound(path).set_volume(...) müsste pro Sound passieren,
+                    # aber wir speichern es hier für spätere Nutzung)
+                    pass
+                except:
+                    pass
+
+        self.save_config()
+        self.add_log(f"SYS: Globale Einstellungen gespeichert (Vol: {data.get('audio_volume')}%)")
 
     def clean_path(self, path_str):
         """Entfernt 'No file selected' und leere Pfade."""
@@ -693,24 +717,18 @@ class DiorClientGUI:
         for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
             self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
 
-        # --- NEU: LOAD BUTTONS VERBINDEN ---
-
-        # 1. Stats Background Image
+        # Browse Buttons für Stats
         try:
             ui.btn_browse_stats_bg.clicked.disconnect()
         except:
             pass
-        # Wir nutzen lambda, um das Ziel-Textfeld (ent_stats_img) zu übergeben
         ui.btn_browse_stats_bg.clicked.connect(lambda: self.browse_file_qt(ui.ent_stats_img, "png"))
 
-        # 2. Headshot Icon
         try:
             ui.btn_browse_hs_icon.clicked.disconnect()
         except:
             pass
         ui.btn_browse_hs_icon.clicked.connect(lambda: self.browse_file_qt(ui.ent_hs_icon, "png"))
-
-        # -----------------------------------
 
         # Save & Edit Actions
         self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
@@ -734,10 +752,12 @@ class DiorClientGUI:
         # Launcher
         self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
 
-        # Settings
+        # Settings (HIER WAREN DIE ÄNDERUNGEN)
         self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
         self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
 
+        # WICHTIG: Das Save-Signal verbinden!
+        self.safe_connect(self.settings_win.signals.save_requested, self.update_main_config_from_settings)
 
         print("SYS: All signals routed successfully.")
 

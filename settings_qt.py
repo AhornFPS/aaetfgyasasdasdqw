@@ -1,11 +1,12 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QLineEdit, QPushButton, QFrame, QFileDialog)
+                             QLabel, QPushButton, QFrame, QSlider)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 
 # --- STYLING ---
 SETTING_STYLE = """
 QWidget#Settings { background-color: #1a1a1a; }
+
 QFrame#Group { 
     background-color: #252525; 
     border: 1px solid #333; 
@@ -15,39 +16,47 @@ QFrame#Group {
 QLabel#GroupTitle { 
     color: #00f2ff; 
     font-weight: bold; 
-    font-size: 12px; 
+    font-size: 14px; 
     font-family: 'Consolas';
+    padding-bottom: 5px;
 }
-QLabel#FieldLabel { color: #4a6a7a; font-size: 11px; }
-QLineEdit { 
-    background-color: #0a141d; 
-    color: #00f2ff; 
-    border: 1px solid #333; 
+QLabel#InfoText { color: #888; font-size: 11px; }
+QLabel#PathLabel { 
+    color: #ffffff; 
+    background-color: #111; 
+    border: 1px solid #444; 
     padding: 8px; 
     border-radius: 4px;
+    font-family: 'Consolas';
 }
+
 QPushButton#ActionBtn { 
     background-color: #1a2b3c; 
     color: #00f2ff; 
     border: none; 
-    padding: 8px 15px; 
-    font-weight: bold;
-}
-QPushButton#ActionBtn:hover { background-color: #00f2ff; color: black; }
-QPushButton#SaveBtn { 
-    background-color: #00f2ff; 
-    color: black; 
+    padding: 10px 15px; 
     font-weight: bold; 
-    padding: 12px; 
-    border-radius: 4px;
+    border-radius: 4px; 
+    text-align: left;
 }
+QPushButton#ActionBtn:hover { background-color: #253c50; }
+
+QPushButton#SaveBtn {
+    background-color: #004400;
+    color: white;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 14px;
+}
+QPushButton#SaveBtn:hover { background-color: #006600; }
 """
 
+
 class SettingsSignals(QObject):
-    save_requested = pyqtSignal(dict)
-    browse_obs_requested = pyqtSignal()
-    browse_ps2_requested = pyqtSignal()
-    change_bg_requested = pyqtSignal()
+    save_requested = pyqtSignal(dict)  # Sendet die Config-Daten an Main
+    browse_ps2_requested = pyqtSignal()  # Trigger für Folder-Dialog
+    change_bg_requested = pyqtSignal()  # Trigger für Background-Dialog
 
 
 class SettingsWidget(QWidget):
@@ -55,98 +64,115 @@ class SettingsWidget(QWidget):
         super().__init__()
         self.controller = controller
         self.setObjectName("Settings")
-        self.resize(600, 750)
-        self.signals = SettingsSignals()
-
-        # WICHTIG: Stylesheet anwenden!
         self.setStyleSheet(SETTING_STYLE)
 
-        # WICHTIG: Layout direkt auf self setzen (kein setCentralWidget bei QWidget)
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(30, 30, 30, 30)
+        self.signals = SettingsSignals()
+
+        # Layout Setup
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
         main_layout.setSpacing(20)
+        main_layout.setContentsMargins(40, 40, 40, 40)
 
-        # --- SOURCE CONFIG (OBS & Streamable) ---
-        self.config_group = QFrame(objectName="Group")
-        conf_layout = QVBoxLayout(self.config_group)
-        conf_layout.addWidget(QLabel("> SOURCE_CONFIG", objectName="GroupTitle"))
+        # Headline
+        head = QLabel("GLOBAL CONFIGURATION")
+        head.setStyleSheet("font-size: 24px; color: #00f2ff; font-weight: bold; font-family: 'Impact';")
+        main_layout.addWidget(head)
 
-        # OBS Dir
-        conf_layout.addWidget(QLabel("OBS_VIDEO_DIR:", objectName="FieldLabel"))
-        obs_h = QHBoxLayout()
-        self.obs_entry = QLineEdit()
-        self.btn_obs = QPushButton("BROWSE", objectName="ActionBtn")
-        self.btn_obs.clicked.connect(lambda: self.signals.browse_obs_requested.emit())
-        obs_h.addWidget(self.obs_entry)
-        obs_h.addWidget(self.btn_obs)
-        conf_layout.addLayout(obs_h)
-
-        # Email
-        conf_layout.addWidget(QLabel("STREAMABLE.IO EMAIL:", objectName="FieldLabel"))
-        self.email_entry = QLineEdit()
-        conf_layout.addWidget(self.email_entry)
-
-        # Password
-        conf_layout.addWidget(QLabel("STREAMABLE.IO PW:", objectName="FieldLabel"))
-        self.pw_entry = QLineEdit()
-        self.pw_entry.setEchoMode(QLineEdit.EchoMode.Password)
-        conf_layout.addWidget(self.pw_entry)
-
-        self.btn_save = QPushButton("LOCK SETTINGS", objectName="SaveBtn")
-        self.btn_save.clicked.connect(self.collect_and_save)
-        conf_layout.addWidget(self.btn_save)
-
-        main_layout.addWidget(self.config_group)
-
-        # --- GAME DIRECTORY ---
+        # --- GROUP 1: GAME PATH ---
         self.game_group = QFrame(objectName="Group")
         game_layout = QVBoxLayout(self.game_group)
-        game_layout.addWidget(QLabel("> GAME_DIRECTORY", objectName="GroupTitle"))
+        game_layout.setContentsMargins(15, 15, 15, 15)
 
-        path_h = QHBoxLayout()
-        path_h.addWidget(QLabel("Pfad:", objectName="FieldLabel"))
-        self.lbl_ps2_path = QLabel("Not set")
-        self.lbl_ps2_path.setStyleSheet("color: #888; font-size: 10px;")
-        self.lbl_ps2_path.setWordWrap(True)
-        path_h.addWidget(self.lbl_ps2_path, 1)
-        game_layout.addLayout(path_h)
+        game_layout.addWidget(QLabel("> PLANETSIDE 2 DIRECTORY", objectName="GroupTitle"))
+        game_layout.addWidget(QLabel("Required for UserOptions.ini modifications (Launcher)", objectName="InfoText"))
 
-        self.btn_ps2 = QPushButton("ORDNER WÄHLEN", objectName="ActionBtn")
+        # Path Display & Button
+        path_row = QHBoxLayout()
+        self.lbl_ps2_path = QLabel("Checking config...", objectName="PathLabel")
+        self.lbl_ps2_path.setMinimumWidth(300)
+
+        self.btn_ps2 = QPushButton("BROWSE FOLDER", objectName="ActionBtn")
+        self.btn_ps2.setFixedWidth(150)
+        self.btn_ps2.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ps2.clicked.connect(lambda: self.signals.browse_ps2_requested.emit())
-        game_layout.addWidget(self.btn_ps2)
+
+        path_row.addWidget(self.lbl_ps2_path)
+        path_row.addWidget(self.btn_ps2)
+        game_layout.addLayout(path_row)
 
         main_layout.addWidget(self.game_group)
 
-        # --- UI VISUALS ---
+        # --- GROUP 2: AUDIO ---
+        self.audio_group = QFrame(objectName="Group")
+        audio_layout = QVBoxLayout(self.audio_group)
+        audio_layout.setContentsMargins(15, 15, 15, 15)
+
+        audio_layout.addWidget(QLabel("> AUDIO SETTINGS", objectName="GroupTitle"))
+
+        # Volume Slider
+        vol_row = QHBoxLayout()
+        vol_row.addWidget(QLabel("Master Volume:", styleSheet="color: white;"))
+
+        self.slider_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_vol.setRange(0, 100)
+        self.slider_vol.setValue(50)
+        self.slider_vol.setStyleSheet("QSlider::handle:horizontal { background-color: #00f2ff; }")
+
+        self.lbl_vol_val = QLabel("50%")
+        self.lbl_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold; width: 40px;")
+
+        # Live Update Label
+        self.slider_vol.valueChanged.connect(lambda v: self.lbl_vol_val.setText(f"{v}%"))
+
+        vol_row.addWidget(self.slider_vol)
+        vol_row.addWidget(self.lbl_vol_val)
+        audio_layout.addLayout(vol_row)
+
+        main_layout.addWidget(self.audio_group)
+
+        # --- GROUP 3: UI VISUALS ---
         self.ui_group = QFrame(objectName="Group")
         ui_layout = QVBoxLayout(self.ui_group)
-        ui_layout.addWidget(QLabel("> UI_VISUALS", objectName="GroupTitle"))
+        ui_layout.setContentsMargins(15, 15, 15, 15)
 
-        self.btn_bg = QPushButton("HINTERGRUND ÄNDERN", objectName="ActionBtn")
+        ui_layout.addWidget(QLabel("> CLIENT APPEARANCE", objectName="GroupTitle"))
+
+        bg_row = QHBoxLayout()
+        bg_row.addWidget(QLabel("Menu Background Image:", styleSheet="color: #aaa;"))
+
+        self.btn_bg = QPushButton("CHANGE IMAGE", objectName="ActionBtn")
+        self.btn_bg.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_bg.clicked.connect(lambda: self.signals.change_bg_requested.emit())
-        ui_layout.addWidget(self.btn_bg)
+
+        bg_row.addWidget(self.btn_bg)
+        ui_layout.addLayout(bg_row)
 
         main_layout.addWidget(self.ui_group)
+
+        # Spacer nach unten
         main_layout.addStretch()
 
+        # --- SAVE BUTTON ---
+        self.btn_save = QPushButton("SAVE SETTINGS", objectName="SaveBtn")
+        self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save.clicked.connect(self.collect_and_save)
+        main_layout.addWidget(self.btn_save)
+
     def load_config(self, config_data, ps2_dir):
-        """Füllt die Felder mit den aktuellen Werten"""
-        self.obs_entry.setText(config_data.get("watch_folder", ""))
-        self.email_entry.setText(config_data.get("email", ""))
-        self.pw_entry.setText(config_data.get("pw", ""))
-        self.lbl_ps2_path.setText(ps2_dir if ps2_dir else "NOT_FOUND")
+        """Füllt die Felder mit den aktuellen Werten."""
+        # 1. Pfad
+        self.lbl_ps2_path.setText(ps2_dir if ps2_dir else "NOT_FOUND (Please Browse)")
+
+        # 2. Audio Volume
+        vol = config_data.get("audio_volume", 50)
+        self.slider_vol.setValue(int(vol))
+        self.lbl_vol_val.setText(f"{vol}%")
 
     def collect_and_save(self):
+        """Sammelt nur noch relevante Daten (Volume). Pfad & BG werden direkt gespeichert."""
         data = {
-            "watch_folder": self.obs_entry.text(),
-            "email": self.email_entry.text(),
-            "pw": self.pw_entry.text()
+            "audio_volume": self.slider_vol.value()
         }
+        # Signal senden
         self.signals.save_requested.emit(data)
-
-# Test-Block für Standalone-Ausführung
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = SettingsWidget()
-    window.show()
-    sys.exit(app.exec())
