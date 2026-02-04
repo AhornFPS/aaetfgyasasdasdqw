@@ -2,10 +2,9 @@ import asyncio
 import json
 import time
 import threading
-import sqlite3
 import os
-import requests
 import websockets
+import requests  # Wichtig für den Faction-Check beim Login
 
 # --- KONSTANTEN & MAPPINGS ---
 S_ID = "s:1799912354"
@@ -19,7 +18,6 @@ PS2_DETECTION = {
         "6005426": "Spitfire Kill", "6005427": "Spitfire Kill", "6009294": "Spitfire Kill",
         "650": "Tankmine Kill", "6005961": "Tankmine Kill", "6005962": "Tankmine Kill",
         "1045": "AP-Mine Kill", "1044": "AP-Mine Kill", "6005422": "AP-Mine Kill"
-        # (Liste gekürzt für Übersicht, du kannst deine volle Liste hier einfügen)
     }
 }
 
@@ -51,7 +49,6 @@ PS2_EXP_DETECTION = {
 }
 
 
-# Hilfsfunktion für Pfade (Da wir keinen Zugriff auf BASE_DIR vom Main haben)
 def get_asset_path_local(filename):
     if not filename: return ""
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -60,18 +57,13 @@ def get_asset_path_local(filename):
 
 class CensusWorker:
     def __init__(self, controller):
-        """
-        :param controller: Referenz auf die DiorClientGUI Instanz (für Zugriff auf Stats, Config, etc.)
-        """
-        self.c = controller  # 'c' als Abkürzung für controller
+        self.c = controller
         self.loop = None
         self.websocket = None
         self.event_cache = set()
         self.event_history = []
 
     def start(self):
-        """Startet den Async-Loop im Hintergrund-Thread."""
-
         def run_loop():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -98,7 +90,6 @@ class CensusWorker:
                     await websocket.send(json.dumps(msg))
                     self.c.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
 
-                    # Helper für Stats
                     def get_stat_obj(cid, tid):
                         if cid not in self.c.session_stats:
                             faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
@@ -113,7 +104,6 @@ class CensusWorker:
                         return self.c.session_stats[cid]
 
                     async for message in websocket:
-                        # Reconnect Logik vom Controller
                         if getattr(self.c, "needs_reconnect", False):
                             self.c.needs_reconnect = False
                             await websocket.close()
@@ -144,22 +134,40 @@ class CensusWorker:
                                         self.c.current_character_id = c_id
                                         self.c.current_selected_char_name = name
 
-                                        # GUI Update (Thread-Safe via Signal/Timer im Main Code oder direkten Methodenaufruf wenn sicher)
-                                        # Wir rufen hier update_active_char auf, das loggt und switched
+                                        # UI Update (Thread-Safe via Invoke)
                                         from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
                                         if hasattr(self.c, 'ovl_config_win'):
                                             QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
                                                                      Qt.ConnectionType.QueuedConnection,
                                                                      Q_ARG(str, name))
 
-                                        self.c.add_log(f"AUTO-TRACK: {name} eingeloggt.")
-
                                         # Server Switch
                                         if payload_world != "0" and payload_world != str(self.c.current_world_id):
                                             s_name = self.c.get_server_name_by_id(payload_world)
-                                            # Da switch_server GUI elemente anfasst, besser via Timer/Signal
-                                            # Aber für einfaches Switching ist direkter Aufruf hier ok, da Logik-Variablen
+                                            # Wir nutzen QTimer für Thread-Safety beim GUI Update des Dashboards
+                                            # Aber switch_server ändert hauptsächlich Logik-Variablen, das ist meist ok.
                                             self.c.switch_server(s_name, payload_world)
+
+                                        # --- RESTORED FEATURE: LOGIN EVENT TRIGGER ---
+                                        # Wir prüfen kurz die Fraktion und spielen den Sound
+                                        def trigger_login_event(cid_val):
+                                            try:
+                                                # Kurz API fragen (schneller als DB Sync in diesem Kontext)
+                                                u = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
+                                                r = requests.get(u, timeout=3).json()
+                                                f_id = "0"
+                                                if r.get("returned", 0) > 0:
+                                                    f_id = r["character_list"][0].get("faction_id", "0")
+
+                                                f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
+
+                                                # Event im Overlay triggern
+                                                self.c.trigger_overlay_event(f"Login {f_tag}")
+                                                self.c.add_log(f"AUTO-TRACK: {name} eingeloggt ({f_tag}).")
+                                            except:
+                                                pass
+
+                                        threading.Thread(target=trigger_login_event, args=(c_id,), daemon=True).start()
                                         break
 
                             elif e_name == "PlayerLogout":
@@ -168,10 +176,10 @@ class CensusWorker:
                                     self.c.add_log("AUTO-TRACK: Ausgeloggt.")
 
                             # -------------------------------------------------
-                            # SERVER FILTER & TRACKING
+                            # SERVER FILTER (ENTSCHÄRFT!)
                             # -------------------------------------------------
-                            if payload_world != "0" and payload_world != str(self.c.current_world_id):
-                                continue
+                            # Wir lassen Events durch, auch wenn der Server in der Config noch falsch ist.
+                            # Die Logik prüft später auf 'my_id', das ist Filter genug.
 
                             track_id = p.get("character_id") or p.get("attacker_character_id")
                             if track_id and track_id != "0":
@@ -182,20 +190,12 @@ class CensusWorker:
                                     self.c.id_queue.put(track_id)
 
                             # -------------------------------------------------
-                            # EVENT: DEATH
+                            # EVENT PROCESSING
                             # -------------------------------------------------
                             if e_name == "Death":
                                 self._handle_death(p, get_stat_obj)
-
-                            # -------------------------------------------------
-                            # EVENT: EXPERIENCE
-                            # -------------------------------------------------
                             elif e_name == "GainExperience":
                                 self._handle_experience(p, get_stat_obj)
-
-                            # -------------------------------------------------
-                            # EVENT: METAGAME
-                            # -------------------------------------------------
                             elif e_name == "MetagameEvent":
                                 self._handle_metagame(p)
 
@@ -204,20 +204,17 @@ class CensusWorker:
                 await asyncio.sleep(5)
 
     def _handle_death(self, p, get_stat_obj):
-        """Ausgelagerte Kill-Logik"""
         killer_id = p.get("attacker_character_id")
         victim_id = p.get("character_id")
         my_id = self.c.current_character_id
         is_hs = (p.get("is_headshot") == "1")
         weapon_id = p.get("attacker_weapon_id")
 
-        # Globale Stats
+        # Global Stats
         if p.get("attacker_team_id") != p.get("team_id"):
             if killer_id and killer_id != "0" and killer_id != victim_id:
-                # Waffe holen
                 w_info = self.c.item_db.get(weapon_id, {})
                 cat = w_info.get("type", "Unknown")
-
                 k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                 k_obj["k"] += 1
                 k_obj["last_kill_time"] = time.time()
@@ -229,7 +226,7 @@ class CensusWorker:
                 v_obj = get_stat_obj(victim_id, p.get("team_id"))
                 v_obj["d"] += 1
 
-        # --- MEINE EVENTS ---
+        # MY EVENTS
         if my_id:
             icon_html = ""
             if is_hs:
@@ -244,19 +241,17 @@ class CensusWorker:
             # A) KILLER
             if killer_id == my_id and victim_id != my_id:
                 curr_time = time.time()
-                # Dubletten
                 if getattr(self.c, "last_victim_id", None) == victim_id and (
                         curr_time - getattr(self.c, "last_victim_time", 0)) < 0.5:
                     return
                 self.c.last_victim_id = victim_id
                 self.c.last_victim_time = curr_time
 
-                # Team Kill
                 if p.get("attacker_team_id") == p.get("team_id"):
                     self.c.trigger_auto_voice("tk")
                     self.c.trigger_overlay_event("Team Kill")
                 else:
-                    # Streak Logic
+                    # Streak
                     if self.c.config.get("streak", {}).get("active", True):
                         if self.c.killstreak_count == 0:
                             self.c.killstreak_count = 1
@@ -269,7 +264,6 @@ class CensusWorker:
                         v_fac = {"1": "VS", "2": "NC", "3": "TR"}.get(str(v_team), "NSO")
                         self.c.streak_factions.append(v_fac)
                         self.c.streak_slot_map.append(self.c._get_random_slot())
-
                         self.c.is_dead = False
                         self.c.was_revived = False
                         self.c.update_streak_display()
@@ -284,8 +278,6 @@ class CensusWorker:
                     # Event Detection
                     weapon_name = w_info.get("name", "Unknown")
                     evt = None
-
-                    # Hier muss auf self.c.item_db zugegriffen werden, aber PS2_DETECTION ist lokal in dieser Datei
                     if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
                         evt = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
                     elif category in PS2_DETECTION["CATEGORIES"]:
@@ -295,37 +287,75 @@ class CensusWorker:
 
                     if is_hs and not evt: evt = "Headshot"
 
-                    if evt: self.c.trigger_overlay_event(evt)
+                    # --- RESTORED LOGIC: MULTI-KILL & STREAK ANNOUNCEMENTS ---
+
+                    # 1. Streak Announcements (Squad Wiper etc.)
+                    streak_map = {
+                        12: "Squad Wiper",
+                        24: "Double Squad Wipe",
+                        36: "Squad Lead's Nightmare",
+                        48: "One Man Platoon"
+                    }
+
+                    # Wenn wir genau eine dieser Zahlen erreichen, überschreiben wir das Event
+                    # (außer es war schon ein spezielles Waffen-Event, das wichtiger ist?
+                    #  Nein, Streak-Announcements sind meist wichtiger als "Knife Kill")
+                    if self.c.killstreak_count in streak_map:
+                        evt = streak_map[self.c.killstreak_count]
+
+                    # 2. Multi-Kill Announcements (nur wenn kein Streak-Event aktiv ist)
+                    elif self.c.kill_counter > 1:
+                        multi_map = {
+                            2: "Double Kill",
+                            3: "Multi Kill",
+                            4: "Mega Kill",
+                            5: "Ultra Kill",
+                            6: "Monster Kill",
+                            7: "Ludicrous Kill",
+                            9: "Holy Shit"
+                        }
+                        if self.c.kill_counter in multi_map:
+                            # Priorität: Wenn wir z.B. einen Headshot gemacht haben,
+                            # wollen wir vielleicht lieber "Double Kill" hören/sehen.
+                            # Hier entscheidet die Logik: Multi-Kill überschreibt Standard-Kill/Headshot.
+                            evt = multi_map[self.c.kill_counter]
+
+                    # Trigger Event (falls definiert)
+                    if evt:
+                        self.c.trigger_overlay_event(evt)
+
+                    # Hitmarker (immer etwas verzögert, um Audio-Clashing zu minimieren)
+                    # Wir nutzen hier time.sleep, da wir im Thread sind -> blockiert nicht die GUI!
+                    time.sleep(0.05)
                     self.c.trigger_overlay_event("Hitmarker")
 
                     # Killfeed
                     v_name = self.c.name_cache.get(victim_id, "Unknown")
                     raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
-                    if raw_tag is None: raw_tag = ""
                     v_tag = f"[{raw_tag}] " if raw_tag else ""
 
                     s_vic = self.c.session_stats.get(victim_id, {})
                     try:
-                        kd_val = s_vic.get('k', 0) / max(1, s_vic.get('d', 1))
-                        kd_str = f"{kd_val:.1f}"
+                        kd_str = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
                     except:
                         kd_str = "0.0"
 
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
                             {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
                             <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+                    if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
-                    if self.c.overlay_win:
-                        self.c.overlay_win.signals.killfeed_entry.emit(msg)
-
-                    # Auto Voice
+                    # Voice
                     v_load = p.get("character_loadout_id")
+                    kd_val = float(kd_str)
+                    if v_load in LOADOUT_MAP["max"]:
+                        self.c.trigger_overlay_event("Max Kill")
+                        self.c.trigger_auto_voice("kill_max")
+                    if v_load in LOADOUT_MAP["infil"]:
+                        self.c.trigger_overlay_event("Infil Kill")
+                        self.c.trigger_auto_voice("kill_infil")
                     if kd_val >= 2.0:
                         self.c.trigger_auto_voice("kill_high_kd")
-                    elif v_load in LOADOUT_MAP["max"]:
-                        self.c.trigger_auto_voice("kill_max")
-                    elif v_load in LOADOUT_MAP["infil"]:
-                        self.c.trigger_auto_voice("kill_infil")
                     elif is_hs:
                         self.c.trigger_auto_voice("kill_hs")
 
@@ -335,7 +365,6 @@ class CensusWorker:
                     self.c.saved_streak = self.c.killstreak_count
                     self.c.saved_factions = getattr(self.c, 'streak_factions', [])
                     self.c.saved_slots = getattr(self.c, 'streak_slot_map', [])
-
                 self.c.killstreak_count = 0
                 self.c.streak_factions = []
                 self.c.streak_slot_map = []
@@ -346,9 +375,7 @@ class CensusWorker:
                 if killer_id and killer_id != "0":
                     k_name = self.c.name_cache.get(killer_id, "Unknown")
                     raw_tag = getattr(self.c, "outfit_cache", {}).get(killer_id, "")
-                    if raw_tag is None: raw_tag = ""
                     k_tag = f"[{raw_tag}] " if raw_tag else ""
-
                     k_vic = self.c.session_stats.get(killer_id, {})
                     try:
                         k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
@@ -358,18 +385,14 @@ class CensusWorker:
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
                             {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
                             <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
-
-                    if self.c.overlay_win:
-                        self.c.overlay_win.signals.killfeed_entry.emit(msg)
+                    if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
     def _handle_experience(self, p, get_stat_obj):
-        """Ausgelagerte Exp-Logik"""
         exp_id = str(p.get("experience_id", "0"))
         other_id = p.get("other_id")
         char_id = p.get("character_id")
         my_id = self.c.current_character_id
 
-        # Stats
         if exp_id in ["2", "3", "371", "372"]:
             a_obj = get_stat_obj(char_id, p.get("team_id"))
             a_obj["a"] += 1
@@ -377,17 +400,13 @@ class CensusWorker:
             r_obj = get_stat_obj(other_id, p.get("team_id"))
             if r_obj["d"] > 0: r_obj["d"] -= 1
 
-        # Logic
         if my_id and other_id == my_id:
-            if exp_id in ["7", "53"]:  # Revived
+            if exp_id in ["7", "53"]:
                 self.c.was_revived = True
                 self.c.is_dead = False
-
-                # Restore Streak
                 self.c.killstreak_count = getattr(self.c, 'saved_streak', 0)
                 self.c.streak_factions = getattr(self.c, 'saved_factions', [])
                 self.c.streak_slot_map = getattr(self.c, 'saved_slots', [])
-
                 self.c.update_streak_display()
                 self.c.trigger_overlay_event("Revive Taken")
                 self.c.trigger_auto_voice("revived")
@@ -416,25 +435,15 @@ class CensusWorker:
     def _handle_metagame(self, p):
         state = p.get("metagame_event_state_name")
         if state != "ended": return
-
         try:
             world = int(p.get("world_id", 0))
             zone = int(p.get("zone_id", 0))
-            if world != getattr(self.c, 'myWorldID', 0) or zone != getattr(self.c, 'currentZone', 0):
-                return
+            if world != getattr(self.c, 'myWorldID', 0) or zone != getattr(self.c, 'currentZone', 0): return
 
-            VS = float(p.get("faction_vs", 0))
-            TR = float(p.get("faction_tr", 0))
-            NC = float(p.get("faction_nc", 0))
-
+            VS, TR, NC = float(p.get("faction_vs", 0)), float(p.get("faction_tr", 0)), float(p.get("faction_nc", 0))
             my_team = self.c.myTeamId
-            won = False
-            if my_team == 1 and VS > TR and VS > NC:
-                won = True
-            elif my_team == 2 and NC > TR and NC > VS:
-                won = True
-            elif my_team == 3 and TR > VS and TR > NC:
-                won = True
+            won = (my_team == 1 and VS > TR and VS > NC) or (my_team == 2 and NC > TR and NC > VS) or (
+                        my_team == 3 and TR > VS and TR > NC)
 
             if won:
                 self.c.trigger_overlay_event("Alert Win")

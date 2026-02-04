@@ -218,33 +218,94 @@ class QtOverlay(QWidget):
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
             self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
 
+        self.hitmarker_label = QLabel(self)
+        self.hitmarker_label.setScaledContents(True)
+        self.hitmarker_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.hitmarker_label.hide()
+
     # --- QUEUE & DISPLAY LOGIK ---
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, is_hitmarker=False):
+
+        # --- FALL A: HITMARKER (Sofort & Parallel) ---
         if is_hitmarker:
+            # Sound sofort
             if sound_path:
                 try:
-                    pygame.mixer.Sound(sound_path).play()
+                    if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
                 except:
                     pass
+
+            # Bild sofort (auf extra Layer)
             if img_path and os.path.exists(img_path):
-                self.display_image(img_path, duration, x, y, scale)
+                self.show_hitmarker(img_path, duration, x, y, scale)
             return
 
+        # --- FALL B: NORMALE EVENTS (Queue) ---
         if not hasattr(self, 'queue_enabled'): self.queue_enabled = True
 
         if not self.queue_enabled:
+            # Queue aus: Alles abbrechen, sofort zeigen
             self.clear_queue_now()
-            self.display_image(img_path, duration, x, y, scale)
+
+            # Sound sofort
             if sound_path:
                 try:
-                    pygame.mixer.Sound(sound_path).play()
+                    if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
                 except:
                     pass
+
+            self.display_image(img_path, duration, x, y, scale)
             return
 
+        # Queue an: Hinten anstellen (INKLUSIVE SOUND!)
         self.event_queue.append((img_path, sound_path, duration, x, y, scale))
+
         if not self.is_showing:
             self.process_next_event()
+
+    def show_hitmarker(self, img_path, duration, abs_x, abs_y, scale=1.0):
+        """Zeigt den Hitmarker auf einem unabhängigen Layer (Logik analog zu display_image)."""
+        if hasattr(self, 'hitmarker_timer') and self.hitmarker_timer.isActive():
+            self.hitmarker_timer.stop()
+
+        if not img_path or not os.path.exists(img_path):
+            self.hitmarker_label.hide()
+            return
+
+        pixmap = QPixmap(img_path)
+        if pixmap.isNull(): return
+
+        # Skalierung (Exakt wie in display_image)
+        final_scale = self.ui_scale * scale
+        if final_scale != 1.0:
+            w = int(pixmap.width() * final_scale)
+            h = int(pixmap.height() * final_scale)
+            pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+        self.hitmarker_label.setPixmap(pixmap)
+        self.hitmarker_label.adjustSize()
+
+        # Positionierung
+        if abs_x == 0 and abs_y == 0:
+            # Spezialfall: Wenn 0,0 übergeben wird, zentrieren wir es auf dem Bildschirm.
+            # (Das ist der einzige Unterschied zu display_image, da Hitmarker per Default mittig sein sollen)
+            center_x = (self.width() // 2) - (self.hitmarker_label.width() // 2)
+            center_y = (self.height() // 2) - (self.hitmarker_label.height() // 2)
+            self.safe_move(self.hitmarker_label, center_x, center_y)
+        else:
+            # Sonst nutzen wir die Koordinaten wie in display_image (s() rechnet Skalierung ein)
+            self.safe_move(self.hitmarker_label, self.s(abs_x), self.s(abs_y))
+
+        self.hitmarker_label.show()
+        self.hitmarker_label.raise_()
+
+        # Timer
+        if not hasattr(self, 'hitmarker_timer'):
+            self.hitmarker_timer = QTimer(self)
+            self.hitmarker_timer.setSingleShot(True)
+            self.hitmarker_timer.timeout.connect(self.hitmarker_label.hide)
+
+        self.hitmarker_timer.start(duration if duration > 0 else 150)
 
     def process_next_event(self):
         if not self.event_queue:
@@ -252,15 +313,22 @@ class QtOverlay(QWidget):
             return
 
         self.is_showing = True
+
+        # Jetzt wieder mit 6 Werten (Sound ist zurück!)
         img_path, sound_path, duration, x, y, scale = self.event_queue.pop(0)
+
+        # 1. Bild anzeigen
         self.display_image(img_path, duration, x, y, scale)
 
+        # 2. Sound abspielen (Synchron zum Bild)
         if sound_path:
             try:
-                pygame.mixer.Sound(sound_path).play()
+                if 'pygame' in sys.modules:
+                    pygame.mixer.Sound(sound_path).play()
             except:
                 pass
 
+        # Timer starten für das nächste Event
         self.queue_timer.start(duration)
 
     def finish_current_event(self):
@@ -310,7 +378,8 @@ class QtOverlay(QWidget):
         if self.path_edit_active: self.path_layer.raise_()
 
     def s(self, value):
-        return int(float(value) * self.ui_scale)
+        # Runden ist wichtig für Pixel-Perfektion bei Skalierung
+        return int(round(float(value) * self.ui_scale))
 
     def safe_move(self, widget, x, y):
         screen_w, screen_h = self.width(), self.height()
@@ -341,39 +410,100 @@ class QtOverlay(QWidget):
             GWL_EXSTYLE = -20
             WS_EX_LAYERED = 0x80000
             WS_EX_TRANSPARENT = 0x20
+
+            # Hole aktuellen Stil
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
-            # ... (Stylesheets leeren) ...
+            # Stylesheets zurücksetzen (Rahmen entfernen)
+            self.feed_label.setStyleSheet("background: transparent;")
+            self.stats_bg_label.setStyleSheet("")
+            self.streak_bg_label.setStyleSheet("")
+            self.crosshair_label.setStyleSheet("background: transparent;")
 
             if enabled:
-                # SPIEL-MODUS: Klicks gehen durch (TRANSPARENT flag gesetzt)
+                # --- SPIEL-MODUS (Klicks gehen durch) ---
+                # Wir setzen das TRANSPARENT Flag
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+
                 self.edit_mode = False
+                self.setWindowFlags(
+                    Qt.WindowType.FramelessWindowHint |
+                    Qt.WindowType.WindowStaysOnTopHint |
+                    Qt.WindowType.Tool |
+                    Qt.WindowType.WindowTransparentForInput  # Wichtig: Qt sagen, dass es transparent ist
+                )
+                self.show()  # Neu zeichnen
+
+                # Preview Label verstecken, wenn Edit aus ist
+                if hasattr(self, 'event_preview_label'):
+                    self.event_preview_label.hide()
+
             else:
-                # EDIT-MODUS: Klicks werden abgefangen (TRANSPARENT flag ENTFERNT)
-                # WICHTIG: Das Overlay muss jetzt auch sichtbar sein und im Vordergrund!
+                # --- EDIT-MODUS (Klicks werden abgefangen) ---
+                # Wir entfernen das TRANSPARENT Flag
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
 
                 self.edit_mode = True
-                self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowTransparentForInput)
-                self.show()
 
-                # Highlight Rahmen setzen
-                hl_style = "border: 2px solid #00ff00; background: rgba(0, 255, 0, 0.1);"
+                # Qt Flags aktualisieren: KEIN WindowTransparentForInput mehr!
+                self.setWindowFlags(
+                    Qt.WindowType.FramelessWindowHint |
+                    Qt.WindowType.WindowStaysOnTopHint |
+                    Qt.WindowType.Tool
+                )
+                self.show()
+                self.raise_()
+                self.activateWindow()  # Fokus erzwingen
+
+                # --- RAHMEN ZEICHNEN ---
+                # Wir nutzen einen sichtbaren Rahmen und einen halb-transparenten Hintergrund
+                hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
+
                 targets = active_targets if active_targets else []
+                # Debugging Log
+                print(f"DEBUG: Activating Edit Mode for targets: {targets}")
 
                 if "feed" in targets:
-                    self.feed_label.setStyleSheet(hl_style);
+                    # HIER IST DER FIX: Ein sichtbarer Hintergrund ist zwingend nötig zum Greifen!
+                    # rgba(0, 0, 0, 150) macht es dunkelgrau und greifbar.
+                    # border: 2px solid #00ff00 macht den grünen Rand.
+                    feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
+
+                    self.feed_label.setStyleSheet(feed_style)
                     self.feed_label.show()
+                    self.feed_label.raise_()  # Nach ganz vorne holen
+
+                    # Fallback Text anzeigen, falls Feed leer ist (WICHTIG!)
+                    if not self.feed_label.text():
+                        self.feed_label.setText(
+                            "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
+                        self.feed_label.adjustSize()
+
                 if "stats" in targets:
-                    self.stats_bg_label.setStyleSheet(hl_style);
+                    self.stats_bg_label.setStyleSheet(hl_style)
                     self.stats_bg_label.show()
+                    self.stats_text_label.show()
+                    self.stats_text_label.raise_()
+
                 if "streak" in targets:
-                    self.streak_bg_label.setStyleSheet(hl_style);
+                    self.streak_bg_label.setStyleSheet(hl_style)
                     self.streak_bg_label.show()
+                    # Dummy Streak anzeigen, damit man was zum Greifen hat
+                    if not self.streak_bg_label.pixmap() or self.streak_bg_label.pixmap().isNull():
+                        self.streak_bg_label.setText("STREAK AREA")
+                        self.streak_bg_label.setStyleSheet(f"{hl_style} color: white; font-weight: bold;")
+                        self.streak_bg_label.adjustSize()
+
                 if "crosshair" in targets:
-                    self.crosshair_label.setStyleSheet(hl_style);
+                    self.crosshair_label.setStyleSheet(hl_style)
                     self.crosshair_label.show()
+
+                if "event" in targets:
+                    # Das Event Preview Label muss existieren und sichtbar sein
+                    if hasattr(self, 'event_preview_label'):
+                        self.event_preview_label.setStyleSheet(hl_style)
+                        self.event_preview_label.show()
+                        self.event_preview_label.raise_()
 
         except Exception as e:
             print(f"Passthrough Error: {e}")
@@ -411,15 +541,31 @@ class QtOverlay(QWidget):
         elif self.dragging_widget == "crosshair":
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
         elif self.dragging_widget == "stats":
+            # 1. Hintergrund bewegen
             self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
-            # Text follows bg
+
+            # 2. Text mitziehen (Live Berechnung)
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
-                cx = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
-                cy = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
-                self.safe_move(self.stats_text_label,
-                               cx + self.s(cfg.get("tx", 0)) - (self.stats_text_label.width() // 2),
-                               cy + self.s(cfg.get("ty", 0)) - (self.stats_text_label.height() // 2))
+
+                # Aktuelle Geometrie
+                bg_w = self.stats_bg_label.width()
+                bg_h = self.stats_bg_label.height()
+                txt_w = self.stats_text_label.width()
+                txt_h = self.stats_text_label.height()
+
+                # Offsets
+                tx_off = self.s(cfg.get("tx", 0))
+                ty_off = self.s(cfg.get("ty", 0))
+
+                # Mitte berechnen basierend auf NEUER Position (new_pos)
+                cx = new_pos.x() + (bg_w / 2)
+                cy = new_pos.y() + (bg_h / 2)
+
+                final_tx = cx - (txt_w / 2) + tx_off
+                final_ty = cy - (txt_h / 2) + ty_off
+
+                self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
         elif self.dragging_widget == "streak":
             self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
             # Text follows bg
@@ -434,28 +580,39 @@ class QtOverlay(QWidget):
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
 
+        # Hilfsfunktion: Rundet mathematisch korrekt statt abzuschneiden
         def uns(val):
-            return int(val / self.ui_scale)
+            return int(round(val / self.ui_scale))
 
         if self.gui_ref:
+            # 1. EVENT BILDER
             if self.dragging_widget == "event":
                 curr = self.event_preview_label.pos()
                 ename = self.gui_ref.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
+
                 if "events" not in self.gui_ref.config: self.gui_ref.config["events"] = {}
                 if ename not in self.gui_ref.config["events"]: self.gui_ref.config["events"][ename] = {}
+
+                # Exakte Position speichern
                 self.gui_ref.config["events"][ename]["x"] = uns(curr.x())
                 self.gui_ref.config["events"][ename]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
 
+            # 2. CROSSHAIR (Zentriert gespeichert)
             elif self.dragging_widget == "crosshair":
+                # Wir wollen die Mitte des Crosshairs speichern, nicht die Ecke oben links
                 curr = self.crosshair_label.pos()
-                cx = curr.x() + (self.crosshair_label.width() // 2)
-                cy = curr.y() + (self.crosshair_label.height() // 2)
+                center_x = curr.x() + (self.crosshair_label.width() / 2)
+                center_y = curr.y() + (self.crosshair_label.height() / 2)
+
                 if "crosshair" not in self.gui_ref.config: self.gui_ref.config["crosshair"] = {}
-                self.gui_ref.config["crosshair"]["x"] = uns(cx)
-                self.gui_ref.config["crosshair"]["y"] = uns(cy)
+
+                # Rückrechnung auf Basis-Auflösung (1080p)
+                self.gui_ref.config["crosshair"]["x"] = uns(center_x)
+                self.gui_ref.config["crosshair"]["y"] = uns(center_y)
                 self.gui_ref.save_config()
 
+            # 3. KILLFEED
             elif self.dragging_widget == "feed":
                 curr = self.feed_label.pos()
                 if "killfeed" not in self.gui_ref.config: self.gui_ref.config["killfeed"] = {}
@@ -463,16 +620,25 @@ class QtOverlay(QWidget):
                 self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
 
+            # 4. STATS WIDGET (Zentriert gespeichert via tx/ty Offset)
             elif self.dragging_widget == "stats":
                 curr = self.stats_bg_label.pos()
-                if "stats_widget" not in self.gui_ref.config: self.gui_ref.config["stats_widget"] = {}
+
+                if "stats_widget" not in self.gui_ref.config:
+                    self.gui_ref.config["stats_widget"] = {}
+
+                # Nur Position updaten
                 self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
                 self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
+
                 self.gui_ref.save_config()
 
+            # 5. KILLSTREAK (Zentriert gespeichert)
             elif self.dragging_widget == "streak":
                 curr = self.streak_bg_label.pos()
+
                 if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
+
                 self.gui_ref.config["streak"]["x"] = uns(curr.x())
                 self.gui_ref.config["streak"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
@@ -511,46 +677,43 @@ class QtOverlay(QWidget):
         self.safe_move(self.feed_label, self.s(conf.get("x", 50)), self.s(conf.get("y", 200)))
 
     def set_stats_html(self, html, img_path):
-        cfg = {}
-        if self.gui_ref: cfg = self.gui_ref.config.get("stats_widget", {})
-        bx, by = self.s(cfg.get("x", 50)), self.s(cfg.get("y", 500))
-
+        # 1. Bild / Hintergrund
         if os.path.exists(img_path) or self.edit_mode:
             if os.path.exists(img_path):
-                pix = QPixmap(img_path)
+                # Config laden um Scale zu bekommen
+                cfg = {}
+                if self.gui_ref: cfg = self.gui_ref.config.get("stats_widget", {})
                 sc = cfg.get("scale", 1.0) * self.ui_scale
+
+                pix = QPixmap(img_path)
                 if not pix.isNull():
                     pix = pix.scaled(int(pix.width() * sc), int(pix.height() * sc), Qt.AspectRatioMode.KeepAspectRatio,
                                      Qt.TransformationMode.SmoothTransformation)
                     self.stats_bg_label.setPixmap(pix)
                     self.stats_bg_label.adjustSize()
             else:
-                self.stats_bg_label.clear();
-                self.stats_bg_label.resize(int(400 * self.ui_scale), int(50 * self.ui_scale))
+                # Kein Bild, aber Edit Mode oder Placeholder
+                self.stats_bg_label.clear()
+                # Größe nicht hier setzen, das macht die main.py Logik
 
-            if not self.edit_mode: self.safe_move(self.stats_bg_label, bx, by)
             self.stats_bg_label.show()
         else:
             self.stats_bg_label.hide()
 
+        # 2. Text HTML skalieren
         scaled_html = html
-        for size in [28, 22, 20, 19, 16, 14]: scaled_html = scaled_html.replace(f"{size}px",
-                                                                                f"{int(size * self.ui_scale)}px")
-        self.stats_text_label.setText(scaled_html);
+        for size in [28, 22, 20, 19, 16, 14]:
+            scaled_html = scaled_html.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
+
+        self.stats_text_label.setText(scaled_html)
         self.stats_text_label.adjustSize()
 
-        if self.edit_mode:
-            cx = self.stats_bg_label.x() + (self.stats_bg_label.width() // 2)
-            cy = self.stats_bg_label.y() + (self.stats_bg_label.height() // 2)
-        else:
-            cx = bx + (self.stats_bg_label.width() // 2)
-            cy = by + (self.stats_bg_label.height() // 2)
-
-        self.safe_move(self.stats_text_label,
-                       cx + self.s(cfg.get("tx", 0)) - (self.stats_text_label.width() // 2),
-                       cy + self.s(cfg.get("ty", 0)) - (self.stats_text_label.height() // 2))
-        self.stats_text_label.show();
+        # Text immer anzeigen (Sichtbarkeit wird über Main Loop gesteuert via hide/show)
+        self.stats_text_label.show()
         self.stats_text_label.raise_()
+
+        # WICHTIG: KEINE safe_move() AUFRUFE HIER!
+        # Die Positionierung übernimmt jetzt exklusiv update_stats_position_safe in main.py
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if not cfg.get("active", True) and not self.edit_mode:

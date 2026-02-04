@@ -92,8 +92,7 @@ class DashboardController:
         self.window = window
         self.signals = DashboardSignals()
         # WICHTIG: Referenz speichern
-        if hasattr(self.window, 'controller'):
-            self.window.controller = self
+        self.window.dash_ctl = self
 
         self.signals.update_population.connect(self.window.graph.update_history)
         self.signals.update_population.connect(lambda val: self.window.lbl_total.setText(f"Total Players: {val}"))

@@ -51,7 +51,17 @@ from PyQt6.QtCore import (
     QPoint  # Neu: Für die Koordinaten-Punkte
 )
 
-
+DUMMY_STATS_HTML = """
+<div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
+            text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
+    KD: <span style="color: #00ff00;">3.50</span> &nbsp;&nbsp;
+    K: <span style="color: white;">42</span> &nbsp;&nbsp;
+    D: <span style="color: white;">12</span> &nbsp;&nbsp;
+    HSR: <span style="color: #ffcc00;">45%</span> &nbsp;&nbsp;
+    KPM: <span style="color: #ffcc00;">1.2</span> &nbsp;&nbsp;
+    <span style="color: #aaa;">TIME: 01:23</span>
+</div>
+"""
 
 
 class WorkerSignals(QObject):
@@ -206,13 +216,12 @@ class DiorClientGUI:
         # 5. SIGNALE VERBINDEN
         self.connect_all_qt_signals()
 
+        self.refresh_char_list_ui()
+
         # 6. DATEN IN DIE FENSTER LADEN
         # WICHTIG: Das hier lädt die Checkboxen UND erzwingt die Config-Werte
         self.load_overlay_config_to_qt()
         self.settings_win.load_config(self.config, self.ps2_dir)
-
-        # --- GELÖSCHT: Der manuelle Dropdown-Reset war hier! ---
-        # load_overlay_config_to_qt macht das schon richtig.
 
         # Positionen initialisieren
         if self.overlay_win:
@@ -244,6 +253,64 @@ class DiorClientGUI:
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
+        self._streak_test_timer = None
+        self._streak_backup = None
+
+    def update_stats_position_safe(self):
+        """Berechnet die Position des Stats-Widgets sicher und konsistent."""
+        if not self.overlay_win: return
+
+        # 1. Config laden
+        cfg = self.config.get("stats_widget", {})
+
+        # Gespeicherte Koordinaten (Linke obere Ecke des Hintergrunds)
+        x_conf = cfg.get("x", 50)
+        y_conf = cfg.get("y", 500)
+
+        # Umrechnen auf aktuelle Bildschirm-Skalierung
+        bg_x = self.overlay_win.s(x_conf)
+        bg_y = self.overlay_win.s(y_conf)
+
+        # 2. Hintergrund bewegen
+        self.overlay_win.safe_move(self.overlay_win.stats_bg_label, bg_x, bg_y)
+
+        # 3. Text Position relativ dazu berechnen
+
+        # Größen erzwingen (Wichtig!)
+        self.overlay_win.stats_bg_label.adjustSize()
+        self.overlay_win.stats_text_label.adjustSize()
+
+        bg_w = self.overlay_win.stats_bg_label.width()
+        bg_h = self.overlay_win.stats_bg_label.height()
+
+        # Fallback Größen (falls Bild noch lädt oder fehlt)
+        # Dies ist wichtig für den "leeren" Edit-Modus
+        if bg_w < 10: bg_w = int(450 * self.overlay_win.ui_scale)
+        if bg_h < 10: bg_h = int(60 * self.overlay_win.ui_scale)
+
+        txt_w = self.overlay_win.stats_text_label.width()
+        txt_h = self.overlay_win.stats_text_label.height()
+
+        # Offsets aus Config (Slider)
+        tx_offset = self.overlay_win.s(cfg.get("tx", 0))
+        ty_offset = self.overlay_win.s(cfg.get("ty", 0))
+
+        # --- MATHE FIX ---
+
+        # 1. Mitte des Hintergrunds finden (Absolute Bildschirmkoordinaten)
+        center_bg_x = bg_x + (bg_w / 2)
+        center_bg_y = bg_y + (bg_h / 2)
+
+        # 2. Text-Startpunkt berechnen:
+        # Mitte - halbe Textbreite + Benutzer-Offset
+        final_text_x = center_bg_x - (txt_w / 2) + tx_offset
+        final_text_y = center_bg_y - (txt_h / 2) + ty_offset
+
+        self.overlay_win.safe_move(self.overlay_win.stats_text_label, int(final_text_x), int(final_text_y))
+
+        # Damit das Text-Label immer VOR dem Hintergrund liegt
+        self.overlay_win.stats_text_label.raise_()
+
     def clean_path(self, path_str):
         """Entfernt 'No file selected' und leere Pfade."""
         if not path_str or "No file selected" in path_str:
@@ -252,6 +319,10 @@ class DiorClientGUI:
 
     def handle_game_status_change(self, is_running):
         """Dieser Slot läuft garantiert im Main-Thread!"""
+        # Wir setzen den Status sofort hier im Main-Thread,
+        # damit alle UI-Funktionen (wie refresh_ingame_overlay) denselben Stand haben.
+        self.ps2_running = is_running
+
         if is_running:
             self.on_game_started()
         else:
@@ -266,7 +337,6 @@ class DiorClientGUI:
         """Wird aufgerufen, wenn PS2 gestartet wurde (läuft im Main-Thread)."""
         self.add_log("MONITOR: PlanetSide 2 erkannt. Prüfe Einstellungen...")
 
-        # 1. Master Switch prüfen
         master_active = self.config.get("overlay_master_active", True)
 
         if master_active:
@@ -277,18 +347,25 @@ class DiorClientGUI:
                 self.overlay_win.showFullScreen()
                 self.overlay_win.raise_()
 
-                # Crosshair Status aktualisieren (Checkbox auslesen & anwenden)
+                # Crosshair
                 self.update_crosshair_from_qt()
 
-                # Stats-Loop starten
-                self.refresh_ingame_overlay()
-
-                # Feed leeren und zeigen
+                # Killfeed (leeren)
                 if hasattr(self.overlay_win, 'feed_label'):
                     self.overlay_win.feed_label.show()
                     self.overlay_win.feed_label.setText("")
-        else:
-            self.add_log("MONITOR: Master-Switch ist AUS. Overlay bleibt versteckt.")
+                    self.overlay_win.update_killfeed_pos()
+
+                # Streak
+                streak_active = self.config.get("streak", {}).get("active", True)
+                if streak_active:
+                    self.update_streak_display()
+
+                # WICHTIG: Kein manuelles .show() für Stats hier!
+                # Wir überlassen das komplett dem Loop.
+
+                # Loop sofort triggern
+                self.refresh_ingame_overlay()
 
     def on_game_stopped(self):
         """Wird aufgerufen, wenn PS2 beendet wurde."""
@@ -300,7 +377,23 @@ class DiorClientGUI:
         if self.overlay_win:
             # Nur verstecken, wenn wir nicht gerade editieren
             if not getattr(self, "is_hud_editing", False):
+                # 1. Crosshair weg
                 self.overlay_win.crosshair_label.hide()
+
+                # 2. Stats weg (NEU)
+                self.overlay_win.stats_bg_label.hide()
+                self.overlay_win.stats_text_label.hide()
+
+                # 3. Killfeed weg (NEU)
+                self.overlay_win.feed_label.hide()
+                self.overlay_win.feed_label.clear()
+
+                # 4. Streak weg
+                self.overlay_win.streak_bg_label.hide()
+                self.overlay_win.streak_text_label.hide()
+                for k in self.overlay_win.knife_labels:
+                    k.hide()
+
                 # Optional: Overlay ganz ausblenden (spart Ressourcen)
                 # self.overlay_win.hide()
 
@@ -600,7 +693,26 @@ class DiorClientGUI:
         for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
             self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
 
-        # Save & Edit
+        # --- NEU: LOAD BUTTONS VERBINDEN ---
+
+        # 1. Stats Background Image
+        try:
+            ui.btn_browse_stats_bg.clicked.disconnect()
+        except:
+            pass
+        # Wir nutzen lambda, um das Ziel-Textfeld (ent_stats_img) zu übergeben
+        ui.btn_browse_stats_bg.clicked.connect(lambda: self.browse_file_qt(ui.ent_stats_img, "png"))
+
+        # 2. Headshot Icon
+        try:
+            ui.btn_browse_hs_icon.clicked.disconnect()
+        except:
+            pass
+        ui.btn_browse_hs_icon.clicked.connect(lambda: self.browse_file_qt(ui.ent_hs_icon, "png"))
+
+        # -----------------------------------
+
+        # Save & Edit Actions
         self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
         self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
@@ -736,26 +848,33 @@ class DiorClientGUI:
         """Aktualisiert das Dropdown und setzt den aktiven Charakter."""
         ui = self.ovl_config_win
 
-        # 1. Signale blockieren (WICHTIG!)
-        # Damit das Leeren der Liste nicht versehentlich Events auslöst
+        # 1. Signale blockieren
         ui.char_combo.blockSignals(True)
 
         # 2. Liste neu aufbauen
         ui.char_combo.clear()
-        names = list(self.char_data.keys())
+
+        # Sortierte Liste ist schöner
+        names = sorted(list(self.char_data.keys()))
         ui.char_combo.addItems(names)
 
         # 3. Auswahl setzen
         if select_name and select_name in names:
             ui.char_combo.setCurrentText(select_name)
-
-            # WICHTIG: Da Signale blockiert sind, müssen wir die Logik MANUELL rufen!
             self.update_active_char(select_name)
 
         elif names:
-            # Fallback: Den ersten nehmen
-            ui.char_combo.setCurrentIndex(0)
-            self.update_active_char(names[0])
+            # --- VERBESSERUNG ---
+            # Versuche den zuletzt gewählten Namen wiederherzustellen
+            current_active = getattr(self, "current_selected_char_name", "")
+            if current_active and current_active in names:
+                ui.char_combo.setCurrentText(current_active)
+                self.update_active_char(current_active)
+            else:
+                # Fallback: Den ersten nehmen
+                ui.char_combo.setCurrentIndex(0)
+                self.update_active_char(names[0])
+            # --------------------
 
         # 4. Signale wieder freigeben
         ui.char_combo.blockSignals(False)
@@ -913,25 +1032,47 @@ class DiorClientGUI:
         """Liest Stats & Feed Settings aus Qt und speichert sie."""
         s_ui = self.ovl_config_win
 
+        # Aktuelle Config holen - LEBENSWICHTIG für x/y Position
+        current_st_conf = self.config.get("stats_widget", {})
+        current_kf_conf = self.config.get("killfeed", {})
+
         # Stats Widget Daten
         st_data = {
             "active": s_ui.check_stats_active.isChecked(),
             "img": s_ui.ent_stats_img.text(),
             "tx": s_ui.slider_st_tx.value(),
             "ty": s_ui.slider_st_ty.value(),
-            "scale": s_ui.slider_st_scale.value() / 100.0
+            "scale": s_ui.slider_st_scale.value() / 100.0,
+
+            # WICHTIG: Alte Position beibehalten!
+            "x": current_st_conf.get("x", 50),
+            "y": current_st_conf.get("y", 500)
         }
 
         # Killfeed Daten
         kf_data = {
             "hs_icon": s_ui.ent_hs_icon.text(),
-            "show_revives": s_ui.check_show_revives.isChecked()
+            "show_revives": s_ui.check_show_revives.isChecked(),
+            # Auch hier Position beibehalten
+            "x": current_kf_conf.get("x", 50),
+            "y": current_kf_conf.get("y", 200)
         }
 
+        # Dictionaries updaten (Merge)
+        if "stats_widget" not in self.config: self.config["stats_widget"] = {}
         self.config["stats_widget"].update(st_data)
+
+        if "killfeed" not in self.config: self.config["killfeed"] = {}
         self.config["killfeed"].update(kf_data)
+
         self.save_config()
         self.add_log("SYS: Stats & Killfeed configuration updated.")
+
+        # Positionen live anwenden
+        if self.overlay_win:
+            self.overlay_win.update_killfeed_pos()
+            # Für Stats müssen wir ein Refresh triggern, da set_stats_html die Position nutzt
+            self.refresh_ingame_overlay()
 
     def save_voice_config_from_qt(self):
         """Liest Voice Macros aus Qt und speichert sie."""
@@ -983,17 +1124,10 @@ class DiorClientGUI:
                 ui.char_combo.setCurrentText(active_char)
             ui.char_combo.blockSignals(False)
 
-            # FIX FÜR DAS DOPPEL-KLICKEN PROBLEM:
-            # 1. Wert holen (Standard True!)
             master_state = self.config.get("overlay_master_active", True)
-
-            # 2. GUI setzen (ohne Signale zu triggern)
             ui.check_master.blockSignals(True)
             ui.check_master.setChecked(master_state)
             ui.check_master.blockSignals(False)
-
-            # 3. ENTSCHEIDEND: Interne Variable erzwingen!
-            # Damit weiß der Monitor-Thread sofort Bescheid, ohne Klick.
             self.config["overlay_master_active"] = master_state
 
         # --- TAB 2: EVENTS ---
@@ -1008,8 +1142,18 @@ class DiorClientGUI:
         ui.ent_evt_snd.clear()
 
         # --- TAB 3: KILLSTREAK ---
+        # A) TEXTFELDER
+        saved_img = s_conf.get("img", "")
+        ui.ent_streak_img.setText(saved_img if saved_img else "KS_Counter.png")
+        ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
 
-        # 1. Slider-Werte setzen (Signale blockieren, um Performance zu sparen)
+        for fac in ["TR", "NC", "VS"]:
+            if fac in ui.knife_inputs:
+                config_key = f"knife_{fac.lower()}"
+                saved_val = s_conf.get(config_key, "")
+                ui.knife_inputs[fac].setText(saved_val)
+
+        # B) ELEMENTE MIT SIGNALEN
         ui.slider_tx.blockSignals(True)
         ui.slider_ty.blockSignals(True)
         ui.slider_scale.blockSignals(True)
@@ -1022,62 +1166,34 @@ class DiorClientGUI:
         ui.slider_ty.blockSignals(False)
         ui.slider_scale.blockSignals(False)
 
-        # 2. Checkboxen laden
-        # Hier stand vorher vielleicht ein Standardwert, der deine Config überschrieben hat
+        ui.check_streak_master.blockSignals(True)
+        ui.check_streak_anim.blockSignals(True)
         ui.check_streak_master.setChecked(s_conf.get("active", True))
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
+        ui.check_streak_master.blockSignals(False)
+        ui.check_streak_anim.blockSignals(False)
 
-        # 3. Schriftgröße
+        ui.combo_font_size.blockSignals(True)
         current_size = str(s_conf.get("size", 26))
         idx = ui.combo_font_size.findText(current_size)
-        if idx >= 0: ui.combo_font_size.setCurrentIndex(idx)
+        if idx >= 0:
+            ui.combo_font_size.setCurrentIndex(idx)
+        else:
+            ui.combo_font_size.setCurrentText(current_size)
+        ui.combo_font_size.blockSignals(False)
 
-        # 4. Farbe (Button einfärben)
         c_hex = s_conf.get("color", "#ffffff")
         text_col = "black" if QColor(c_hex).lightness() > 128 else "white"
         ui.btn_pick_color.setStyleSheet(
             f"background-color: {c_hex}; color: {text_col}; font-weight: bold; border: 1px solid #555; padding: 3px; border-radius: 3px;")
 
-        # 5. HAUPTBILD & SPEED (WICHTIG!)
-        # Wir prüfen explizit auf den gespeicherten Wert. Nur wenn leer, nehmen wir Default.
-        saved_img = s_conf.get("img", "")
-        if not saved_img: saved_img = "KS_Counter.png"
-
-        ui.ent_streak_img.setText(saved_img)
-        ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
-
-        # 6. MESSER ICONS (DER KNACKPUNKT)
-        # Die Keys in der Config sind klein geschrieben (knife_tr), die UI-Dict Keys groß (TR).
-        for fac in ["TR", "NC", "VS"]:
-            if fac in ui.knife_inputs:
-                # Wir bauen den Key: "knife_" + "tr" = "knife_tr"
-                config_key = f"knife_{fac.lower()}"
-
-                # Wert laden (kann leer sein, das ist ok)
-                saved_val = s_conf.get(config_key, "")
-
-                # Ins Textfeld setzen
-                ui.knife_inputs[fac].setText(saved_val)
-
-        # --- TAB 4: CROSSHAIR (Gefixter Bereich) ---
-
-        # 1. Signale blockieren (EXTREM WICHTIG hier!)
-        # Verhindert, dass setText sofort 'update_crosshair_from_qt' aufruft und speichert
+        # --- TAB 4: CROSSHAIR ---
         ui.check_cross.blockSignals(True)
         ui.cross_path.blockSignals(True)
-
-        # 2. Checkbox setzen
         ui.check_cross.setChecked(c_conf.get("active", True))
-
-        # 3. Pfad intelligent laden
         saved_file = c_conf.get("file", "")
-        # Wenn der String leer ist, Standard erzwingen
-        if not saved_file:
-            saved_file = "crosshair.png"
-
+        if not saved_file: saved_file = "crosshair.png"
         ui.cross_path.setText(saved_file)
-
-        # 4. Signale wieder freigeben
         ui.check_cross.blockSignals(False)
         ui.cross_path.blockSignals(False)
 
@@ -1106,28 +1222,32 @@ class DiorClientGUI:
             idx = combo.findText(str(val))
             if idx >= 0: combo.setCurrentIndex(idx)
 
+        # --- OVERLAY INIT ---
         if self.overlay_win:
             # 1. Crosshair initialisieren
             ch_active = c_conf.get("active", True)
             ch_file = c_conf.get("file", "crosshair.png")
             if not ch_file: ch_file = "crosshair.png"
-
             full_path = get_asset_path(ch_file)
             current_size = c_conf.get("size", 32)
 
-            # Prüfen: Soll es sichtbar sein? (Active + Game läuft ODER Edit Mode)
+            # Crosshair Logik
             game_running = getattr(self, 'ps2_running', False)
             edit_mode = getattr(self, "is_hud_editing", False)
             should_show = (ch_active and game_running) or edit_mode
-
             self.overlay_win.update_crosshair(full_path, current_size, should_show)
 
-            # 2. Killstreak initialisieren (optional, aber gut für Konsistenz)
+            # 2. Killstreak Init
             self.update_streak_display()
 
-            # 3. Stats Widget Position updaten
+            # 3. Killfeed Position Init
             if hasattr(self.overlay_win, 'update_killfeed_pos'):
                 self.overlay_win.update_killfeed_pos()
+
+            # 4. LOOP STARTEN (Verzögert)
+            # Wir machen hier KEINE manuelle Positionierung mehr.
+            # Der Loop (refresh_ingame_overlay) kümmert sich um alles.
+            QTimer.singleShot(500, self.refresh_ingame_overlay)
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
@@ -1633,17 +1753,6 @@ class DiorClientGUI:
         # Signal abfeuern (Top 20 reicht meist für die Anzeige)
         self.dash_controller.signals.update_top_list.emit(prepared_players[:20])
 
-    def open_server_menu(self, event):
-        """Öffnet das Popup-Menü zur Serverwahl"""
-        menu = tk.Menu(self.root, tearoff=0, bg="#1a1a1a", fg="white", activebackground="#00f2ff",
-                       activeforeground="black")
-
-        for name, s_id in self.server_map.items():
-            # Wir nutzen lambda, um name und s_id an die Funktion zu übergeben
-            menu.add_command(label=name, command=lambda n=name, i=s_id: self.switch_server(n, i))
-
-        # Menü an der Mausposition öffnen
-        menu.tk_popup(event.x_root, event.y_root)
 
     def switch_server(self, name, new_id):
         """Wechselt die Anzeige-ID und löscht lokale Stats (kein Reconnect nötig)"""
@@ -1977,40 +2086,58 @@ class DiorClientGUI:
             self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
 
     def refresh_ingame_overlay(self):
+        """Der Herzschlag des Overlays: Daten, HTML und Position."""
         if not self.overlay_win: return
 
-        master_switch = self.overlay_active.get()
+        # Loop sofort neu planen (damit er nie stirbt, auch bei Fehlern)
+        # Wir speichern die ID, falls wir ihn mal stoppen müssten (optional)
+        QTimer.singleShot(1000, self.refresh_ingame_overlay)
+
+        # 1. Status prüfen
+        master_switch = self.config.get("overlay_master_active", True)
         game_running = getattr(self, 'ps2_running', False)
         test_active = getattr(self, 'is_stats_test', False)
+        edit_active = getattr(self, 'is_hud_editing', False)
+
         cfg = self.config.get("stats_widget", {})
+        active_config = cfg.get("active", True)
 
-        # Prüfen ob Overlay aktiv sein soll
-        if master_switch and (game_running or test_active) and cfg.get("active", True):
+        # Soll es sichtbar sein?
+        should_be_visible = (master_switch and (game_running or test_active) and active_config) or edit_active
 
-            # --- 1. DATEN VORBEREITEN ---
+        if should_be_visible:
+            # 2. Daten sammeln
             if test_active:
-                # HIER FEHLTE 'hsrkills' -> Wir fügen es hinzu (z.B. 10)
                 kills, deaths, hs, hsrkills, start_time = 15, 5, 6, 10, time.time() - 3600
+            elif edit_active and not game_running:
+                # Dummy Daten für Edit Mode (damit man was sieht)
+                kills, deaths, hs, hsrkills, start_time = 42, 12, 20, 45, time.time() - 3600
             else:
+                # LIVE DATEN
                 my_id = self.current_character_id
                 if my_id and my_id in self.session_stats:
                     s = self.session_stats[my_id]
-                    # Hier ist es bereits korrekt definiert
-                    kills, deaths, hs, hsrkills = s.get("k", 0), s.get("d", 0), s.get("hs", 0), s.get("hsrkill", 0)
+                    kills = s.get("k", 0)
+                    deaths = s.get("d", 0)
+                    hs = s.get("hs", 0)
+                    hsrkills = s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
                 else:
                     kills, deaths, hs, hsrkills, start_time = 0, 0, 0, 0, time.time()
 
+            # 3. Berechnungen
             kd = kills / max(1, deaths)
             hsr = (hs / hsrkills * 100) if hsrkills > 0 else 0
             dur_min = (time.time() - start_time) / 60
             kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
-            hrs = int(dur_min // 60);
+            hrs = int(dur_min // 60)
             mns = int(dur_min % 60)
 
-            # --- 3. HTML DESIGN (ALLES IN EI NER ZEILE) ---
+            # 4. HTML Bauen
+            # Wir nutzen immer denselben Aufbau, damit nichts springt
             kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
 
+            # WICHTIG: Nutze exakt diesen String-Aufbau
             html = f"""
             <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
                         text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
@@ -2023,29 +2150,38 @@ class DiorClientGUI:
             </div>
             """
 
-            # --- 3. BILD PFAD LOGIK (HIER WAR DAS PROBLEM) ---
+            # Im Edit-Modus nehmen wir die Konstante, falls definiert, sonst den String von oben
+            if edit_active and not game_running:
+                # Falls du die DUMMY_STATS_HTML Konstante in main.py hast:
+                if 'DUMMY_STATS_HTML' in globals():
+                    html = DUMMY_STATS_HTML
+
+            # 5. Bild Pfad
             raw_name = cfg.get("img", "").strip()
             final_img_path = ""
-
             if raw_name:
-                # A: Wir bauen den Pfad zum assets Ordner
                 asset_path = get_asset_path(raw_name)
-
-                # B: Wir prüfen, was existiert
                 if os.path.exists(asset_path):
-                    final_img_path = asset_path  # Treffer im Assets Ordner!
+                    final_img_path = asset_path
                 elif os.path.exists(raw_name):
-                    final_img_path = raw_name  # Treffer als direkter Pfad
+                    final_img_path = raw_name
 
-                # Debugging Ausgabe in die Konsole (damit wir sehen was passiert)
-                # print(f"DEBUG: Suche Bild '{raw_name}' -> Gefunden: '{final_img_path}'")
+            # 6. Overlay Update (Inhalt)
+            # Hier wird nur Inhalt gesetzt, keine Position!
+            self.overlay_win.set_stats_html(html, final_img_path)
 
-            # Daten an das Overlay senden (Signal nimmt jetzt den korrekten vollen Pfad)
-            self.overlay_win.signals.update_stats.emit(html, final_img_path)
+            # 7. Position erzwingen (jedes Mal!)
+            # Das verhindert, dass es falsch liegt, wenn es sichtbar wird
+            from PyQt6.QtWidgets import QApplication
+            QApplication.processEvents()  # Zwingt Qt zum Neu-Berechnen der Größe
 
-            self.root.after(1000, self.refresh_ingame_overlay)
+            self.update_stats_position_safe()
+
         else:
-            self.stop_overlay_logic()
+            # Unsichtbar machen
+            if hasattr(self.overlay_win, 'stats_bg_label'):
+                self.overlay_win.stats_bg_label.hide()
+                self.overlay_win.stats_text_label.hide()
 
 
 
@@ -2083,13 +2219,15 @@ class DiorClientGUI:
         threading.Thread(target=press, daemon=True).start()
 
     def test_stats_visuals(self):
-        """Startet eine Vorschau (Anti-Ghosting Test mit neuem Layout)"""
+        """Startet eine Vorschau (Anti-Ghosting Test mit neuem Layout) - PyQt6 Fixed"""
         if not self.overlay_win:
-            messagebox.showwarning("Warnung", "Overlay System ist nicht aktiv!")
+            self.add_log("WARN: Overlay System ist nicht aktiv! Bitte erst starten.")
             return
 
         self.add_log("UI: Starte visuellen Test (Layout-Check)...")
         self.is_stats_test = True
+
+        # Sofortiges Update des Stats-Balkens (KD, KPM etc.) erzwingen
         self.refresh_ingame_overlay()
 
         # Test-Szenarien (Typ, Name, Tag, IsHS, KD)
@@ -2105,11 +2243,13 @@ class DiorClientGUI:
         ]
 
         def send_fake_feed(t_type, name, tag, is_hs, kd_val):
+            # Basis-Style für den Text
             base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
-            # NEUES LAYOUT LOGIK
-            tag_display = f"[{tag}]"  # Immer Klammern, auch wenn tag leer ist
+            # Tag Formatierung
+            tag_display = f"[{tag}]" if tag else ""
 
+            # Icon Logik
             icon_html = ""
             if is_hs:
                 hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
@@ -2118,6 +2258,7 @@ class DiorClientGUI:
                     # Icon ganz links
                     icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
 
+            # HTML zusammenbauen
             if t_type == "kill":
                 msg = f"""<div style="{base_style}">
                         {icon_html}<span style="color: #888;">{tag_display} </span>
@@ -2136,33 +2277,43 @@ class DiorClientGUI:
                         <span style="color: white;">{name}</span>
                         </div>"""
 
-            if self.overlay_win: self.overlay_win.signals.killfeed_entry.emit(msg)
+            # Signal senden
+            if self.overlay_win:
+                self.overlay_win.signals.killfeed_entry.emit(msg)
 
-        # Die Test-Events nacheinander abfeuern
+        # Die Test-Events nacheinander abfeuern (PyQt6 QTimer statt root.after)
         for i, (t, n, tag, hs, kd) in enumerate(test_scenarios):
-            self.root.after(i * 500, lambda t=t, n=n, tag=tag, hs=hs, kd=kd: send_fake_feed(t, n, tag, hs, kd))
+            # QTimer.singleShot(Verzögerung_ms, Funktion)
+            QTimer.singleShot(i * 500, lambda t=t, n=n, tag=tag, hs=hs, kd=kd: send_fake_feed(t, n, tag, hs, kd))
 
         # --- AUTO-CLEAR UND AUFRÄUMEN ---
         def end_test():
             self.is_stats_test = False
             if self.overlay_win:
                 self.overlay_win.signals.clear_feed.emit()
+                # Stats wieder auf echte Werte (oder 0) setzen
+                self.refresh_ingame_overlay()
             self.add_log("UI: Test beendet & Feed bereinigt.")
 
-        self.root.after(6000, end_test)
+        # Nach 6 Sekunden aufräumen
+        QTimer.singleShot(6000, end_test)
 
     def get_current_tab_targets(self):
         """Ermittelt sicher, welcher Tab gerade offen ist."""
         try:
             ui = self.ovl_config_win
             idx = ui.tabs.currentIndex()
-            # .strip() ist entscheidend, da deine Tabs " EVENTS " heißen (mit Leerzeichen)
+            # .strip() entfernt Leerzeichen am Anfang/Ende
             tab_text = ui.tabs.tabText(idx).strip().upper()
+
+            print(f"DEBUG: Current Tab Index: {idx}, Text: '{tab_text}'")  # Debug Log
 
             targets = []
             if "CROSSHAIR" in tab_text:
                 targets = ["crosshair"]
-            elif "STATS" in tab_text:
+            # Hier haben wir "Stats_Feed" in "STATS & FEED" geändert im UI,
+            # also prüfen wir auf "STATS" oder "FEED"
+            elif "STATS" in tab_text or "FEED" in tab_text:
                 targets = ["stats", "feed"]
             elif "KILLSTREAK" in tab_text:
                 targets = ["streak"]
@@ -2176,12 +2327,15 @@ class DiorClientGUI:
 
     def toggle_hud_edit_mode(self):
         """
-        Der moderne Ersatz für 'toggle_preview'.
-        Startet den Edit-Modus, zeigt Rahmen an und ermöglicht Drag & Drop.
+        Startet den Edit-Modus, zeigt Rahmen an, füllt Dummy-Daten ein
+        und ermöglicht Drag & Drop.
         """
         if not self.overlay_win:
             self.add_log("ERR: Overlay läuft nicht! Bitte erst Overlay starten.")
-            return
+            # Versuch es zu starten, falls Master-Switch an ist
+            if self.config.get("overlay_master_active", True):
+                self.create_overlay_window()
+            if not self.overlay_win: return
 
         # Status umschalten
         self.is_hud_editing = not getattr(self, "is_hud_editing", False)
@@ -2191,7 +2345,7 @@ class DiorClientGUI:
         targets = self.get_current_tab_targets()
 
         if not targets:
-            self.add_log("INFO: Bitte erst einen Tab (Events, Streak, etc.) auswählen.")
+            self.add_log("INFO: Bitte erst einen Tab auswählen.")
             self.is_hud_editing = False
             return
 
@@ -2199,7 +2353,7 @@ class DiorClientGUI:
         btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats]
 
         if is_editing:
-            # --- START EDIT ---
+            # --- START EDIT (An) ---
 
             # 1. Overlay klickbar machen
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
@@ -2210,31 +2364,78 @@ class DiorClientGUI:
                 btn.setStyleSheet(
                     "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;")
 
-            # 3. Spezialfall EVENTS: Bild anzeigen (Ersatz für refresh_preview_graphics)
+            # 3. DUMMY DATEN LADEN (Damit man was sieht!)
+
+            # A) STATS WIDGET (KD Anzeige)
+            if "stats" in targets:
+                cfg = self.config.get("stats_widget", {})
+                img_name = clean_path(cfg.get("img", ""))
+                img_path = get_asset_path(img_name) if img_name else ""
+
+                # Zwinge sofortiges Update mit dem konstanten Dummy
+                # Damit ist es sofort da und sieht bunt aus
+                self.overlay_win.set_stats_html(DUMMY_STATS_HTML, img_path)
+
+                self.overlay_win.stats_bg_label.show()
+
+                # Größe erzwingen für Rahmen (falls Bild fehlt)
+                if not img_path or not os.path.exists(img_path):
+                    w = int(600 * self.overlay_win.ui_scale)  # Etwas breiter machen für den langen Text
+                    h = int(60 * self.overlay_win.ui_scale)
+                    self.overlay_win.stats_bg_label.setFixedSize(w, h)
+                else:
+                    self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
+                    self.overlay_win.stats_bg_label.adjustSize()
+
+                # Loop anwerfen (der nutzt jetzt auch DUMMY_STATS_HTML, also kein Springen!)
+                self.refresh_ingame_overlay()
+
+            # B) KILLFEED (Text einfügen, damit er Größe bekommt und greifbar wird)
+            if "feed" in targets:
+                # Wir füllen den Feed mit Fake-Zeilen, damit die Box groß genug zum Klicken ist
+                fake_feed = []
+                base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+
+                # 3 Zeilen simulieren
+                line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'
+                line2 = f'<div style="{base_style}"><span style="color:#00ff00;">ALLY</span> <span style="color:white;">[HS]</span> <span style="color:#ff0000;">TARGET</span></div>'
+                line3 = f'<div style="{base_style}"><span style="color:#888;">[SKL]</span> <span style="color:#ff4444;">SWEATY</span> (4.2)</div>'
+
+                self.overlay_win.feed_label.setText(line1 + line2 + line3)
+                self.overlay_win.feed_label.adjustSize()
+                self.overlay_win.feed_label.show()
+
+            # C) EVENTS (Preview Bild)
             if "event" in targets:
                 img_name = clean_path(ui.ent_evt_img.text())
-                if not img_name:
-                    # Fallback auf Config
-                    evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
-                    evt_data = self.config.get("events", {}).get(evt_name, {})
-                    img_name = evt_data.get("img", "kill.png")
+                if not img_name: img_name = "kill.png"  # Fallback
 
-                img_path = get_asset_path(img_name)
-
-                # Das Overlay hat ein spezielles Preview-Label dafür
                 if hasattr(self.overlay_win, 'event_preview_label'):
-                    self.overlay_win.event_preview_label.show()
-                    # Wir nutzen display_image mit langer Dauer (999999) für die Vorschau
-                    current_x = self.config.get("events", {}).get(evt_name, {}).get("x", 100)
-                    current_y = self.config.get("events", {}).get(evt_name, {}).get("y", 100)
-                    scale = ui.slider_evt_scale.value() / 100.0
+                    full_path = get_asset_path(img_name)
+                    from PyQt6.QtGui import QPixmap
+                    if os.path.exists(full_path):
+                        pix = QPixmap(full_path)
+                        scale = ui.slider_evt_scale.value() / 100.0
+                        w = int(pix.width() * scale * self.overlay_win.ui_scale)
+                        h = int(pix.height() * scale * self.overlay_win.ui_scale)
+                        pix = pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                         Qt.TransformationMode.SmoothTransformation)
+                        self.overlay_win.event_preview_label.setPixmap(pix)
+                        self.overlay_win.event_preview_label.resize(w, h)
 
-                    self.overlay_win.display_image(img_path, 9999999, current_x, current_y, scale)
+                        # Position setzen
+                        evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+                        data = self.config.get("events", {}).get(evt_name, {})
+                        ex = int(data.get("x", 100) * self.overlay_win.ui_scale)
+                        ey = int(data.get("y", 100) * self.overlay_win.ui_scale)
+                        self.overlay_win.event_preview_label.move(ex, ey)
+                        self.overlay_win.event_preview_label.show()
+                        self.overlay_win.event_preview_label.raise_()
 
-            self.add_log(f"UI: Edit-Modus für {targets}")
+            self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
 
         else:
-            # --- STOP EDIT ---
+            # --- STOP EDIT (Aus) ---
 
             # 1. Overlay wieder durchlässig machen
             self.overlay_win.set_mouse_passthrough(True)
@@ -2242,25 +2443,41 @@ class DiorClientGUI:
             # 2. Buttons zurücksetzen
             for btn in btn_list:
                 btn.setText("MOVE UI")
-                # Reset auf Default-Style (Blau via #EditBtn ID im CSS)
                 btn.setStyleSheet("")
 
-                # 3. Explizit Speichern je nach Tab
+                # 3. Dummy Daten aufräumen (Leeren)
+            if "feed" in targets:
+                self.overlay_win.feed_label.clear()
+
+            if "stats" in targets:
+                # Größe Fix aufheben (auf Standard zurücksetzen)
+                if hasattr(self.overlay_win, 'stats_bg_label'):
+                    # QWIDGETSIZE_MAX (entfernt fixed size constraint)
+                    self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
+
+                    # Wenn wir nicht gerade spielen, Text verstecken
+                if not getattr(self, 'ps2_running', False):
+                    self.overlay_win.stats_text_label.clear()
+                    self.overlay_win.stats_bg_label.hide()
+                else:
+                    # Wenn wir spielen, echte Daten laden
+                    self.refresh_ingame_overlay()
+
+            if "event" in targets:
+                if hasattr(self.overlay_win, 'event_preview_label'):
+                    self.overlay_win.event_preview_label.hide()
+
+            # 4. Speichern
             if "event" in targets:
                 self.save_event_ui_data()
             elif "streak" in targets:
                 self.save_streak_settings_from_qt()
-            elif "stats" in targets:
+            elif "stats" in targets or "feed" in targets:
                 self.save_stats_config_from_qt()
             elif "crosshair" in targets:
                 self.update_crosshair_from_qt()
 
-            # Event Preview verstecken
-            if hasattr(self.overlay_win, 'event_preview_label'):
-                self.overlay_win.event_preview_label.hide()
-            self.overlay_win.img_label.hide()
-
-            self.add_log("UI: Positionen gespeichert.")
+            self.add_log("UI: Positionen gespeichert & Edit beendet.")
 
 
     def on_overlay_tab_change(self, event):
@@ -2322,16 +2539,14 @@ class DiorClientGUI:
 
     def test_streak_visuals(self):
         """
-        Startet eine Vorschau mit 20 Messern.
-        Verhindert Abstürze durch Spamming und schützt echte Statistiken.
+        Startet eine Vorschau mit 20 Messern (PyQt6 kompatibel).
         """
-        # 1. Vorherige Timer abbrechen, damit die GUI nicht "hängt"
+        # 1. Vorherige Timer abbrechen
         if self._streak_test_timer:
-            self.root.after_cancel(self._streak_test_timer)
+            self._streak_test_timer.stop()
             self._streak_test_timer = None
 
-        # 2. Echte Daten nur sichern, wenn wir noch NICHT im Test-Modus sind.
-        # Das verhindert, dass die Test-Zahl (20) als "echter" Wert gespeichert wird.
+        # 2. Backup erstellen (nur wenn nicht schon im Test-Modus)
         if self._streak_backup is None:
             self._streak_backup = {
                 'count': getattr(self, 'killstreak_count', 0),
@@ -2341,31 +2556,40 @@ class DiorClientGUI:
 
         self.add_log("UI: Teste Killstreak-Visuals (20 Messer)...")
 
-        # 3. Testwerte setzen (Begrenzt auf 20 für Performance)
+        # 3. Testwerte setzen
         self.killstreak_count = 20
+        # Erzeuge eine bunte Mischung aus Fraktionen
         self.streak_factions = (["TR", "NC", "VS"] * 7)[:20]
 
         import random
+        # Slots zufällig verteilen
         slots = list(range(20))
         random.shuffle(slots)
         self.streak_slot_map = slots
 
-        # 4. Sofortiges Update an das Overlay senden
+        # 4. Update an Overlay senden
         self.update_streak_display()
 
-        # 5. Reset-Funktion: Stellt die echten Daten wieder her
+        # 5. Reset-Funktion definieren
         def reset_action():
             if self._streak_backup:
                 self.killstreak_count = self._streak_backup['count']
                 self.streak_factions = self._streak_backup['factions']
                 self.streak_slot_map = self._streak_backup['slots']
+
+                # Overlay zurücksetzen
                 self.update_streak_display()
+
                 self._streak_backup = None  # Backup löschen
+
             self._streak_test_timer = None
             self.add_log("UI: Test beendet.")
 
-        # 6. Timer für das automatische Ende starten (4 Sekunden)
-        self._streak_test_timer = self.root.after(2000, reset_action)
+        # 6. Timer starten (PyQt6 Weg)
+        self._streak_test_timer = QTimer()
+        self._streak_test_timer.setSingleShot(True)
+        self._streak_test_timer.timeout.connect(reset_action)
+        self._streak_test_timer.start(4000)  # 4 Sekunden (wie in deinem Kommentar gewünscht, Code hatte 2000)
 
     def fade_out(self, tag, alpha=255):
         if alpha > 0:

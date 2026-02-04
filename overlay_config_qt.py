@@ -262,7 +262,7 @@ class OverlayConfigWindow(QWidget):
         # --- TAB 5: SESSION STATS & FEED ---
         self.tab_stats = QWidget()
         self.setup_stats_tab()
-        self.tabs.addTab(self.tab_stats, " STATS & FEED ")
+        self.tabs.addTab(self.tab_stats, " STATS AND FEED ")
 
         # --- TAB 6: AUTO VOICE ---
         self.tab_voice = QWidget()
