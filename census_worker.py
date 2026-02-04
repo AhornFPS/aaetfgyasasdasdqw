@@ -364,10 +364,22 @@ class CensusWorker:
 
             # B) VICTIM
             elif victim_id == my_id:
+                # --- KILLSTREAK LOGIK (Fix für "Double Death") ---
                 if self.c.killstreak_count > 0:
+                    # Wir haben einen Streak -> Backup erstellen für möglichen Revive
                     self.c.saved_streak = self.c.killstreak_count
                     self.c.saved_factions = getattr(self.c, 'streak_factions', [])
                     self.c.saved_slots = getattr(self.c, 'streak_slot_map', [])
+                else:
+                    # WICHTIG: Wenn wir sterben und der Streak ist bereits 0
+                    # (z.B. wir sind respawned und sofort wieder gestorben),
+                    # müssen wir das Backup LÖSCHEN. Sonst würde ein Revive jetzt
+                    # den Streak vom VOR-VORIGEN Leben wiederherstellen.
+                    self.c.saved_streak = 0
+                    self.c.saved_factions = []
+                    self.c.saved_slots = []
+
+                # Reset des aktuellen Zählers
                 self.c.killstreak_count = 0
                 self.c.streak_factions = []
                 self.c.streak_slot_map = []
