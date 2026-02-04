@@ -1973,7 +1973,7 @@ class DiorClientGUI:
             if hasattr(self.overlay_win, 'crosshair_label'):
                 self.overlay_win.crosshair_label.hide()
 
-        # Zähler resetten
+        # Zähler  resetten
         self.killstreak_count = 0
         self.kill_counter = 0
         self.streak_factions = []
