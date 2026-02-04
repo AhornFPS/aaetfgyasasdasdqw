@@ -10,14 +10,14 @@ import requests  # Wichtig für den Faction-Check beim Login
 S_ID = "s:1799912354"
 
 PS2_DETECTION = {
-    "CATEGORIES": {"Knife": "Knife Kill", "Grenade": "Nade Kill", "MAX": "Max Kill"},
+    "CATEGORIES": {"Knife": "Knife Kill", "Grenade": "Nade Kill"},
     "NAMES": {"SpitFire Turret": "Spitfire Kill", "Spitfire Auto-Turret": "Spitfire Kill"},
     "SPECIAL_IDS": {
         "802512": "Spitfire Kill", "802514": "Spitfire Kill", "802515": "Spitfire Kill",
         "802516": "Spitfire Kill", "802517": "Spitfire Kill", "802518": "Spitfire Kill",
         "6005426": "Spitfire Kill", "6005427": "Spitfire Kill", "6009294": "Spitfire Kill",
-        "650": "Tankmine Kill", "6005961": "Tankmine Kill", "6005962": "Tankmine Kill",
-        "1045": "AP-Mine Kill", "1044": "AP-Mine Kill", "6005422": "AP-Mine Kill"
+        "650": "Mine Kill", "6005961": "Mine Kill", "6005962": "Mine Kill",
+        "1045": "Mine Kill", "1044": "Mine Kill", "6005422": "Mine Kill"
     }
 }
 
@@ -41,10 +41,11 @@ PS2_EXP_DETECTION = {
     "Base Capture": ["19", "598"],
     "Break Construction": ["604", "616", "628"],
     "Alert End": ["328"],
-    "Road Kill": ["26"],
+    "RoadKill": ["26"],
     "Domination": ["10"],
     "Revenge": ["11"],
     "Killstreak Stop": ["8"],
+    "Bounty Kill": ["593"],
     "Gunner Assist": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"]
 }
 
@@ -284,7 +285,9 @@ class CensusWorker:
                         evt = PS2_DETECTION["CATEGORIES"][category]
                     elif weapon_name in PS2_DETECTION["NAMES"]:
                         evt = PS2_DETECTION["NAMES"][weapon_name]
-
+                    print(weapon_id)
+                    print(weapon_name)
+                    print(category)
                     if is_hs and not evt: evt = "Headshot"
 
                     # --- RESTORED LOGIC: MULTI-KILL & STREAK ANNOUNCEMENTS ---
@@ -393,6 +396,7 @@ class CensusWorker:
         char_id = p.get("character_id")
         my_id = self.c.current_character_id
 
+
         if exp_id in ["2", "3", "371", "372"]:
             a_obj = get_stat_obj(char_id, p.get("team_id"))
             a_obj["a"] += 1
@@ -401,6 +405,10 @@ class CensusWorker:
             if r_obj["d"] > 0: r_obj["d"] -= 1
 
         if my_id and other_id == my_id:
+
+            if exp_id == "26":
+                self.c.trigger_overlay_event("Get Roadkilled")
+
             if exp_id in ["7", "53"]:
                 self.c.was_revived = True
                 self.c.is_dead = False

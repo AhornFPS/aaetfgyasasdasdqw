@@ -368,9 +368,9 @@ class OverlayConfigWindow(QWidget):
             "STREAKS": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
             "MULTI KILL": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill",
                            "Holy Shit"],
-            "SPECIAL": ["Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "Road Kill",
+            "SPECIAL": ["Bounty Kill", "Domination", "Revenge", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled",
                         "Spitfire Kill", "Gunner Kill"],
-            "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction"],
+            "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction","Mine Kill"],
             "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
                            "Alert Win"],
             "SYSTEM": ["Login TR", "Login NC", "Login VS", "Login NSO"]
