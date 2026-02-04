@@ -285,9 +285,6 @@ class CensusWorker:
                         evt = PS2_DETECTION["CATEGORIES"][category]
                     elif weapon_name in PS2_DETECTION["NAMES"]:
                         evt = PS2_DETECTION["NAMES"][weapon_name]
-                    print(weapon_id)
-                    print(weapon_name)
-                    print(category)
                     if is_hs and not evt: evt = "Headshot"
 
                     # --- RESTORED LOGIC: MULTI-KILL & STREAK ANNOUNCEMENTS ---
