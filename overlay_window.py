@@ -16,46 +16,11 @@ except ImportError:
     pass
 
 
-# Helper Funktion für Pfade (lokal definiert, damit wir keine Abhängigkeiten haben)
+# Helper Funktion für Pfade
 def get_asset_path(filename):
     if not filename: return ""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_dir, "assets", filename)
-
-
-def set_animated_background(label: QLabel, path: str):
-    """
-    Hilfsfunktion: Lädt ein Bild auf ein Label.
-    Wenn es ein GIF ist, wird es animiert (QMovie).
-    Wenn es ein statisches Bild ist, wird es normal angezeigt (QPixmap).
-    """
-    # 1. Eventuell laufenden alten Film stoppen
-    if label.movie() is not None:
-        label.movie().stop()
-        label.setMovie(None)
-
-    # 2. Prüfen, ob Pfad existiert
-    if not path or not os.path.exists(path):
-        label.clear()
-        return
-
-    # 3. Prüfen, ob es ein GIF ist
-    if path.lower().endswith(".gif"):
-        movie = QMovie(path)
-        # Größe anpassen (optional, aber gut für Hintergründe)
-        # Hinweis: label.size() kann 0 sein, wenn das Fenster noch nicht sichtbar ist.
-        # Besser ist oft: movie.setScaledSize(QSize(width, height)) wenn bekannt.
-        if label.width() > 0 and label.height() > 0:
-            movie.setScaledSize(label.size())
-
-        label.setMovie(movie)
-        movie.start()
-        label.setScaledContents(True)
-    else:
-        # 4. Es ist ein normales Bild
-        pixmap = QPixmap(path)
-        label.setPixmap(pixmap)
-        label.setScaledContents(True)
 
 
 # --- SIGNALE ---
@@ -152,6 +117,10 @@ class QtOverlay(QWidget):
         self.dragging_widget = None
         self.drag_offset = None
         self.knife_labels = []
+
+        # --- CACHE DICTIONARY (NEU) ---
+        # Hier speichern wir alle geladenen Bilder
+        self.pixmap_cache = {}
 
         # 1. FENSTER-KONFIGURATION
         self.setWindowFlags(
@@ -258,19 +227,40 @@ class QtOverlay(QWidget):
         self.hitmarker_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.hitmarker_label.hide()
 
+    # --- CACHE LOGIK ---
+    def get_cached_pixmap(self, path):
+        """Lädt Bild aus RAM oder von Disk, falls neu."""
+        if not path or not os.path.exists(path):
+            return QPixmap()  # Leeres Pixmap zurückgeben
+
+        # Wenn Pfad noch nicht im Cache ist -> Laden
+        if path not in self.pixmap_cache:
+            pm = QPixmap(path)
+            if not pm.isNull():
+                self.pixmap_cache[path] = pm
+            else:
+                # Defektes Bild, wir speichern ein leeres Pixmap, damit wir nicht immer wieder versuchen zu laden
+                self.pixmap_cache[path] = QPixmap()
+                return QPixmap()
+
+        # Aus Cache zurückgeben
+        return self.pixmap_cache[path]
+
+    def clear_cache(self):
+        """Falls man Bilder im Betrieb austauscht (Reload)."""
+        self.pixmap_cache.clear()
+
     # --- QUEUE & DISPLAY LOGIK ---
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, is_hitmarker=False):
 
         # --- FALL A: HITMARKER (Sofort & Parallel) ---
         if is_hitmarker:
-            # Sound sofort
             if sound_path:
                 try:
                     if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
                 except:
                     pass
 
-            # Bild sofort (auf extra Layer)
             if img_path and os.path.exists(img_path):
                 self.show_hitmarker(img_path, duration, x, y, scale)
             return
@@ -282,7 +272,6 @@ class QtOverlay(QWidget):
             # Queue aus: Alles abbrechen, sofort zeigen
             self.clear_queue_now()
 
-            # Sound sofort
             if sound_path:
                 try:
                     if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
@@ -292,25 +281,22 @@ class QtOverlay(QWidget):
             self.display_image(img_path, duration, x, y, scale)
             return
 
-        # Queue an: Hinten anstellen (INKLUSIVE SOUND!)
         self.event_queue.append((img_path, sound_path, duration, x, y, scale))
 
         if not self.is_showing:
             self.process_next_event()
 
     def show_hitmarker(self, img_path, duration, abs_x, abs_y, scale=1.0):
-        """Zeigt den Hitmarker auf einem unabhängigen Layer (Logik analog zu display_image)."""
         if hasattr(self, 'hitmarker_timer') and self.hitmarker_timer.isActive():
             self.hitmarker_timer.stop()
 
-        if not img_path or not os.path.exists(img_path):
+        # --- CACHE GENUTZT ---
+        pixmap = self.get_cached_pixmap(img_path)
+        if pixmap.isNull():
             self.hitmarker_label.hide()
             return
 
-        pixmap = QPixmap(img_path)
-        if pixmap.isNull(): return
-
-        # Skalierung (Exakt wie in display_image)
+        # Skalierung (nutzt das gecachte Bild als Basis)
         final_scale = self.ui_scale * scale
         if final_scale != 1.0:
             w = int(pixmap.width() * final_scale)
@@ -320,21 +306,16 @@ class QtOverlay(QWidget):
         self.hitmarker_label.setPixmap(pixmap)
         self.hitmarker_label.adjustSize()
 
-        # Positionierung
         if abs_x == 0 and abs_y == 0:
-            # Spezialfall: Wenn 0,0 übergeben wird, zentrieren wir es auf dem Bildschirm.
-            # (Das ist der einzige Unterschied zu display_image, da Hitmarker per Default mittig sein sollen)
             center_x = (self.width() // 2) - (self.hitmarker_label.width() // 2)
             center_y = (self.height() // 2) - (self.hitmarker_label.height() // 2)
             self.safe_move(self.hitmarker_label, center_x, center_y)
         else:
-            # Sonst nutzen wir die Koordinaten wie in display_image (s() rechnet Skalierung ein)
             self.safe_move(self.hitmarker_label, self.s(abs_x), self.s(abs_y))
 
         self.hitmarker_label.show()
         self.hitmarker_label.raise_()
 
-        # Timer
         if not hasattr(self, 'hitmarker_timer'):
             self.hitmarker_timer = QTimer(self)
             self.hitmarker_timer.setSingleShot(True)
@@ -348,14 +329,10 @@ class QtOverlay(QWidget):
             return
 
         self.is_showing = True
-
-        # Jetzt wieder mit 6 Werten (Sound ist zurück!)
         img_path, sound_path, duration, x, y, scale = self.event_queue.pop(0)
 
-        # 1. Bild anzeigen
         self.display_image(img_path, duration, x, y, scale)
 
-        # 2. Sound abspielen (Synchron zum Bild)
         if sound_path:
             try:
                 if 'pygame' in sys.modules:
@@ -363,7 +340,6 @@ class QtOverlay(QWidget):
             except:
                 pass
 
-        # Timer starten für das nächste Event
         self.queue_timer.start(duration)
 
     def finish_current_event(self):
@@ -375,7 +351,6 @@ class QtOverlay(QWidget):
         self.is_showing = False
 
     def display_image(self, img_path, duration, abs_x, abs_y, scale=1.0):
-        # 1. Aufräumen (Timer und alte Movies stoppen)
         if hasattr(self, 'hide_timer') and self.hide_timer.isActive():
             self.hide_timer.stop()
 
@@ -383,26 +358,18 @@ class QtOverlay(QWidget):
             self.img_label.movie().stop()
             self.img_label.setMovie(None)
 
-        # 2. Prüfen ob Datei existiert
         if not img_path or not os.path.exists(img_path):
             self.img_label.hide()
             return
 
-        # 3. Entscheidung: GIF oder Bild?
         if img_path.lower().endswith(".gif"):
-            # --- GIF LOGIK (FIXED) ---
+            # GIFs cachen wir NICHT als Pixmap, da sie animiert sind (QMovie).
+            # Das ist okay, da GIFs selten sind im Vergleich zu Hitmarkern.
             movie = QMovie(img_path)
             if movie.isValid():
-                # WICHTIG: Wir springen manuell zu Frame 0.
-                # Das zwingt Qt, die Metadaten (Größe) sofort zu laden.
                 movie.jumpToFrame(0)
-
-                # Jetzt bekommen wir die korrekte Größe
                 base_size = movie.currentImage().size()
-
                 final_scale = self.ui_scale * scale
-
-                # Nur skalieren, wenn wir eine gültige Größe haben
                 if final_scale != 1.0 and not base_size.isEmpty():
                     w = int(base_size.width() * final_scale)
                     h = int(base_size.height() * final_scale)
@@ -411,8 +378,8 @@ class QtOverlay(QWidget):
                 self.img_label.setMovie(movie)
                 movie.start()
         else:
-            # --- NORMALE BILD LOGIK ---
-            pixmap = QPixmap(img_path)
+            # --- CACHE GENUTZT (Statische Bilder) ---
+            pixmap = self.get_cached_pixmap(img_path)
             if pixmap.isNull(): return
 
             final_scale = self.ui_scale * scale
@@ -424,13 +391,11 @@ class QtOverlay(QWidget):
 
             self.img_label.setPixmap(pixmap)
 
-        # 4. Anzeigen & Positionieren
         self.img_label.adjustSize()
         self.safe_move(self.img_label, self.s(abs_x), self.s(abs_y))
         self.img_label.show()
         self.img_label.raise_()
 
-        # 5. Timer zum Ausblenden
         if not hasattr(self, 'hide_timer'):
             self.hide_timer = QTimer(self)
             self.hide_timer.setSingleShot(True)
@@ -439,7 +404,6 @@ class QtOverlay(QWidget):
         self.hide_timer.start(duration)
 
     def _hide_image_safe(self):
-        """Hilfsmethode: Stoppt das GIF sauber, um CPU zu sparen."""
         if self.img_label.movie():
             self.img_label.movie().stop()
         self.img_label.hide()
@@ -454,7 +418,6 @@ class QtOverlay(QWidget):
         if self.path_edit_active: self.path_layer.raise_()
 
     def s(self, value):
-        # Runden ist wichtig für Pixel-Perfektion bei Skalierung
         return int(round(float(value) * self.ui_scale))
 
     def safe_move(self, widget, x, y):
@@ -486,42 +449,28 @@ class QtOverlay(QWidget):
             GWL_EXSTYLE = -20
             WS_EX_LAYERED = 0x80000
             WS_EX_TRANSPARENT = 0x20
-
-            # Hole aktuellen Stil
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
-            # Stylesheets zurücksetzen (Rahmen entfernen)
             self.feed_label.setStyleSheet("background: transparent;")
             self.stats_bg_label.setStyleSheet("")
             self.streak_bg_label.setStyleSheet("")
             self.crosshair_label.setStyleSheet("background: transparent;")
 
             if enabled:
-                # --- SPIEL-MODUS (Klicks gehen durch) ---
-                # Wir setzen das TRANSPARENT Flag
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-
                 self.edit_mode = False
                 self.setWindowFlags(
                     Qt.WindowType.FramelessWindowHint |
                     Qt.WindowType.WindowStaysOnTopHint |
                     Qt.WindowType.Tool |
-                    Qt.WindowType.WindowTransparentForInput  # Wichtig: Qt sagen, dass es transparent ist
+                    Qt.WindowType.WindowTransparentForInput
                 )
-                self.show()  # Neu zeichnen
-
-                # Preview Label verstecken, wenn Edit aus ist
+                self.show()
                 if hasattr(self, 'event_preview_label'):
                     self.event_preview_label.hide()
-
             else:
-                # --- EDIT-MODUS (Klicks werden abgefangen) ---
-                # Wir entfernen das TRANSPARENT Flag
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
-
                 self.edit_mode = True
-
-                # Qt Flags aktualisieren: KEIN WindowTransparentForInput mehr!
                 self.setWindowFlags(
                     Qt.WindowType.FramelessWindowHint |
                     Qt.WindowType.WindowStaysOnTopHint |
@@ -529,27 +478,16 @@ class QtOverlay(QWidget):
                 )
                 self.show()
                 self.raise_()
-                self.activateWindow()  # Fokus erzwingen
+                self.activateWindow()
 
-                # --- RAHMEN ZEICHNEN ---
-                # Wir nutzen einen sichtbaren Rahmen und einen halb-transparenten Hintergrund
                 hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
-
                 targets = active_targets if active_targets else []
-                # Debugging Log
-                print(f"DEBUG: Activating Edit Mode for targets: {targets}")
 
                 if "feed" in targets:
-                    # HIER IST DER FIX: Ein sichtbarer Hintergrund ist zwingend nötig zum Greifen!
-                    # rgba(0, 0, 0, 150) macht es dunkelgrau und greifbar.
-                    # border: 2px solid #00ff00 macht den grünen Rand.
                     feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
-
                     self.feed_label.setStyleSheet(feed_style)
                     self.feed_label.show()
-                    self.feed_label.raise_()  # Nach ganz vorne holen
-
-                    # Fallback Text anzeigen, falls Feed leer ist (WICHTIG!)
+                    self.feed_label.raise_()
                     if not self.feed_label.text():
                         self.feed_label.setText(
                             "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
@@ -564,7 +502,6 @@ class QtOverlay(QWidget):
                 if "streak" in targets:
                     self.streak_bg_label.setStyleSheet(hl_style)
                     self.streak_bg_label.show()
-                    # Dummy Streak anzeigen, damit man was zum Greifen hat
                     if not self.streak_bg_label.pixmap() or self.streak_bg_label.pixmap().isNull():
                         self.streak_bg_label.setText("STREAK AREA")
                         self.streak_bg_label.setStyleSheet(f"{hl_style} color: white; font-weight: bold;")
@@ -575,7 +512,6 @@ class QtOverlay(QWidget):
                     self.crosshair_label.show()
 
                 if "event" in targets:
-                    # Das Event Preview Label muss existieren und sichtbar sein
                     if hasattr(self, 'event_preview_label'):
                         self.event_preview_label.setStyleSheet(hl_style)
                         self.event_preview_label.show()
@@ -588,7 +524,6 @@ class QtOverlay(QWidget):
     def mousePressEvent(self, event):
         if getattr(self, "path_edit_active", False): return
         if not self.edit_mode: return
-
         pos = event.pos()
         if self.event_preview_label.isVisible() and self.event_preview_label.geometry().contains(pos):
             self.dragging_widget = "event"
@@ -617,34 +552,18 @@ class QtOverlay(QWidget):
         elif self.dragging_widget == "crosshair":
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
         elif self.dragging_widget == "stats":
-            # 1. Hintergrund bewegen
             self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
-
-            # 2. Text mitziehen (Live Berechnung)
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
-
-                # Aktuelle Geometrie
-                bg_w = self.stats_bg_label.width()
-                bg_h = self.stats_bg_label.height()
-                txt_w = self.stats_text_label.width()
-                txt_h = self.stats_text_label.height()
-
-                # Offsets
-                tx_off = self.s(cfg.get("tx", 0))
-                ty_off = self.s(cfg.get("ty", 0))
-
-                # Mitte berechnen basierend auf NEUER Position (new_pos)
-                cx = new_pos.x() + (bg_w / 2)
-                cy = new_pos.y() + (bg_h / 2)
-
+                bg_w, bg_h = self.stats_bg_label.width(), self.stats_bg_label.height()
+                txt_w, txt_h = self.stats_text_label.width(), self.stats_text_label.height()
+                tx_off, ty_off = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
+                cx, cy = new_pos.x() + (bg_w / 2), new_pos.y() + (bg_h / 2)
                 final_tx = cx - (txt_w / 2) + tx_off
                 final_ty = cy - (txt_h / 2) + ty_off
-
                 self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
         elif self.dragging_widget == "streak":
             self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
-            # Text follows bg
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("streak", {})
                 cx = self.streak_bg_label.x() + (self.streak_bg_label.width() // 2)
@@ -656,65 +575,41 @@ class QtOverlay(QWidget):
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
 
-        # Hilfsfunktion: Rundet mathematisch korrekt statt abzuschneiden
         def uns(val):
             return int(round(val / self.ui_scale))
 
         if self.gui_ref:
-            # 1. EVENT BILDER
             if self.dragging_widget == "event":
                 curr = self.event_preview_label.pos()
                 ename = self.gui_ref.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
-
                 if "events" not in self.gui_ref.config: self.gui_ref.config["events"] = {}
                 if ename not in self.gui_ref.config["events"]: self.gui_ref.config["events"][ename] = {}
-
-                # Exakte Position speichern
                 self.gui_ref.config["events"][ename]["x"] = uns(curr.x())
                 self.gui_ref.config["events"][ename]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
-
-            # 2. CROSSHAIR (Zentriert gespeichert)
             elif self.dragging_widget == "crosshair":
-                # Wir wollen die Mitte des Crosshairs speichern, nicht die Ecke oben links
                 curr = self.crosshair_label.pos()
                 center_x = curr.x() + (self.crosshair_label.width() / 2)
                 center_y = curr.y() + (self.crosshair_label.height() / 2)
-
                 if "crosshair" not in self.gui_ref.config: self.gui_ref.config["crosshair"] = {}
-
-                # Rückrechnung auf Basis-Auflösung (1080p)
                 self.gui_ref.config["crosshair"]["x"] = uns(center_x)
                 self.gui_ref.config["crosshair"]["y"] = uns(center_y)
                 self.gui_ref.save_config()
-
-            # 3. KILLFEED
             elif self.dragging_widget == "feed":
                 curr = self.feed_label.pos()
                 if "killfeed" not in self.gui_ref.config: self.gui_ref.config["killfeed"] = {}
                 self.gui_ref.config["killfeed"]["x"] = uns(curr.x())
                 self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
-
-            # 4. STATS WIDGET (Zentriert gespeichert via tx/ty Offset)
             elif self.dragging_widget == "stats":
                 curr = self.stats_bg_label.pos()
-
-                if "stats_widget" not in self.gui_ref.config:
-                    self.gui_ref.config["stats_widget"] = {}
-
-                # Nur Position updaten
+                if "stats_widget" not in self.gui_ref.config: self.gui_ref.config["stats_widget"] = {}
                 self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
                 self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
-
                 self.gui_ref.save_config()
-
-            # 5. KILLSTREAK (Zentriert gespeichert)
             elif self.dragging_widget == "streak":
                 curr = self.streak_bg_label.pos()
-
                 if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
-
                 self.gui_ref.config["streak"]["x"] = uns(curr.x())
                 self.gui_ref.config["streak"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
@@ -734,7 +629,6 @@ class QtOverlay(QWidget):
         scaled = html_msg
         for size in [19, 16]: scaled = scaled.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
         if "style=\"" in scaled: scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
-
         self.feed_messages.insert(0, scaled)
         self.feed_messages = self.feed_messages[:6]
         self.feed_label.setText(
@@ -756,22 +650,20 @@ class QtOverlay(QWidget):
         # 1. Bild / Hintergrund
         if os.path.exists(img_path) or self.edit_mode:
             if os.path.exists(img_path):
-                # Config laden um Scale zu bekommen
                 cfg = {}
                 if self.gui_ref: cfg = self.gui_ref.config.get("stats_widget", {})
                 sc = cfg.get("scale", 1.0) * self.ui_scale
 
-                pix = QPixmap(img_path)
+                # --- CACHE GENUTZT ---
+                pix = self.get_cached_pixmap(img_path)
+
                 if not pix.isNull():
                     pix = pix.scaled(int(pix.width() * sc), int(pix.height() * sc), Qt.AspectRatioMode.KeepAspectRatio,
                                      Qt.TransformationMode.SmoothTransformation)
                     self.stats_bg_label.setPixmap(pix)
                     self.stats_bg_label.adjustSize()
             else:
-                # Kein Bild, aber Edit Mode oder Placeholder
                 self.stats_bg_label.clear()
-                # Größe nicht hier setzen, das macht die main.py Logik
-
             self.stats_bg_label.show()
         else:
             self.stats_bg_label.hide()
@@ -783,13 +675,8 @@ class QtOverlay(QWidget):
 
         self.stats_text_label.setText(scaled_html)
         self.stats_text_label.adjustSize()
-
-        # Text immer anzeigen (Sichtbarkeit wird über Main Loop gesteuert via hide/show)
         self.stats_text_label.show()
         self.stats_text_label.raise_()
-
-        # WICHTIG: KEINE safe_move() AUFRUFE HIER!
-        # Die Positionierung übernimmt jetzt exklusiv update_stats_position_safe in main.py
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if not cfg.get("active", True) and not self.edit_mode:
@@ -807,7 +694,8 @@ class QtOverlay(QWidget):
         sc = cfg.get("scale", 1.0) * self.ui_scale
 
         if os.path.exists(img_path):
-            pix = QPixmap(img_path)
+            # --- CACHE GENUTZT ---
+            pix = self.get_cached_pixmap(img_path)
             if not pix.isNull():
                 pix = pix.scaled(int(pix.width() * sc), int(pix.height() * sc), Qt.AspectRatioMode.KeepAspectRatio,
                                  Qt.TransformationMode.SmoothTransformation)
@@ -824,7 +712,6 @@ class QtOverlay(QWidget):
                     l.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);
                     self.knife_labels.append(l)
 
-                # PATH or CIRCLE
                 if len(path_data) > 2:
                     segments = []
                     total_l = 0
@@ -842,14 +729,14 @@ class QtOverlay(QWidget):
                         ftag = factions[i]
                         kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
                         kpath = get_asset_path(kfile)
-                        if not os.path.exists(kpath): lbl.hide(); continue
+
+                        if not os.path.exists(kpath): lbl.hide(); continue  # Nur Pfad checken
 
                         sidx = slot_map[i] if slot_map and i < len(slot_map) else i
                         ridx = sidx // k_per_ring
                         posring = sidx % k_per_ring
                         rscale = 1.0 + (ridx * 0.28)
                         tdist = (posring / k_per_ring) * total_l
-
                         kx_off, ky_off = 0, 0
                         for p1, p2, seg_d, start_l in segments:
                             if start_l <= tdist <= start_l + seg_d:
@@ -857,17 +744,14 @@ class QtOverlay(QWidget):
                                 kx_off = (p1.x() + t * (p2.x() - p1.x())) * rscale
                                 ky_off = (p1.y() + t * (p2.y() - p1.y())) * rscale
                                 break
-
                         angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
                         kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
                         self._place_knife(lbl, kpath, kx, ky, angle, is_new, skull_center)
-
                 else:
                     k_per_circle = 50
                     rad_step = self.s(22)
                     sx = (self.streak_bg_label.width() // 2) - self.s(15)
                     sy = (self.streak_bg_label.height() // 2) - self.s(15)
-
                     for i in range(len(factions)):
                         lbl = self.knife_labels[i]
                         is_new = not lbl.isVisible()
@@ -883,36 +767,37 @@ class QtOverlay(QWidget):
                         rad = math.radians(angle)
                         s_val = math.sin(rad)
                         narrow = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
-
                         kx = skull_center.x() + int((sx + (ridx * rad_step)) * narrow * math.cos(rad))
                         ky = skull_center.y() - self.s(20) + int((sy + (ridx * rad_step)) * math.sin(rad))
                         self._place_knife(lbl, kpath, kx, ky, angle + 90, is_new, skull_center)
 
                 for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
 
-                # Text Update
                 fc, fs, sh = cfg.get("color", "#fff"), cfg.get("size", 26), int(cfg.get("shadow_size", 0))
                 stl = [f"font-family: 'Black Ops One';", f"font-size: {int(fs * sc)}px;", f"color: {fc};"]
                 if sh > 0: stl.append(f"text-shadow: {sh}px {sh}px 0 #000;")
                 if cfg.get("bold"): stl.append("font-weight: bold;")
                 if cfg.get("underline"): stl.append("text-decoration: underline;")
-
                 self.streak_text_label.setText(f'<div style="{" ".join(stl)}">{cnt}</div>')
                 self.streak_text_label.adjustSize()
-
                 tx = skull_center.x() + self.s(cfg.get("tx", 0))
                 ty = skull_center.y() + self.s(cfg.get("ty", 0))
                 self.safe_move(self.streak_text_label, tx - (self.streak_text_label.width() // 2),
                                ty - (self.streak_text_label.height() // 2))
-
                 self.streak_text_label.show()
                 self.streak_bg_label.raise_();
                 self.streak_text_label.raise_()
 
     def _place_knife(self, lbl, path, kx, ky, angle, is_new, center):
-        pix = QPixmap(path).transformed(QTransform().rotate(angle), Qt.TransformationMode.SmoothTransformation)
+        # --- CACHE GENUTZT (WICHTIG!) ---
+        base_pix = self.get_cached_pixmap(path)
+        if base_pix.isNull(): return
+
+        # Transformation vom RAM-Bild erstellen (Kopie)
+        pix = base_pix.transformed(QTransform().rotate(angle), Qt.TransformationMode.SmoothTransformation)
         pix = pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
                          Qt.TransformationMode.SmoothTransformation)
+
         lbl.setPixmap(pix);
         lbl.adjustSize()
         lbl._base_off_x, lbl._base_off_y = kx - center.x(), ky - center.y()
@@ -926,28 +811,24 @@ class QtOverlay(QWidget):
         scfg = {}
         if self.gui_ref: scfg = self.gui_ref.config.get("streak", {})
         if not scfg.get("active", True): return
-
         now = time.time()
-        # Pulse
         try:
             speed = int(scfg.get("speed", 50)) / 20.0
         except:
             speed = 2.5
         pulse = 1.0 + (math.sin(now * speed) * 0.04) if scfg.get("anim_active", True) else 1.0
-
         cx, cy = self.streak_bg_label.geometry().center().x(), self.streak_bg_label.geometry().center().y()
 
         for lbl in self.knife_labels:
             if getattr(lbl, "_is_active", False) and lbl.isVisible():
                 alive = now - getattr(lbl, "_spawn_time", 0)
                 cur_s = 1.0
-                if alive < 0.4:  # Spawn anim
+                if alive < 0.4:
                     prog = alive / 0.4
                     start_f = 1.8
                     cur_s = start_f - ((start_f - 1.0) * math.sin(prog * (math.pi / 2)))
                 else:
                     cur_s = pulse
-
                 nx = cx + int(getattr(lbl, "_base_off_x") * cur_s)
                 ny = cy + int(getattr(lbl, "_base_off_y") * cur_s)
                 lbl.move(nx - (lbl.width() // 2), ny - (lbl.height() // 2))
@@ -957,12 +838,12 @@ class QtOverlay(QWidget):
             self.crosshair_label.hide();
             return
 
-        pix = QPixmap(path)
+        # --- CACHE GENUTZT ---
+        pix = self.get_cached_pixmap(path)
         if not pix.isNull():
             pix = pix.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.crosshair_label.setPixmap(pix);
             self.crosshair_label.adjustSize()
-
             tx, ty = 0, 0
             if self.gui_ref:
                 c = self.gui_ref.config.get("crosshair", {})
@@ -971,7 +852,6 @@ class QtOverlay(QWidget):
                     tx, ty = self.width() // 2, self.height() // 2
                 else:
                     tx, ty = self.s(rx), self.s(ry)
-
             self.safe_move(self.crosshair_label, tx - (self.crosshair_label.width() // 2),
                            ty - (self.crosshair_label.height() // 2))
             self.crosshair_label.show()
