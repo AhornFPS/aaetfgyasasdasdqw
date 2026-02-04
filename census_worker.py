@@ -100,7 +100,8 @@ class CensusWorker:
                                 "faction": faction_name,
                                 "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
                                 "start": time.time(),
-                                "last_kill_time": time.time()
+                                "last_kill_time": time.time(),  # <--- WICHTIG: Hier muss das Komma hin!
+                                "world_id": str(p.get("world_id", "0"))  # Das ist die neue Zeile
                             }
                         return self.c.session_stats[cid]
 
@@ -186,7 +187,8 @@ class CensusWorker:
                             if track_id and track_id != "0":
                                 tid = p.get("team_id") or p.get("attacker_team_id")
                                 f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-                                self.c.active_players[track_id] = (time.time(), f_name)
+                                w_id = str(p.get("world_id", "0"))
+                                self.c.active_players[track_id] = (time.time(), f_name, w_id)
                                 if track_id not in self.c.name_cache:
                                     self.c.id_queue.put(track_id)
 

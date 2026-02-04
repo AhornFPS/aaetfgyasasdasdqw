@@ -85,6 +85,7 @@ class DashboardSignals(QObject):
     update_factions = pyqtSignal(dict)
     update_top_list = pyqtSignal(list)
     server_changed = pyqtSignal(str)
+    update_db_count = pyqtSignal(int)
 
 
 class DashboardController:
@@ -98,6 +99,7 @@ class DashboardController:
         self.signals.update_population.connect(lambda val: self.window.lbl_total.setText(f"Total Players: {val}"))
         self.signals.update_factions.connect(self.update_faction_ui)
         self.signals.update_top_list.connect(self.update_top_list_ui)
+        self.signals.update_db_count.connect(lambda c: self.window.lbl_db_count.setText(f"UNIQUE DB: {c:,}"))
 
     def update_faction_ui(self, data):
         total = sum(data.values())
@@ -187,7 +189,7 @@ class FactionBox(QFrame):
         self.bar.setRange(0, 1000)
         layout.addWidget(self.bar)
 
-        self.table = QTableWidget(10, 7)
+        self.table = QTableWidget(15, 7)
         self.table.setHorizontalHeaderLabels(["PLAYER", "K", "KPM", "D", "A", "K/D", "KDA"])
         self.table.setMinimumHeight(300)
         self.table.verticalHeader().setVisible(False)
@@ -210,7 +212,8 @@ class FactionBox(QFrame):
 
     def update_table(self, players):
         self.table.clearContents()
-        top_players = sorted(players, key=lambda x: x.get('k', 0), reverse=True)[:10]
+        # Sortiert die empfangene Liste und nimmt die Top 10
+        top_players = sorted(players, key=lambda x: x.get('k', 0), reverse=True)[:15]
 
         for row, p in enumerate(top_players):
             k, d, a = p.get('k', 0), p.get('d', 0), p.get('a', 0)
@@ -311,6 +314,11 @@ class DashboardWidget(QWidget):
         self.lbl_footer.setStyleSheet("color: #444; font-size: 9px;")
         main_layout.addWidget(self.lbl_footer)
 
+        self.lbl_db_count = QLabel("DB: 0", self)
+        self.lbl_db_count.setStyleSheet("color: #666; font-family: 'Consolas'; font-size: 11px; font-weight: bold;")
+        self.lbl_db_count.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.lbl_db_count.show()  # Wichtig, da es nicht im Layout liegt
+
     def on_server_selected(self, server_name):
         world_id = self.server_map.get(server_name, "10")
         if self.controller:
@@ -318,6 +326,14 @@ class DashboardWidget(QWidget):
                 self.controller.dash_controller.signals.server_changed.emit(world_id)
 
         print(f"DEBUG: Server changed to {server_name} (ID: {world_id})")
+
+    def resizeEvent(self, event):
+        # Positioniert das Label fest unten rechts (160px von rechts, 30px von unten)
+        if hasattr(self, 'lbl_db_count'):
+            w = self.width()
+            h = self.height()
+            self.lbl_db_count.setGeometry(w - 160, h - 30, 150, 20)
+        super().resizeEvent(event)
 
 
 if __name__ == "__main__":

@@ -180,6 +180,9 @@ class DiorClientGUI:
         self.session_stats = {}
         self.active_players = {}
 
+        self.db_player_count = 0
+        self.update_db_count_cache()
+
         # Enforcer / Watchdog / Network
         self.observer = None
         self.last_killer_name = "None"
@@ -256,6 +259,17 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
 
+
+    def update_db_count_cache(self):
+        """Liest die Anzahl der einzigartigen Spieler aus der DB."""
+        try:
+            conn = sqlite3.connect("ps2_master.db")
+            cursor = conn.cursor()
+            count = cursor.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
+            conn.close()
+            self.db_player_count = count
+        except Exception as e:
+            print(f"DB Count Error: {e}")
 
     def update_stats_position_safe(self):
         """Berechnet die Position des Stats-Widgets sicher und konsistent."""
@@ -1627,12 +1641,18 @@ class DiorClientGUI:
         # Initialer Trigger für Daten-Update
         self.update_live_graph()
 
+
     def update_dashboard_elements(self):
         """Sendet echte Live-Daten an das neue PyQt6 Dashboard via Signale."""
         if not hasattr(self, 'dash_window') or not hasattr(self, 'dash_controller'):
             return
 
-        # 1. POPULATION & FRAKTIONEN (Direktes Emit)
+        # Aktuell ausgewählte Server-ID holen (Standard: 10/EU)
+        current_wid = str(getattr(self, 'current_world_id', '10'))
+
+        # 1. POPULATION & FRAKTIONEN
+        # Diese Daten kommen jetzt aus self.live_stats, welches in update_live_graph
+        # bereits gefiltert wurde!
         total_players = self.live_stats.get("Total", 0)
         self.dash_controller.signals.update_population.emit(total_players)
 
@@ -1644,7 +1664,7 @@ class DiorClientGUI:
         }
         self.dash_controller.signals.update_factions.emit(faction_data)
 
-        # 2. TOP PLAYER LISTE VORBEREITEN
+        # 2. PLAYER LISTE VORBEREITEN
         active_ids = self.active_players.keys()
         now = time.time()
         prepared_players = []
@@ -1654,32 +1674,37 @@ class DiorClientGUI:
             if not isinstance(p, dict) or p_id not in active_ids:
                 continue
 
+            # --- SERVER FILTER (NEU) ---
+            # Überspringt Spieler, die nicht auf dem gewählten Server sind
+            if str(p.get("world_id", "0")) != current_wid:
+                continue
+
             # --- NAMEN-FIX ---
-            # Falls die API noch lädt, nutzen wir den Cache
             p_name = p.get("name")
             if p_name in ["Unknown", "Searching...", None]:
                 p_name = self.name_cache.get(p_id, f"ID: {p_id[-4:]}")
 
             # --- KPM LOGIK ---
-            # Wir nutzen die Zeit seit dem ersten Kill dieser Session
             p_start = p.get("start", now)
             active_min = max((now - p_start) / 60, 0.5)
 
-            # Paket schnüren (Wichtig: Nur Basisdaten, die GUI berechnet den Rest)
+            # Paket schnüren
             prepared_players.append({
                 "name": p_name,
-                "fac": p.get("faction", "NSO"),
+                "fac": p.get("faction", "NSO"),  # Wichtig für die Sortierung im Dashboard
                 "k": p.get("k", 0),
                 "d": p.get("d", 0),
                 "a": p.get("a", 0),
                 "active_min": active_min
             })
 
-        # 3. SORTIERUNG (Nach Kills, damit das Dashboard oben die Besten zeigt)
+        # 3. SORTIEREN & SENDEN
+        # Wir sortieren vor, senden aber ALLE Daten (kein [:20]),
+        # damit jede Fraktion ihre eigenen Top 16 anzeigen kann.
         prepared_players.sort(key=lambda x: x['k'], reverse=True)
 
-        # Signal abfeuern (Top 20 reicht meist für die Anzeige)
-        self.dash_controller.signals.update_top_list.emit(prepared_players[:20])
+        self.dash_controller.signals.update_top_list.emit(prepared_players)
+        self.dash_controller.signals.update_db_count.emit(self.db_player_count)
 
 
     def switch_server(self, name, new_id):
@@ -2587,22 +2612,45 @@ class DiorClientGUI:
         # Animation starten
         self.animate_fade_in()
 
+    # DATEI: Dior Client.py
+
     def update_live_graph(self):
         """Berechnet jede Sekunde die aktuellen Stats und triggert das Dashboard-Update."""
         try:
             now = time.time()
 
-            # 1. Fraktions-Zahlen aus den aktiven Spielern berechnen
+            # Aktuell ausgewählte Server-ID holen (Standard auf 10/EU)
+            current_wid = str(getattr(self, 'current_world_id', '10'))
+
+            # 1. Fraktions-Zahlen berechnen (MIT FILTER)
             counts = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0}
-            for _, fac in self.active_players.values():
+            total_pop = 0
+
+            # Wir iterieren über die Werte. Achtung: Format kann (Zeit, Fac) oder (Zeit, Fac, Wid) sein
+            for val in self.active_players.values():
+
+                # Standardwerte
+                fac = "NSO"
+                p_wid = current_wid  # Wenn keine ID da ist, zählen wir es sicherheitshalber dazu
+
+                if len(val) == 3:
+                    _, fac, p_wid = val  # Neues Format mit World ID
+                elif len(val) == 2:
+                    _, fac = val  # Altes Format (Fallback)
+
+                # FILTER: Nur zählen, wenn Server ID passt!
+                if str(p_wid) != current_wid:
+                    continue
+
+                # Zählen
                 if fac in counts:
                     counts[fac] += 1
+                    total_pop += 1
 
-            total_pop = len(self.active_players)
             self.live_stats.update(counts)
             self.live_stats["Total"] = total_pop
 
-            # 2. Graph-Daten füttern (nur alle X Sekunden für eine schöne Kurve)
+            # 2. Graph-Daten füttern
             elapsed = now - getattr(self, 'session_start_time', now)
             graph_interval = 1.0 if elapsed < 60 else 30.0
 
@@ -2611,8 +2659,7 @@ class DiorClientGUI:
                 self.pop_history.append(total_pop)
                 self.last_graph_point_time = now
 
-            # 3. UI UPDATE (Nur wenn wir im Dashboard-Tab sind)
-            # Wir prüfen, ob im Stack das erste Fenster (Index 0 = Dashboard) aktiv ist
+            # 3. UI UPDATE
             if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
                 self.update_dashboard_elements()
 
@@ -2848,6 +2895,8 @@ class DiorClientGUI:
 
                                         QTimer.singleShot(0, lambda c=count: self.cache_label.config(
                                             text=f"Characters in db: {c}"))
+
+                                        self.update_db_count_cache()
                                     except Exception as e:
                                         print(f"DEBUG: Cache Label Update skipped: {e}")
                         except ValueError:
