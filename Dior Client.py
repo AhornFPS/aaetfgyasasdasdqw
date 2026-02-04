@@ -742,13 +742,20 @@ class DiorClientGUI:
         print("SYS: All signals routed successfully.")
 
     def browse_ps2_folder(self):
+        """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
         path = filedialog.askdirectory(title="PlanetSide 2 Installationsordner wählen")
         if path:
             self.ps2_dir = path
-            if hasattr(self, 'ps2_path_label'):
-                self.ps2_path_label.config(text=path)
-            self.add_log(f"SYS: PS2 Path set to {path}")
-            self.save_enforcer_config()
+
+            # WICHTIG: In das Config-Dictionary schreiben!
+            self.config["ps2_path"] = path
+
+            # Update im Settings-Fenster (visuelles Feedback)
+            if hasattr(self, 'settings_win'):
+                self.settings_win.lbl_ps2_path.setText(path)
+
+            self.save_config()  # Korrekte Speicher-Funktion aufrufen
+            self.add_log(f"SYS: PS2 Path set and saved to {path}")
 
     def add_char_qt(self):
         """Startet den Thread."""
@@ -1905,20 +1912,21 @@ class DiorClientGUI:
             ay = int(data.get("y", 200) * self.overlay_win.ui_scale)
             self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
 
-
     def save_event_ui_data(self):
-        """Speichert die UI-Eingaben für das aktuell gewählte Event in die Config"""
+        """Speichert das Event, auch wenn Felder leer sind (Reset)."""
         ui = self.ovl_config_win
-        etype = ui.lbl_editing.text().replace("EDITING: ", "").strip()
 
+        # Welches Event bearbeiten wir gerade?
+        etype = ui.lbl_editing.text().replace("EDITING: ", "").strip()
         if etype == "NONE" or not etype:
             return
 
         if "events" not in self.config: self.config["events"] = {}
         existing_data = self.config["events"].get(etype, {})
 
-        # Koordinaten vom Overlay holen, falls es gerade sichtbar ist (Edit Mode)
-        if self.overlay_win and self.overlay_win.event_preview_label.isVisible():
+        # Koordinaten behalten (vom Overlay oder Config)
+        if self.overlay_win and getattr(self.overlay_win, 'event_preview_label',
+                                        None) and self.overlay_win.event_preview_label.isVisible():
             pos = self.overlay_win.event_preview_label.pos()
             save_x = int(pos.x() / self.overlay_win.ui_scale)
             save_y = int(pos.y() / self.overlay_win.ui_scale)
@@ -1926,18 +1934,28 @@ class DiorClientGUI:
             save_x = existing_data.get("x", 100)
             save_y = existing_data.get("y", 100)
 
-        # Neue Daten zusammenstellen (Feldnamen korrigiert)
-        self.config["events"][etype].update({
-            "img": ui.ent_evt_img.text().strip(),
-            "snd": ui.ent_evt_snd.text().strip(),
+        # Daten auslesen (mit .strip() um Leerzeichen zu killen)
+        img_val = ui.ent_evt_img.text().strip()
+        snd_val = ui.ent_evt_snd.text().strip()
+
+        # Dauer sicherstellen
+        try:
+            dur_val = int(ui.ent_evt_duration.text())
+        except ValueError:
+            dur_val = 3000
+
+        # Update (Wir überschreiben alles, auch wenn es leer ist -> so kann man löschen)
+        self.config["events"][etype] = {
+            "img": img_val,
+            "snd": snd_val,
             "scale": ui.slider_evt_scale.value() / 100.0,
-            "duration": int(ui.ent_evt_duration.text() if ui.ent_evt_duration.text().isdigit() else 3000),
+            "duration": dur_val,
             "x": save_x,
             "y": save_y
-        })
+        }
 
         self.save_config()
-        self.add_log(f"UI: '{etype}' gespeichert ({save_x}/{save_y}).")
+        self.add_log(f"UI: Event '{etype}' gespeichert (Img: '{img_val}').")
 
 
 
