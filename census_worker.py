@@ -391,8 +391,38 @@ class CensusWorker:
         exp_id = str(p.get("experience_id", "0"))
         other_id = p.get("other_id")
         char_id = p.get("character_id")
+
+        # --- FEATURE: LATE START ACTIVATION (Auto-Detect Character) ---
+        # Wenn noch kein Charakter ausgewählt ist (Programm startete nach Spielstart)
+        if not self.c.current_character_id and char_id:
+            # Wir prüfen, ob die ID zu einem unserer gespeicherten Chars gehört
+            for name, saved_id in self.c.char_data.items():
+                if saved_id == char_id:
+                    # 1. Fraktion direkt aus dem XP-Event lesen (spart API Call)
+                    t_id = p.get("team_id", "0")
+                    f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(t_id), "NSO")
+
+                    # 2. Variablen im Client setzen
+                    self.c.current_character_id = char_id
+                    self.c.current_selected_char_name = name
+
+                    # 3. UI Dropdown aktualisieren (Thread-Safe)
+                    from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
+                    if hasattr(self.c, 'ovl_config_win'):
+                        QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
+                                                 Qt.ConnectionType.QueuedConnection,
+                                                 Q_ARG(str, name))
+
+                    # 4. Login-Event & Log triggern (wie gewünscht)
+                    self.c.trigger_overlay_event(f"Login {f_tag}")
+                    self.c.add_log(f"AUTO-TRACK: {name} aktiv erkannt ({f_tag} - Late Join).")
+                    break
+
+        # WICHTIG: ID neu zuweisen, falls sie oben gerade gesetzt wurde,
+        # damit die Statistik-Logik unten sofort greift.
         my_id = self.c.current_character_id
 
+        # --- AB HIER: NORMALE XP LOGIK ---
 
         if exp_id in ["2", "3", "371", "372"]:
             a_obj = get_stat_obj(char_id, p.get("team_id"))
@@ -401,6 +431,7 @@ class CensusWorker:
             r_obj = get_stat_obj(other_id, p.get("team_id"))
             if r_obj["d"] > 0: r_obj["d"] -= 1
 
+        # A) EVENTS DIE MIR PASSIEREN (Ich bin das Opfer/Empfänger)
         if my_id and other_id == my_id:
 
             if exp_id == "26":
@@ -409,10 +440,12 @@ class CensusWorker:
             if exp_id in ["7", "53"]:
                 self.c.was_revived = True
                 self.c.is_dead = False
+                # Streak wiederherstellen
                 self.c.killstreak_count = getattr(self.c, 'saved_streak', 0)
                 self.c.streak_factions = getattr(self.c, 'saved_factions', [])
                 self.c.streak_slot_map = getattr(self.c, 'saved_slots', [])
                 self.c.update_streak_display()
+
                 self.c.trigger_overlay_event("Revive Taken")
                 self.c.trigger_auto_voice("revived")
 
@@ -421,14 +454,24 @@ class CensusWorker:
                     msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
                     if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
+        # B) EVENTS DIE ICH MACHE (Ich bekomme XP)
         if my_id and char_id == my_id:
+            # Update Environment Data (Zone/Team)
             try:
                 self.c.myTeamId = int(p.get("team_id", 0))
                 self.c.myWorldID = int(p.get("world_id", 0))
                 self.c.currentZone = int(p.get("zone_id", 0))
+
+                # Check Server Switch (Falls wir auf einem anderen Server sind)
+                payload_world = str(p.get("world_id", "0"))
+                if payload_world != "0" and payload_world != str(self.c.current_world_id):
+                    s_name = self.c.get_server_name_by_id(payload_world)
+                    self.c.switch_server(s_name, payload_world)
+
             except:
                 pass
 
+            # Trigger logic
             if exp_id in ["7", "53"]:
                 self.c.trigger_overlay_event("Revive Given")
             else:
