@@ -4,7 +4,6 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
                              QHeaderView, QPushButton, QFrame, QTabWidget, QTextEdit)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
-from PyQt6.QtGui import QColor, QFont
 
 
 # --- SIGNALE ---
@@ -45,6 +44,11 @@ class CharacterWidget(QWidget):
 
         # Signale initialisieren
         self.signals = CharacterSignals()
+
+        # Instanzattribute
+        self.info_labels = {}
+        self.stats_ui = {}
+        self.weapon_table = QTableWidget(0, 4)
 
         # Layout direkt auf self anwenden
         main_layout = QVBoxLayout(self)
@@ -89,20 +93,28 @@ class CharacterWidget(QWidget):
 
     def setup_overview_tab(self):
         layout = QHBoxLayout(self.overview_tab)
-        self.info_labels = {}
-        self.stats_ui = {}
 
         # General Info
         gen_box = QFrame()
         gen_box.setObjectName("StatCard")
         gen_layout = QVBoxLayout(gen_box)
-        gen_layout.addWidget(QLabel("GENERAL INFORMATION", objectName="GroupTitle"))
+        
+        title_label = QLabel("GENERAL INFORMATION")
+        title_label.setObjectName("GroupTitle")
+        gen_layout.addWidget(title_label)
+
         for field in ["Name:", "Faction:", "Server:", "Outfit:", "Rank:", "Time Played:"]:
             row = QHBoxLayout()
-            val = QLabel("-", objectName="StatValue")
+            
+            val = QLabel("-")
+            val.setObjectName("StatValue")
             val.setAlignment(Qt.AlignmentFlag.AlignRight)
             self.info_labels[field] = val
-            row.addWidget(QLabel(field, objectName="StatLabel"))
+            
+            field_label = QLabel(field)
+            field_label.setObjectName("StatLabel")
+            row.addWidget(field_label)
+            
             row.addWidget(val)
             gen_layout.addLayout(row)
         gen_layout.addStretch()
@@ -114,10 +126,18 @@ class CharacterWidget(QWidget):
         perf_layout = QHBoxLayout(perf_box)
         for group in ["LIFETIME PERFORMANCE", "LAST 30 DAYS"]:
             col = QVBoxLayout()
-            col.addWidget(QLabel(group, objectName="GroupTitle"))
+            
+            group_label = QLabel(group)
+            group_label.setObjectName("GroupTitle")
+            col.addWidget(group_label)
+            
             for stat in ["Kills", "Deaths", "K/D", "KPM", "KPH", "SPM", "Score"]:
-                col.addWidget(QLabel(stat, objectName="StatLabel"))
-                val = QLabel("-", objectName="StatValue")
+                stat_label = QLabel(stat)
+                stat_label.setObjectName("StatLabel")
+                col.addWidget(stat_label)
+                
+                val = QLabel("-")
+                val.setObjectName("StatValue")
                 self.stats_ui[f"{group}_{stat}"] = val
                 col.addWidget(val)
             col.addStretch()
@@ -126,7 +146,6 @@ class CharacterWidget(QWidget):
 
     def setup_weapon_tab(self):
         layout = QVBoxLayout(self.weapon_tab)
-        self.weapon_table = QTableWidget(0, 4)
         self.weapon_table.setHorizontalHeaderLabels(["WEAPON", "KILLS", "ACC %", "HSR %"])
         self.weapon_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.weapon_table.verticalHeader().setVisible(False)

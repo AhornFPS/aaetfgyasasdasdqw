@@ -345,7 +345,8 @@ class CensusWorker:
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
                             {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
                             <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
-                    if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
+                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                        if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
                     # Voice
                     v_load = p.get("character_loadout_id")
@@ -387,7 +388,8 @@ class CensusWorker:
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
                             {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
                             <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
-                    if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
+                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                        if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
     def _handle_experience(self, p, get_stat_obj):
         exp_id = str(p.get("experience_id", "0"))
@@ -454,7 +456,8 @@ class CensusWorker:
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
                     m_name = self.c.name_cache.get(char_id, "Medic")
                     msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
-                    if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
+                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                        if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
         # B) EVENTS DIE ICH MACHE (Ich bekomme XP)
         if my_id and char_id == my_id:

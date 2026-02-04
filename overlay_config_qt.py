@@ -793,7 +793,9 @@ class OverlayConfigWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # --- SESSION STATS WIDGET ---
+        # ==========================================
+        # 1. SESSION STATS WIDGET
+        # ==========================================
         stats_group = QFrame(objectName="Group")
         st_layout = QVBoxLayout(stats_group)
 
@@ -801,20 +803,25 @@ class OverlayConfigWindow(QWidget):
         st_header.setObjectName("Header")
         st_layout.addWidget(st_header)
 
-        self.check_stats_active = QCheckBox("SHOW LIVE STATS")
-        self.check_stats_active.setStyleSheet("color: #00ff00; font-weight: bold;")
-        st_layout.addWidget(self.check_stats_active)
+        # --- STATS TOGGLE BUTTON (Moved here) ---
+        self.btn_toggle_stats = QPushButton("STATS WIDGET: ON")
+        self.btn_toggle_stats.setFixedHeight(40)
+        self.btn_toggle_stats.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_stats.setStyleSheet(
+            "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        st_layout.addWidget(self.btn_toggle_stats)
 
+        # Background Image
         st_layout.addWidget(QLabel("Background (PNG):", objectName="SubText"))
         st_img_h = QHBoxLayout()
         self.ent_stats_img = QLineEdit()
-
         self.btn_browse_stats_bg = QPushButton("...")
         self.btn_browse_stats_bg.setFixedWidth(40)
         st_img_h.addWidget(self.ent_stats_img)
         st_img_h.addWidget(self.btn_browse_stats_bg)
         st_layout.addLayout(st_img_h)
 
+        # Text Adjustments
         lbl_adj = QLabel("Text Adjust Number:")
         lbl_adj.setStyleSheet("color: #ffcc00;")
         st_layout.addWidget(lbl_adj)
@@ -832,6 +839,7 @@ class OverlayConfigWindow(QWidget):
 
         st_layout.addLayout(adj_grid)
 
+        # Scale
         st_layout.addWidget(QLabel("Image scale:"))
         self.slider_st_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_st_scale.setRange(10, 200)
@@ -840,7 +848,9 @@ class OverlayConfigWindow(QWidget):
 
         layout.addWidget(stats_group)
 
-        # --- KILLFEED ---
+        # ==========================================
+        # 2. KILLFEED
+        # ==========================================
         feed_group = QFrame(objectName="Group")
         kf_layout = QVBoxLayout(feed_group)
 
@@ -848,10 +858,18 @@ class OverlayConfigWindow(QWidget):
         kf_header.setStyleSheet("color: #ff4444; font-weight: bold; font-size: 16px;")
         kf_layout.addWidget(kf_header)
 
+        # --- KILLFEED TOGGLE BUTTON (New) ---
+        self.btn_toggle_feed = QPushButton("KILLFEED: ON")
+        self.btn_toggle_feed.setFixedHeight(40)
+        self.btn_toggle_feed.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_feed.setStyleSheet(
+            "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        kf_layout.addWidget(self.btn_toggle_feed)
+
+        # Headshot Icon
         kf_layout.addWidget(QLabel("Headshot Icon (PNG):", objectName="SubText"))
         hs_h = QHBoxLayout()
         self.ent_hs_icon = QLineEdit()
-
         self.btn_browse_hs_icon = QPushButton("...")
         self.btn_browse_hs_icon.setFixedWidth(40)
 
@@ -859,29 +877,31 @@ class OverlayConfigWindow(QWidget):
         hs_h.addWidget(self.btn_browse_hs_icon)
         kf_layout.addLayout(hs_h)
 
-        self.check_show_revives = QCheckBox("Show Revives")
+        # Revive Checkbox
+        self.check_show_revives = QCheckBox("Show Revives in Feed")
         self.check_show_revives.setStyleSheet("color: #00ff00;")
         kf_layout.addWidget(self.check_show_revives)
 
         layout.addWidget(feed_group)
 
-
-        # --- ACTION BUTTONS (FINAL SYNCED LOOK) ---
-        # --- ACTION BUTTONS ---
+        # ==========================================
+        # 3. ACTION BUTTONS (Bottom)
+        # ==========================================
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
         btn_box.setContentsMargins(0, 15, 0, 0)
 
+        # Hier nur noch Edit, Test, Save (keine Live-Buttons mehr)
         self.btn_edit_hud_stats = QPushButton("MOVE UI")
-        self.btn_edit_hud_stats.setObjectName("EditBtn")  # -> Blau
+        self.btn_edit_hud_stats.setObjectName("EditBtn")
         self.btn_edit_hud_stats.setMinimumHeight(35)
 
         self.btn_test_stats = QPushButton("TEST UI")
-        self.btn_test_stats.setObjectName("TestBtn")  # -> Grau
+        self.btn_test_stats.setObjectName("TestBtn")
         self.btn_test_stats.setMinimumHeight(35)
 
         self.btn_save_stats = QPushButton("SAVE SETTINGS")
-        self.btn_save_stats.setObjectName("SaveBtn")  # -> Grün
+        self.btn_save_stats.setObjectName("SaveBtn")
         self.btn_save_stats.setMinimumHeight(35)
 
         btn_box.addWidget(self.btn_edit_hud_stats)
@@ -889,7 +909,6 @@ class OverlayConfigWindow(QWidget):
         btn_box.addWidget(self.btn_save_stats)
 
         layout.addLayout(btn_box)
-
         layout.addStretch()
 
     def setup_voice_tab(self):

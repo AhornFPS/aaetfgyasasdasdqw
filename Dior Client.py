@@ -259,6 +259,59 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
 
+    def toggle_killfeed_visibility(self):
+        """Schaltet den Killfeed an/aus."""
+        ui = self.ovl_config_win
+
+        # 1. Config holen & toggeln
+        if "killfeed" not in self.config: self.config["killfeed"] = {}
+        current_state = self.config["killfeed"].get("active", True)
+        new_state = not current_state
+
+        self.config["killfeed"]["active"] = new_state
+        self.save_config()
+
+        # 2. Button Optik
+        if new_state:
+            ui.btn_toggle_feed.setText("KILLFEED: ON")
+            ui.btn_toggle_feed.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_toggle_feed.setText("KILLFEED: OFF")
+            ui.btn_toggle_feed.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+
+            # Sofort leeren/verstecken wenn ausgeschaltet
+            if self.overlay_win:
+                self.overlay_win.feed_label.hide()
+                self.overlay_win.feed_label.clear()
+
+        state_str = "ENABLED" if new_state else "DISABLED"
+        self.add_log(f"UI: Killfeed {state_str}")
+
+    def toggle_stats_visibility(self):
+        """Schaltet das Stats-Widget an/aus."""
+        ui = self.ovl_config_win
+
+        if "stats_widget" not in self.config: self.config["stats_widget"] = {}
+        new_state = not self.config["stats_widget"].get("active", True)
+
+        self.config["stats_widget"]["active"] = new_state
+        self.save_config()
+
+        # Button Optik
+        if new_state:
+            ui.btn_toggle_stats.setText("STATS WIDGET: ON")
+            ui.btn_toggle_stats.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_toggle_stats.setText("STATS WIDGET: OFF")
+            ui.btn_toggle_stats.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+
+        # Sofort Refresh
+        self.refresh_ingame_overlay()
+
 
     def update_db_count_cache(self):
         """Liest die Anzahl der einzigartigen Spieler aus der DB."""
@@ -748,6 +801,9 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
         self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
+
+        self.safe_connect(ui.btn_toggle_stats.clicked, self.toggle_stats_visibility)
+        self.safe_connect(ui.btn_toggle_feed.clicked, self.toggle_killfeed_visibility)
 
         # ---------------------------------------------------------
         # 7. OVERLAY TAB: VOICE MACROS
@@ -1239,20 +1295,39 @@ class DiorClientGUI:
         ui.cross_path.blockSignals(False)
 
         # --- TAB 5: STATS & FEED ---
-        ui.check_stats_active.setChecked(st_conf.get("active", True))
+        st_active = st_conf.get("active", True)
+        if st_active:
+            ui.btn_toggle_stats.setText("STATS WIDGET: ON")
+            ui.btn_toggle_stats.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_toggle_stats.setText("STATS WIDGET: OFF")
+            ui.btn_toggle_stats.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+
         ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
 
-        ui.slider_st_tx.blockSignals(True)
-        ui.slider_st_ty.blockSignals(True)
-        ui.slider_st_scale.blockSignals(True)
-
-        ui.slider_st_tx.setValue(st_conf.get("tx", 0))
-        ui.slider_st_ty.setValue(st_conf.get("ty", 0))
-        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
-
+        # Sliders (wie gehabt)
+        ui.slider_st_tx.blockSignals(True);
+        ui.slider_st_tx.setValue(st_conf.get("tx", 0));
         ui.slider_st_tx.blockSignals(False)
+        ui.slider_st_ty.blockSignals(True);
+        ui.slider_st_ty.setValue(st_conf.get("ty", 0));
         ui.slider_st_ty.blockSignals(False)
+        ui.slider_st_scale.blockSignals(True);
+        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100));
         ui.slider_st_scale.blockSignals(False)
+
+        # 2. Killfeed Button Status
+        kf_active = kf_conf.get("active", True)
+        if kf_active:
+            ui.btn_toggle_feed.setText("KILLFEED: ON")
+            ui.btn_toggle_feed.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_toggle_feed.setText("KILLFEED: OFF")
+            ui.btn_toggle_feed.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
 
         ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
         ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
