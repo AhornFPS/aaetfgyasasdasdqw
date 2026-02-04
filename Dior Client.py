@@ -801,9 +801,9 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_save_stats.clicked, self.save_stats_config_from_qt)
         self.safe_connect(ui.btn_edit_hud_stats.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_stats.clicked, self.test_stats_visuals)
-
         self.safe_connect(ui.btn_toggle_stats.clicked, self.toggle_stats_visibility)
         self.safe_connect(ui.btn_toggle_feed.clicked, self.toggle_killfeed_visibility)
+        self.safe_connect(ui.check_show_revives.toggled, self.save_stats_config_from_qt)
 
         # ---------------------------------------------------------
         # 7. OVERLAY TAB: VOICE MACROS
@@ -1126,31 +1126,40 @@ class DiorClientGUI:
         self.add_log("SYS: Killstreak-Einstellungen gespeichert.")
 
     def save_stats_config_from_qt(self):
-        """Liest Stats & Feed Settings aus Qt und speichert sie."""
+        """Liest Stats & Feed Settings aus Qt und speichert sie (OHNE Active-Reset)."""
         s_ui = self.ovl_config_win
 
-        # Aktuelle Config holen - LEBENSWICHTIG für x/y Position
+        # Aktuelle Config holen
         current_st_conf = self.config.get("stats_widget", {})
         current_kf_conf = self.config.get("killfeed", {})
 
-        # Stats Widget Daten
+        # --- STATS WIDGET DATEN ---
+        # KORREKTUR: Wir lesen NICHT die Checkbox. Wir behalten den Status bei,
+        # den der Toggle-Button gesetzt hat.
+        saved_active_state = current_st_conf.get("active", True)
+
         st_data = {
-            "active": s_ui.check_stats_active.isChecked(),
+            "active": saved_active_state,  # <--- WICHTIG: Alten Wert behalten!
             "img": s_ui.ent_stats_img.text(),
             "tx": s_ui.slider_st_tx.value(),
             "ty": s_ui.slider_st_ty.value(),
             "scale": s_ui.slider_st_scale.value() / 100.0,
 
-            # WICHTIG: Alte Position beibehalten!
+            # Position behalten
             "x": current_st_conf.get("x", 50),
             "y": current_st_conf.get("y", 500)
         }
 
-        # Killfeed Daten
+        # --- KILLFEED DATEN ---
+        # Auch hier: Active Status vom Button behalten
+        kf_active_state = current_kf_conf.get("active", True)
+
         kf_data = {
+            "active": kf_active_state,  # <--- WICHTIG
             "hs_icon": s_ui.ent_hs_icon.text(),
-            "show_revives": s_ui.check_show_revives.isChecked(),
-            # Auch hier Position beibehalten
+            "show_revives": s_ui.check_show_revives.isChecked(),  # Das ist OK (Checkbox existiert)
+
+            # Position behalten
             "x": current_kf_conf.get("x", 50),
             "y": current_kf_conf.get("y", 200)
         }
@@ -1168,7 +1177,6 @@ class DiorClientGUI:
         # Positionen live anwenden
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
-            # Für Stats müssen wir ein Refresh triggern, da set_stats_html die Position nutzt
             self.refresh_ingame_overlay()
 
     def save_voice_config_from_qt(self):
