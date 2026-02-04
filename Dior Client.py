@@ -40,7 +40,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import (
 
+    QPixmap,
     QColor,
+    QPainter,
+    QPen,
+    QBrush,
+    QTransform,
+    QMovie
+
+
 
 )
 from PyQt6.QtCore import (
@@ -48,7 +56,8 @@ from PyQt6.QtCore import (
     pyqtSignal,
     QObject,
     QTimer,
-    QPoint  # Neu: Für die Koordinaten-Punkte
+    QPoint,
+    QSize
 )
 
 DUMMY_STATS_HTML = """
@@ -1984,8 +1993,8 @@ class DiorClientGUI:
                         self.overlay_win.event_queue.clear()
 
     def browse_file_qt(self, line_edit_widget, type_):
-        # Filter für PyQt6 QFileDialog
-        ft = "Images (*.png *.jpg)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
+        # HIER HABE ICH *.gif HINZUGEFÜGT:
+        ft = "Images (*.png *.jpg *.jpeg *.gif)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
 
         from PyQt6.QtWidgets import QFileDialog
         # self.main_hub als Parent nutzen, damit das Fenster zentriert ist
@@ -2002,7 +2011,7 @@ class DiorClientGUI:
             except Exception as e:
                 self.add_log(f"ERR: Kopier-Fehler: {e}")
 
-            # Textfeld setzen (Das löst automatisch das textChanged Signal aus Schritt 2 aus!)
+            # Textfeld setzen
             line_edit_widget.setText(filename)
 
     def load_event_ui_data(self, event_type):

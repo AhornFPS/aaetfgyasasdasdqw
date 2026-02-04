@@ -4,8 +4,8 @@ import ctypes
 import math
 import time
 from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect)
-from PyQt6.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QTransform
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint
+from PyQt6.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QTransform, QMovie
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -21,6 +21,41 @@ def get_asset_path(filename):
     if not filename: return ""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_dir, "assets", filename)
+
+
+def set_animated_background(label: QLabel, path: str):
+    """
+    Hilfsfunktion: Lädt ein Bild auf ein Label.
+    Wenn es ein GIF ist, wird es animiert (QMovie).
+    Wenn es ein statisches Bild ist, wird es normal angezeigt (QPixmap).
+    """
+    # 1. Eventuell laufenden alten Film stoppen
+    if label.movie() is not None:
+        label.movie().stop()
+        label.setMovie(None)
+
+    # 2. Prüfen, ob Pfad existiert
+    if not path or not os.path.exists(path):
+        label.clear()
+        return
+
+    # 3. Prüfen, ob es ein GIF ist
+    if path.lower().endswith(".gif"):
+        movie = QMovie(path)
+        # Größe anpassen (optional, aber gut für Hintergründe)
+        # Hinweis: label.size() kann 0 sein, wenn das Fenster noch nicht sichtbar ist.
+        # Besser ist oft: movie.setScaledSize(QSize(width, height)) wenn bekannt.
+        if label.width() > 0 and label.height() > 0:
+            movie.setScaledSize(label.size())
+
+        label.setMovie(movie)
+        movie.start()
+        label.setScaledContents(True)
+    else:
+        # 4. Es ist ein normales Bild
+        pixmap = QPixmap(path)
+        label.setPixmap(pixmap)
+        label.setScaledContents(True)
 
 
 # --- SIGNALE ---
@@ -340,33 +375,74 @@ class QtOverlay(QWidget):
         self.is_showing = False
 
     def display_image(self, img_path, duration, abs_x, abs_y, scale=1.0):
+        # 1. Aufräumen (Timer und alte Movies stoppen)
         if hasattr(self, 'hide_timer') and self.hide_timer.isActive():
             self.hide_timer.stop()
 
+        if self.img_label.movie():
+            self.img_label.movie().stop()
+            self.img_label.setMovie(None)
+
+        # 2. Prüfen ob Datei existiert
         if not img_path or not os.path.exists(img_path):
             self.img_label.hide()
             return
 
-        pixmap = QPixmap(img_path)
-        if pixmap.isNull(): return
+        # 3. Entscheidung: GIF oder Bild?
+        if img_path.lower().endswith(".gif"):
+            # --- GIF LOGIK (FIXED) ---
+            movie = QMovie(img_path)
+            if movie.isValid():
+                # WICHTIG: Wir springen manuell zu Frame 0.
+                # Das zwingt Qt, die Metadaten (Größe) sofort zu laden.
+                movie.jumpToFrame(0)
 
-        final_scale = self.ui_scale * scale
-        if final_scale != 1.0:
-            w = int(pixmap.width() * final_scale)
-            h = int(pixmap.height() * final_scale)
-            pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                # Jetzt bekommen wir die korrekte Größe
+                base_size = movie.currentImage().size()
 
-        self.img_label.setPixmap(pixmap)
+                final_scale = self.ui_scale * scale
+
+                # Nur skalieren, wenn wir eine gültige Größe haben
+                if final_scale != 1.0 and not base_size.isEmpty():
+                    w = int(base_size.width() * final_scale)
+                    h = int(base_size.height() * final_scale)
+                    movie.setScaledSize(QSize(w, h))
+
+                self.img_label.setMovie(movie)
+                movie.start()
+        else:
+            # --- NORMALE BILD LOGIK ---
+            pixmap = QPixmap(img_path)
+            if pixmap.isNull(): return
+
+            final_scale = self.ui_scale * scale
+            if final_scale != 1.0:
+                w = int(pixmap.width() * final_scale)
+                h = int(pixmap.height() * final_scale)
+                pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
+
+            self.img_label.setPixmap(pixmap)
+
+        # 4. Anzeigen & Positionieren
         self.img_label.adjustSize()
         self.safe_move(self.img_label, self.s(abs_x), self.s(abs_y))
         self.img_label.show()
         self.img_label.raise_()
 
+        # 5. Timer zum Ausblenden
         if not hasattr(self, 'hide_timer'):
             self.hide_timer = QTimer(self)
             self.hide_timer.setSingleShot(True)
-            self.hide_timer.timeout.connect(self.img_label.hide)
+            self.hide_timer.timeout.connect(self._hide_image_safe)
+
         self.hide_timer.start(duration)
+
+    def _hide_image_safe(self):
+        """Hilfsmethode: Stoppt das GIF sauber, um CPU zu sparen."""
+        if self.img_label.movie():
+            self.img_label.movie().stop()
+        self.img_label.hide()
 
     # --- CORE FUNCTIONS ---
     def resizeEvent(self, event):
