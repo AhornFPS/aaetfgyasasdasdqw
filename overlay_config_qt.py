@@ -269,7 +269,13 @@ class OverlayConfigWindow(QWidget):
         self.setup_voice_tab()
         self.tabs.addTab(self.tab_voice, " VOICE MACROS ")
 
+        # --- TAB 7: TWITCH CHAT (NEU) ---
+        self.tab_twitch = QWidget()
+        self.setup_twitch_tab()
+        self.tabs.addTab(self.tab_twitch, " TWITCH CHAT ")  # Neuer Tab ganz rechts
+
         layout.addWidget(self.tabs)
+
 
     # --- TAB SETUP METHODS ---
 
@@ -1024,6 +1030,126 @@ class OverlayConfigWindow(QWidget):
         self.btn_save_voice.setFixedWidth(250)
         layout.addWidget(self.btn_save_voice, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        layout.addStretch()
+
+    def setup_twitch_tab(self):
+        """Erstellt das UI für die Twitch Chat Einstellungen."""
+        layout = QVBoxLayout(self.tab_twitch)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # --- 1. HEADER & TOGGLE ---
+        header_group = QFrame(objectName="Group")
+        h_layout = QVBoxLayout(header_group)
+
+        lbl_header = QLabel("TWITCH CHAT OVERLAY")
+        lbl_header.setObjectName("Header")
+        h_layout.addWidget(lbl_header)
+
+        self.btn_toggle_twitch = QPushButton("TWITCH CHAT: OFF")
+        self.btn_toggle_twitch.setCheckable(True)
+        self.btn_toggle_twitch.setFixedHeight(40)
+        self.btn_toggle_twitch.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Style wird später vom Controller gesetzt/aktualisiert
+        self.btn_toggle_twitch.setStyleSheet(
+            "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+        h_layout.addWidget(self.btn_toggle_twitch)
+
+        layout.addWidget(header_group)
+
+        # --- 2. CHANNEL SETTINGS ---
+        chan_group = QFrame(objectName="Group")
+        c_layout = QVBoxLayout(chan_group)
+
+        c_layout.addWidget(QLabel("Channel Name (e.g. 'shroud'):", objectName="SubText"))
+
+        chan_row = QHBoxLayout()
+        self.ent_twitch_channel = QLineEdit()
+        self.ent_twitch_channel.setPlaceholderText("Enter Twitch channel name...")
+        chan_row.addWidget(self.ent_twitch_channel)
+
+        self.btn_connect_twitch = QPushButton("CONNECT")
+        self.btn_connect_twitch.setFixedWidth(100)
+        self.btn_connect_twitch.setStyleSheet(
+            "background-color: #6441a5; color: white; font-weight: bold;")  # Twitch Lila
+        chan_row.addWidget(self.btn_connect_twitch)
+
+        c_layout.addLayout(chan_row)
+        layout.addWidget(chan_group)
+
+        # --- 3. APPEARANCE & POSITION ---
+        app_group = QFrame(objectName="Group")
+        a_layout = QGridLayout(app_group)
+        a_layout.setSpacing(10)
+
+        a_layout.addWidget(QLabel("APPEARANCE", styleSheet="color: #00f2ff; font-weight: bold; margin-bottom: 5px;"), 0,
+                           0, 1, 2)
+
+        # Opacity
+        a_layout.addWidget(QLabel("Background Opacity:"), 1, 0)
+        self.slider_twitch_opacity = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_opacity.setRange(0, 100)  # 0 = Transparent, 100 = Solid
+        self.slider_twitch_opacity.setValue(30)
+        a_layout.addWidget(self.slider_twitch_opacity, 1, 1)
+
+        # Font Size
+        a_layout.addWidget(QLabel("Font Size:"), 2, 0)
+        self.combo_twitch_font = QComboBox()
+        self.combo_twitch_font.addItems(["10", "12", "14", "16", "18", "20", "24"])
+        self.combo_twitch_font.setCurrentText("12")
+        self.combo_twitch_font.setFixedWidth(60)
+        a_layout.addWidget(self.combo_twitch_font, 2, 1)
+
+        # Position (Offset)
+        a_layout.addWidget(QLabel("Position X:"), 3, 0)
+        self.slider_twitch_x = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_x.setRange(0, 1920)  # Beispiel Range
+        self.slider_twitch_x.setValue(50)
+        a_layout.addWidget(self.slider_twitch_x, 3, 1)
+
+        a_layout.addWidget(QLabel("Position Y:"), 4, 0)
+        self.slider_twitch_y = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_y.setRange(0, 1080)
+        self.slider_twitch_y.setValue(300)
+        a_layout.addWidget(self.slider_twitch_y, 4, 1)
+
+        # Dimensions (Width/Height)
+        a_layout.addWidget(QLabel("Width:"), 5, 0)
+        self.slider_twitch_w = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_w.setRange(200, 800)
+        self.slider_twitch_w.setValue(350)
+        a_layout.addWidget(self.slider_twitch_w, 5, 1)
+
+        a_layout.addWidget(QLabel("Height:"), 6, 0)
+        self.slider_twitch_h = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_h.setRange(200, 1000)
+        self.slider_twitch_h.setValue(400)
+        a_layout.addWidget(self.slider_twitch_h, 6, 1)
+
+        layout.addWidget(app_group)
+
+        # --- 4. ACTION BUTTONS ---
+        btn_box = QHBoxLayout()
+        btn_box.setSpacing(10)
+
+        #self.btn_edit_twitch = QPushButton("MOVE UI")
+        #self.btn_edit_twitch.setObjectName("EditBtn")
+        #self.btn_edit_twitch.setMinimumHeight(35)
+
+        self.btn_test_twitch = QPushButton("TEST MSG")
+        self.btn_test_twitch.setObjectName("TestBtn")
+        self.btn_test_twitch.setMinimumHeight(35)
+
+        self.btn_save_twitch = QPushButton("SAVE SETTINGS")
+        self.btn_save_twitch.setObjectName("SaveBtn")
+        self.btn_save_twitch.setMinimumHeight(35)
+
+        #btn_box.addWidget(self.btn_edit_twitch)
+        btn_box.addWidget(self.btn_test_twitch)
+        btn_box.addWidget(self.btn_save_twitch)
+
+        layout.addLayout(btn_box)
         layout.addStretch()
 
 

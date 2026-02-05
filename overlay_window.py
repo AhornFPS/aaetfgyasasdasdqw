@@ -6,6 +6,8 @@ import time
 from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect)
 from PyQt6.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QTransform, QMovie
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize
+from PyQt6.QtWidgets import QTextBrowser
+from PyQt6.QtGui import QCursor, QTextCursor # Wichtig für Scrolling
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -34,7 +36,52 @@ class OverlaySignals(QObject):
     setting_changed = pyqtSignal(str, object)
     test_trigger = pyqtSignal(str)
     edit_mode_toggled = pyqtSignal(str)
+    item_moved = pyqtSignal(str, int, int)
 
+
+
+
+class DraggableChat(QTextBrowser):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.edit_mode = False
+        self.drag_start_pos = None
+
+        # Standard Settings
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent; border: none;")
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setOpenExternalLinks(False)
+
+    def mousePressEvent(self, event):
+        if self.edit_mode and event.button() == Qt.MouseButton.LeftButton:
+            self.drag_start_pos = event.globalPosition().toPoint() - self.pos()
+            self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+            event.accept()
+        else:
+            super().mousePressEvent(event)  # Standard Text-Selection erlauben wenn nicht edit mode
+
+    def mouseMoveEvent(self, event):
+        if self.edit_mode and self.drag_start_pos:
+            new_pos = event.globalPosition().toPoint() - self.drag_start_pos
+            self.move(new_pos)
+
+            # Optional: Signal an Parent senden, um Config-Fenster zu updaten
+            # (Das machen wir hier simplifiziert, indem wir es beim Loslassen speichern)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.edit_mode:
+            self.drag_start_pos = None
+            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+
+            # WICHTIG: Position an das Hauptfenster melden
+            if self.parent() and hasattr(self.parent(), 'notify_chat_moved'):
+                self.parent().notify_chat_moved(self.x(), self.y())
+
+        super().mouseReleaseEvent(event)
 
 # --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
 class PathDrawingLayer(QWidget):
@@ -226,6 +273,61 @@ class QtOverlay(QWidget):
         self.hitmarker_label.setScaledContents(True)
         self.hitmarker_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.hitmarker_label.hide()
+
+        # --- TWITCH CHAT CONTAINER ---
+        self.twitch_browser = DraggableChat(self)
+        self.twitch_browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.twitch_browser.setStyleSheet("background: transparent; border: none;")
+        self.twitch_browser.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.twitch_browser.setOpenExternalLinks(False)
+        self.twitch_browser.hide()  # Standardmäßig versteckt
+
+        # WICHTIG: Damit Bilder aus dem Internet geladen werden können (für Emotes),
+        # muss das interne Document Resource Handling erlaubt sein.
+        # QTextBrowser macht das standardmäßig für HTTP URLs oft async.
+
+    def notify_chat_moved(self, x, y):
+        # Signal an Controller senden
+        self.signals.item_moved.emit("twitch", x, y)
+
+    def update_twitch_style(self, x, y, w, h, opacity, font_size):
+        # 1. Geometrie setzen
+        self.twitch_browser.setGeometry(int(x), int(y), int(w), int(h))
+
+        # 2. Hintergrund berechnen
+        alpha = int((opacity / 100) * 255)
+        bg_color = f"rgba(0, 0, 0, {alpha})"
+
+        # 3. Stylesheet anwenden
+        self.twitch_browser.setStyleSheet(f"""
+            QTextBrowser {{
+                background-color: {bg_color};
+                border: none;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: {font_size}pt;
+                color: white;
+                font-weight: bold;
+                text-shadow: 1px 1px 1px black;
+            }}
+        """)
+
+    def add_twitch_message(self, user, html_msg, color="#00f2ff"):
+        line = f"""
+        <div style="margin-bottom: 2px; line-height: 120%;">
+            <span style="color: {color}; font-weight: 800;">{user}:</span>
+            <span style="color: #eeeeee;">{html_msg}</span>
+        </div>
+        """
+        self.twitch_browser.append(line)
+
+        # FIX SCROLLING:
+        # Cursor ans Ende bewegen zwingt den Viewport zum Scrollen
+        c = self.twitch_browser.textCursor()
+        c.movePosition(QTextCursor.MoveOperation.End)
+        self.twitch_browser.setTextCursor(c)
+
+    def clear_twitch_chat(self):
+        self.twitch_browser.clear()
 
     # --- CACHE LOGIK ---
     def get_cached_pixmap(self, path):

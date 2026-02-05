@@ -32,6 +32,7 @@ from census_worker import CensusWorker, S_ID, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
 from dior_utils import BASE_DIR, get_asset_path, log_exception, clean_path
 from dior_db import DatabaseHandler
+from twitch_worker import TwitchWorker
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
@@ -282,6 +283,10 @@ class DiorClientGUI:
 
         self._streak_test_timer = None
         self._streak_backup = None
+
+        # Twitch Variablen
+        self.twitch_worker = None
+        self.twitch_thread = None
 
     def save_global_event_duration(self):
         """Speichert die globale Event-Dauer."""
@@ -867,7 +872,180 @@ class DiorClientGUI:
         # WICHTIG: Das Save-Signal verbinden!
         self.safe_connect(self.settings_win.signals.save_requested, self.update_main_config_from_settings)
 
+        # ---------------------------------------------------------
+        # 9. Twitch chat
+        # ---------------------------------------------------------
+        # Button Toggle (AN/AUS)
+        self.safe_connect(ui.btn_toggle_twitch.toggled, self.toggle_twitch_active)
+
+        # Button Connect
+        self.safe_connect(ui.btn_connect_twitch.clicked, self.start_twitch_connection)
+
+        # Sliders (Live Update Position)
+        for s in [ui.slider_twitch_x, ui.slider_twitch_y, ui.slider_twitch_w, ui.slider_twitch_h,
+                  ui.slider_twitch_opacity]:
+            self.safe_connect(s.valueChanged, self.update_twitch_visuals)
+        self.safe_connect(ui.combo_twitch_font.currentTextChanged, self.update_twitch_visuals)
+
+        # TEST MSG Button
+        self.safe_connect(ui.btn_test_twitch.clicked, self.trigger_twitch_test)
+
+        # MOVE UI Button
+        # Wir machen daraus einen Toggle: Einmal klicken = Sichtbar machen, nochmal = Normal
+        #self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_twitch_edit_mode)
+        if self.overlay_win:
+            self.overlay_win.signals.item_moved.connect(self.on_overlay_item_moved)
+
+        # Save
+        self.safe_connect(ui.btn_save_twitch.clicked, self.save_twitch_config)
+
         print("SYS: All signals routed successfully.")
+
+    def on_overlay_item_moved(self, item_name, x, y):
+        """Wird aufgerufen, wenn im Overlay etwas mit der Maus verschoben wurde."""
+        if item_name == "twitch":
+            # Slider aktualisieren, ohne das Overlay erneut zu updaten (Loop verhindern)
+            ui = self.ovl_config_win
+            ui.slider_twitch_x.blockSignals(True)
+            ui.slider_twitch_y.blockSignals(True)
+
+            # Rückrechnung der Skalierung (falls du s() benutzt hast)
+            # Da wir im Overlay absolute Pixel bewegen, setzen wir hier die Rohwerte
+            # Achtung: Wenn dein Overlay skaliert ist, musst du hier durch den Faktor teilen!
+            # Nehmen wir an 1:1 Mapping für jetzt:
+            ui.slider_twitch_x.setValue(x)
+            ui.slider_twitch_y.setValue(y)
+
+            ui.slider_twitch_x.blockSignals(False)
+            ui.slider_twitch_y.blockSignals(False)
+
+    def trigger_twitch_test(self):
+        """Sendet eine gefakte Nachricht an das Overlay zum Testen."""
+        if not self.overlay_win:
+            self.add_log("ERR: Overlay nicht aktiv.")
+            return
+
+        # Wir simulieren das Signal, das sonst vom Worker kommt
+        # Format: User, Nachricht, HTML-Nachricht
+        import random
+        users = ["Shroud", "DrDisrespect", "XQC", "Summit1g", "LIRIK"]
+        msgs = [
+            "PogChamp das Overlay funktioniert!",
+            "Kannst du das bitte fixen? KEKW",
+            "Woher hast du dieses krasse Tool?",
+            "Planetside 2 lebt noch? <img src='https://cdn.7tv.app/emote/60ae355d259ac5a73e56a426/2x.webp' height='24'>",
+            "OmegaLUL nice shot!"
+        ]
+        colors = ["#FF0000", "#00FF00", "#0000FF", "#FFaa00", "#FF00FF"]
+
+        u = random.choice(users)
+        m = random.choice(msgs)
+        c = random.choice(colors)
+
+        # HTML bauen (einfach, da wir hier keine Emotes parsen müssen für den Test)
+        # Falls du den Emote im Test sehen willst, musst du ihn hardcoden (wie oben im Beispiel)
+
+        self.overlay_win.add_twitch_message(u, m, c)
+        self.add_log("TWITCH: Testnachricht gesendet.")
+
+
+
+    def toggle_twitch_active(self, active):
+        ui = self.ovl_config_win
+        if active:
+            ui.btn_toggle_twitch.setText("TWITCH CHAT: ON")
+            ui.btn_toggle_twitch.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+            if self.overlay_win: self.overlay_win.twitch_browser.show()
+        else:
+            ui.btn_toggle_twitch.setText("TWITCH CHAT: OFF")
+            ui.btn_toggle_twitch.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+            if self.overlay_win: self.overlay_win.twitch_browser.hide()
+
+        # Optional: Config speichern
+        if "twitch" not in self.config: self.config["twitch"] = {}
+        self.config["twitch"]["active"] = active
+        self.save_config()
+
+    def start_twitch_connection(self):
+        ui = self.ovl_config_win
+        channel = ui.ent_twitch_channel.text()
+
+        if not channel:
+            self.add_log("TWITCH: Kein Kanal angegeben.")
+            return
+
+        # Alten Worker stoppen
+        if self.twitch_worker:
+            self.twitch_worker.stop()
+
+        self.add_log(f"TWITCH: Verbinde zu {channel}...")
+        ui.btn_connect_twitch.setEnabled(False)
+
+        # Thread starten
+        self.twitch_thread = threading.Thread(target=self._twitch_thread_target, args=(channel,), daemon=True)
+        self.twitch_thread.start()
+
+    def _twitch_thread_target(self, channel):
+        # Worker instanziieren
+        self.twitch_worker = TwitchWorker(channel)
+
+        # Signale verbinden (WICHTIG: Slot muss im Main Thread laufen für GUI Updates)
+        # PyQt Signale sind standardmäßig thread-safe, wenn man sie richtig emittet.
+        self.twitch_worker.new_message.connect(self.on_twitch_message)
+        self.twitch_worker.status_changed.connect(self.on_twitch_status)
+
+        self.twitch_worker.run()  # Blockiert den Thread
+
+    def on_twitch_message(self, user, msg_text, html_msg):
+        """Wird vom Worker aufgerufen (via Signal)"""
+        if self.overlay_win:
+            # Zufällige Farbe für Usernamen generieren oder feste nehmen
+            self.overlay_win.add_twitch_message(user, html_msg)
+
+    def on_twitch_status(self, status):
+        self.add_log(f"TWITCH: {status}")
+        if "CONNECTED" in status or "ERROR" in status:
+            self.ovl_config_win.btn_connect_twitch.setEnabled(True)
+
+    def update_twitch_visuals(self):
+        """Sendet die Slider-Werte an das Overlay"""
+        if not self.overlay_win: return
+        ui = self.ovl_config_win
+
+        x = ui.slider_twitch_x.value()
+        y = ui.slider_twitch_y.value()
+        w = ui.slider_twitch_w.value()
+        h = ui.slider_twitch_h.value()
+        op = ui.slider_twitch_opacity.value()
+        fs = int(ui.combo_twitch_font.currentText())
+
+        # Skalierung beachten!
+        x_scaled = self.overlay_win.s(x)
+        y_scaled = self.overlay_win.s(y)
+        w_scaled = self.overlay_win.s(w)
+        h_scaled = self.overlay_win.s(h)
+
+        self.overlay_win.update_twitch_style(x_scaled, y_scaled, w_scaled, h_scaled, op, fs)
+
+    def save_twitch_config(self):
+        ui = self.ovl_config_win
+
+        data = {
+            "active": ui.btn_toggle_twitch.isChecked(),
+            "channel": ui.ent_twitch_channel.text(),
+            "x": ui.slider_twitch_x.value(),
+            "y": ui.slider_twitch_y.value(),
+            "w": ui.slider_twitch_w.value(),
+            "h": ui.slider_twitch_h.value(),
+            "opacity": ui.slider_twitch_opacity.value(),
+            "font_size": int(ui.combo_twitch_font.currentText())
+        }
+
+        self.config["twitch"] = data
+        self.save_config()
+        self.add_log("TWITCH: Settings saved.")
 
     def browse_ps2_folder(self):
         """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
@@ -1415,6 +1593,43 @@ class DiorClientGUI:
             # Wir machen hier KEINE manuelle Positionierung mehr.
             # Der Loop (refresh_ingame_overlay) kümmert sich um alles.
             QTimer.singleShot(500, self.refresh_ingame_overlay)
+
+        # --- TWITCH LOAD ---
+        twitch_conf = self.config.get("twitch", {})
+
+        # 1. Textfelder & Toggle
+        ui.ent_twitch_channel.setText(twitch_conf.get("channel", ""))
+        active = twitch_conf.get("active", False)
+        ui.btn_toggle_twitch.setChecked(active)
+        self.toggle_twitch_active(active)  # Direkt UI & Overlay updaten
+
+        # 2. Sliders
+        # Blockiere Signale kurz, damit nicht bei jedem SetValue ein Update gefeuert wird
+        ui.slider_twitch_opacity.blockSignals(True)
+        ui.slider_twitch_x.blockSignals(True)
+        ui.slider_twitch_y.blockSignals(True)
+        ui.slider_twitch_w.blockSignals(True)
+        ui.slider_twitch_h.blockSignals(True)
+
+        ui.slider_twitch_opacity.setValue(twitch_conf.get("opacity", 30))
+        ui.slider_twitch_x.setValue(twitch_conf.get("x", 50))
+        ui.slider_twitch_y.setValue(twitch_conf.get("y", 300))
+        ui.slider_twitch_w.setValue(twitch_conf.get("w", 350))
+        ui.slider_twitch_h.setValue(twitch_conf.get("h", 400))
+
+        ui.slider_twitch_opacity.blockSignals(False)
+        ui.slider_twitch_x.blockSignals(False)
+        ui.slider_twitch_y.blockSignals(False)
+        ui.slider_twitch_w.blockSignals(False)
+        ui.slider_twitch_h.blockSignals(False)
+
+        # 3. Font
+        current_font = str(twitch_conf.get("font_size", 12))
+        ui.combo_twitch_font.setCurrentText(current_font)
+
+        # 4. Initiales Update an das Overlay senden (damit es sofort richtig sitzt)
+        if self.overlay_win:
+            self.update_twitch_visuals()
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
