@@ -28,28 +28,37 @@ class EmoteManager:
         self.emote_urls = {}
 
     def load_all_emotes(self, channel_name):
-        print(f"TWITCH: Loading emotes for {channel_name}...")
+        print(f"TWITCH: Loading community emotes for {channel_name}...")
         try:
-            # User ID holen
+            # 1. User ID für den Kanal holen (wird für BTTV/FFZ/7TV benötigt)
             user_data = fetch_json(f"https://api.ivr.fi/v2/twitch/user?login={channel_name}")
-            if not user_data: return
-            user_id = user_data[0]['id']
+            if not user_data:
+                print("TWITCH: Could not fetch User ID. Skipping channel emotes.")
+                user_id = None
+            else:
+                user_id = user_data[0]['id']
 
-            # 7TV (Hier gibt es die meisten animierten Emotes)
-            self._load_7tv(f"https://7tv.io/v3/users/twitch/{user_id}")
+            # --- 2. 7TV (Die wichtigste Quelle) ---
+            if user_id:
+                self._load_7tv(f"https://7tv.io/v3/users/twitch/{user_id}")
             self._load_7tv("https://7tv.io/v3/emote-sets/global")
 
-            # BetterTTV
-            self._load_bttv(f"https://api.betterttv.net/3/cached/users/twitch/{user_id}")
+            # --- 3. BetterTTV (BTTV) ---
+            if user_id:
+                self._load_bttv(f"https://api.betterttv.net/3/cached/users/twitch/{user_id}")
             self._load_bttv("https://api.betterttv.net/3/cached/emotes/global")
 
-            # FFZ
-            self._load_ffz(f"https://api.frankerfacez.com/v1/room/id/{user_id}")
+            # --- 4. FrankerFacez (FFZ) ---
+            # FFZ enthält oft die klassischen Twitch-Emotes (Kappa, LUL) in ihrem Global-Set!
+            if user_id:
+                self._load_ffz(f"https://api.frankerfacez.com/v1/room/id/{user_id}")
             self._load_ffz("https://api.frankerfacez.com/v1/set/global")
 
-            print(f"TWITCH: Found {len(self.emote_urls)} emote URLs.")
+            print(f"TWITCH: Done! Total emotes in library: {len(self.emote_urls)}")
+
         except Exception as e:
-            print(f"TWITCH: Error loading emote lists: {e}")
+            print(f"TWITCH: Error in load_all_emotes: {e}")
+
 
     def _load_7tv(self, url):
         data = fetch_json(url)
@@ -115,6 +124,7 @@ class EmoteManager:
                     urls = e['urls']
                     best = urls.get('4') or urls.get('2') or urls.get('1')
                     if best: self.emote_urls[e['name']] = f"https:{best}"
+
 
     def get_emote_html(self, code):
         """Lädt Bild herunter, speichert es auf Disk und gibt <img> Tag zurück."""
@@ -185,7 +195,7 @@ class EmoteManager:
 
 
 class TwitchWorker(QObject):
-    new_message = pyqtSignal(str, str, str)
+    new_message = pyqtSignal(str, str, str) # DisplayName, HTML_Msg, Color
     status_changed = pyqtSignal(str)
 
     def __init__(self, channel):
@@ -194,14 +204,6 @@ class TwitchWorker(QObject):
         self.running = False
         self.sock = None
         self.emote_mgr = EmoteManager()
-
-    def stop(self):
-        self.running = False
-        if self.sock:
-            try:
-                self.sock.close()
-            except:
-                pass
 
     def run(self):
         self.running = True
@@ -219,6 +221,9 @@ class TwitchWorker(QObject):
             self.sock.connect(('irc.chat.twitch.tv', 6667))
             self.sock.settimeout(None)
 
+            # WICHTIG: Tags und Commands anfordern (CAP REQ)
+            # Ohne 'twitch.tv/tags' gibt es keine Farben oder Display-Names!
+            self.sock.send("CAP REQ :twitch.tv/tags twitch.tv/commands\n".encode('utf-8'))
             self.sock.send(f"PASS oauth:kappa\nNICK justinfan12345\nJOIN #{self.channel}\n".encode('utf-8'))
             self.status_changed.emit(f"CONNECTED: #{self.channel}")
 
@@ -233,26 +238,42 @@ class TwitchWorker(QObject):
                         line, buffer = buffer.split('\n', 1)
                         line = line.strip()
 
+                        if not line: continue
+
                         if line.startswith('PING'):
-                            self.sock.send("PONG\n".encode('utf-8'))
+                            self.sock.send("PONG :tmi.twitch.tv\n".encode('utf-8'))
                         elif "PRIVMSG" in line:
+                            # --- TAG PARSING ---
+                            tags = {}
+                            if line.startswith("@"):
+                                tag_part, line = line[1:].split(" ", 1)
+                                tags = dict(item.split("=") for item in tag_part.split(";") if "=" in item)
+
+                            # Jetzt extrahieren wir User und Nachricht
                             parts = line.split(":", 2)
                             if len(parts) > 2:
                                 user_part = parts[1]
-                                user = user_part.split("!", 1)[0]
-                                msg = parts[2].strip()
+                                raw_user = user_part.split("!", 1)[0]
+                                raw_msg = parts[2].strip()
 
-                                # 1. Parsing (Hier werden Emotes ggf. erst runtergeladen)
-                                html = self.emote_mgr.parse_message(msg)
+                                # --- DATEN AUS TAGS NUTZEN ---
+                                # Echte Groß/Kleinschreibung aus display-name
+                                display_name = tags.get("display-name", raw_user)
+                                # User-Farbe (Fallback auf Cyan, falls keine gesetzt)
+                                user_color = tags.get("color", "#00f2ff")
+                                if not user_color: user_color = "#00f2ff"
 
-                                # 2. Sicherheitscheck: Enthält die Nachricht ein Bild?
-                                # Wenn ja, geben wir Windows eine winzige Atempause (10ms),
-                                # um den Datei-Handle nach dem Download freizugeben.
+                                # 1. Nachricht in HTML umwandeln (Emotes)
+                                html = self.emote_mgr.parse_message(raw_msg)
+
+                                # 2. Kleiner Delay bei Bildern (dein bestehender Fix)
                                 if "<img" in html:
                                     time.sleep(0.01)
 
-                                # 3. Signal an die GUI senden
-                                self.new_message.emit(user, msg, html)
+                                # 3. Signal senden (WICHTIG: display_name und color mitgeben!)
+                                # Das Overlay erwartet (user, html, color)
+                                self.new_message.emit(display_name, html, user_color)
+
                 except socket.error:
                     break
                 except Exception as e:

@@ -898,6 +898,7 @@ class DiorClientGUI:
         #self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_twitch_edit_mode)
         if self.overlay_win:
             self.overlay_win.signals.item_moved.connect(self.on_overlay_item_moved)
+        self.ovl_config_win.spin_twitch_hold.valueChanged.connect(self.overlay_win.set_chat_hold_time)
 
         # Save
         self.safe_connect(ui.btn_save_twitch.clicked, self.save_twitch_config)
@@ -923,14 +924,20 @@ class DiorClientGUI:
             ui.slider_twitch_y.blockSignals(False)
 
     def trigger_twitch_test(self):
-        """Verbindet den UI-Button mit der Gif-Prüfmethode im Overlay."""
+        """Triggers a standard test message to check layout and position."""
         if not self.overlay_win:
-            self.add_log("ERR: Overlay nicht aktiv.")
+            self.add_log("ERR: Overlay not active.")
             return
 
-        # Wir rufen die neue Testmethode im Overlay auf
-        self.overlay_win.test_local_gif()
-        self.add_log("TWITCH: Lokaler GIF-Test getriggert.")
+        # Wir nutzen direkt die add_twitch_message Methode des Overlays.
+        # Das stellt sicher, dass Timer, Sichtbarkeit und Styling identisch sind.
+        test_user = "SystemTest"
+        test_msg = "This is a test message to adjust the chat position, size, and font settings."
+
+        # Aufruf der bestehenden Methode im Overlay
+        self.overlay_win.add_twitch_message(test_user, test_msg, color="#ffaa00")
+
+        self.add_log("TWITCH: Standard test message sent to overlay.")
 
 
 
@@ -940,12 +947,12 @@ class DiorClientGUI:
             ui.btn_toggle_twitch.setText("TWITCH CHAT: ON")
             ui.btn_toggle_twitch.setStyleSheet(
                 "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
-            if self.overlay_win: self.overlay_win.twitch_browser.show()
+            if self.overlay_win: self.overlay_win.chat_container.show()
         else:
             ui.btn_toggle_twitch.setText("TWITCH CHAT: OFF")
             ui.btn_toggle_twitch.setStyleSheet(
                 "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
-            if self.overlay_win: self.overlay_win.twitch_browser.hide()
+            if self.overlay_win: self.overlay_win.chat_container.hide()
 
         # Optional: Config speichern
         if "twitch" not in self.config: self.config["twitch"] = {}
@@ -972,10 +979,7 @@ class DiorClientGUI:
 
         # 3. Signale verbinden (Im Haupt-Thread!)
         # WICHTIG: QueuedConnection verhindert den Absturz 0xC0000005
-        self.twitch_worker.new_message.connect(
-            lambda u, m, h: self.overlay_win.add_twitch_message(u, h),
-            Qt.ConnectionType.QueuedConnection
-        )
+        self.twitch_worker.new_message.connect(self.on_new_twitch_msg, Qt.ConnectionType.QueuedConnection)
 
         # Optional: Status-Updates vom Worker loggen
         self.twitch_worker.status_changed.connect(
@@ -990,13 +994,9 @@ class DiorClientGUI:
         )
         self.twitch_thread.start()
 
-
-
-    def on_twitch_message(self, user, msg_text, html_msg):
-        """Wird vom Worker aufgerufen (via Signal)"""
+    def on_new_twitch_msg(self, display_name, html_content, color_code):
         if self.overlay_win:
-            # Zufällige Farbe für Usernamen generieren oder feste nehmen
-            self.overlay_win.add_twitch_message(user, html_msg)
+            self.overlay_win.add_twitch_message(display_name, html_content, color_code)
 
     def on_twitch_status(self, status):
         self.add_log(f"TWITCH: {status}")
@@ -1026,20 +1026,34 @@ class DiorClientGUI:
     def save_twitch_config(self):
         ui = self.ovl_config_win
 
+        # Daten aus dem UI sammeln
         data = {
             "active": ui.btn_toggle_twitch.isChecked(),
-            "channel": ui.ent_twitch_channel.text(),
+            "channel": ui.ent_twitch_channel.text().strip(),
             "x": ui.slider_twitch_x.value(),
             "y": ui.slider_twitch_y.value(),
             "w": ui.slider_twitch_w.value(),
             "h": ui.slider_twitch_h.value(),
             "opacity": ui.slider_twitch_opacity.value(),
-            "font_size": int(ui.combo_twitch_font.currentText())
+            "font_size": int(ui.combo_twitch_font.currentText()),
+            "hold_time": ui.spin_twitch_hold.value()  # NEU: Hold Time speichern
         }
 
+        # In der globalen Config speichern
         self.config["twitch"] = data
         self.save_config()
-        self.add_log("TWITCH: Settings saved.")
+
+        # --- SOFORTIGE AKTUALISIERUNG ---
+        # 1. Hold Time im Overlay setzen
+        if hasattr(self.overlay_win, 'set_chat_hold_time'):
+            self.overlay_win.set_chat_hold_time(data["hold_time"])
+
+        # 2. Visuelle Darstellung (Position, Opacity, Font) aktualisieren
+        # Das triggert die neue update_twitch_style Methode im Overlay
+        self.update_twitch_visuals()
+
+        self.add_log("TWITCH: Settings saved and applied.")
+        self.add_log("TWITCH: Settings saved and applied.")
 
     def browse_ps2_folder(self):
         """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
@@ -1597,33 +1611,38 @@ class DiorClientGUI:
         ui.btn_toggle_twitch.setChecked(active)
         self.toggle_twitch_active(active)  # Direkt UI & Overlay updaten
 
-        # 2. Sliders
+        # 2. Widgets (Sliders & SpinBox)
         # Blockiere Signale kurz, damit nicht bei jedem SetValue ein Update gefeuert wird
         ui.slider_twitch_opacity.blockSignals(True)
         ui.slider_twitch_x.blockSignals(True)
         ui.slider_twitch_y.blockSignals(True)
         ui.slider_twitch_w.blockSignals(True)
         ui.slider_twitch_h.blockSignals(True)
+        ui.spin_twitch_hold.blockSignals(True)  # NEU: Hold Time Signale blockieren
 
         ui.slider_twitch_opacity.setValue(twitch_conf.get("opacity", 30))
         ui.slider_twitch_x.setValue(twitch_conf.get("x", 50))
         ui.slider_twitch_y.setValue(twitch_conf.get("y", 300))
         ui.slider_twitch_w.setValue(twitch_conf.get("w", 350))
         ui.slider_twitch_h.setValue(twitch_conf.get("h", 400))
+        ui.spin_twitch_hold.setValue(twitch_conf.get("hold_time", 15))  # NEU
 
         ui.slider_twitch_opacity.blockSignals(False)
         ui.slider_twitch_x.blockSignals(False)
         ui.slider_twitch_y.blockSignals(False)
         ui.slider_twitch_w.blockSignals(False)
         ui.slider_twitch_h.blockSignals(False)
+        ui.spin_twitch_hold.blockSignals(False)  # NEU
 
         # 3. Font
         current_font = str(twitch_conf.get("font_size", 12))
         ui.combo_twitch_font.setCurrentText(current_font)
 
-        # 4. Initiales Update an das Overlay senden (damit es sofort richtig sitzt)
-        if self.overlay_win:
-            self.update_twitch_visuals()
+        # 4. Sofortige Übernahme ins Overlay (Sync)
+        self.overlay_win.set_chat_hold_time(twitch_conf.get("hold_time", 15))
+        self.update_twitch_visuals()
+
+
 
         self.add_log("SYS: Overlay configuration synchronized.")
 

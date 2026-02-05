@@ -3,14 +3,19 @@ import os
 import ctypes
 import math
 import time
-from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect)
-from PyQt6.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QTransform, QMovie
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize
-from PyQt6.QtWidgets import QTextBrowser
-from PyQt6.QtGui import QCursor, QTextCursor # Wichtig für Scrolling
-from PyQt6.QtGui import QTextDocument, QTextCursor, QMovie, QPixmap
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize, QUrl, QRectF
-from urllib.parse import unquote
+
+# Aus QtCore kommen die Logik- und Animations-Klassen
+from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
+                            QSize, QUrl, QRectF, QPropertyAnimation, QEasingCurve)
+
+# Aus QtWidgets kommen alle visuellen Komponenten und Effekte
+from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect,
+                                 QVBoxLayout, QHBoxLayout, QFrame, QTextBrowser,
+                                 QGraphicsOpacityEffect) # <--- Hier gehört er hin!
+
+# Aus QtGui kommen die Grafik-Ressourcen
+from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
+                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument)
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -42,16 +47,20 @@ class OverlaySignals(QObject):
     item_moved = pyqtSignal(str, int, int)
 
 
+
+
+
 class DraggableChat(QTextBrowser):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.setStyleSheet("background: transparent; border: none;")
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # WICHTIG: WA_TranslucentBackground auf False, damit Stylesheet-Farben greifen
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        # Das erlaubt uns, den Hintergrund selbst über das Stylesheet zu zeichnen
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
 
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.movies = {}
-        # Sperre gegen gleichzeitigen Zugriff
         self._mutex = False
 
     def add_animated_message(self, html_msg):
@@ -116,6 +125,44 @@ class DraggableChat(QTextBrowser):
         self.movies.clear()
         super().clear()
         self._mutex = False
+
+
+class ChatMessageWidget(DraggableChat):  # Wir erben von deinem Browser
+    def __init__(self, parent, html, hold_time, fade_duration=2000):
+        super().__init__(parent)
+        self.hold_time = hold_time
+
+        # Opacity Effekt für die Animation
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+
+        # Inhalt setzen
+        self.add_animated_message(html)
+        self.adjust_height()
+
+        # Timer für den Start des Fade-Outs
+        if self.hold_time > 0:
+            QTimer.singleShot(self.hold_time * 1000, self.start_fade_out)
+
+    def adjust_height(self):
+        """Passt die Höhe des Widgets an den Textinhalt an."""
+        self.document().setTextWidth(self.width())
+        new_h = int(self.document().size().height()) + 5
+        self.setFixedHeight(new_h)
+
+    def start_fade_out(self):
+        # Animation: Von 1.0 (sichtbar) zu 0.0 (unsichtbar)
+        self.anim = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.anim.setDuration(2000)  # 2 Sekunden Fading
+        self.anim.setStartValue(1.0)
+        self.anim.setEndValue(0.0)
+        self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.anim.finished.connect(self.destroy_message)
+        self.anim.start()
+
+    def destroy_message(self):
+        self.hide()
+        self.deleteLater()  # Sicher aus dem Speicher löschen
 
 # --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
 class PathDrawingLayer(QWidget):
@@ -308,74 +355,104 @@ class QtOverlay(QWidget):
         self.hitmarker_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.hitmarker_label.hide()
 
-        # --- TWITCH CHAT CONTAINER ---
-        self.twitch_browser = DraggableChat(self)
-        # Nur noch die Dinge setzen, die nicht in DraggableChat.__init__ stehen:
-        self.twitch_browser.hide()
-        self.twitch_browser.setSearchPaths([os.path.join(os.getcwd(), "_emote_cache")])
+        self.chat_container = QWidget(self)
+        self.chat_layout = QVBoxLayout(self.chat_container)
+        self.chat_layout.setContentsMargins(0, 0, 0, 0)
+        self.chat_layout.setSpacing(5)
 
-        # WICHTIG: Damit Bilder aus dem Internet geladen werden können (für Emotes),
-        # muss das interne Document Resource Handling erlaubt sein.
-        # QTextBrowser macht das standardmäßig für HTTP URLs oft async.
+        # GEÄNDERT: Nachrichten setzen jetzt oben an
+        self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-    def test_local_gif(self):
-        """Triggert ein lokales Test-GIF direkt in den Chat."""
-        # Such dir ein GIF aus deinem Cache-Ordner
-        cache_path = os.path.join(os.getcwd(), "_emote_cache")
-        if not os.path.exists(cache_path):
-            print("TEST: Cache Ordner existiert nicht!")
-            return
+        self.chat_container.hide()
 
-        files = [f for f in os.listdir(cache_path) if f.endswith(".gif")]
-        if not files:
-            print("TEST: Keine GIFs im Cache gefunden zum Testen.")
-            return
+        self.chat_hold_time = 15  # Standard: 15 Sekunden
+        self.auto_hide_timer = QTimer(self)
+        self.auto_hide_timer.setSingleShot(True)
+        self.auto_hide_timer.timeout.connect(self.fade_out_chat)
 
-        test_file = os.path.abspath(os.path.join(cache_path, files[0])).replace("\\", "/")
-        # Hier auch emote:// nutzen!
-        test_html = f'<b>Test-User:</b> <img src="emote://{test_file}" height="28">'
 
-        print(f"TEST: Sende GIF an Chat: {test_file}")
-        self.twitch_browser.add_animated_message(test_html)
+
+
 
     def notify_chat_moved(self, x, y):
         # Signal an Controller senden
         self.signals.item_moved.emit("twitch", x, y)
 
     def update_twitch_style(self, x, y, w, h, opacity, font_size):
-        # 1. Geometrie setzen
-        self.twitch_browser.setGeometry(int(x), int(y), int(w), int(h))
+        # Wir bewegen den Container, nicht mehr den einzelnen Browser
+        self.chat_container.setGeometry(int(x), int(y), int(w), int(h))
 
-        # 2. Hintergrund berechnen
+        # Speichere Font-Size für die neuen Widgets
+        self.current_chat_font_size = font_size
+        self.current_chat_opacity = opacity
+
+        # Hintergrund für den Container (falls gewünscht)
         alpha = int((opacity / 100) * 255)
-        bg_color = f"rgba(0, 0, 0, {alpha})"
-
-        # 3. Stylesheet anwenden
-        self.twitch_browser.setStyleSheet(f"""
-            QTextBrowser {{
-                background-color: {bg_color};
-                border: none;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: {font_size}pt;
-                color: white;
-                font-weight: bold;
-                text-shadow: 1px 1px 1px black;
-            }}
-        """)
+        self.chat_container.setStyleSheet(f"background-color: rgba(0, 0, 0, {alpha}); border-radius: 5px;")
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff"):
-        # Wir bauen das HTML jetzt sauber zusammen
+        self.chat_container.show()
+
+        # Hol dir die aktuellen Werte (falls sie in update_twitch_style gespeichert wurden)
+        f_size = getattr(self, 'current_chat_font_size', 12)
+
+        # Wir geben dem Widget ein direktes Stylesheet für die Schriftgröße
+        # Der Hintergrund kommt vom Container (Parent)
         full_html = f"""
-        <div style="margin-bottom: 4px; line-height: 120%;">
+        <div style="font-size: {f_size}pt; line-height: 120%;">
             <span style="color: {color}; font-weight: bold;">{user}:</span>
-            <span style="color: #ffffff;">{html_msg}</span>
+            <span style="color: #ffffff;"> {html_msg}</span>
         </div>
         """
-        self.twitch_browser.add_animated_message(full_html)
-        print(full_html)
+
+        # Erstelle ein neues, individuelles Message-Widget
+        msg_widget = ChatMessageWidget(
+            self.chat_container,
+            full_html,
+            self.chat_hold_time
+        )
+
+        # WICHTIG: Setze die Breite des Widgets auf die aktuelle Container-Breite,
+        # damit adjust_height() korrekt rechnen kann.
+        msg_widget.setFixedWidth(self.chat_container.width())
+        msg_widget.adjust_height()  # Jetzt erst die Höhe berechnen
+
+        # Zum Layout hinzufügen
+        self.chat_layout.addWidget(msg_widget)
+
+
+        # (Optional) Begrenzung: Alte Nachrichten sofort löschen, wenn zu viele da sind
+        if self.chat_layout.count() > 50:
+            item = self.chat_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def fade_out_chat(self):
+        """Versteckt den Chat oder leert ihn."""
+        # Variante 1: Einfach verstecken (empfohlen für Performance)
+        self.chat_container.hide()
+        # Variante 2: Chat leeren (falls du willst, dass er beim nächsten Mal leer startet)
+        # self.twitch_browser.clear()
+
+    def set_chat_hold_time(self, seconds):
+        """Wird vom GUI aufgerufen, wenn der User den Wert ändert."""
+        self.chat_hold_time = int(seconds)
+        if self.chat_hold_time == 0:
+            self.auto_hide_timer.stop()
+            self.chat_container.show()
 
     def clear_twitch_chat(self):
-        self.twitch_browser.clear()
+        """Entfernt alle aktuellen Nachrichten-Widgets aus dem Layout."""
+        while self.chat_layout.count():
+            item = self.chat_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                # Falls es ein ChatMessageWidget ist, stoppen wir das Movie
+                if hasattr(widget, 'movies'):
+                    for m in widget.movies.values():
+                        m.stop()
+                widget.deleteLater()
+        self.add_log("TWITCH: Chat cleared.")
 
     # --- CACHE LOGIK ---
     def get_cached_pixmap(self, path):

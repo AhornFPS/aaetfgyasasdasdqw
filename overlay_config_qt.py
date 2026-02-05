@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QFrame, QTabWidget,
                              QCheckBox, QComboBox, QSlider, QScrollArea, QGridLayout,
-                             QSizePolicy)
+                             QSizePolicy,QSpinBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
 from PyQt6.QtGui import QColor, QPixmap
 
@@ -1085,6 +1085,16 @@ class OverlayConfigWindow(QWidget):
 
         a_layout.addWidget(QLabel("APPEARANCE", styleSheet="color: #00f2ff; font-weight: bold; margin-bottom: 5px;"), 0,
                            0, 1, 2)
+
+        a_layout.addWidget(QLabel("Hold Text for (s):"), 7, 0)
+        self.spin_twitch_hold = QSpinBox()
+        self.spin_twitch_hold.setRange(0, 600)  # 0 bis 10 Minuten
+        self.spin_twitch_hold.setSuffix(" s (0 = Permanent)")
+        self.spin_twitch_hold.setValue(15)
+        self.spin_twitch_hold.setFixedWidth(120)
+        a_layout.addWidget(self.spin_twitch_hold, 7, 1)
+
+        layout.addWidget(app_group)
 
         # Opacity
         a_layout.addWidget(QLabel("Background Opacity:"), 1, 0)
