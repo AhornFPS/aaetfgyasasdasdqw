@@ -627,7 +627,7 @@ class QtOverlay(QWidget):
     # --- ELEMENT UPDATES ---
     def add_killfeed_row(self, html_msg):
         scaled = html_msg
-        for size in [19, 16]: scaled = scaled.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
+        for size in [19, 16]: scaled = scaled.replace(f"{size}px", f"{(size * self.ui_scale)}px")
         if "style=\"" in scaled: scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
         self.feed_messages.insert(0, scaled)
         self.feed_messages = self.feed_messages[:6]

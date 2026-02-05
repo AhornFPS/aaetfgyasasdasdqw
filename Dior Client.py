@@ -2363,7 +2363,7 @@ class DiorClientGUI:
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
                     # Icon ganz links
-                    icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
+                    icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
 
             # HTML zusammenbauen
             if t_type == "kill":

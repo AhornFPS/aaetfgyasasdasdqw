@@ -238,7 +238,7 @@ class CensusWorker:
                 hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                 hs_path = get_asset_path_local(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
-                    icon_html = f'<img src="{hs_path}" width="40" height="40" style="vertical-align: middle;">&nbsp;'
+                    icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
 
             w_info = self.c.item_db.get(weapon_id, {})
             category = w_info.get("type", "Unknown")
@@ -346,8 +346,9 @@ class CensusWorker:
                     # Hitmarker (immer etwas verzögert)
                     time.sleep(0.05)
                     self.c.trigger_overlay_event("Hitmarker")
+                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
-                    # Killfeed
+                    # Killfeed Message bauen
                     v_name = self.c.name_cache.get(victim_id, "Unknown")
                     raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
                     v_tag = f"[{raw_tag}] " if raw_tag else ""
@@ -358,9 +359,10 @@ class CensusWorker:
                     except:
                         kd_str = "0.0"
 
-                    msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
-                            {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
-                            <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+                    msg = f"""<div style="{base_style}">
+                                                {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
+                                                <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
@@ -408,9 +410,13 @@ class CensusWorker:
                     except:
                         k_kd = "0.0"
 
-                    msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
-                            {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
-                            <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
+                    # Auch hier den gleichen Style nutzen
+                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+
+                    msg = f"""<div style="{base_style}">
+                                            {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
+                                            <span style="color: #aaa; font-size: 16px;"> ({k_kd})</span></div>"""
+
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
@@ -468,7 +474,12 @@ class CensusWorker:
 
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
                     m_name = self.c.name_cache.get(char_id, "Medic")
-                    msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
+
+                    # Style Update
+                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+
+                    msg = f'<div style="{base_style}"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
+
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
