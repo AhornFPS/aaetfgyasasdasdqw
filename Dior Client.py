@@ -954,33 +954,43 @@ class DiorClientGUI:
 
     def start_twitch_connection(self):
         ui = self.ovl_config_win
-        channel = ui.ent_twitch_channel.text()
+        channel = ui.ent_twitch_channel.text().strip()
 
         if not channel:
             self.add_log("TWITCH: Kein Kanal angegeben.")
             return
 
-        # Alten Worker stoppen
-        if self.twitch_worker:
+        # 1. Alten Worker sauber stoppen
+        if hasattr(self, 'twitch_worker') and self.twitch_worker:
             self.twitch_worker.stop()
 
         self.add_log(f"TWITCH: Verbinde zu {channel}...")
         ui.btn_connect_twitch.setEnabled(False)
 
-        # Thread starten
-        self.twitch_thread = threading.Thread(target=self._twitch_thread_target, args=(channel,), daemon=True)
-        self.twitch_thread.start()
-
-    def _twitch_thread_target(self, channel):
-        # Worker instanziieren
+        # 2. Den NEUEN Worker erstellen (Das QObject mit den Signalen)
         self.twitch_worker = TwitchWorker(channel)
 
-        # Signale verbinden (WICHTIG: Slot muss im Main Thread laufen für GUI Updates)
-        # PyQt Signale sind standardmäßig thread-safe, wenn man sie richtig emittet.
-        self.twitch_worker.new_message.connect(self.on_twitch_message)
-        self.twitch_worker.status_changed.connect(self.on_twitch_status)
+        # 3. Signale verbinden (Im Haupt-Thread!)
+        # WICHTIG: QueuedConnection verhindert den Absturz 0xC0000005
+        self.twitch_worker.new_message.connect(
+            lambda u, m, h: self.overlay_win.add_twitch_message(u, h),
+            Qt.ConnectionType.QueuedConnection
+        )
 
-        self.twitch_worker.run()  # Blockiert den Thread
+        # Optional: Status-Updates vom Worker loggen
+        self.twitch_worker.status_changed.connect(
+            lambda msg: self.add_log(f"TWITCH: {msg}"),
+            Qt.ConnectionType.QueuedConnection
+        )
+
+        # 4. Den Python-Thread starten, der nur die 'run'-Methode ausführt
+        self.twitch_thread = threading.Thread(
+            target=self.twitch_worker.run,
+            daemon=True
+        )
+        self.twitch_thread.start()
+
+
 
     def on_twitch_message(self, user, msg_text, html_msg):
         """Wird vom Worker aufgerufen (via Signal)"""

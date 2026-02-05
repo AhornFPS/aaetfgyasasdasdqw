@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize
 from PyQt6.QtWidgets import QTextBrowser
 from PyQt6.QtGui import QCursor, QTextCursor # Wichtig für Scrolling
 from PyQt6.QtGui import QTextDocument, QTextCursor, QMovie, QPixmap
-from PyQt6.QtCore import QUrl, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize, QUrl, QRectF
 from urllib.parse import unquote
 
 # Sound Support (Optional, falls pygame fehlt)
@@ -49,94 +49,73 @@ class DraggableChat(QTextBrowser):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setStyleSheet("background: transparent; border: none;")
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setOpenExternalLinks(False)
-
-        # self.document().setCacheEnabled(False)  <-- DIESE ZEILE ENTFERNEN
 
         self.movies = {}
-
-    @staticmethod
-    def _extract_local_emote_paths(html):
-        """Parst lokale file://-Bildpfade robust aus dem HTML."""
-        import re
-
-        matches = re.findall(r'src="(file:///[^\"]+)"', html)
-        paths = []
-        for url in matches:
-            local_path = QUrl(url).toLocalFile()
-            if not local_path:
-                local_path = unquote(url.replace("file:///", "", 1))
-            paths.append(local_path.replace("\\", "/"))
-        return paths
+        # Sperre gegen gleichzeitigen Zugriff
+        self._mutex = False
 
     def add_animated_message(self, html_msg):
-        # Erst einfügen, damit die Ressource im Dokument bereits existiert,
-        # bevor QMovie die Frames liefert.
+        """Fügt Nachrichten sicher hinzu ohne den Speicher zu gefährden."""
+        import os
+        import re
+
+        # 1. Pfade finden
+        matches = re.findall(r'src="emote://([^"]+)"', html_msg)
+
+        for path in matches:
+            clean_path = path.replace('\\', '/')
+            if clean_path.lower().endswith((".gif", ".webp")):
+                if clean_path not in self.movies:
+                    if os.path.exists(clean_path):
+                        # Movie-Objekt erstellen
+                        m = QMovie(clean_path)
+                        if m.isValid():
+                            m.setScaledSize(QSize(28, 28))
+                            m.setCacheMode(QMovie.CacheMode.CacheAll)
+                            self.movies[clean_path] = m
+
+                            # WICHTIG: Connection mit Pfad-Bindung
+                            m.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
+                            m.start()
+
+        # 2. Nachricht einfach anhängen (Qt kümmert sich um den Rest)
         self.append(html_msg)
         self.moveCursor(QTextCursor.MoveOperation.End)
 
-        # Wir suchen nach den Pfaden zu den GIFs/WebPs
-        matches = self._extract_local_emote_paths(html_msg)
-
-        for path in matches:
-            clean_path = path.replace('\\', '/')
-            if clean_path.lower().endswith((".gif", ".webp")):
-                if clean_path not in self.movies:
-                    if os.path.exists(clean_path):
-                        movie = QMovie(clean_path)
-                        if movie.isValid():
-                            movie.setScaledSize(QSize(28, 28))
-                            self.movies[clean_path] = movie
-                            # Verbindung zum Frame-Update
-                            movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
-                            movie.start()
-
-    def scan_for_new_emotes(self):
-        """Sucht im Dokument nach Image-Ressourcen und startet Animationen."""
-        import os
-        doc = self.document()
-        # Wir gehen alle Bilder im Ressourcen-System des Dokuments durch
-        # Aber einfacher: Wir suchen im HTML nach file-Pfaden
-        # Dieser Helper parst lokale file://-Pfade inklusive URL-Encoding.
-        matches = self._extract_local_emote_paths(self.toHtml())
-
-        for path in matches:
-            clean_path = path.replace('\\', '/')
-            # Nur wenn es ein GIF/WebP ist und noch nicht animiert wird
-            if clean_path.lower().endswith((".gif", ".webp")):
-                if clean_path not in self.movies:
-                    if os.path.exists(clean_path):
-                        movie = QMovie(clean_path)
-                        if movie.isValid():
-                            movie.setScaledSize(QSize(28, 28))
-                            self.movies[clean_path] = movie
-                            # WICHTIG: Die Bindung des Pfads via Default-Argument (p=clean_path)
-                            movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
-                            movie.start()
-                            print(f"ANIMATION GESTARTET: {clean_path}")
-                        else:
-                            print(f"ANIMATION UNGÜLTIG: {clean_path}")
-
     def on_frame_changed(self, path):
+        """Aktualisiert das Bild nur, wenn wir nicht gerade mitten im Rendern sind."""
+        if self._mutex or not self.isVisible():
+            return
+
         movie = self.movies.get(path)
         if movie:
-            frame = movie.currentPixmap()
-            url = QUrl.fromLocalFile(path)
+            self._mutex = True
+            try:
+                frame = movie.currentPixmap()
+                if not frame.isNull():
+                    url = QUrl(f"emote://{path}")
+                    # Resource im Dokument registrieren
+                    doc = self.document()
+                    if doc:
+                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, frame)
 
-            # Das Bild im Dokument-Ressourcen-Cache ersetzen
-            self.document().addResource(QTextDocument.ResourceType.ImageResource, url, frame)
-
-            # Da wir setCacheEnabled nicht nutzen können, markieren wir den Inhalt
-            # explizit als geändert. Das zwingt Qt, die Anzeige zu aktualisieren.
-            self.document().markContentsDirty(0, self.document().characterCount())
-
-            # Viewport-Update für das sofortige Neuzeichnen
-            self.viewport().update()
+                        # Nur ein kleines Update-Signal senden
+                        doc.documentLayout().update.emit(QRectF(0, 0, self.width(), self.height()))
+            except:
+                pass
+            finally:
+                self._mutex = False
+                # Wir rufen viewport().update() NICHT hier auf,
+                # um CPU-Spikes und Abstürze zu vermeiden.
 
     def clear(self):
-        for m in self.movies.values(): m.stop()
+        self._mutex = True
+        for m in self.movies.values():
+            m.stop()
+            m.deleteLater()
         self.movies.clear()
         super().clear()
+        self._mutex = False
 
 # --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
 class PathDrawingLayer(QWidget):
@@ -352,8 +331,9 @@ class QtOverlay(QWidget):
             print("TEST: Keine GIFs im Cache gefunden zum Testen.")
             return
 
-        test_file = os.path.join(cache_path, files[0]).replace("\\", "/")
-        test_html = f'Test-User: <img src="file:///{test_file}" height="28">'
+        test_file = os.path.abspath(os.path.join(cache_path, files[0])).replace("\\", "/")
+        # Hier auch emote:// nutzen!
+        test_html = f'<b>Test-User:</b> <img src="emote://{test_file}" height="28">'
 
         print(f"TEST: Sende GIF an Chat: {test_file}")
         self.twitch_browser.add_animated_message(test_html)
@@ -384,14 +364,15 @@ class QtOverlay(QWidget):
         """)
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff"):
-        # Das HTML muss genau so aufgebaut sein, wie der Regex oben (file:///)
+        # Wir bauen das HTML jetzt sauber zusammen
         full_html = f"""
-        <div style="margin-bottom: 4px;">
-            <b style="color: {color};">{user}:</b> 
+        <div style="margin-bottom: 4px; line-height: 120%;">
+            <span style="color: {color}; font-weight: bold;">{user}:</span>
             <span style="color: #ffffff;">{html_msg}</span>
         </div>
         """
         self.twitch_browser.add_animated_message(full_html)
+        print(full_html)
 
     def clear_twitch_chat(self):
         self.twitch_browser.clear()
