@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+import random # Für zufällige justinfan Nummer
 import requests
 import os
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -195,13 +196,13 @@ class EmoteManager:
 
 
 class TwitchWorker(QObject):
-    new_message = pyqtSignal(str, str, str) # DisplayName, HTML_Msg, Color
+    new_message = pyqtSignal(str, str, str)
     status_changed = pyqtSignal(str)
 
-    def __init__(self, channel, ignore_list=None): # <--- Hier erweitert
+    def __init__(self, channel, ignore_list=None):
         super().__init__()
         self.channel = channel.lower().strip().replace("#", "")
-        self.ignore_list = ignore_list if ignore_list else [] # Liste speichern
+        self.ignore_list = [n.lower() for n in ignore_list] if ignore_list else []
         self.running = False
         self.sock = None
         self.emote_mgr = EmoteManager()
@@ -222,10 +223,15 @@ class TwitchWorker(QObject):
             self.sock.connect(('irc.chat.twitch.tv', 6667))
             self.sock.settimeout(None)
 
-            # WICHTIG: Tags und Commands anfordern (CAP REQ)
-            # Ohne 'twitch.tv/tags' gibt es keine Farben oder Display-Names!
-            self.sock.send("CAP REQ :twitch.tv/tags twitch.tv/commands\n".encode('utf-8'))
-            self.sock.send(f"PASS oauth:kappa\nNICK justinfan12345\nJOIN #{self.channel}\n".encode('utf-8'))
+            # Zufällige justinfan ID um Kollisionen zu vermeiden
+            nick = f"justinfan{random.randint(10000, 99999)}"
+
+            # WICHTIG: Jede Zeile MUSS mit \r\n enden!
+            self.sock.send(f"CAP REQ :twitch.tv/tags twitch.tv/commands\r\n".encode('utf-8'))
+            self.sock.send(f"PASS oauth:kappa\r\n".encode('utf-8'))
+            self.sock.send(f"NICK {nick}\r\n".encode('utf-8'))
+            self.sock.send(f"JOIN #{self.channel}\r\n".encode('utf-8'))
+
             self.status_changed.emit(f"CONNECTED: #{self.channel}")
 
             buffer = ""
@@ -235,51 +241,42 @@ class TwitchWorker(QObject):
                     if not data: break
 
                     buffer += data
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        line = line.strip()
-
+                    while '\r\n' in buffer:  # IRC nutzt \r\n als Trenner
+                        line, buffer = buffer.split('\r\n', 1)
                         if not line: continue
 
                         if line.startswith('PING'):
-                            self.sock.send("PONG :tmi.twitch.tv\n".encode('utf-8'))
-                        elif "PRIVMSG" in line:
+                            # Twitch will ein PONG mit dem gleichen Token zurück
+                            self.sock.send(f"PONG {line.split()[1]}\r\n".encode('utf-8'))
+                            continue
+
+                        if "PRIVMSG" in line:
                             # --- TAG PARSING ---
                             tags = {}
                             if line.startswith("@"):
                                 tag_part, line = line[1:].split(" ", 1)
                                 tags = dict(item.split("=") for item in tag_part.split(";") if "=" in item)
 
-                            # Jetzt extrahieren wir User und Nachricht
+                            # Extraktion von User und Nachricht
                             parts = line.split(":", 2)
                             if len(parts) > 2:
-                                user_part = parts[1]
-                                raw_user = user_part.split("!", 1)[0]
+                                # Der Login-Name (kleingeschrieben)
+                                raw_user = parts[1].split("!")[0].lower()
                                 raw_msg = parts[2].strip()
 
-                                # --- DATEN AUS TAGS NUTZEN ---
-                                # Echte Groß/Kleinschreibung aus display-name
+                                # Display Name (mit Groß/Kleinschreibung aus den Tags)
                                 display_name = tags.get("display-name", raw_user)
-                                # User-Farbe (Fallback auf Cyan, falls keine gesetzt)
                                 user_color = tags.get("color", "#00f2ff")
                                 if not user_color: user_color = "#00f2ff"
 
-                                display_name = tags.get("display-name", raw_user)
-
-                                # --- NEU: IGNORE CHECK ---
-                                # Wir holen uns die Liste aus der Config (oder übergeben sie dem Worker)
-                                if display_name.lower() in self.ignore_list:
+                                # --- IGNORE CHECK (Login-Name prüfen ist sicherer) ---
+                                if raw_user in self.ignore_list:
                                     continue
 
-                                # 1. Nachricht in HTML umwandeln (Emotes)
+                                # 1. Nachricht in HTML umwandeln
                                 html = self.emote_mgr.parse_message(raw_msg)
 
-                                # 2. Kleiner Delay bei Bildern (dein bestehender Fix)
-                                if "<img" in html:
-                                    time.sleep(0.01)
-
-                                # 3. Signal senden (WICHTIG: display_name und color mitgeben!)
-                                # Das Overlay erwartet (user, html, color)
+                                # 2. Signal an die GUI
                                 self.new_message.emit(display_name, html, user_color)
 
                 except socket.error:

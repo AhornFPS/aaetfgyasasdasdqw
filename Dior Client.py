@@ -958,7 +958,7 @@ class DiorClientGUI:
         test_msg = "This is a test message to adjust the chat position, size, and font settings."
 
         # Aufruf der bestehenden Methode im Overlay
-        self.overlay_win.add_twitch_message(test_user, test_msg, color="#ffaa00")
+        self.overlay_win.add_twitch_message(test_user, test_msg, color="#ffaa00", is_test=True)
 
         self.add_log("TWITCH: Standard test message sent to overlay.")
 

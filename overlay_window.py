@@ -64,78 +64,71 @@ class DraggableChat(QTextBrowser):
         self._mutex = False
 
     def add_animated_message(self, html_msg):
-        """Fügt Nachrichten hinzu und registriert Bilder sofort im Dokument."""
         import re
-        from PyQt6.QtGui import QPixmap
-
-        # 1. Alle Pfade extrahieren
         matches = re.findall(r'src="emote://([^"]+)"', html_msg)
         doc = self.document()
 
+        # Wir suchen das Haupt-Overlay für den globalen Cache
+        # Struktur: ChatMessageWidget -> Container -> QtOverlay
+        main_ovl = self.parent().parent() if self.parent() else None
+
         for path in matches:
             clean_path = path.replace('\\', '/')
-            if not os.path.exists(clean_path):
-                continue
-
+            if not os.path.exists(clean_path): continue
             url = QUrl(f"emote://{clean_path}")
 
-            # FALL A: Animation (GIF/WebP)
             if clean_path.lower().endswith((".gif", ".webp")):
-                if clean_path not in self.movies:
-                    m = QMovie(clean_path)
-                    if m.isValid():
-                        m.setScaledSize(QSize(28, 28))
-                        m.setCacheMode(QMovie.CacheMode.CacheAll)
-                        self.movies[clean_path] = m
-                        m.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
-                        m.start()
+                # Globalen Movie-Cache nutzen
+                if main_ovl and hasattr(main_ovl, 'movie_cache'):
+                    if clean_path not in main_ovl.movie_cache:
+                        m = QMovie(clean_path)
+                        if m.isValid():
+                            m.setScaledSize(QSize(28, 28))
+                            m.setCacheMode(QMovie.CacheMode.CacheAll)
+                            m.start()
+                            main_ovl.movie_cache[clean_path] = m
 
-                        # Sofort den ersten Frame registrieren, damit kein "Broken Icon" erscheint
-                        m.jumpToFrame(0)
-                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, m.currentPixmap())
+                    movie = main_ovl.movie_cache.get(clean_path)
+                    if movie:
+                        self.movies[clean_path] = movie
+                        # Jede Nachricht hört auf den globalen Taktgeber
+                        movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
+                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, movie.currentPixmap())
 
-            # FALL B: Statisches Bild (PNG/JPG)
-            else:
+            else:  # Statische Bilder (PNG)
                 pix = QPixmap(clean_path)
                 if not pix.isNull():
-                    # Statische Bilder müssen nur einmal registriert werden
                     doc.addResource(QTextDocument.ResourceType.ImageResource, url, pix)
 
-        # 2. Nachricht erst anhängen, wenn alle Ressourcen im Cache sind
         self.append(html_msg)
         self.moveCursor(QTextCursor.MoveOperation.End)
 
     def on_frame_changed(self, path):
-        """Aktualisiert das Bild nur, wenn wir nicht gerade mitten im Rendern sind."""
-        if self._mutex or not self.isVisible():
-            return
+        """Wird vom globalen Movie getriggert."""
+        if self._mutex or not self.isVisible(): return
 
         movie = self.movies.get(path)
         if movie:
             self._mutex = True
             try:
-                frame = movie.currentPixmap()
-                if not frame.isNull():
-                    url = QUrl(f"emote://{path}")
-                    # Resource im Dokument registrieren
-                    doc = self.document()
-                    if doc:
-                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, frame)
-
-                        # Nur ein kleines Update-Signal senden
-                        doc.documentLayout().update.emit(QRectF(0, 0, self.width(), self.height()))
+                # Wir holen den aktuellen Frame vom globalen Cache-Objekt
+                doc = self.document()
+                url = QUrl(f"emote://{path}")
+                doc.addResource(QTextDocument.ResourceType.ImageResource, url, movie.currentPixmap())
+                doc.documentLayout().update.emit(QRectF(0, 0, self.width(), self.height()))
             except:
                 pass
             finally:
                 self._mutex = False
-                # Wir rufen viewport().update() NICHT hier auf,
-                # um CPU-Spikes und Abstürze zu vermeiden.
 
     def clear(self):
         self._mutex = True
-        for m in self.movies.values():
-            m.stop()
-            m.deleteLater()
+        # NUR die Verbindung trennen, NICHT das Movie stoppen!
+        for path, movie in self.movies.items():
+            try:
+                movie.frameChanged.disconnect()
+            except:
+                pass
         self.movies.clear()
         super().clear()
         self._mutex = False
@@ -263,6 +256,7 @@ class QtOverlay(QWidget):
         # --- CACHE DICTIONARY (NEU) ---
         # Hier speichern wir alle geladenen Bilder
         self.pixmap_cache = {}
+        self.movie_cache = {}
 
         # 1. FENSTER-KONFIGURATION
         self.setWindowFlags(
@@ -408,17 +402,17 @@ class QtOverlay(QWidget):
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
         self.update_twitch_visibility(enabled)
 
-    def add_twitch_message(self, user, html_msg, color="#00f2ff"):
-
+    def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
         enabled = True
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
             game_running = getattr(self.gui_ref, 'ps2_running', False)
-            # Wenn Spiel nicht läuft und kein Edit-Mode -> Abbruch
-            if not game_running and not self.edit_mode:
+
+            # FIX: Wenn es ein Test ist ODER wir im Edit-Mode sind ODER das Spiel läuft
+            if not is_test and not game_running and not self.edit_mode:
                 return
 
-        if not enabled and not self.edit_mode:
+        if not enabled and not self.edit_mode and not is_test:
             return
 
         self.chat_container.show()
