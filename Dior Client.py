@@ -1985,21 +1985,29 @@ class DiorClientGUI:
         # Aktuell ausgewählte Server-ID holen (Standard: 10/EU)
         current_wid = str(getattr(self, 'current_world_id', '10'))
 
-        # 1. POPULATION (Total inkl. NSO/Unknown für den Graphen)
+        # 1. DATEN VORBEREITEN
+        # Total inkl. NSO/Unknown
         total_players = self.live_stats.get("Total", 0)
-        self.dash_controller.signals.update_population.emit(total_players)
 
-        # 2. FRAKTIONEN (Für die Balken)
-        # FIX: Wir senden KEINE "NSO" Daten an die Balken-Logik.
-        # Dadurch berechnet das Dashboard die 100% Basis nur aus (TR + NC + VS).
-        # Unzugewiesene NSO verfälschen so nicht mehr die Balance-Anzeige.
+        # Fraktionen (TR, NC, VS) - NSO bewusst weggelassen für Balance-Anzeige
         faction_data = {
             "TR": self.live_stats.get("TR", 0),
             "NC": self.live_stats.get("NC", 0),
             "VS": self.live_stats.get("VS", 0)
-            # "NSO": ...  <-- ENTFERNT für die %-Berechnung
         }
+
+        # 2. UPDATES SENDEN
+        # A) Update Text-Label (Total Players)
+        self.dash_controller.signals.update_population.emit(total_players)
+
+        # B) Update Fraktions-Balken
         self.dash_controller.signals.update_factions.emit(faction_data)
+
+        # C) Update Graph (NEU: Total UND Fraktionsdaten übergeben)
+        # Wir greifen direkt auf das Graph-Objekt zu, da es die effizienteste Methode
+        # ist, komplexe Daten (Dicts + Ints) gleichzeitig zu übergeben ohne Signal-Änderung.
+        if hasattr(self.dash_window, 'graph'):
+            self.dash_window.graph.update_history(total_players, faction_data)
 
         # 3. PLAYER LISTE VORBEREITEN
         active_ids = self.active_players.keys()
