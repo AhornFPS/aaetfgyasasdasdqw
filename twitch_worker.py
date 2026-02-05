@@ -198,9 +198,10 @@ class TwitchWorker(QObject):
     new_message = pyqtSignal(str, str, str) # DisplayName, HTML_Msg, Color
     status_changed = pyqtSignal(str)
 
-    def __init__(self, channel):
+    def __init__(self, channel, ignore_list=None): # <--- Hier erweitert
         super().__init__()
         self.channel = channel.lower().strip().replace("#", "")
+        self.ignore_list = ignore_list if ignore_list else [] # Liste speichern
         self.running = False
         self.sock = None
         self.emote_mgr = EmoteManager()
@@ -262,6 +263,13 @@ class TwitchWorker(QObject):
                                 # User-Farbe (Fallback auf Cyan, falls keine gesetzt)
                                 user_color = tags.get("color", "#00f2ff")
                                 if not user_color: user_color = "#00f2ff"
+
+                                display_name = tags.get("display-name", raw_user)
+
+                                # --- NEU: IGNORE CHECK ---
+                                # Wir holen uns die Liste aus der Config (oder übergeben sie dem Worker)
+                                if display_name.lower() in self.ignore_list:
+                                    continue
 
                                 # 1. Nachricht in HTML umwandeln (Emotes)
                                 html = self.emote_mgr.parse_message(raw_msg)

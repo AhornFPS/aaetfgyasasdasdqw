@@ -1078,6 +1078,17 @@ class OverlayConfigWindow(QWidget):
         c_layout.addLayout(chan_row)
         layout.addWidget(chan_group)
 
+        # --- 2.5 IGNORE LIST ---
+        ignore_group = QFrame(objectName="Group")
+        i_layout = QVBoxLayout(ignore_group)
+
+        i_layout.addWidget(QLabel("Ignore Users (comma separated):", objectName="SubText"))
+        self.ent_twitch_ignore = QLineEdit()
+        self.ent_twitch_ignore.setPlaceholderText("e.g. Nightbot, StreamElements, user123...")
+        i_layout.addWidget(self.ent_twitch_ignore)
+
+        layout.addWidget(ignore_group)
+
         # --- 3. APPEARANCE & POSITION ---
         app_group = QFrame(objectName="Group")
         a_layout = QGridLayout(app_group)
@@ -1143,9 +1154,6 @@ class OverlayConfigWindow(QWidget):
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
 
-        #self.btn_edit_twitch = QPushButton("MOVE UI")
-        #self.btn_edit_twitch.setObjectName("EditBtn")
-        #self.btn_edit_twitch.setMinimumHeight(35)
 
         self.btn_test_twitch = QPushButton("TEST MSG")
         self.btn_test_twitch.setObjectName("TestBtn")

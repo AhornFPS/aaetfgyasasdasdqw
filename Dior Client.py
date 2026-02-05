@@ -963,6 +963,11 @@ class DiorClientGUI:
         ui = self.ovl_config_win
         channel = ui.ent_twitch_channel.text().strip()
 
+        # --- IGNORE LISTE VORBEREITEN ---
+        # Wir lesen das Feld aus und machen eine saubere Liste daraus
+        raw_ignore = ui.ent_twitch_ignore.text().strip().lower()
+        ignore_list = [n.strip() for n in raw_ignore.split(",") if n.strip()]
+
         if not channel:
             self.add_log("TWITCH: Kein Kanal angegeben.")
             return
@@ -974,20 +979,24 @@ class DiorClientGUI:
         self.add_log(f"TWITCH: Verbinde zu {channel}...")
         ui.btn_connect_twitch.setEnabled(False)
 
-        # 2. Den NEUEN Worker erstellen (Das QObject mit den Signalen)
-        self.twitch_worker = TwitchWorker(channel)
+        # 2. Den NEUEN Worker erstellen
+        # WICHTIG: Die ignore_list wird hier als Argument übergeben!
+        self.twitch_worker = TwitchWorker(channel, ignore_list=ignore_list)
 
         # 3. Signale verbinden (Im Haupt-Thread!)
-        # WICHTIG: QueuedConnection verhindert den Absturz 0xC0000005
-        self.twitch_worker.new_message.connect(self.on_new_twitch_msg, Qt.ConnectionType.QueuedConnection)
-
-        # Optional: Status-Updates vom Worker loggen
-        self.twitch_worker.status_changed.connect(
-            lambda msg: self.add_log(f"TWITCH: {msg}"),
+        # Wir nutzen die Methode on_new_twitch_msg, die wir vorhin korrigiert haben
+        self.twitch_worker.new_message.connect(
+            self.on_new_twitch_msg,
             Qt.ConnectionType.QueuedConnection
         )
 
-        # 4. Den Python-Thread starten, der nur die 'run'-Methode ausführt
+        # Status-Updates (on_twitch_status kümmert sich um Logs und Button-Reset)
+        self.twitch_worker.status_changed.connect(
+            self.on_twitch_status,
+            Qt.ConnectionType.QueuedConnection
+        )
+
+        # 4. Den Python-Thread starten
         self.twitch_thread = threading.Thread(
             target=self.twitch_worker.run,
             daemon=True
@@ -1030,6 +1039,7 @@ class DiorClientGUI:
         data = {
             "active": ui.btn_toggle_twitch.isChecked(),
             "channel": ui.ent_twitch_channel.text().strip(),
+            "ignore_list": ui.ent_twitch_ignore.text().strip(),
             "x": ui.slider_twitch_x.value(),
             "y": ui.slider_twitch_y.value(),
             "w": ui.slider_twitch_w.value(),
@@ -1637,6 +1647,8 @@ class DiorClientGUI:
         # 3. Font
         current_font = str(twitch_conf.get("font_size", 12))
         ui.combo_twitch_font.setCurrentText(current_font)
+        # Ignore List
+        ui.ent_twitch_ignore.setText(twitch_conf.get("ignore_list", ""))
 
         # 4. Sofortige Übernahme ins Overlay (Sync)
         self.overlay_win.set_chat_hold_time(twitch_conf.get("hold_time", 15))
