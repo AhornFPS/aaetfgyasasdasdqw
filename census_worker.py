@@ -92,17 +92,29 @@ class CensusWorker:
                     self.c.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
 
                     def get_stat_obj(cid, tid):
+                        # 1. Ermittle die Fraktion des AKTUELLEN Events
+                        current_faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+
                         if cid not in self.c.session_stats:
-                            faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+                            # NEUER EINTRAG
                             self.c.session_stats[cid] = {
                                 "id": cid,
                                 "name": self.c.name_cache.get(cid, "Searching..."),
-                                "faction": faction_name,
+                                "faction": current_faction_name, # Setze Fraktion basierend auf Event
                                 "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
                                 "start": time.time(),
-                                "last_kill_time": time.time(),  # <--- WICHTIG: Hier muss das Komma hin!
-                                "world_id": str(p.get("world_id", "0"))  # Das ist die neue Zeile
+                                "last_kill_time": time.time(),
+                                "world_id": str(p.get("world_id", "0"))
                             }
+                        else:
+                            # BESTEHENDER EINTRAG
+                            # Check: Ist der Spieler als "NSO" gespeichert, kämpft aber gerade für eine echte Fraktion?
+                            obj = self.c.session_stats[cid]
+                            if obj["faction"] == "NSO" and current_faction_name != "NSO":
+                                obj["faction"] = current_faction_name
+                                # Optional: Loggen, dass wir einen NSO zugewiesen haben
+                                # print(f"DEBUG: Assigned NSO {obj['name']} to {current_faction_name}")
+
                         return self.c.session_stats[cid]
 
                     async for message in websocket:

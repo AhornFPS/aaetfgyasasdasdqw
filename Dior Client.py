@@ -1757,21 +1757,23 @@ class DiorClientGUI:
         # Aktuell ausgewählte Server-ID holen (Standard: 10/EU)
         current_wid = str(getattr(self, 'current_world_id', '10'))
 
-        # 1. POPULATION & FRAKTIONEN
-        # Diese Daten kommen jetzt aus self.live_stats, welches in update_live_graph
-        # bereits gefiltert wurde!
+        # 1. POPULATION (Total inkl. NSO/Unknown für den Graphen)
         total_players = self.live_stats.get("Total", 0)
         self.dash_controller.signals.update_population.emit(total_players)
 
+        # 2. FRAKTIONEN (Für die Balken)
+        # FIX: Wir senden KEINE "NSO" Daten an die Balken-Logik.
+        # Dadurch berechnet das Dashboard die 100% Basis nur aus (TR + NC + VS).
+        # Unzugewiesene NSO verfälschen so nicht mehr die Balance-Anzeige.
         faction_data = {
             "TR": self.live_stats.get("TR", 0),
             "NC": self.live_stats.get("NC", 0),
-            "VS": self.live_stats.get("VS", 0),
-            "NSO": self.live_stats.get("NSO", 0)
+            "VS": self.live_stats.get("VS", 0)
+            # "NSO": ...  <-- ENTFERNT für die %-Berechnung
         }
         self.dash_controller.signals.update_factions.emit(faction_data)
 
-        # 2. PLAYER LISTE VORBEREITEN
+        # 3. PLAYER LISTE VORBEREITEN
         active_ids = self.active_players.keys()
         now = time.time()
         prepared_players = []
@@ -1781,8 +1783,7 @@ class DiorClientGUI:
             if not isinstance(p, dict) or p_id not in active_ids:
                 continue
 
-            # --- SERVER FILTER (NEU) ---
-            # Überspringt Spieler, die nicht auf dem gewählten Server sind
+            # --- SERVER FILTER ---
             if str(p.get("world_id", "0")) != current_wid:
                 continue
 
@@ -1798,16 +1799,14 @@ class DiorClientGUI:
             # Paket schnüren
             prepared_players.append({
                 "name": p_name,
-                "fac": p.get("faction", "NSO"),  # Wichtig für die Sortierung im Dashboard
+                "fac": p.get("faction", "NSO"),  # Hier ist NSO ok, damit man sieht wer es ist
                 "k": p.get("k", 0),
                 "d": p.get("d", 0),
                 "a": p.get("a", 0),
                 "active_min": active_min
             })
 
-        # 3. SORTIEREN & SENDEN
-        # Wir sortieren vor, senden aber ALLE Daten (kein [:20]),
-        # damit jede Fraktion ihre eigenen Top 16 anzeigen kann.
+        # 4. SORTIEREN & SENDEN
         prepared_players.sort(key=lambda x: x['k'], reverse=True)
 
         self.dash_controller.signals.update_top_list.emit(prepared_players)
