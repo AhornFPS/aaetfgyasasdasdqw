@@ -64,30 +64,44 @@ class DraggableChat(QTextBrowser):
         self._mutex = False
 
     def add_animated_message(self, html_msg):
-        """Fügt Nachrichten sicher hinzu ohne den Speicher zu gefährden."""
-        import os
+        """Fügt Nachrichten hinzu und registriert Bilder sofort im Dokument."""
         import re
+        from PyQt6.QtGui import QPixmap
 
-        # 1. Pfade finden
+        # 1. Alle Pfade extrahieren
         matches = re.findall(r'src="emote://([^"]+)"', html_msg)
+        doc = self.document()
 
         for path in matches:
             clean_path = path.replace('\\', '/')
+            if not os.path.exists(clean_path):
+                continue
+
+            url = QUrl(f"emote://{clean_path}")
+
+            # FALL A: Animation (GIF/WebP)
             if clean_path.lower().endswith((".gif", ".webp")):
                 if clean_path not in self.movies:
-                    if os.path.exists(clean_path):
-                        # Movie-Objekt erstellen
-                        m = QMovie(clean_path)
-                        if m.isValid():
-                            m.setScaledSize(QSize(28, 28))
-                            m.setCacheMode(QMovie.CacheMode.CacheAll)
-                            self.movies[clean_path] = m
+                    m = QMovie(clean_path)
+                    if m.isValid():
+                        m.setScaledSize(QSize(28, 28))
+                        m.setCacheMode(QMovie.CacheMode.CacheAll)
+                        self.movies[clean_path] = m
+                        m.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
+                        m.start()
 
-                            # WICHTIG: Connection mit Pfad-Bindung
-                            m.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
-                            m.start()
+                        # Sofort den ersten Frame registrieren, damit kein "Broken Icon" erscheint
+                        m.jumpToFrame(0)
+                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, m.currentPixmap())
 
-        # 2. Nachricht einfach anhängen (Qt kümmert sich um den Rest)
+            # FALL B: Statisches Bild (PNG/JPG)
+            else:
+                pix = QPixmap(clean_path)
+                if not pix.isNull():
+                    # Statische Bilder müssen nur einmal registriert werden
+                    doc.addResource(QTextDocument.ResourceType.ImageResource, url, pix)
+
+        # 2. Nachricht erst anhängen, wenn alle Ressourcen im Cache sind
         self.append(html_msg)
         self.moveCursor(QTextCursor.MoveOperation.End)
 
