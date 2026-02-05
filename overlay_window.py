@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QTextBrowser
 from PyQt6.QtGui import QCursor, QTextCursor # Wichtig für Scrolling
 from PyQt6.QtGui import QTextDocument, QTextCursor, QMovie, QPixmap
 from PyQt6.QtCore import QUrl, QSize
+from urllib.parse import unquote
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -54,10 +55,28 @@ class DraggableChat(QTextBrowser):
 
         self.movies = {}
 
-    def add_animated_message(self, html_msg):
+    @staticmethod
+    def _extract_local_emote_paths(html):
+        """Parst lokale file://-Bildpfade robust aus dem HTML."""
         import re
-        # Wir suchen nach den Pfaden zu den GIFs
-        matches = re.findall(r'src="file:///([^"]+)"', html_msg)
+
+        matches = re.findall(r'src="(file:///[^\"]+)"', html)
+        paths = []
+        for url in matches:
+            local_path = QUrl(url).toLocalFile()
+            if not local_path:
+                local_path = unquote(url.replace("file:///", "", 1))
+            paths.append(local_path.replace("\\", "/"))
+        return paths
+
+    def add_animated_message(self, html_msg):
+        # Erst einfügen, damit die Ressource im Dokument bereits existiert,
+        # bevor QMovie die Frames liefert.
+        self.append(html_msg)
+        self.moveCursor(QTextCursor.MoveOperation.End)
+
+        # Wir suchen nach den Pfaden zu den GIFs/WebPs
+        matches = self._extract_local_emote_paths(html_msg)
 
         for path in matches:
             clean_path = path.replace('\\', '/')
@@ -72,18 +91,14 @@ class DraggableChat(QTextBrowser):
                             movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
                             movie.start()
 
-        self.append(html_msg)
-        self.moveCursor(QTextCursor.MoveOperation.End)
-
     def scan_for_new_emotes(self):
         """Sucht im Dokument nach Image-Ressourcen und startet Animationen."""
         import os
         doc = self.document()
         # Wir gehen alle Bilder im Ressourcen-System des Dokuments durch
         # Aber einfacher: Wir suchen im HTML nach file-Pfaden
-        import re
-        # Dieser Regex findet ALLES zwischen src="file:/// und "
-        matches = re.findall(r'src="file:///([^"]+)"', self.toHtml())
+        # Dieser Helper parst lokale file://-Pfade inklusive URL-Encoding.
+        matches = self._extract_local_emote_paths(self.toHtml())
 
         for path in matches:
             clean_path = path.replace('\\', '/')
@@ -106,7 +121,7 @@ class DraggableChat(QTextBrowser):
         movie = self.movies.get(path)
         if movie:
             frame = movie.currentPixmap()
-            url = QUrl(f"file:///{path}")
+            url = QUrl.fromLocalFile(path)
 
             # Das Bild im Dokument-Ressourcen-Cache ersetzen
             self.document().addResource(QTextDocument.ResourceType.ImageResource, url, frame)
