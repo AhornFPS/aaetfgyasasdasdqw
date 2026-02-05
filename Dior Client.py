@@ -529,8 +529,29 @@ class DiorClientGUI:
                 for k in self.overlay_win.knife_labels:
                     k.hide()
 
+                active = self.config.get("twitch", {}).get("active", True)
+                self.overlay_win.update_twitch_visibility(active)
+
                 # Optional: Overlay ganz ausblenden (spart Ressourcen)
                 # self.overlay_win.hide()
+
+    def toggle_twitch_always(self, checked):
+        ui = self.ovl_config_win
+        if "twitch" not in self.config: self.config["twitch"] = {}
+        self.config["twitch"]["always_on"] = checked
+        self.save_config()
+
+        if checked:
+            ui.btn_twitch_always.setText("ALWAYS ON")
+            ui.btn_twitch_always.setStyleSheet("background-color: #004400; color: white; font-weight: bold;")
+        else:
+            ui.btn_twitch_always.setText("PLANETSIDE")
+            ui.btn_twitch_always.setStyleSheet("background-color: #440000; color: white; font-weight: bold;")
+
+        # Sofortige Aktualisierung im Overlay
+        if self.overlay_win:
+            active = self.config["twitch"].get("active", True)
+            self.overlay_win.update_twitch_visibility(active)
 
     # --- CROSSHAIR LOGIK (NEU) ---
     def browse_crosshair_qt(self):
@@ -892,6 +913,8 @@ class DiorClientGUI:
 
         # TEST MSG Button
         self.safe_connect(ui.btn_test_twitch.clicked, self.trigger_twitch_test)
+        #allways on
+        self.safe_connect(ui.btn_twitch_always.toggled, self.toggle_twitch_always)
 
         # MOVE UI Button
         # Wir machen daraus einen Toggle: Einmal klicken = Sichtbar machen, nochmal = Normal
@@ -1040,6 +1063,7 @@ class DiorClientGUI:
             "active": ui.btn_toggle_twitch.isChecked(),
             "channel": ui.ent_twitch_channel.text().strip(),
             "ignore_list": ui.ent_twitch_ignore.text().strip(),
+            "always_on": ui.btn_twitch_always.isChecked(),
             "x": ui.slider_twitch_x.value(),
             "y": ui.slider_twitch_y.value(),
             "w": ui.slider_twitch_w.value(),
@@ -1061,9 +1085,7 @@ class DiorClientGUI:
         # 2. Visuelle Darstellung (Position, Opacity, Font) aktualisieren
         # Das triggert die neue update_twitch_style Methode im Overlay
         self.update_twitch_visuals()
-
-        self.add_log("TWITCH: Settings saved and applied.")
-        self.add_log("TWITCH: Settings saved and applied.")
+        self.add_log("TWITCH: Settings saved (including Always On).")
 
     def browse_ps2_folder(self):
         """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
@@ -1644,6 +1666,17 @@ class DiorClientGUI:
         ui.slider_twitch_h.blockSignals(False)
         ui.spin_twitch_hold.blockSignals(False)  # NEU
 
+        is_always = twitch_conf.get("always_on", False)
+        ui.btn_twitch_always.setChecked(is_always)
+
+        # UI-Optik an den geladenen Zustand anpassen
+        if is_always:
+            ui.btn_twitch_always.setText("ALWAYS ON")
+            ui.btn_twitch_always.setStyleSheet("background-color: #004400; color: white; font-weight: bold;")
+        else:
+            ui.btn_twitch_always.setText("PLANETSIDE")
+            ui.btn_twitch_always.setStyleSheet("background-color: #440000; color: white; font-weight: bold;")
+
         # 3. Font
         current_font = str(twitch_conf.get("font_size", 12))
         ui.combo_twitch_font.setCurrentText(current_font)
@@ -1654,7 +1687,10 @@ class DiorClientGUI:
         self.overlay_win.set_chat_hold_time(twitch_conf.get("hold_time", 15))
         self.update_twitch_visuals()
 
-
+        if self.overlay_win:
+            active = twitch_conf.get("active", False)
+            # Prüft jetzt (Game-Running ODER Always-On)
+            self.overlay_win.update_twitch_visibility(active)
 
         self.add_log("SYS: Overlay configuration synchronized.")
 

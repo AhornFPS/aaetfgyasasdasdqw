@@ -403,8 +403,24 @@ class QtOverlay(QWidget):
         # Hintergrund für den Container (falls gewünscht)
         alpha = int((opacity / 100) * 255)
         self.chat_container.setStyleSheet(f"background-color: rgba(0, 0, 0, {alpha}); border-radius: 5px;")
+        enabled = True
+        if self.gui_ref:
+            enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
+        self.update_twitch_visibility(enabled)
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff"):
+
+        enabled = True
+        if self.gui_ref:
+            enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
+            game_running = getattr(self.gui_ref, 'ps2_running', False)
+            # Wenn Spiel nicht läuft und kein Edit-Mode -> Abbruch
+            if not game_running and not self.edit_mode:
+                return
+
+        if not enabled and not self.edit_mode:
+            return
+
         self.chat_container.show()
 
         # Hol dir die aktuellen Werte (falls sie in update_twitch_style gespeichert wurden)
@@ -1096,3 +1112,21 @@ class QtOverlay(QWidget):
             self.safe_move(self.crosshair_label, tx - (self.crosshair_label.width() // 2),
                            ty - (self.crosshair_label.height() // 2))
             self.crosshair_label.show()
+
+    def update_twitch_visibility(self, enabled):
+        """Entscheidet, ob der Chat-Container wirklich sichtbar sein darf."""
+        game_running = False
+        always_on = False
+
+        if self.gui_ref:
+            game_running = getattr(self.gui_ref, 'ps2_running', False)
+            always_on = self.gui_ref.config.get("twitch", {}).get("always_on", False)
+
+        # Die goldene Regel:
+        # Sichtbar wenn (Aktiviert UND (Spiel läuft ODER Always-On)) ODER (Wir editieren gerade)
+        should_show = (enabled and (game_running or always_on)) or self.edit_mode
+
+        if should_show:
+            self.chat_container.show()
+        else:
+            self.chat_container.hide()

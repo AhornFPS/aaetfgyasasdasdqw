@@ -1069,6 +1069,13 @@ class OverlayConfigWindow(QWidget):
         self.ent_twitch_channel.setPlaceholderText("Enter Twitch channel name...")
         chan_row.addWidget(self.ent_twitch_channel)
 
+        # --- NEU: ALWAYS ON BUTTON ---
+        self.btn_twitch_always = QPushButton("ALWAYS OFF")
+        self.btn_twitch_always.setCheckable(True)
+        self.btn_twitch_always.setFixedWidth(100)
+        self.btn_twitch_always.setStyleSheet("background-color: #440000; color: white; font-weight: bold;")
+        chan_row.addWidget(self.btn_twitch_always)
+
         self.btn_connect_twitch = QPushButton("CONNECT")
         self.btn_connect_twitch.setFixedWidth(100)
         self.btn_connect_twitch.setStyleSheet(
