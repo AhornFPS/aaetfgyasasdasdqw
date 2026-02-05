@@ -83,7 +83,7 @@ class DraggableChat(QTextBrowser):
                     if clean_path not in main_ovl.movie_cache:
                         m = QMovie(clean_path)
                         if m.isValid():
-                            m.setScaledSize(QSize(28, 28))
+                            #m.setScaledSize(QSize(28, 28))
                             m.setCacheMode(QMovie.CacheMode.CacheAll)
                             m.start()
                             main_ovl.movie_cache[clean_path] = m
@@ -91,6 +91,8 @@ class DraggableChat(QTextBrowser):
                     movie = main_ovl.movie_cache.get(clean_path)
                     if movie:
                         self.movies[clean_path] = movie
+                        if main_ovl:
+                            main_ovl.cache_usage_timestamps[clean_path] = time.time()
                         # Jede Nachricht hört auf den globalen Taktgeber
                         movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
                         doc.addResource(QTextDocument.ResourceType.ImageResource, url, movie.currentPixmap())
@@ -139,8 +141,11 @@ class ChatMessageWidget(DraggableChat):  # Wir erben von deinem Browser
         super().__init__(parent)
         self.hold_time = hold_time
 
+        self.setStyleSheet("background: transparent; border: none;")
+
         # Opacity Effekt für die Animation
         self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.opacity_effect.setOpacity(1.0)  # <--- Das hier erzwingt volle Schärfe von Anfang an
         self.setGraphicsEffect(self.opacity_effect)
 
         # Inhalt setzen
@@ -257,6 +262,13 @@ class QtOverlay(QWidget):
         # Hier speichern wir alle geladenen Bilder
         self.pixmap_cache = {}
         self.movie_cache = {}
+
+        self.cache_usage_timestamps = {}  # NEU: Speichert {pfad: zeitstempel}
+
+        # GC-Timer: Alle 2 Minuten prüfen wir auf "Müll"
+        self.gc_timer = QTimer(self)
+        self.gc_timer.timeout.connect(self.run_garbage_collection)
+        self.gc_timer.start(120000)  # 120.000 ms = 2 Minuten
 
         # 1. FENSTER-KONFIGURATION
         self.setWindowFlags(
@@ -378,29 +390,59 @@ class QtOverlay(QWidget):
         self.auto_hide_timer.setSingleShot(True)
         self.auto_hide_timer.timeout.connect(self.fade_out_chat)
 
+    def run_garbage_collection(self):
+        """Löscht Ressourcen, die länger als 20 Minuten nicht genutzt wurden."""
+        now = time.time()
+        max_idle_time = 20 * 60  # 20 Minuten in Sekunden
 
+        # Listen für zu löschende Pfade
+        to_remove = []
 
+        for path, last_used in self.cache_usage_timestamps.items():
+            if now - last_used > max_idle_time:
+                to_remove.append(path)
 
+        if not to_remove:
+            return
+
+        for path in to_remove:
+            # 1. Aus Movie-Cache entfernen (falls vorhanden)
+            if path in self.movie_cache:
+                movie = self.movie_cache.pop(path)
+                movie.stop()  # WICHTIG: Animation stoppen
+                movie.deleteLater()  # Ressourcen freigeben
+
+            # 2. Aus Pixmap-Cache entfernen
+            if path in self.pixmap_cache:
+                self.pixmap_cache.pop(path)
+
+            # 3. Zeitstempel-Eintrag löschen
+            if path in self.cache_usage_timestamps:
+                del self.cache_usage_timestamps[path]
+
+        self.gui_ref.add_log(f"GC: {len(to_remove)} ungenutzte Ressourcen aus RAM gelöscht.")
 
     def notify_chat_moved(self, x, y):
         # Signal an Controller senden
         self.signals.item_moved.emit("twitch", x, y)
 
     def update_twitch_style(self, x, y, w, h, opacity, font_size):
-        # Wir bewegen den Container, nicht mehr den einzelnen Browser
         self.chat_container.setGeometry(int(x), int(y), int(w), int(h))
-
-        # Speichere Font-Size für die neuen Widgets
         self.current_chat_font_size = font_size
-        self.current_chat_opacity = opacity
 
-        # Hintergrund für den Container (falls gewünscht)
         alpha = int((opacity / 100) * 255)
-        self.chat_container.setStyleSheet(f"background-color: rgba(0, 0, 0, {alpha}); border-radius: 5px;")
-        enabled = True
+
+        # Hintergrund komplett auf transparent setzen
+        self.chat_container.setStyleSheet(f"""
+            QWidget {{ 
+                background-color: rgba(0, 0, 0, {alpha}); 
+                border-radius: 5px; 
+            }}
+        """)
+
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
-        self.update_twitch_visibility(enabled)
+            self.update_twitch_visibility(enabled)
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False): # <--- is_test hinzugefügt
         # 1. Sichtbarkeit prüfen
@@ -422,12 +464,19 @@ class QtOverlay(QWidget):
         # Container sicherheitshalber zeigen
         self.chat_container.show()
 
+        safe_color = self.get_readable_color(color)
+
         # Hol dir die aktuellen Werte (falls sie in update_twitch_style gespeichert wurden)
         f_size = getattr(self, 'current_chat_font_size', 12)
         full_html = f"""
-                <div style="font-size: {f_size}pt; line-height: 120%;">
-                    <span style="color: {color}; font-weight: bold;">{user}:</span>
-                    <span style="color: #ffffff;"> {html_msg}</span>
+                <div style="font-size: {f_size}pt; line-height: 125%; font-weight: 800;">
+                    <span style="color: {safe_color}; font-weight: 900; letter-spacing: 0.5px;
+                                 text-shadow: 0px 0px 8px {safe_color}, 1px 1px 0px #000, -1px -1px 0px #000;">
+                        {user}:
+                    </span>
+                    <span style="color: #ffffff; text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;">
+                        {html_msg}
+                    </span>
                 </div>
                 """
 
@@ -439,6 +488,26 @@ class QtOverlay(QWidget):
         if self.chat_layout.count() > 50:
             item = self.chat_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
+
+    def get_readable_color(self, hex_color):
+        """Prüft die Helligkeit und hellt dunkle Farben auf."""
+        hex_color = hex_color.lstrip('#')
+        # Von Hex zu RGB
+        r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+
+        # Perzeptive Helligkeit berechnen
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+
+        # Schwellenwert: Alles unter 120 (von 255) wird aufgehellt
+        if luminance < 120:
+            # Wir addieren einen festen Wert, um die Farbe "pastelliger"
+            # und leuchtender zu machen, ohne den Farbton zu verlieren
+            r = min(255, r + 80)
+            g = min(255, g + 80)
+            b = min(255, b + 80)
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        return f"#{hex_color}"
 
     def fade_out_chat(self):
         """Versteckt den Chat oder leert ihn."""
@@ -469,21 +538,18 @@ class QtOverlay(QWidget):
 
     # --- CACHE LOGIK ---
     def get_cached_pixmap(self, path):
-        """Lädt Bild aus RAM oder von Disk, falls neu."""
         if not path or not os.path.exists(path):
-            return QPixmap()  # Leeres Pixmap zurückgeben
+            return QPixmap()
 
-        # Wenn Pfad noch nicht im Cache ist -> Laden
         if path not in self.pixmap_cache:
             pm = QPixmap(path)
             if not pm.isNull():
                 self.pixmap_cache[path] = pm
             else:
-                # Defektes Bild, wir speichern ein leeres Pixmap, damit wir nicht immer wieder versuchen zu laden
-                self.pixmap_cache[path] = QPixmap()
                 return QPixmap()
 
-        # Aus Cache zurückgeben
+        # Zeitstempel aktualisieren
+        self.cache_usage_timestamps[path] = time.time()
         return self.pixmap_cache[path]
 
     def clear_cache(self):
@@ -605,18 +671,17 @@ class QtOverlay(QWidget):
         if img_path.lower().endswith(".gif"):
             # GIFs cachen wir NICHT als Pixmap, da sie animiert sind (QMovie).
             # Das ist okay, da GIFs selten sind im Vergleich zu Hitmarkern.
-            movie = QMovie(img_path)
-            if movie.isValid():
-                movie.jumpToFrame(0)
-                base_size = movie.currentImage().size()
-                final_scale = self.ui_scale * scale
-                if final_scale != 1.0 and not base_size.isEmpty():
-                    w = int(base_size.width() * final_scale)
-                    h = int(base_size.height() * final_scale)
-                    movie.setScaledSize(QSize(w, h))
+            if img_path not in self.movie_cache:
+                m = QMovie(img_path)
+                m.setCacheMode(QMovie.CacheMode.CacheAll)
+                m.start()
+                self.movie_cache[img_path] = m
 
-                self.img_label.setMovie(movie)
-                movie.start()
+            movie = self.movie_cache[img_path]
+            self.img_label.setMovie(movie)
+            # Wichtig: Das Movie muss für das neue Label ggf. neu gestartet/gezeigt werden
+            movie.jumpToFrame(0)
+            movie.start()
         else:
             # --- CACHE GENUTZT (Statische Bilder) ---
             pixmap = self.get_cached_pixmap(img_path)

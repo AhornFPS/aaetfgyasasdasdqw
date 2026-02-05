@@ -142,7 +142,7 @@ class EmoteManager:
                 # FIX: IMMER Absoluter Pfad + Forward Slashes
                 abs_path = os.path.abspath(filepath).replace("\\", "/")
                 # Wir nutzen ein Custom-Prefix 'emote://', um Qt zu zwingen, NICHT auf der Festplatte zu suchen
-                return f'<img src="emote://{abs_path}" height="28">'
+                return f'<img src="emote://{abs_path}">'
 
         # 2. Check: Falls nicht im Dictionary, schau manuell im Ordner nach (z.B. nach Neustart)
         for ext in ['gif', 'webp', 'png']:
@@ -150,7 +150,7 @@ class EmoteManager:
             if os.path.exists(test_path):
                 self.emote_files[code] = test_path
                 abs_path = os.path.abspath(test_path).replace("\\", "/")
-                return f'<img src="emote://{abs_path}" height="28">'
+                return f'<img src="emote://{abs_path}">'
 
         # 3. Download: Falls gar nicht vorhanden
         url = self.emote_urls[code]
@@ -174,7 +174,7 @@ class EmoteManager:
 
                 # FIX: Auch beim ersten Download absoluten Pfad erzwingen
                 abs_path = os.path.abspath(filepath).replace("\\", "/")
-                return f'<img src="emote://{abs_path}" height="28">'
+                return f'<img src="emote://{abs_path}">'
         except Exception:
             pass
 
