@@ -3056,10 +3056,7 @@ class DiorClientGUI:
                     # GUI Feedback
                     self.launcher_win.lbl_info.setText(f"SUCCESS: {mode.upper()} INITIALIZED. CLOSING...")
 
-                    # --- KORREKTUR: PyQt6 Weg statt self.root.after ---
-                    # Wir nutzen QTimer.singleShot für die Verzögerung
-                    from PyQt6.QtCore import QTimer
-                    QTimer.singleShot(2000, self.launcher_win.hide)
+
 
                 else:
                     self.add_log("ERR: LaunchPad.exe not found.")
