@@ -122,7 +122,7 @@ class TelemetryGraph(QWidget):
         super().__init__()
         self.setFixedHeight(150)
         self.pop_history = [0] * 100
-        self.max_pop = 1500
+        # self.max_pop entfernt, da wir es jetzt dynamisch berechnen
 
     def update_history(self, new_val):
         self.pop_history.append(new_val)
@@ -135,29 +135,70 @@ class TelemetryGraph(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
 
-        painter.fillRect(0, 0, w, h, QColor("#050505"))
+        # Hintergrund
+        painter.fillRect(0, 0, w, h, QColor("#121212"))
+
+        # Rahmen
         painter.setPen(QPen(QColor("#333"), 1))
         painter.drawRect(0, 0, w, h)
 
-        if not self.pop_history: return
+        data = self.pop_history
+        if not data: return
 
+        # --- DYNAMISCHE SKALA BERECHNEN ---
+        # Maximum finden (mindestens 100, damit der Graph bei 0 Spielern nicht spinnt)
+        max_val = max(max(data), 100)
+        # +10% Puffer nach oben
+        max_val = int(max_val * 1.1)
+
+        # --- GRID & LABELS ZEICHNEN ---
+        grid_pen = QPen(QColor(40, 40, 40), 1, Qt.PenStyle.DashLine)
+        text_pen = QPen(QColor(100, 100, 100))
+        painter.setFont(self.font())
+
+        steps = 4
+        for i in range(1, steps + 1):
+            val = int(max_val * (i / steps))
+            # Y Position berechnen (invertiert: h ist unten)
+            y_pos = h - (val / max_val * h)
+
+            # Linie
+            painter.setPen(grid_pen)
+            painter.drawLine(0, int(y_pos), w, int(y_pos))
+
+            # Text
+            painter.setPen(text_pen)
+            painter.drawText(5, int(y_pos) - 2, str(val))
+
+        # --- GRAPH LINIE ZEICHNEN ---
         points = []
-        step_x = w / (len(self.pop_history) - 1)
-        for i, val in enumerate(self.pop_history):
+        step_x = w / (len(data) - 1) if len(data) > 1 else w
+
+        for i, val in enumerate(data):
             x = i * step_x
-            y = h - (val * (h / self.max_pop))
+            # Normalisieren auf max_val
+            normalized = val / max(1, max_val)
+            y = h - (normalized * h)
+            # Begrenzen auf Canvas
             y = max(0, min(y, h))
             points.append(QPointF(x, y))
 
-        painter.setPen(QPen(QColor("#00f2ff"), 2))
-        painter.drawPolyline(points)
+        # Linie
+        path_pen = QPen(QColor("#00f2ff"), 2)
+        painter.setPen(path_pen)
 
+        if len(points) > 1:
+            painter.drawPolyline(points)
+
+        # Füllung unter der Linie
         painter.setPen(Qt.PenStyle.NoPen)
         fill_color = QColor("#00f2ff")
         fill_color.setAlpha(30)
         painter.setBrush(QBrush(fill_color))
-        poly_points = [QPointF(0, h)] + points + [QPointF(w, h)]
-        painter.drawPolygon(poly_points)
+
+        if len(points) > 1:
+            poly_points = [QPointF(0, h)] + points + [QPointF(w, h)]
+            painter.drawPolygon(poly_points)
 
 
 class FactionBox(QFrame):
@@ -212,7 +253,7 @@ class FactionBox(QFrame):
 
     def update_table(self, players):
         self.table.clearContents()
-        # Sortiert die empfangene Liste und nimmt die Top 10
+        # Sortiert die empfangene Liste und nimmt die Top 15
         top_players = sorted(players, key=lambda x: x.get('k', 0), reverse=True)[:15]
 
         for row, p in enumerate(top_players):
@@ -265,8 +306,6 @@ class DashboardWidget(QWidget):
         header_container = QWidget()
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
-
-        # HIER WAREN FRÜHER DIE BUTTONS (JETZT ENTFERNT)
 
         header_layout.addStretch()
 

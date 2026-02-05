@@ -212,8 +212,23 @@ class DiorClientGUI:
         self.qt_app.setStyle("Fusion")
 
         # Unter-Fenster erstellen
+        # Unter-Fenster erstellen
         self.dash_window = dashboard_qt.DashboardWidget(self)
         self.dash_controller = dashboard_qt.DashboardController(self.dash_window)
+
+        # --- FIX START: Dropdown mit Config synchronisieren ---
+        # Wir suchen den Namen zur geladenen ID (z.B. "10" -> "Wainwright (EU)")
+        init_server_name = self.get_server_name_by_id(self.current_world_id)
+
+        # Wir setzen das Dropdown auf diesen Namen, ohne das Signal zu feuern (blockSignals)
+        if hasattr(self.dash_window, 'server_combo'):
+            self.dash_window.server_combo.blockSignals(True)
+            idx = self.dash_window.server_combo.findText(init_server_name)
+            if idx >= 0:
+                self.dash_window.server_combo.setCurrentIndex(idx)
+            self.dash_window.server_combo.blockSignals(False)
+        # --- FIX ENDE ---
+
         self.launcher_win = launcher_qt.LauncherWidget(self)
         self.char_win = characters_qt.CharacterWidget(self)
         self.ovl_config_win = overlay_config_qt.OverlayConfigWindow(self)
