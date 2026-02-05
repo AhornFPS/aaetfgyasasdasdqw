@@ -283,6 +283,18 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
 
+    def save_global_event_duration(self):
+        """Speichert die globale Event-Dauer."""
+        try:
+            val = int(self.ovl_config_win.ent_global_duration.text())
+        except ValueError:
+            val = 3000
+            self.ovl_config_win.ent_global_duration.setText("3000")
+
+        self.config["event_global_duration"] = val
+        self.save_config()
+        self.add_log(f"SYS: Globale Event-Dauer auf {val}ms gesetzt.")
+
     def toggle_killfeed_visibility(self):
         """Schaltet den Killfeed an/aus."""
         ui = self.ovl_config_win
@@ -714,6 +726,8 @@ class DiorClientGUI:
         ui.signals.setting_changed.connect(
             lambda key, val: self.load_event_ui_data(val) if key == "event_selection" else None
         )
+        if hasattr(ui, 'ent_global_duration'):
+            ui.ent_global_duration.editingFinished.connect(self.save_global_event_duration)
 
         # Live-Preview bei Texteingabe
         ui.ent_evt_img.textChanged.connect(lambda text: ui.update_preview_image(get_asset_path(text)))
@@ -1228,6 +1242,11 @@ class DiorClientGUI:
 
         # --- QUEUE BUTTON ---
         queue_active = self.config.get("event_queue_active", True)
+
+        # Globalen Timer laden (Standard 3000ms)
+        g_dur = self.config.get("event_global_duration", 3000)
+        ui.ent_global_duration.setText(str(g_dur))
+
         ui.btn_queue_toggle.setChecked(queue_active)
 
         if queue_active:
@@ -1880,41 +1899,60 @@ class DiorClientGUI:
             self.overlay_enabled = True
             self.add_log("Overlay: aktiviert.")
 
-
-
-
     def trigger_overlay_event(self, event_type):
-        """Triggert Bild/Sound im Overlay. Findet Config-Eintrag robust & erlaubt Sound-Only."""
+        """Triggert Bild/Sound im Overlay.
+           Logik:
+           - Queue AN: Individuelle Dauer > Globale Dauer
+           - Queue AUS: Globale Dauer überschreibt immer (Force Override)
+        """
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
         # 1. CONFIG-DATEN SUCHEN (ROBUST & CASE-INSENSITIVE)
         events_dict = self.config.get("events", {})
-        # Erst exakt suchen ("Hitmarker")
         event_data = events_dict.get(event_type)
 
-        # Falls nicht gefunden, Case-Insensitive suchen ("hitmarker" -> "Hitmarker")
+        # Fallback Suche (Case-Insensitive)
         if not event_data:
             for key, val in events_dict.items():
                 if key.lower() == event_type.lower():
                     event_data = val
                     break
 
-        # Wenn immer noch nichts da ist, abbrechen
         if not event_data:
             return
 
-        # 2. KOORDINATEN & DAUER LADEN
+        # 2. KOORDINATEN & STATUS LADEN
         try:
             abs_x = int(event_data.get("x", event_data.get("x_offset", 0)))
             abs_y = int(event_data.get("y", event_data.get("y_offset", 0)))
-            dur = int(event_data.get("duration", 3000))
-            # NEU: Scale laden (Standard 1.0)
             scale = float(event_data.get("scale", 1.0))
         except (ValueError, TypeError):
-            abs_x, abs_y, dur, scale = 0, 0, 3000, 1.0
+            abs_x, abs_y, scale = 0, 0, 1.0
 
-        # 3. BILD-PFAD ERMITTELN (Auch leere Pfade sind ok)
+        # --- NEUE DAUER-LOGIK (DURATION) ---
+        queue_active = self.config.get("event_queue_active", True)
+        global_dur = int(self.config.get("event_global_duration", 3000))
+        specific_dur = int(event_data.get("duration", 0))
+
+
+        if not queue_active:
+            # MODUS: QUEUE AUS -> Globaler Timer erzwingen!
+            # Wir ignorieren hier bewusst 'specific_dur', damit alle Events
+            # gleich lange stehen bleiben (wie gewünscht).
+            dur = global_dur
+        else:
+            # MODUS: QUEUE AN -> Individuelle Dauer hat Vorrang
+            if specific_dur > 0:
+                dur = specific_dur
+            else:
+                dur = global_dur  # Fallback
+
+
+        if (event_type.lower() == "hitmarker"):
+            dur = specific_dur
+
+        # 3. BILD-PFAD ERMITTELN
         img_path = ""
         img_name = event_data.get("img")
         if img_name:
@@ -1924,7 +1962,6 @@ class DiorClientGUI:
 
         # 4. SOUND-PFAD ERMITTELN
         sound_path = ""
-        # Prüfen auf Sound-System (Global oder Class-Attribut)
         has_sound = globals().get("HAS_SOUND", False)
         if has_sound:
             snd_name = event_data.get("snd")
@@ -1936,7 +1973,7 @@ class DiorClientGUI:
         # 5. FLAG SETZEN: Ist es ein Hitmarker?
         is_hitmarker = (event_type.lower() == "hitmarker")
 
-        # 6. SIGNAL SENDEN (Wenn Bild ODER Sound existiert)
+        # 6. SIGNAL SENDEN
         if img_path or sound_path:
             self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, is_hitmarker)
 

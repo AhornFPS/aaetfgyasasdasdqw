@@ -8,16 +8,16 @@ from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
 from PyQt6.QtGui import QColor, QPixmap
 
 
-# --- SIGNALE ---
+# --- SIGNALS ---
 class OverlaySignals(QObject):
-    setting_changed = pyqtSignal(str, object)  # Key, Wert
-    test_trigger = pyqtSignal(str)  # Event-Name für Test
-    edit_mode_toggled = pyqtSignal(str)  # Welches HUD Element verschoben wird
+    setting_changed = pyqtSignal(str, object)  # Key, Value
+    test_trigger = pyqtSignal(str)  # Event Name for Test
+    edit_mode_toggled = pyqtSignal(str)  # Which HUD element is being moved
 
 
 # --- STYLESHEET ---
 OVERLAY_STYLE = """
-/* --- HAUPTFENSTER & TABS --- */
+/* --- MAIN WINDOW & TABS --- */
 QWidget#Overlay { background-color: #1a1a1a; }
 
 QTabWidget::pane { 
@@ -49,7 +49,7 @@ QTabBar::tab:hover:!selected {
     color: #eee; 
 }
 
-/* --- CONTAINER & GRUPPEN --- */
+/* --- CONTAINERS & GROUPS --- */
 QFrame#Group { 
     background-color: #222; 
     border: 1px solid #333; 
@@ -70,7 +70,7 @@ QLabel#SubText {
     font-size: 11px; 
 }
 
-/* --- EINGABEFELDER --- */
+/* --- INPUT FIELDS --- */
 QLineEdit, QComboBox {
     background-color: #111;
     border: 1px solid #444;
@@ -89,11 +89,11 @@ QPushButton {
     background-color: #2a2a2a;
     border: 1px solid #444;
     color: #ddd;
-    padding: 8px 15px;      /* Mehr Innenabstand */
+    padding: 8px 15px;      /* More padding */
     border-radius: 4px;
     font-weight: bold;
     font-size: 11px;
-    min-height: 20px;       /* Mindesthöhe damit sie massiver wirken */
+    min-height: 20px;       /* Min height to look robust */
 }
 
 QPushButton:hover {
@@ -108,9 +108,9 @@ QPushButton:pressed {
     border-color: #00f2ff;
 }
 
-/* --- SPEZIAL-BUTTONS (TARGETED BY ID) --- */
+/* --- SPECIAL BUTTONS (TARGETED BY ID) --- */
 
-/* MOVE UI / EDIT (Kräftiges Blau) */
+/* MOVE UI / EDIT (Strong Blue) */
 QPushButton#EditBtn { 
     background-color: #004080; 
     color: white; 
@@ -122,7 +122,7 @@ QPushButton#EditBtn:hover {
     border-color: #00f2ff; 
 }
 
-/* TEST BUTTON (Dunkelgrau) */
+/* TEST BUTTON (Dark Grey) */
 QPushButton#TestBtn { 
     background-color: #333; 
     color: #eee; 
@@ -134,7 +134,7 @@ QPushButton#TestBtn:hover {
     border-color: #ccc; 
 }
 
-/* SAVE BUTTON (Dunkelgrün) */
+/* SAVE BUTTON (Dark Green) */
 QPushButton#SaveBtn { 
     background-color: #004400; 
     color: #00ff00; 
@@ -147,7 +147,7 @@ QPushButton#SaveBtn:hover {
     color: white; 
 }
 
-/* RECORD BUTTON (Orange/Rot) */
+/* RECORD BUTTON (Orange/Red) */
 QPushButton#RecordBtn { 
     background-color: #883300; 
     color: white; 
@@ -158,7 +158,7 @@ QPushButton#RecordBtn:hover {
     border-color: #ff8c00; 
 }
 
-/* CLEAR BUTTON (Sehr dunkel) */
+/* CLEAR BUTTON (Very Dark) */
 QPushButton#ClearBtn { 
     background-color: #1a1a1a; 
     color: #888; 
@@ -170,7 +170,7 @@ QPushButton#ClearBtn:hover {
     color: #ccc;
 }
 
-/* COLOR PICKER (Lila) */
+/* COLOR PICKER (Purple) */
 QPushButton#ColorBtn { 
     background-color: #440088; 
     color: white; 
@@ -193,11 +193,11 @@ QLabel#PreviewBox, QLabel#AspectRatioLabel {
 
 # --- HELPER CLASS: RESPONSIVE IMAGE LABEL ---
 class AspectRatioLabel(QLabel):
-    """Ein Label, das sein Bild proportional skaliert, wenn sich die Fenstergröße ändert."""
+    """A label that scales its image proportionally when the window size changes."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(1, 1)  # Wichtig, damit es auch kleiner werden kann
+        self.setMinimumSize(1, 1)  # Important so it can shrink
         self.setScaledContents(False)
         self.pixmap_cache = None
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -214,7 +214,7 @@ class AspectRatioLabel(QLabel):
 
     def update_scaled(self):
         if self.pixmap_cache:
-            # Skaliert das Bild auf die aktuelle Größe des Labels (KeepAspectRatio)
+            # Scale image to current label size (KeepAspectRatio)
             scaled = self.pixmap_cache.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio,
                                               Qt.TransformationMode.SmoothTransformation)
             super().setPixmap(scaled)
@@ -229,14 +229,14 @@ class OverlayConfigWindow(QWidget):
         self.setObjectName("Overlay")
         self.resize(1150, 850)
 
-        # Stylesheet direkt hier laden
+        # Load Stylesheet directly here
         self.setStyleSheet(OVERLAY_STYLE)
 
         self.signals = OverlaySignals()
 
         layout = QVBoxLayout(self)
 
-        # Das Herzstück: Das Tab-System
+        # The Core: The Tab System
         self.tabs = QTabWidget()
 
         # --- TAB 1: IDENTITY ---
@@ -271,7 +271,7 @@ class OverlayConfigWindow(QWidget):
 
         layout.addWidget(self.tabs)
 
-    # --- TAB SETUP METHODEN ---
+    # --- TAB SETUP METHODS ---
 
     def setup_identity_tab(self):
         layout = QVBoxLayout(self.tab_ident)
@@ -329,48 +329,70 @@ class OverlayConfigWindow(QWidget):
         self.check_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 16px; padding: 10px;")
         m_layout.addWidget(self.check_master)
 
-        layout.addStretch()  # Drückt alles nach oben
+        layout.addStretch()  # Push everything up
         layout.addWidget(master_box)
 
     def setup_events_tab(self):
         layout = QVBoxLayout(self.tab_events)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        # --- 1. GLOBAL CONTROLS (Oben) ---
+        # --- 1. GLOBAL CONTROLS (Top) ---
         global_ctrl_layout = QHBoxLayout()
 
-        # Queue Toggle
+        # Queue Toggle Button
         self.btn_queue_toggle = QPushButton("QUEUE: ON")
         self.btn_queue_toggle.setCheckable(True)
         self.btn_queue_toggle.setChecked(True)
+        self.btn_queue_toggle.setFixedHeight(40)
+        # Style is set here initially, later overridden by controller
         self.btn_queue_toggle.setStyleSheet(
             "background-color: #004400; color: white; font-weight: bold; padding: 10px;")
 
-        # Bulk Action
-        self.btn_apply_all = QPushButton("APPLY LAYOUT TO ALL (Except Hitmarker)")
-        self.btn_apply_all.setStyleSheet("background-color: #552200; color: #ffdddd; padding: 10px;")
-
         global_ctrl_layout.addWidget(self.btn_queue_toggle)
+
+        # --- NEW: Global Timer Input (For Queue: OFF mode) ---
+        lbl_g_timer = QLabel("If Queue is off or no time set (ms):")
+        lbl_g_timer.setStyleSheet("color: #aaa; margin-left: 15px; font-size: 11px;")
+        global_ctrl_layout.addWidget(lbl_g_timer)
+
+        self.ent_global_duration = QLineEdit("3000")
+        self.ent_global_duration.setFixedWidth(60)
+        self.ent_global_duration.setToolTip("How long an event is displayed when the Queue is OFF (Fallback).")
+        self.ent_global_duration.setStyleSheet(
+            "background-color: #0a141d; color: #00f2ff; border: 1px solid #333; padding: 5px;")
+        global_ctrl_layout.addWidget(self.ent_global_duration)
+
+        # Bulk Action (Right aligned or after)
+        global_ctrl_layout.addStretch()  # Push rest to right
+
+        self.btn_apply_all = QPushButton("APPLY LAYOUT TO ALL")
+        self.btn_apply_all.setToolTip("Copies position and scale of the current event to ALL others.")
+        self.btn_apply_all.setStyleSheet("background-color: #442200; color: #ffdddd; padding: 8px; border-radius: 4px;")
+        self.btn_apply_all.setFixedHeight(40)
+
         global_ctrl_layout.addWidget(self.btn_apply_all)
         layout.addLayout(global_ctrl_layout)
 
-        # --- 2. EVENT SELECTION GRID (Mitte) ---
+        # --- 2. EVENT SELECTION GRID (Middle) ---
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("background-color: #1a1a1a; border: none;")
 
         grid_widget = QWidget()
         grid_layout = QHBoxLayout(grid_widget)
-        grid_layout.setSpacing(5)
+        grid_layout.setSpacing(10)
+        grid_layout.setContentsMargins(0, 10, 0, 10)
 
         self.event_categories = {
             "STANDARD": ["Kill", "Headshot", "Death", "Hitmarker", "Team Kill", "Team Kill Victim"],
             "STREAKS": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
             "MULTI KILL": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill",
                            "Holy Shit"],
-            "SPECIAL": ["Bounty Kill", "Domination", "Revenge","Infil Kill", "Killstreak Stop", "Nade Kill", "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled",
+            "SPECIAL": ["Bounty Kill", "Domination", "Revenge", "Infil Kill", "Killstreak Stop", "Nade Kill",
+                        "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled",
                         "Spitfire Kill", "Gunner Kill"],
-            "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction","Mine Kill"],
+            "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction",
+                        "Mine Kill"],
             "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
                            "Alert Win"],
             "SYSTEM": ["Login TR", "Login NC", "Login VS", "Login NSO"]
@@ -380,20 +402,26 @@ class OverlayConfigWindow(QWidget):
 
         for cat_name, items in self.event_categories.items():
             cat_box = QFrame(objectName="Group")
+            cat_box.setStyleSheet(
+                "QFrame#Group { background-color: #202020; border: 1px solid #333; border-radius: 4px; }")
             cat_vbox = QVBoxLayout(cat_box)
             cat_vbox.setContentsMargins(5, 5, 5, 5)
+            cat_vbox.setSpacing(2)
 
             lbl_cat = QLabel(cat_name)
-            lbl_cat.setStyleSheet("color: #00f2ff; font-weight: bold; font-size: 10px; border-bottom: 1px solid #333;")
+            lbl_cat.setStyleSheet(
+                "color: #00f2ff; font-weight: bold; font-size: 11px; border-bottom: 1px solid #444; padding-bottom: 4px; margin-bottom: 4px;")
             lbl_cat.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cat_vbox.addWidget(lbl_cat)
 
             for item in items:
                 btn = QPushButton(item)
+                # Text left-aligned for better readability in list
                 btn.setStyleSheet("""
-                    QPushButton { background-color: #1a1a1a; color: #ccc; border: none; padding: 4px; font-size: 11px; }
-                    QPushButton:hover { background-color: #00f2ff; color: black; }
+                    QPushButton { background-color: transparent; color: #ccc; border: none; padding: 3px; text-align: left; }
+                    QPushButton:hover { background-color: #00f2ff; color: black; border-radius: 2px; }
                 """)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn.clicked.connect(lambda _, x=item: self.select_event(x))
                 cat_vbox.addWidget(btn)
                 self.event_buttons[item] = btn
@@ -402,82 +430,109 @@ class OverlayConfigWindow(QWidget):
             grid_layout.addWidget(cat_box)
 
         scroll.setWidget(grid_widget)
-        layout.addWidget(scroll, 3)
+        layout.addWidget(scroll, 1)  # Stretch factor 1
 
-        # --- 3. EDIT AREA (Unten) ---
+        # --- 3. EDIT AREA (Bottom) ---
         edit_box = QFrame(objectName="Group")
+        edit_box.setStyleSheet("QFrame#Group { background-color: #222; border-top: 2px solid #333; }")
         edit_layout = QVBoxLayout(edit_box)
+        edit_layout.setContentsMargins(10, 10, 10, 10)
 
         self.lbl_editing = QLabel("EDITING: NONE")
-        self.lbl_editing.setStyleSheet("color: #00ff00; font-size: 16px; font-weight: bold;")
+        self.lbl_editing.setStyleSheet("color: #00ff00; font-size: 16px; font-weight: bold; margin-bottom: 5px;")
         edit_layout.addWidget(self.lbl_editing)
 
-        # Container Split: Links Input, Rechts Preview
+        # Container Split: Left Inputs, Right Preview
         editor_split = QHBoxLayout()
 
-        # --- LINKS: INPUTS ---
+        # --- LEFT: INPUTS ---
         input_container = QWidget()
         input_layout = QVBoxLayout(input_container)
-        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setContentsMargins(0, 0, 10, 0)  # Some spacing to right
+        input_layout.setSpacing(10)
 
-        # Image & Sound Row
+        # Image & Sound Row (Grid Layout for clean alignment)
         io_grid = QGridLayout()
+        io_grid.setSpacing(8)
+
         io_grid.addWidget(QLabel("Image (PNG/JPG):"), 0, 0)
         self.ent_evt_img = QLineEdit()
+        self.ent_evt_img.setPlaceholderText("Filename in assets folder...")
         io_grid.addWidget(self.ent_evt_img, 0, 1)
         self.btn_browse_evt_img = QPushButton("...")
-        self.btn_browse_evt_img.setFixedWidth(30)
+        self.btn_browse_evt_img.setFixedWidth(40)
         io_grid.addWidget(self.btn_browse_evt_img, 0, 2)
 
         io_grid.addWidget(QLabel("Sound (MP3/OGG):"), 1, 0)
         self.ent_evt_snd = QLineEdit()
+        self.ent_evt_snd.setPlaceholderText("Optional...")
         io_grid.addWidget(self.ent_evt_snd, 1, 1)
         self.btn_browse_evt_snd = QPushButton("...")
-        self.btn_browse_evt_snd.setFixedWidth(30)
+        self.btn_browse_evt_snd.setFixedWidth(40)
         io_grid.addWidget(self.btn_browse_evt_snd, 1, 2)
 
         input_layout.addLayout(io_grid)
 
         # Scale & Duration Row
         sd_layout = QHBoxLayout()
+        sd_layout.setSpacing(15)
 
         sd_layout.addWidget(QLabel("Scale:"))
+
         self.slider_evt_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_evt_scale.setRange(10, 300)
         self.slider_evt_scale.setValue(100)
+
+        # CHANGE 1: Removed fixed width and set SizePolicy to Expanding
+        # This makes the slider fill the space between "Scale:" and "Duration"
+        self.slider_evt_scale.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         # Scale Value Label
         self.lbl_scale_val = QLabel("1.00")
         self.lbl_scale_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
         self.lbl_scale_val.setFixedWidth(40)
-        # Direktes Update beim Schieben
         self.slider_evt_scale.valueChanged.connect(lambda val: self.lbl_scale_val.setText(f"{val / 100:.2f}"))
 
         sd_layout.addWidget(self.slider_evt_scale)
         sd_layout.addWidget(self.lbl_scale_val)
 
+        # CHANGE 2: Removed addStretch()
+        # sd_layout.addStretch()  <-- Previously consumed space
+
         sd_layout.addWidget(QLabel("Duration (ms):"))
         self.ent_evt_duration = QLineEdit("3000")
         self.ent_evt_duration.setFixedWidth(60)
+        self.ent_evt_duration.setToolTip("If left empty or 0, the global timer is used.")
         sd_layout.addWidget(self.ent_evt_duration)
 
         input_layout.addLayout(sd_layout)
 
+        # Separator Line
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("background-color: #444;")
+        line.setFixedHeight(1)
+        input_layout.addWidget(line)
+
         # Action Buttons
         btn_box = QHBoxLayout()
-        btn_box.setSpacing(10)  # Abstand zwischen Buttons
+        btn_box.setSpacing(10)
 
         self.btn_edit_hud = QPushButton("MOVE UI")
-        self.btn_edit_hud.setObjectName("EditBtn")  # -> Blau
-        self.btn_edit_hud.setMinimumHeight(35)  # Schön hoch
+        self.btn_edit_hud.setObjectName("EditBtn")
+        self.btn_edit_hud.setMinimumHeight(40)
+        self.btn_edit_hud.setToolTip("Switches the overlay to Edit Mode to move the event.")
 
         self.btn_test_preview = QPushButton("TEST PREVIEW")
-        self.btn_test_preview.setObjectName("TestBtn")  # -> Grau
-        self.btn_test_preview.setMinimumHeight(35)
+        self.btn_test_preview.setObjectName("TestBtn")
+        self.btn_test_preview.setMinimumHeight(40)
+        self.btn_test_preview.setToolTip("Briefly shows the event in the overlay.")
 
         self.btn_save_event = QPushButton("SAVE EVENT")
-        self.btn_save_event.setObjectName("SaveBtn")  # -> Grün
-        self.btn_save_event.setMinimumHeight(35)
+        self.btn_save_event.setObjectName("SaveBtn")
+        self.btn_save_event.setMinimumHeight(40)
+        self.btn_save_event.setToolTip("Saves the settings for THIS event.")
 
         btn_box.addWidget(self.btn_edit_hud)
         btn_box.addWidget(self.btn_test_preview)
@@ -485,26 +540,28 @@ class OverlayConfigWindow(QWidget):
 
         input_layout.addLayout(btn_box)
 
-        # --- RECHTS: PREVIEW ---
-        # Wir nutzen unsere Custom Class AspectRatioLabel
+        # --- RIGHT: PREVIEW ---
+        # Custom AspectRatioLabel
         self.lbl_event_preview = AspectRatioLabel()
-        # SizePolicy: Expanding sagt dem Layout "Nimm dir so viel Platz wie möglich"
         self.lbl_event_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.lbl_event_preview.setStyleSheet("border: 1px dashed #444; background-color: #151515;")
+        self.lbl_event_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_event_preview.setText("PREVIEW")
 
-        # Zusammenbau
-        editor_split.addWidget(input_container, 60)  # 60% Breite
-        editor_split.addWidget(self.lbl_event_preview, 40)  # 40% Breite
+        # Assembly
+        editor_split.addWidget(input_container, 65)  # 65% Width
+        editor_split.addWidget(self.lbl_event_preview, 35)  # 35% Width
 
         edit_layout.addLayout(editor_split)
-        layout.addWidget(edit_box, 2)
+        layout.addWidget(edit_box, 0)  # Stretch factor 0 (Fixed height based on content)
 
     def select_event(self, event_name):
-        """Wird aufgerufen, wenn man im Grid auf ein Event klickt"""
+        """Called when clicking an event in the grid"""
         self.lbl_editing.setText(f"EDITING: {event_name}")
         self.signals.setting_changed.emit("event_selection", event_name)
 
     def update_preview_image(self, image_path):
-        """Helper: Lädt das Bild in die Responsive Preview-Box"""
+        """Helper: Loads image into Responsive Preview-Box"""
         if image_path and os.path.exists(image_path):
             pix = QPixmap(image_path)
             self.lbl_event_preview.setPixmap(pix)
@@ -532,7 +589,6 @@ class OverlayConfigWindow(QWidget):
         img_layout.addWidget(self.btn_browse_cross)
         layout.addLayout(img_layout)
 
-        # HIER WAR DER ALTE TEXT
         self.btn_edit_cross = QPushButton("MOVE UI", objectName="EditBtn")
         layout.addWidget(self.btn_edit_cross)
 
@@ -541,7 +597,7 @@ class OverlayConfigWindow(QWidget):
 
     def setup_streak_tab(self):
         layout = QVBoxLayout(self.tab_streak)
-        layout.setContentsMargins(10, 10, 10, 10)  # Weniger Rand außen
+        layout.setContentsMargins(10, 10, 10, 10)  # Less margin outside
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -550,7 +606,7 @@ class OverlayConfigWindow(QWidget):
         content_widget = QWidget()
         content_widget.setStyleSheet("background-color: #1a1a1a;")
         main_layout = QVBoxLayout(content_widget)
-        main_layout.setSpacing(10)  # KOMPAKTER: Globaler Abstand zwischen Gruppen reduziert
+        main_layout.setSpacing(10)  # COMPACT: Global spacing reduced
 
         # --- 1. HEADER & MASTER SWITCH ---
         header_layout = QHBoxLayout()
@@ -561,7 +617,7 @@ class OverlayConfigWindow(QWidget):
         main_layout.addLayout(header_layout)
 
         sw_layout = QHBoxLayout()
-        # Checkbox Styles etwas kompakter
+        # Compact Checkbox Styles
         cb_style = "QCheckBox { font-weight: bold; font-size: 11px; spacing: 5px; }"
 
         self.check_streak_master = QCheckBox("ENABLE KILLSTREAK SYSTEM")
@@ -576,10 +632,10 @@ class OverlayConfigWindow(QWidget):
 
         # --- 2. MAIN VISUALS ---
         vis_group = QFrame()
-        # KOMPAKTER: Padding reduziert
+        # COMPACT: Reduced padding
         vis_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         vis_layout = QVBoxLayout(vis_group)
-        vis_layout.setSpacing(5)  # KOMPAKTER: Abstand innerhalb der Gruppe
+        vis_layout.setSpacing(5)  # COMPACT: Spacing within group
 
         vis_layout.addWidget(QLabel("MAIN BACKGROUND & ANIMATION",
                                     styleSheet="color: #00f2ff; font-weight:bold; font-size: 11px; border: none; margin-bottom: 2px;"))
@@ -619,7 +675,7 @@ class OverlayConfigWindow(QWidget):
         knife_group = QFrame()
         knife_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
         knife_layout = QVBoxLayout(knife_group)
-        knife_layout.setSpacing(2)  # Sehr eng beieinander
+        knife_layout.setSpacing(2)  # Very tight
 
         lbl_knife = QLabel("FACTION KNIVES / ICONS (PNG)")
         lbl_knife.setStyleSheet("color: #00f2ff; font-weight:bold; font-size: 11px; border: none; margin-bottom: 2px;")
@@ -696,7 +752,7 @@ class OverlayConfigWindow(QWidget):
         pos_layout.addWidget(QLabel("Offset X:", styleSheet="border:none; color:#ddd;"), 1, 0)
         self.slider_tx = QSlider(Qt.Orientation.Horizontal)
         self.slider_tx.setRange(-200, 200)
-        # Slider etwas kompakter machen (Höhe begrenzen)
+        # Make slider compact (limit height)
         self.slider_tx.setFixedHeight(15)
         pos_layout.addWidget(self.slider_tx, 1, 1, 1, 2)
 
@@ -743,12 +799,12 @@ class OverlayConfigWindow(QWidget):
         # --- 6. ACTION BUTTONS ---
         action_layout = QHBoxLayout()
         action_layout.setSpacing(10)
-        action_layout.setContentsMargins(0, 5, 0, 0)  # Nur wenig Abstand nach oben
+        action_layout.setContentsMargins(0, 5, 0, 0)  # Only little margin at top
 
-        # Button Style Templates (Kompakter)
+        # Button Style Templates (Compact)
         style_base = "border-radius: 4px; font-weight: bold; font-size: 12px; padding: 5px;"
 
-        # 1. MOVE UI (Blau)
+        # 1. MOVE UI (Blue)
         self.btn_edit_streak = QPushButton("MOVE UI")
         self.btn_edit_streak.setMinimumHeight(35)
         self.btn_edit_streak.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -758,7 +814,7 @@ class OverlayConfigWindow(QWidget):
             QPushButton:pressed {{ background-color: #00f2ff; color: black; }}
         """)
 
-        # 2. TEST ANIMATION (Grau)
+        # 2. TEST ANIMATION (Grey)
         self.btn_test_streak = QPushButton("TEST")
         self.btn_test_streak.setMinimumHeight(35)
         self.btn_test_streak.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -768,7 +824,7 @@ class OverlayConfigWindow(QWidget):
             QPushButton:pressed {{ background-color: #666; }}
         """)
 
-        # 3. SAVE SETTINGS (Grün)
+        # 3. SAVE SETTINGS (Green)
         self.btn_save_streak = QPushButton("SAVE SETTINGS")
         self.btn_save_streak.setMinimumHeight(35)
         self.btn_save_streak.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -891,7 +947,7 @@ class OverlayConfigWindow(QWidget):
         btn_box.setSpacing(10)
         btn_box.setContentsMargins(0, 15, 0, 0)
 
-        # Hier nur noch Edit, Test, Save (keine Live-Buttons mehr)
+        # Here only Edit, Test, Save (no live buttons anymore)
         self.btn_edit_hud_stats = QPushButton("MOVE UI")
         self.btn_edit_hud_stats.setObjectName("EditBtn")
         self.btn_edit_hud_stats.setMinimumHeight(35)
@@ -928,7 +984,7 @@ class OverlayConfigWindow(QWidget):
 
         layout.addSpacing(20)
 
-        # Grid für die Trigger-Liste
+        # Grid for Trigger List
         grid_frame = QFrame(objectName="Group")
         grid_layout = QGridLayout(grid_frame)
         grid_layout.setVerticalSpacing(15)

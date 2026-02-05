@@ -100,7 +100,7 @@ class CensusWorker:
                             self.c.session_stats[cid] = {
                                 "id": cid,
                                 "name": self.c.name_cache.get(cid, "Searching..."),
-                                "faction": current_faction_name, # Setze Fraktion basierend auf Event
+                                "faction": current_faction_name,  # Setze Fraktion basierend auf Event
                                 "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
                                 "start": time.time(),
                                 "last_kill_time": time.time(),
@@ -112,8 +112,6 @@ class CensusWorker:
                             obj = self.c.session_stats[cid]
                             if obj["faction"] == "NSO" and current_faction_name != "NSO":
                                 obj["faction"] = current_faction_name
-                                # Optional: Loggen, dass wir einen NSO zugewiesen haben
-                                # print(f"DEBUG: Assigned NSO {obj['name']} to {current_faction_name}")
 
                         return self.c.session_stats[cid]
 
@@ -158,15 +156,11 @@ class CensusWorker:
                                         # Server Switch
                                         if payload_world != "0" and payload_world != str(self.c.current_world_id):
                                             s_name = self.c.get_server_name_by_id(payload_world)
-                                            # Wir nutzen QTimer für Thread-Safety beim GUI Update des Dashboards
-                                            # Aber switch_server ändert hauptsächlich Logik-Variablen, das ist meist ok.
                                             self.c.switch_server(s_name, payload_world)
 
                                         # --- RESTORED FEATURE: LOGIN EVENT TRIGGER ---
-                                        # Wir prüfen kurz die Fraktion und spielen den Sound
                                         def trigger_login_event(cid_val):
                                             try:
-                                                # Kurz API fragen (schneller als DB Sync in diesem Kontext)
                                                 u = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
                                                 r = requests.get(u, timeout=3).json()
                                                 f_id = "0"
@@ -175,7 +169,6 @@ class CensusWorker:
 
                                                 f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
 
-                                                # Event im Overlay triggern
                                                 self.c.trigger_overlay_event(f"Login {f_tag}")
                                                 self.c.add_log(f"AUTO-TRACK: {name} eingeloggt ({f_tag}).")
                                             except:
@@ -190,11 +183,8 @@ class CensusWorker:
                                     self.c.add_log("AUTO-TRACK: Ausgeloggt.")
 
                             # -------------------------------------------------
-                            # SERVER FILTER (ENTSCHÄRFT!)
+                            # SERVER FILTER
                             # -------------------------------------------------
-                            # Wir lassen Events durch, auch wenn der Server in der Config noch falsch ist.
-                            # Die Logik prüft später auf 'my_id', das ist Filter genug.
-
                             track_id = p.get("character_id") or p.get("attacker_character_id")
                             if track_id and track_id != "0":
                                 tid = p.get("team_id") or p.get("attacker_team_id")
@@ -266,7 +256,7 @@ class CensusWorker:
                     self.c.trigger_auto_voice("tk")
                     self.c.trigger_overlay_event("Team Kill")
                 else:
-                    # Streak
+                    # Streak Logic
                     if self.c.config.get("streak", {}).get("active", True):
                         if self.c.killstreak_count == 0:
                             self.c.killstreak_count = 1
@@ -283,63 +273,77 @@ class CensusWorker:
                         self.c.was_revived = False
                         self.c.update_streak_display()
 
-                    # Multi Kill
+                    # Multi Kill Logic
                     if curr_time - getattr(self.c, "last_kill_time", 0) <= self.c.streak_timeout:
                         self.c.kill_counter += 1
                     else:
                         self.c.kill_counter = 1
                     self.c.last_kill_time = curr_time
 
-                    # Event Detection
+                    # -------------------------------------------------
+                    # EVENT ERMITTLUNG (QUEUE LOGIC START)
+                    # -------------------------------------------------
+
+                    # 1. Basis-Events sammeln
+                    base_events = []
                     weapon_name = w_info.get("name", "Unknown")
-                    evt = None
+
+                    # Special IDs / Kategorien / Namen
                     if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
-                        evt = PS2_DETECTION["SPECIAL_IDS"][weapon_id]
+                        base_events.append(PS2_DETECTION["SPECIAL_IDS"][weapon_id])
                     elif category in PS2_DETECTION["CATEGORIES"]:
-                        evt = PS2_DETECTION["CATEGORIES"][category]
+                        base_events.append(PS2_DETECTION["CATEGORIES"][category])
                     elif weapon_name in PS2_DETECTION["NAMES"]:
-                        evt = PS2_DETECTION["NAMES"][weapon_name]
-                    if is_hs and not evt: evt = "Headshot"
+                        base_events.append(PS2_DETECTION["NAMES"][weapon_name])
 
-                    # --- RESTORED LOGIC: MULTI-KILL & STREAK ANNOUNCEMENTS ---
+                    if is_hs and "Headshot" not in base_events:
+                        base_events.append("Headshot")
 
-                    # 1. Streak Announcements (Squad Wiper etc.)
+                    # 2. Streak Events
+                    streak_event = None
                     streak_map = {
-                        12: "Squad Wiper",
-                        24: "Double Squad Wipe",
-                        36: "Squad Lead's Nightmare",
-                        48: "One Man Platoon"
+                        12: "Squad Wiper", 24: "Double Squad Wipe",
+                        36: "Squad Lead's Nightmare", 48: "One Man Platoon"
                     }
-
-                    # Wenn wir genau eine dieser Zahlen erreichen, überschreiben wir das Event
-                    # (außer es war schon ein spezielles Waffen-Event, das wichtiger ist?
-                    #  Nein, Streak-Announcements sind meist wichtiger als "Knife Kill")
                     if self.c.killstreak_count in streak_map:
-                        evt = streak_map[self.c.killstreak_count]
+                        streak_event = streak_map[self.c.killstreak_count]
 
-                    # 2. Multi-Kill Announcements (nur wenn kein Streak-Event aktiv ist)
-                    elif self.c.kill_counter > 1:
+                    # 3. Multi Events
+                    multi_event = None
+                    if self.c.kill_counter > 1:
                         multi_map = {
-                            2: "Double Kill",
-                            3: "Multi Kill",
-                            4: "Mega Kill",
-                            5: "Ultra Kill",
-                            6: "Monster Kill",
-                            7: "Ludicrous Kill",
+                            2: "Double Kill", 3: "Multi Kill", 4: "Mega Kill",
+                            5: "Ultra Kill", 6: "Monster Kill", 7: "Ludicrous Kill",
                             9: "Holy Shit"
                         }
                         if self.c.kill_counter in multi_map:
-                            # Priorität: Wenn wir z.B. einen Headshot gemacht haben,
-                            # wollen wir vielleicht lieber "Double Kill" hören/sehen.
-                            # Hier entscheidet die Logik: Multi-Kill überschreibt Standard-Kill/Headshot.
-                            evt = multi_map[self.c.kill_counter]
+                            multi_event = multi_map[self.c.kill_counter]
 
-                    # Trigger Event (falls definiert)
-                    if evt:
-                        self.c.trigger_overlay_event(evt)
+                    # -------------------------------------------------
+                    # ENTSCHEIDUNG: QUEUE AN ODER AUS?
+                    # -------------------------------------------------
+                    is_queue_active = self.c.config.get("event_queue_active", True)
 
-                    # Hitmarker (immer etwas verzögert, um Audio-Clashing zu minimieren)
-                    # Wir nutzen hier time.sleep, da wir im Thread sind -> blockiert nicht die GUI!
+                    if is_queue_active:
+                        # ALLES senden (Basis -> Multi -> Streak)
+                        for evt in base_events: self.c.trigger_overlay_event(evt)
+                        if multi_event: self.c.trigger_overlay_event(multi_event)
+                        if streak_event: self.c.trigger_overlay_event(streak_event)
+                    else:
+                        # NUR PRIORITÄT senden (Streak > Multi > Base)
+                        final_event = None
+                        if streak_event:
+                            final_event = streak_event
+                        elif multi_event:
+                            final_event = multi_event
+                        elif base_events:
+                            final_event = base_events[0]  # Nimm das erste (meist speziellste)
+
+                        if final_event: self.c.trigger_overlay_event(final_event)
+
+                    # -------------------------------------------------
+
+                    # Hitmarker (immer etwas verzögert)
                     time.sleep(0.05)
                     self.c.trigger_overlay_event("Hitmarker")
 
@@ -357,7 +361,7 @@ class CensusWorker:
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; color: white; text-align: right; margin-bottom: 2px;">
                             {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
                             <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
-                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                    if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
                     # Voice
@@ -378,20 +382,15 @@ class CensusWorker:
             elif victim_id == my_id:
                 # --- KILLSTREAK LOGIK (Fix für "Double Death") ---
                 if self.c.killstreak_count > 0:
-                    # Wir haben einen Streak -> Backup erstellen für möglichen Revive
                     self.c.saved_streak = self.c.killstreak_count
                     self.c.saved_factions = getattr(self.c, 'streak_factions', [])
                     self.c.saved_slots = getattr(self.c, 'streak_slot_map', [])
                 else:
-                    # WICHTIG: Wenn wir sterben und der Streak ist bereits 0
-                    # (z.B. wir sind respawned und sofort wieder gestorben),
-                    # müssen wir das Backup LÖSCHEN. Sonst würde ein Revive jetzt
-                    # den Streak vom VOR-VORIGEN Leben wiederherstellen.
                     self.c.saved_streak = 0
                     self.c.saved_factions = []
                     self.c.saved_slots = []
 
-                # Reset des aktuellen Zählers
+                # Reset
                 self.c.killstreak_count = 0
                 self.c.streak_factions = []
                 self.c.streak_slot_map = []
@@ -412,7 +411,7 @@ class CensusWorker:
                     msg = f"""<div style="font-family: 'Black Ops One'; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;">
                             {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
                             <span style="color: #aaa; font-size: 19px;"> ({k_kd})</span></div>"""
-                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                    if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
     def _handle_experience(self, p, get_stat_obj):
@@ -421,37 +420,28 @@ class CensusWorker:
         char_id = p.get("character_id")
 
         # --- FEATURE: LATE START ACTIVATION (Auto-Detect Character) ---
-        # Wenn noch kein Charakter ausgewählt ist (Programm startete nach Spielstart)
         if not self.c.current_character_id and char_id:
-            # Wir prüfen, ob die ID zu einem unserer gespeicherten Chars gehört
             for name, saved_id in self.c.char_data.items():
                 if saved_id == char_id:
-                    # 1. Fraktion direkt aus dem XP-Event lesen (spart API Call)
                     t_id = p.get("team_id", "0")
                     f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(t_id), "NSO")
 
-                    # 2. Variablen im Client setzen
                     self.c.current_character_id = char_id
                     self.c.current_selected_char_name = name
 
-                    # 3. UI Dropdown aktualisieren (Thread-Safe)
                     from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
                     if hasattr(self.c, 'ovl_config_win'):
                         QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
                                                  Qt.ConnectionType.QueuedConnection,
                                                  Q_ARG(str, name))
 
-                    # 4. Login-Event & Log triggern (wie gewünscht)
                     self.c.trigger_overlay_event(f"Login {f_tag}")
                     self.c.add_log(f"AUTO-TRACK: {name} aktiv erkannt ({f_tag} - Late Join).")
                     break
 
-        # WICHTIG: ID neu zuweisen, falls sie oben gerade gesetzt wurde,
-        # damit die Statistik-Logik unten sofort greift.
         my_id = self.c.current_character_id
 
         # --- AB HIER: NORMALE XP LOGIK ---
-
         if exp_id in ["2", "3", "371", "372"]:
             a_obj = get_stat_obj(char_id, p.get("team_id"))
             a_obj["a"] += 1
@@ -459,9 +449,8 @@ class CensusWorker:
             r_obj = get_stat_obj(other_id, p.get("team_id"))
             if r_obj["d"] > 0: r_obj["d"] -= 1
 
-        # A) EVENTS DIE MIR PASSIEREN (Ich bin das Opfer/Empfänger)
+        # A) EVENTS DIE MIR PASSIEREN
         if my_id and other_id == my_id:
-
             if exp_id == "26":
                 self.c.trigger_overlay_event("Get Roadkilled")
 
@@ -480,23 +469,20 @@ class CensusWorker:
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
                     m_name = self.c.name_cache.get(char_id, "Medic")
                     msg = f'<div style="font-family: \'Black Ops One\'; font-size: 19px; color: white; text-align: right;"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
-                    if self.c.config.get("killfeed", {}).get("active", True):  # <--- CHECK HINZUFÜGEN
+                    if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
-        # B) EVENTS DIE ICH MACHE (Ich bekomme XP)
+        # B) EVENTS DIE ICH MACHE
         if my_id and char_id == my_id:
-            # Update Environment Data (Zone/Team)
             try:
                 self.c.myTeamId = int(p.get("team_id", 0))
                 self.c.myWorldID = int(p.get("world_id", 0))
                 self.c.currentZone = int(p.get("zone_id", 0))
 
-                # Check Server Switch (Falls wir auf einem anderen Server sind)
                 payload_world = str(p.get("world_id", "0"))
                 if payload_world != "0" and payload_world != str(self.c.current_world_id):
                     s_name = self.c.get_server_name_by_id(payload_world)
                     self.c.switch_server(s_name, payload_world)
-
             except:
                 pass
 
@@ -520,7 +506,7 @@ class CensusWorker:
             VS, TR, NC = float(p.get("faction_vs", 0)), float(p.get("faction_tr", 0)), float(p.get("faction_nc", 0))
             my_team = self.c.myTeamId
             won = (my_team == 1 and VS > TR and VS > NC) or (my_team == 2 and NC > TR and NC > VS) or (
-                        my_team == 3 and TR > VS and TR > NC)
+                    my_team == 3 and TR > VS and TR > NC)
 
             if won:
                 self.c.trigger_overlay_event("Alert Win")
