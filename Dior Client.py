@@ -1691,6 +1691,11 @@ class DiorClientGUI:
             active = twitch_conf.get("active", False)
             # Prüft jetzt (Game-Running ODER Always-On)
             self.overlay_win.update_twitch_visibility(active)
+        if active and twitch_conf.get("channel"):
+            # Wir geben dem System eine Sekunde Zeit, um stabil zu laden,
+            # bevor wir den Thread für den Twitch-Chat starten.
+            QTimer.singleShot(1000, self.start_twitch_connection)
+            self.add_log(f"TWITCH: Auto-connecting to #{twitch_conf.get('channel')}...")
 
         self.add_log("SYS: Overlay configuration synchronized.")
 

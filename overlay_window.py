@@ -402,54 +402,43 @@ class QtOverlay(QWidget):
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
         self.update_twitch_visibility(enabled)
 
-    def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
+    def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False): # <--- is_test hinzugefügt
+        # 1. Sichtbarkeit prüfen
         enabled = True
+        always_on = False
+        game_running = False
+
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
+            always_on = self.gui_ref.config.get("twitch", {}).get("always_on", False)
             game_running = getattr(self.gui_ref, 'ps2_running', False)
 
-            # FIX: Wenn es ein Test ist ODER wir im Edit-Mode sind ODER das Spiel läuft
-            if not is_test and not game_running and not self.edit_mode:
-                return
+        # Logik: Zeigen wenn (Test) ODER (Aktiv UND (Spiel läuft ODER AlwaysOn)) ODER (Edit-Mode)
+        should_process = is_test or (enabled and (game_running or always_on)) or self.edit_mode
 
-        if not enabled and not self.edit_mode and not is_test:
-            return
+        if not should_process:
+            return # Nachricht wird ignoriert, da Bedingungen nicht erfüllt
 
+        # Container sicherheitshalber zeigen
         self.chat_container.show()
 
         # Hol dir die aktuellen Werte (falls sie in update_twitch_style gespeichert wurden)
         f_size = getattr(self, 'current_chat_font_size', 12)
-
-        # Wir geben dem Widget ein direktes Stylesheet für die Schriftgröße
-        # Der Hintergrund kommt vom Container (Parent)
         full_html = f"""
-        <div style="font-size: {f_size}pt; line-height: 120%;">
-            <span style="color: {color}; font-weight: bold;">{user}:</span>
-            <span style="color: #ffffff;"> {html_msg}</span>
-        </div>
-        """
+                <div style="font-size: {f_size}pt; line-height: 120%;">
+                    <span style="color: {color}; font-weight: bold;">{user}:</span>
+                    <span style="color: #ffffff;"> {html_msg}</span>
+                </div>
+                """
 
-        # Erstelle ein neues, individuelles Message-Widget
-        msg_widget = ChatMessageWidget(
-            self.chat_container,
-            full_html,
-            self.chat_hold_time
-        )
-
-        # WICHTIG: Setze die Breite des Widgets auf die aktuelle Container-Breite,
-        # damit adjust_height() korrekt rechnen kann.
+        msg_widget = ChatMessageWidget(self.chat_container, full_html, self.chat_hold_time)
         msg_widget.setFixedWidth(self.chat_container.width())
-        msg_widget.adjust_height()  # Jetzt erst die Höhe berechnen
-
-        # Zum Layout hinzufügen
+        msg_widget.adjust_height()
         self.chat_layout.addWidget(msg_widget)
 
-
-        # (Optional) Begrenzung: Alte Nachrichten sofort löschen, wenn zu viele da sind
         if self.chat_layout.count() > 50:
             item = self.chat_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item.widget(): item.widget().deleteLater()
 
     def fade_out_chat(self):
         """Versteckt den Chat oder leert ihn."""

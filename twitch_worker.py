@@ -229,7 +229,7 @@ class TwitchWorker(QObject):
             # WICHTIG: Jede Zeile MUSS mit \r\n enden!
             self.sock.send(f"CAP REQ :twitch.tv/tags twitch.tv/commands\r\n".encode('utf-8'))
             self.sock.send(f"PASS oauth:kappa\r\n".encode('utf-8'))
-            self.sock.send(f"NICK {nick}\r\n".encode('utf-8'))
+            self.sock.send(f"NICK justinfan{random.randint(1000, 9999)}\r\n".encode('utf-8'))
             self.sock.send(f"JOIN #{self.channel}\r\n".encode('utf-8'))
 
             self.status_changed.emit(f"CONNECTED: #{self.channel}")
