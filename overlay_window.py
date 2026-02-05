@@ -8,6 +8,8 @@ from PyQt6.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QTransform, QMo
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer, QPoint, QSize
 from PyQt6.QtWidgets import QTextBrowser
 from PyQt6.QtGui import QCursor, QTextCursor # Wichtig für Scrolling
+from PyQt6.QtGui import QTextDocument, QTextCursor, QMovie, QPixmap
+from PyQt6.QtCore import QUrl, QSize
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -39,49 +41,87 @@ class OverlaySignals(QObject):
     item_moved = pyqtSignal(str, int, int)
 
 
-
-
 class DraggableChat(QTextBrowser):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.edit_mode = False
-        self.drag_start_pos = None
-
-        # Standard Settings
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setStyleSheet("background: transparent; border: none;")
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setOpenExternalLinks(False)
 
-    def mousePressEvent(self, event):
-        if self.edit_mode and event.button() == Qt.MouseButton.LeftButton:
-            self.drag_start_pos = event.globalPosition().toPoint() - self.pos()
-            self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
-            event.accept()
-        else:
-            super().mousePressEvent(event)  # Standard Text-Selection erlauben wenn nicht edit mode
+        # self.document().setCacheEnabled(False)  <-- DIESE ZEILE ENTFERNEN
 
-    def mouseMoveEvent(self, event):
-        if self.edit_mode and self.drag_start_pos:
-            new_pos = event.globalPosition().toPoint() - self.drag_start_pos
-            self.move(new_pos)
+        self.movies = {}
 
-            # Optional: Signal an Parent senden, um Config-Fenster zu updaten
-            # (Das machen wir hier simplifiziert, indem wir es beim Loslassen speichern)
-            event.accept()
-        else:
-            super().mouseMoveEvent(event)
+    def add_animated_message(self, html_msg):
+        import re
+        # Wir suchen nach den Pfaden zu den GIFs
+        matches = re.findall(r'src="file:///([^"]+)"', html_msg)
 
-    def mouseReleaseEvent(self, event):
-        if self.edit_mode:
-            self.drag_start_pos = None
-            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+        for path in matches:
+            clean_path = path.replace('\\', '/')
+            if clean_path.lower().endswith((".gif", ".webp")):
+                if clean_path not in self.movies:
+                    if os.path.exists(clean_path):
+                        movie = QMovie(clean_path)
+                        if movie.isValid():
+                            movie.setScaledSize(QSize(28, 28))
+                            self.movies[clean_path] = movie
+                            # Verbindung zum Frame-Update
+                            movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
+                            movie.start()
 
-            # WICHTIG: Position an das Hauptfenster melden
-            if self.parent() and hasattr(self.parent(), 'notify_chat_moved'):
-                self.parent().notify_chat_moved(self.x(), self.y())
+        self.append(html_msg)
+        self.moveCursor(QTextCursor.MoveOperation.End)
 
-        super().mouseReleaseEvent(event)
+    def scan_for_new_emotes(self):
+        """Sucht im Dokument nach Image-Ressourcen und startet Animationen."""
+        import os
+        doc = self.document()
+        # Wir gehen alle Bilder im Ressourcen-System des Dokuments durch
+        # Aber einfacher: Wir suchen im HTML nach file-Pfaden
+        import re
+        # Dieser Regex findet ALLES zwischen src="file:/// und "
+        matches = re.findall(r'src="file:///([^"]+)"', self.toHtml())
+
+        for path in matches:
+            clean_path = path.replace('\\', '/')
+            # Nur wenn es ein GIF/WebP ist und noch nicht animiert wird
+            if clean_path.lower().endswith((".gif", ".webp")):
+                if clean_path not in self.movies:
+                    if os.path.exists(clean_path):
+                        movie = QMovie(clean_path)
+                        if movie.isValid():
+                            movie.setScaledSize(QSize(28, 28))
+                            self.movies[clean_path] = movie
+                            # WICHTIG: Die Bindung des Pfads via Default-Argument (p=clean_path)
+                            movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
+                            movie.start()
+                            print(f"ANIMATION GESTARTET: {clean_path}")
+                        else:
+                            print(f"ANIMATION UNGÜLTIG: {clean_path}")
+
+    def on_frame_changed(self, path):
+        movie = self.movies.get(path)
+        if movie:
+            frame = movie.currentPixmap()
+            url = QUrl(f"file:///{path}")
+
+            # Das Bild im Dokument-Ressourcen-Cache ersetzen
+            self.document().addResource(QTextDocument.ResourceType.ImageResource, url, frame)
+
+            # Da wir setCacheEnabled nicht nutzen können, markieren wir den Inhalt
+            # explizit als geändert. Das zwingt Qt, die Anzeige zu aktualisieren.
+            self.document().markContentsDirty(0, self.document().characterCount())
+
+            # Viewport-Update für das sofortige Neuzeichnen
+            self.viewport().update()
+
+    def clear(self):
+        for m in self.movies.values(): m.stop()
+        self.movies.clear()
+        super().clear()
 
 # --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
 class PathDrawingLayer(QWidget):
@@ -276,15 +316,32 @@ class QtOverlay(QWidget):
 
         # --- TWITCH CHAT CONTAINER ---
         self.twitch_browser = DraggableChat(self)
-        self.twitch_browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.twitch_browser.setStyleSheet("background: transparent; border: none;")
-        self.twitch_browser.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.twitch_browser.setOpenExternalLinks(False)
-        self.twitch_browser.hide()  # Standardmäßig versteckt
+        # Nur noch die Dinge setzen, die nicht in DraggableChat.__init__ stehen:
+        self.twitch_browser.hide()
+        self.twitch_browser.setSearchPaths([os.path.join(os.getcwd(), "_emote_cache")])
 
         # WICHTIG: Damit Bilder aus dem Internet geladen werden können (für Emotes),
         # muss das interne Document Resource Handling erlaubt sein.
         # QTextBrowser macht das standardmäßig für HTTP URLs oft async.
+
+    def test_local_gif(self):
+        """Triggert ein lokales Test-GIF direkt in den Chat."""
+        # Such dir ein GIF aus deinem Cache-Ordner
+        cache_path = os.path.join(os.getcwd(), "_emote_cache")
+        if not os.path.exists(cache_path):
+            print("TEST: Cache Ordner existiert nicht!")
+            return
+
+        files = [f for f in os.listdir(cache_path) if f.endswith(".gif")]
+        if not files:
+            print("TEST: Keine GIFs im Cache gefunden zum Testen.")
+            return
+
+        test_file = os.path.join(cache_path, files[0]).replace("\\", "/")
+        test_html = f'Test-User: <img src="file:///{test_file}" height="28">'
+
+        print(f"TEST: Sende GIF an Chat: {test_file}")
+        self.twitch_browser.add_animated_message(test_html)
 
     def notify_chat_moved(self, x, y):
         # Signal an Controller senden
@@ -312,19 +369,14 @@ class QtOverlay(QWidget):
         """)
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff"):
-        line = f"""
-        <div style="margin-bottom: 2px; line-height: 120%;">
-            <span style="color: {color}; font-weight: 800;">{user}:</span>
-            <span style="color: #eeeeee;">{html_msg}</span>
+        # Das HTML muss genau so aufgebaut sein, wie der Regex oben (file:///)
+        full_html = f"""
+        <div style="margin-bottom: 4px;">
+            <b style="color: {color};">{user}:</b> 
+            <span style="color: #ffffff;">{html_msg}</span>
         </div>
         """
-        self.twitch_browser.append(line)
-
-        # FIX SCROLLING:
-        # Cursor ans Ende bewegen zwingt den Viewport zum Scrollen
-        c = self.twitch_browser.textCursor()
-        c.movePosition(QTextCursor.MoveOperation.End)
-        self.twitch_browser.setTextCursor(c)
+        self.twitch_browser.add_animated_message(full_html)
 
     def clear_twitch_chat(self):
         self.twitch_browser.clear()

@@ -121,25 +121,30 @@ class EmoteManager:
         if code not in self.emote_urls:
             return None
 
-        # 1. Ist es schon fertig auf der Platte?
-        # Dateiname säubern (keine Sonderzeichen)
+        # Dateiname säubern
         safe_code = "".join([c for c in code if c.isalnum() or c in ('_', '-')])
 
-        # Endung raten (wird beim Download korrigiert, aber für Cache-Check wichtig)
-        # Wir prüfen einfach, ob wir diesen Code schon einem Pfad zugeordnet haben
+        # 1. Check: Ist der Pfad bereits in unserem Laufzeit-Dictionary?
         if code in self.emote_files:
-            local_path = self.emote_files[code]
-            if os.path.exists(local_path):
-                # WICHTIG: Pfad für HTML vorbereiten (Forward Slashes)
-                html_path = local_path.replace("\\", "/")
-                return f'<img src="file:///{html_path}" height="24" style="vertical-align: middle;">'
+            filepath = self.emote_files[code]
+            if os.path.exists(filepath):
+                # FIX: IMMER Absoluter Pfad + Forward Slashes
+                abs_path = os.path.abspath(filepath).replace("\\", "/")
+                return f'<img src="file:///{abs_path}" height="28">'
 
-        # 2. Downloaden und Speichern
+        # 2. Check: Falls nicht im Dictionary, schau manuell im Ordner nach (z.B. nach Neustart)
+        for ext in ['gif', 'webp', 'png']:
+            test_path = os.path.join(CACHE_DIR, f"{safe_code}.{ext}")
+            if os.path.exists(test_path):
+                self.emote_files[code] = test_path
+                abs_path = os.path.abspath(test_path).replace("\\", "/")
+                return f'<img src="file:///{abs_path}" height="28">'
+
+        # 3. Download: Falls gar nicht vorhanden
         url = self.emote_urls[code]
         try:
             r = requests.get(url, timeout=3)
             if r.status_code == 200:
-                # Richtige Dateiendung ermitteln
                 ctype = r.headers.get('Content-Type', '').lower()
                 ext = "png"
                 if "gif" in ctype or url.endswith(".gif"):
@@ -150,18 +155,15 @@ class EmoteManager:
                 filename = f"{safe_code}.{ext}"
                 filepath = os.path.join(CACHE_DIR, filename)
 
-                # Auf Platte schreiben
                 with open(filepath, "wb") as f:
                     f.write(r.content)
 
-                # Cache aktualisieren
                 self.emote_files[code] = filepath
 
-                # HTML zurückgeben
-                html_path = filepath.replace("\\", "/")
-                return f'<img src="file:///{html_path}" height="24" style="vertical-align: middle;">'
-        except Exception as e:
-            # print(f"Download Error {code}: {e}")
+                # FIX: Auch beim ersten Download absoluten Pfad erzwingen
+                abs_path = os.path.abspath(filepath).replace("\\", "/")
+                return f'<img src="file:///{abs_path}" height="28">'
+        except Exception:
             pass
 
         return None
@@ -237,10 +239,18 @@ class TwitchWorker(QObject):
                             if len(parts) > 2:
                                 user_part = parts[1]
                                 user = user_part.split("!", 1)[0]
-                                msg = parts[2]
+                                msg = parts[2].strip()
 
-                                # Parsing
+                                # 1. Parsing (Hier werden Emotes ggf. erst runtergeladen)
                                 html = self.emote_mgr.parse_message(msg)
+
+                                # 2. Sicherheitscheck: Enthält die Nachricht ein Bild?
+                                # Wenn ja, geben wir Windows eine winzige Atempause (10ms),
+                                # um den Datei-Handle nach dem Download freizugeben.
+                                if "<img" in html:
+                                    time.sleep(0.01)
+
+                                # 3. Signal an die GUI senden
                                 self.new_message.emit(user, msg, html)
                 except socket.error:
                     break

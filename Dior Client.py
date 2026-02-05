@@ -1,7 +1,6 @@
 import os
 import sys
 import ctypes
-
 # DPI Awareness erzwingen, bevor GUI-Module geladen werden
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)  # 1 = Process_System_DPI_Aware
@@ -40,7 +39,6 @@ from PyQt6.QtWidgets import (
     QColorDialog, QFileDialog # <--- QColorDialog und QFileDialog sicherstellen
 )
 from PyQt6.QtGui import (
-
     QPixmap,
     QColor,
     QPainter,
@@ -48,9 +46,6 @@ from PyQt6.QtGui import (
     QBrush,
     QTransform,
     QMovie
-
-
-
 )
 from PyQt6.QtCore import (
     Qt,
@@ -60,6 +55,14 @@ from PyQt6.QtCore import (
     QPoint,
     QSize
 )
+import os
+from PyQt6.QtCore import QCoreApplication
+
+# Pfad zum aktuellen Verzeichnis ermitteln
+basedir = os.path.dirname(os.path.abspath(__file__))
+
+# Qt anweisen, im Unterordner nach Plugins zu suchen
+QCoreApplication.addLibraryPath(os.path.join(basedir, 'imageformats'))
 
 DUMMY_STATS_HTML = """
 <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
@@ -920,33 +923,14 @@ class DiorClientGUI:
             ui.slider_twitch_y.blockSignals(False)
 
     def trigger_twitch_test(self):
-        """Sendet eine gefakte Nachricht an das Overlay zum Testen."""
+        """Verbindet den UI-Button mit der Gif-Prüfmethode im Overlay."""
         if not self.overlay_win:
             self.add_log("ERR: Overlay nicht aktiv.")
             return
 
-        # Wir simulieren das Signal, das sonst vom Worker kommt
-        # Format: User, Nachricht, HTML-Nachricht
-        import random
-        users = ["Shroud", "DrDisrespect", "XQC", "Summit1g", "LIRIK"]
-        msgs = [
-            "PogChamp das Overlay funktioniert!",
-            "Kannst du das bitte fixen? KEKW",
-            "Woher hast du dieses krasse Tool?",
-            "Planetside 2 lebt noch? <img src='https://cdn.7tv.app/emote/60ae355d259ac5a73e56a426/2x.webp' height='24'>",
-            "OmegaLUL nice shot!"
-        ]
-        colors = ["#FF0000", "#00FF00", "#0000FF", "#FFaa00", "#FF00FF"]
-
-        u = random.choice(users)
-        m = random.choice(msgs)
-        c = random.choice(colors)
-
-        # HTML bauen (einfach, da wir hier keine Emotes parsen müssen für den Test)
-        # Falls du den Emote im Test sehen willst, musst du ihn hardcoden (wie oben im Beispiel)
-
-        self.overlay_win.add_twitch_message(u, m, c)
-        self.add_log("TWITCH: Testnachricht gesendet.")
+        # Wir rufen die neue Testmethode im Overlay auf
+        self.overlay_win.test_local_gif()
+        self.add_log("TWITCH: Lokaler GIF-Test getriggert.")
 
 
 
