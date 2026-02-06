@@ -10,7 +10,7 @@ __pycache__/
 *$py.class
 dist/
 build/
-*.spec
+
 
 # Lokale Daten & Datenbanken (Deine Liste)
 .env
