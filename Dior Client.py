@@ -2969,8 +2969,24 @@ class DiorClientGUI:
                         ex = int(data.get("x", 100) * self.overlay_win.ui_scale)
                         ey = int(data.get("y", 100) * self.overlay_win.ui_scale)
                         self.overlay_win.event_preview_label.move(ex, ey)
+
                         self.overlay_win.event_preview_label.show()
                         self.overlay_win.event_preview_label.raise_()
+
+            # D) KILLSTREAK (Dummy Daten füllen)
+            if "streak" in targets:
+                streak_cfg = self.config.get("streak", {})
+                img_name = clean_path(streak_cfg.get("img", "KS_Counter.png"))
+                img_path = get_asset_path(img_name)
+
+                # Wir simulieren einen aktiven Streak
+                self.overlay_win.draw_streak_ui(
+                    img_path,
+                    10,  # Dummy Count
+                    ["TR", "NC", "VS"], # Dummy Factions
+                    streak_cfg,
+                    [0, 1, 2] # Dummy Slots
+                )
 
             self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
 
@@ -3006,6 +3022,12 @@ class DiorClientGUI:
             if "event" in targets:
                 if hasattr(self.overlay_win, 'event_preview_label'):
                     self.overlay_win.event_preview_label.hide()
+
+            if "streak" in targets:
+                if not getattr(self, 'ps2_running', False):
+                    self.overlay_win.streak_bg_label.hide()
+                    self.overlay_win.streak_text_label.hide()
+                    for l in self.overlay_win.knife_labels: l.hide()
 
             # 4. Speichern
             if "event" in targets:
