@@ -2988,6 +2988,14 @@ class DiorClientGUI:
                     [0, 1, 2] # Dummy Slots
                 )
 
+            # E) CROSSHAIR (Sofort anzeigen)
+            if "crosshair" in targets:
+                # Sicherstellen, dass die aktuellen Settings geladen sind
+                self.update_crosshair_from_qt()
+                if hasattr(self.overlay_win, 'crosshair_label'):
+                    self.overlay_win.crosshair_label.show()
+                    self.overlay_win.crosshair_label.raise_()
+
             self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
 
         else:
@@ -3028,6 +3036,11 @@ class DiorClientGUI:
                     self.overlay_win.streak_bg_label.hide()
                     self.overlay_win.streak_text_label.hide()
                     for l in self.overlay_win.knife_labels: l.hide()
+
+            if "crosshair" in targets:
+                if not getattr(self, 'ps2_running', False):
+                    if hasattr(self.overlay_win, 'crosshair_label'):
+                        self.overlay_win.crosshair_label.hide()
 
             # 4. Speichern
             if "event" in targets:
