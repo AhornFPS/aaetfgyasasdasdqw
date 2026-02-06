@@ -1,53 +1,60 @@
-import os
 import sys
-import time
+import os
 import traceback
 
-# Ermittelt den Ordner, in dem die EXE oder das Skript liegt
+# ---------------------------------------------------------
+# 1. BASE_DIR: Hier liegen Configs, Logs und die DB
+# ---------------------------------------------------------
 if getattr(sys, 'frozen', False):
+    # Wenn wir eine EXE sind, ist das der Ordner, in dem die .exe liegt
     BASE_DIR = os.path.dirname(sys.executable)
 else:
+    # Wenn wir ein Skript sind, ist das der Projektordner
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+# ---------------------------------------------------------
+# 2. ASSET PATH: Hier liegen Bilder und Sounds
+# ---------------------------------------------------------
 def get_asset_path(filename):
-    if not filename: return ""
-    return os.path.join(BASE_DIR, "assets", filename)
-
-def clean_path(text):
-    """Entfernt 'No file selected' und Pfade, gibt nur Dateinamen zurück."""
-    if not text or "No file selected" in text:
+    """
+    Findet Ressourcen zuverlässig, egal ob Development oder PyInstaller EXE.
+    """
+    if not filename:
         return ""
-    return os.path.basename(text.strip())
 
-# --- ERROR LOGGER ---
+    # Pfadbereinigung (falls User "assets/bild.png" statt "bild.png" schreibt)
+    filename = filename.replace("assets/", "").replace("assets\\", "")
+
+    # Prüfen, ob wir im PyInstaller Temp-Ordner laufen
+    if hasattr(sys, '_MEIPASS'):
+        base_path = os.path.join(sys._MEIPASS, "assets")
+    else:
+        base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+    return os.path.join(base_path, filename)
+
+
+# ---------------------------------------------------------
+# 3. HELPER FUNKTIONEN
+# ---------------------------------------------------------
+def clean_path(path_str):
+    """Entfernt 'No file selected' und leere Pfade, gibt nur Dateinamen zurück."""
+    if not path_str or "No file selected" in path_str:
+        return ""
+    return os.path.basename(path_str)
+
+
 def log_exception(exc_type, exc_value, exc_traceback):
-    with open("error_log.txt", "a") as f:
-        f.write(f"\n--- CRASH LOG {time.ctime()} ---\n")
+    """Globaler Error-Handler für Log-Dateien."""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    # Fehler in Datei schreiben
+    error_file = os.path.join(BASE_DIR, "crash_log.txt")
+    with open(error_file, "a") as f:
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
 
-# --- KONSTANTEN ---
-CHEAT_OPTIONS = [
-    "Aimbot", "Magic Bullet", "Hitbox Mod", "Triggerbot",
-    "Wallhack (ESP)", "Radar Hack", "Speedhack", "Flying",
-    "Teleport", "No Recoil/Spread", "Fire Rate Mod", "Unlimited Heat",
-    "Instant Hit", "No Collision", "Invincibility", "Stat Padding"
-]
-
-CHEAT_DESCRIPTIONS = {
-    "Aimbot": "Automated target acquisition that unnaturally snaps the crosshair to critical hit zones.",
-    "Magic Bullet": "Manipulation of projectile vectors, allowing shots to hit targets even when not directly aimed at them.",
-    "Hitbox Mod": "Artificial enlargement of player hitboxes, resulting in an unnaturally high hit-rate.",
-    "Triggerbot": "Automated firing system that triggers the weapon instantly when a target enters the reticle.",
-    "Wallhack (ESP)": "Tactical overlay showing player positions, health, and distances through solid terrain.",
-    "Radar Hack": "External real-time position tracking of all units far beyond the range of in-game detection tools.",
-    "Speedhack": "Illegal modification of movement speed (client-speed) exceeding normal gameplay mechanics.",
-    "Flying": "Suspension of gravity constants, allowing the character to move freely through the air without a jetpack.",
-    "Teleport": "Instantaneous movement between coordinates or snapping to a target's position.",
-    "No Recoil/Spread": "Complete elimination of weapon kick and bullet spread for perfect accuracy at any range.",
-    "Fire Rate Mod": "Technical increase of the weapon's rate of fire beyond the server-defined maximum.",
-    "Unlimited Heat": "Manipulation of the heat mechanic to allow continuous firing without cooldown or ammo depletion.",
-    "Instant Hit": "Removal of projectile travel time (bullet velocity), making shots hit the target instantaneously.",
-    "No Collision": "Modification allowing the player to walk through walls and solid objects (NoClip).",
-    "Invincibility": "Exploiting game memory to prevent taking damage from any source (God Mode).",
-    "Stat Padding": "Coordinated actions to artificially inflate character statistics outside of normal competitive play."
-}
+    # Fehler auch in Konsole ausgeben
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)

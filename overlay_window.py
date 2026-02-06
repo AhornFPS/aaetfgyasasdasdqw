@@ -31,8 +31,19 @@ except ImportError:
 # Helper Funktion für Pfade
 def get_asset_path(filename):
     if not filename: return ""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_dir, "assets", filename)
+
+    # 1. Basis-Pfad ermitteln (Skript vs. EXE/_internal)
+    if hasattr(sys, '_MEIPASS'):
+        base_dir = os.path.join(sys._MEIPASS, "assets")
+    else:
+        base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+    full_path = os.path.join(base_dir, filename)
+
+    # Debugging-Hilfe (wird im CMD Fenster angezeigt, falls console=True)
+    # print(f"DEBUG ASSET: {full_path} | Exists: {os.path.exists(full_path)}")
+
+    return full_path
 
 
 # --- SIGNALE ---
@@ -419,36 +430,49 @@ class QtOverlay(QWidget):
         f_size = getattr(self, 'current_chat_font_size', 12)
 
         full_html = f"""
-                        <html>
-                        <head>
-                            <style>
-                                body {{ 
-                                    margin: 0; padding: 5px; 
-                                    overflow: hidden; 
-                                    font-family: 'Segoe UI', Arial;
-                                    background-color: transparent;
-                                    color: white;
-                                }}
-                                .message {{
-                                    font-size: {f_size}pt;
-                                    font-weight: 800;
-                                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
-                                }}
-                                .user {{
-                                    color: {safe_color};
-                                    font-weight: 900;
-                                    text-shadow: 0px 0px 8px {safe_color}, 1px 1px 1px #000;
-                                }}
-                                img {{ vertical-align: middle; }}
-                            </style>
-                        </head>
-                        <body>
-                            <div class="message">
-                                <span class="user">{user}:</span> {html_msg}
-                            </div>
-                        </body>
-                        </html>
-                        """
+                                <html>
+                                <head>
+                                    <style>
+                                        @keyframes slideIn {{
+                                            from {{
+                                                transform: translateX(-30px);
+                                                opacity: 0;
+                                            }}
+                                            to {{
+                                                transform: translateX(0);
+                                                opacity: 1;
+                                            }}
+                                        }}
+
+                                        body {{ 
+                                            margin: 0; padding: 5px; 
+                                            overflow: hidden; 
+                                            font-family: 'Segoe UI', Arial;
+                                            background-color: transparent;
+                                            color: white;
+                                            /* Hier wird die Animation auf den gesamten Body angewendet */
+                                            animation: slideIn 0.4s ease-out forwards;
+                                        }}
+                                        .message {{
+                                            font-size: {f_size}pt;
+                                            font-weight: 800;
+                                            text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
+                                        }}
+                                        .user {{
+                                            color: {safe_color};
+                                            font-weight: 900;
+                                            text-shadow: 0px 0px 8px {safe_color}, 1px 1px 1px #000;
+                                        }}
+                                        img {{ vertical-align: middle; max-height: 2em; }}
+                                    </style>
+                                </head>
+                                <body>
+                                    <div class="message">
+                                        <span class="user">{user}:</span> {html_msg}
+                                    </div>
+                                </body>
+                                </html>
+                                """
 
         # Widget erstellen (Höhe regelt sich intern von selbst!)
         msg_widget = ChatMessageWidget(self.chat_container, full_html, self.chat_hold_time)
@@ -508,9 +532,22 @@ class QtOverlay(QWidget):
 
     # --- CACHE LOGIK ---
     def get_cached_pixmap(self, path):
-        if not path or not os.path.exists(path):
+        if not path:
             return QPixmap()
 
+        # --- FIX: Selbstheilung für relative Pfade ---
+        # 1. Ist der Pfad so wie er ist gültig?
+        if not os.path.exists(path):
+            # 2. Nein? Dann versuchen wir, ihn im Assets-Ordner zu finden
+            resolved_path = get_asset_path(path)
+            if os.path.exists(resolved_path):
+                path = resolved_path # Gefunden! Wir nutzen den korrigierten Pfad
+            else:
+                # Weder direkt noch in Assets gefunden -> Abbruch
+                # print(f"DEBUG: Bild nicht gefunden: {path}")
+                return QPixmap()
+
+        # Ab hier normale Cache-Logik
         if path not in self.pixmap_cache:
             pm = QPixmap(path)
             if not pm.isNull():
@@ -518,9 +555,9 @@ class QtOverlay(QWidget):
             else:
                 return QPixmap()
 
-        # Zeitstempel aktualisieren
         self.cache_usage_timestamps[path] = time.time()
         return self.pixmap_cache[path]
+
 
     def clear_cache(self):
         """Falls man Bilder im Betrieb austauscht (Reload)."""
@@ -729,42 +766,58 @@ class QtOverlay(QWidget):
         widget.move(final_x, final_y)
 
     def set_mouse_passthrough(self, enabled=True, active_targets=None):
+        """
+        Aktiviert oder deaktiviert die Klick-Durchlässigkeit.
+        WICHTIG: Erst Qt-Flags setzen, DANN show(), DANN ctypes Styles!
+        """
+        # 1. Qt Flags setzen (Dies kann das Fenster zerstören und neu erstellen!)
+        if enabled:
+            # Normaler Overlay-Modus (Klicks gehen durch)
+            self.edit_mode = False
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Tool |
+                Qt.WindowType.WindowTransparentForInput  # Qt-Level Transparenz
+            )
+        else:
+            # Edit-Modus (Fenster fängt Klicks ab)
+            self.edit_mode = True
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Tool
+                # KEIN WindowTransparentForInput hier!
+            )
+
+        # 2. Fenster (wieder) anzeigen, damit es ein gültiges Handle bekommt
+        self.show()
+
+        # Falls Edit-Modus: Fokus erzwingen, sonst landen Klicks im Spiel
+        if not enabled:
+            self.activateWindow()
+            self.raise_()
+
+        # 3. Windows API Styles anwenden (Auf das NEUE Handle!)
         try:
             hwnd = int(self.winId())
             GWL_EXSTYLE = -20
             WS_EX_LAYERED = 0x80000
             WS_EX_TRANSPARENT = 0x20
+
+            # Aktuellen Style holen
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
-            self.feed_label.setStyleSheet("background: transparent;")
-            self.stats_bg_label.setStyleSheet("")
-            self.streak_bg_label.setStyleSheet("")
-            self.crosshair_label.setStyleSheet("background: transparent;")
-
             if enabled:
+                # Durchlässig machen (Layered + Transparent)
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-                self.edit_mode = False
-                self.setWindowFlags(
-                    Qt.WindowType.FramelessWindowHint |
-                    Qt.WindowType.WindowStaysOnTopHint |
-                    Qt.WindowType.Tool |
-                    Qt.WindowType.WindowTransparentForInput
-                )
-                self.show()
                 if hasattr(self, 'event_preview_label'):
                     self.event_preview_label.hide()
             else:
+                # Greifbar machen (Transparent-Bit entfernen)
                 ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
-                self.edit_mode = True
-                self.setWindowFlags(
-                    Qt.WindowType.FramelessWindowHint |
-                    Qt.WindowType.WindowStaysOnTopHint |
-                    Qt.WindowType.Tool
-                )
-                self.show()
-                self.raise_()
-                self.activateWindow()
 
+                # --- VISUALS FÜR EDIT MODE ---
                 hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
                 targets = active_targets if active_targets else []
 

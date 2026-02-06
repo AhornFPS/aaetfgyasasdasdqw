@@ -1,11 +1,5 @@
-import os
-import sys
-import ctypes
-import os
-from dotenv import load_dotenv
 
-# Ganz oben beim Programmstart
-load_dotenv()
+import os
 import sys
 import ctypes
 
@@ -15,25 +9,33 @@ try:
 except Exception:
     pass
 
-# 2. Die Pfad-Logik (Muss vor der Nutzung definiert sein)
+# 2. Die Pfad-Logik für PyInstaller 6+ (_internal Support)
 def resource_path(relative_path):
-    """ Errechnet den Pfad zur Ressource, egal ob Skript oder EXE. """
+    """
+    Findet Ressourcen, egal ob im Skript oder in der EXE (_internal).
+    """
     if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+        # In der EXE ist _MEIPASS der Pfad zum '_internal' Ordner
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
 
-# 3. Qt & WebEngine Umgebungsvariablen
+    return os.path.join(base_path, relative_path)
+
+# 3. Umgebungsvariablen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
-# Falls RivaTuner immer noch nervt, hier der GPU-Disable-Flag:
+
+# WICHTIG: Falls WebEngine Grafikfehler macht (schwarze Felder), dies entkommentieren:
 # os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
 
 from PyQt6.QtCore import QCoreApplication
 
-# 4. Plugin-Pfad für imageformats (Wichtig für WebP/GIF)
-# Wir fügen das Verzeichnis hinzu, das den Ordner 'imageformats' ENTHÄLT
-plugin_path = resource_path(".")
-QCoreApplication.addLibraryPath(plugin_path)
+# 4. Plugin-Pfad setzen (Der wichtigste Fix für fehlende Bilder!)
+# Qt muss wissen, dass die DLLs jetzt in '_internal' liegen.
+# sys._MEIPASS zeigt genau auf diesen '_internal' Ordner.
+if hasattr(sys, '_MEIPASS'):
+    QCoreApplication.addLibraryPath(sys._MEIPASS)
 
 # Qt-Skalierung fixen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
@@ -2298,19 +2300,18 @@ class DiorClientGUI:
             self.add_log("Overlay: aktiviert.")
 
     def trigger_overlay_event(self, event_type):
-        """Triggert Bild/Sound im Overlay.
-           Logik:
-           - Queue AN: Individuelle Dauer > Globale Dauer
-           - Queue AUS: Globale Dauer überschreibt immer (Force Override)
+        """
+        Triggert Bild/Sound im Overlay.
+        Nutzt jetzt die zentrale Logik aus dior_utils.
         """
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
-        # 1. CONFIG-DATEN SUCHEN (ROBUST & CASE-INSENSITIVE)
+        # 1. CONFIG-DATEN SUCHEN
         events_dict = self.config.get("events", {})
         event_data = events_dict.get(event_type)
 
-        # Fallback Suche (Case-Insensitive)
+        # Fallback (Case-Insensitive)
         if not event_data:
             for key, val in events_dict.items():
                 if key.lower() == event_type.lower():
@@ -2320,61 +2321,58 @@ class DiorClientGUI:
         if not event_data:
             return
 
-        # 2. KOORDINATEN & STATUS LADEN
+        # 2. PARAMETER LADEN
         try:
-            abs_x = int(event_data.get("x", event_data.get("x_offset", 0)))
-            abs_y = int(event_data.get("y", event_data.get("y_offset", 0)))
+            abs_x = int(event_data.get("x", 0))
+            abs_y = int(event_data.get("y", 0))
             scale = float(event_data.get("scale", 1.0))
             volume = float(event_data.get("volume", 1.0))
         except (ValueError, TypeError):
             abs_x, abs_y, scale, volume = 0, 0, 1.0, 1.0
 
-        # --- NEUE DAUER-LOGIK (DURATION) ---
+        # 3. DAUER-LOGIK
         queue_active = self.config.get("event_queue_active", True)
         global_dur = int(self.config.get("event_global_duration", 3000))
         specific_dur = int(event_data.get("duration", 0))
 
-
         if not queue_active:
-            # MODUS: QUEUE AUS -> Globaler Timer erzwingen!
-            # Wir ignorieren hier bewusst 'specific_dur', damit alle Events
-            # gleich lange stehen bleiben (wie gewünscht).
             dur = global_dur
         else:
-            # MODUS: QUEUE AN -> Individuelle Dauer hat Vorrang
-            if specific_dur > 0:
-                dur = specific_dur
-            else:
-                dur = global_dur  # Fallback
+            dur = specific_dur if specific_dur > 0 else global_dur
 
-
-        if (event_type.lower() == "hitmarker"):
+        if event_type.lower() == "hitmarker":
             dur = specific_dur
 
-        # 3. BILD-PFAD ERMITTELN
+        # 4. PFADE ERMITTELN (Jetzt viel schlanker!)
         img_path = ""
         img_name = event_data.get("img")
         if img_name:
-            temp_path = get_asset_path(img_name)
-            if os.path.exists(temp_path):
-                img_path = temp_path
+            # Versuch 1: via dior_utils (deckt Exe & Dev ab)
+            path_candidate = get_asset_path(img_name)
 
-        # 4. SOUND-PFAD ERMITTELN
+            if os.path.exists(path_candidate):
+                img_path = path_candidate
+            # Versuch 2: Absoluter Pfad (falls User eigene Bilder von C:/ lädt)
+            elif os.path.exists(img_name):
+                img_path = img_name
+
         sound_path = ""
-        has_sound = globals().get("HAS_SOUND", False)
-        if has_sound:
+        if globals().get("HAS_SOUND", False):
             snd_name = event_data.get("snd")
             if snd_name:
-                temp_snd = get_asset_path(snd_name)
-                if os.path.exists(temp_snd):
-                    sound_path = temp_snd
+                path_candidate = get_asset_path(snd_name)
+                if os.path.exists(path_candidate):
+                    sound_path = path_candidate
+                elif os.path.exists(snd_name):
+                    sound_path = snd_name
 
-        # 5. FLAG SETZEN: Ist es ein Hitmarker?
+        # 5. TRIGGER
         is_hitmarker = (event_type.lower() == "hitmarker")
 
-        # 6. SIGNAL SENDEN
         if img_path or sound_path:
-            self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, volume, is_hitmarker)
+            self.overlay_win.signals.show_image.emit(
+                img_path, sound_path, dur, abs_x, abs_y, scale, volume, is_hitmarker
+            )
 
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
