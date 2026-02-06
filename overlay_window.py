@@ -3,6 +3,8 @@ import os
 import ctypes
 import math
 import time
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEngineSettings
 
 # Aus QtCore kommen die Logik- und Animations-Klassen
 from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
@@ -47,125 +49,73 @@ class OverlaySignals(QObject):
     item_moved = pyqtSignal(str, int, int)
 
 
-
-
-
-class DraggableChat(QTextBrowser):
+class DraggableChat(QWebEngineView):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # WICHTIG: WA_TranslucentBackground auf False, damit Stylesheet-Farben greifen
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-        # Das erlaubt uns, den Hintergrund selbst über das Stylesheet zu zeichnen
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.page().setBackgroundColor(QColor(0, 0, 0, 0))
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.movies = {}
-        self._mutex = False
 
+        settings = self.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+
+    # Diese Methode wird nicht mehr benötigt, da wir setHtml() im Widget nutzen.
+    # Wir lassen sie leer, damit Aufrufe nicht abstürzen.
     def add_animated_message(self, html_msg):
-        import re
-        matches = re.findall(r'src="emote://([^"]+)"', html_msg)
-        doc = self.document()
-
-        # Wir suchen das Haupt-Overlay für den globalen Cache
-        # Struktur: ChatMessageWidget -> Container -> QtOverlay
-        main_ovl = self.parent().parent() if self.parent() else None
-
-        for path in matches:
-            clean_path = path.replace('\\', '/')
-            if not os.path.exists(clean_path): continue
-            url = QUrl(f"emote://{clean_path}")
-
-            if clean_path.lower().endswith((".gif", ".webp")):
-                # Globalen Movie-Cache nutzen
-                if main_ovl and hasattr(main_ovl, 'movie_cache'):
-                    if clean_path not in main_ovl.movie_cache:
-                        m = QMovie(clean_path)
-                        if m.isValid():
-                            #m.setScaledSize(QSize(28, 28))
-                            m.setCacheMode(QMovie.CacheMode.CacheAll)
-                            m.start()
-                            main_ovl.movie_cache[clean_path] = m
-
-                    movie = main_ovl.movie_cache.get(clean_path)
-                    if movie:
-                        self.movies[clean_path] = movie
-                        if main_ovl:
-                            main_ovl.cache_usage_timestamps[clean_path] = time.time()
-                        # Jede Nachricht hört auf den globalen Taktgeber
-                        movie.frameChanged.connect(lambda _, p=clean_path: self.on_frame_changed(p))
-                        doc.addResource(QTextDocument.ResourceType.ImageResource, url, movie.currentPixmap())
-
-            else:  # Statische Bilder (PNG)
-                pix = QPixmap(clean_path)
-                if not pix.isNull():
-                    doc.addResource(QTextDocument.ResourceType.ImageResource, url, pix)
-
-        self.append(html_msg)
-        self.moveCursor(QTextCursor.MoveOperation.End)
-
-    def on_frame_changed(self, path):
-        """Wird vom globalen Movie getriggert."""
-        if self._mutex or not self.isVisible(): return
-
-        movie = self.movies.get(path)
-        if movie:
-            self._mutex = True
-            try:
-                # Wir holen den aktuellen Frame vom globalen Cache-Objekt
-                doc = self.document()
-                url = QUrl(f"emote://{path}")
-                doc.addResource(QTextDocument.ResourceType.ImageResource, url, movie.currentPixmap())
-                doc.documentLayout().update.emit(QRectF(0, 0, self.width(), self.height()))
-            except:
-                pass
-            finally:
-                self._mutex = False
+        pass
 
     def clear(self):
-        self._mutex = True
-        # NUR die Verbindung trennen, NICHT das Movie stoppen!
-        for path, movie in self.movies.items():
-            try:
-                movie.frameChanged.disconnect()
-            except:
-                pass
-        self.movies.clear()
-        super().clear()
-        self._mutex = False
+        self.setHtml("")
 
 
-class ChatMessageWidget(DraggableChat):  # Wir erben von deinem Browser
-    def __init__(self, parent, html, hold_time, fade_duration=2000):
+class ChatMessageWidget(QWidget):
+    def __init__(self, parent, html, hold_time):
         super().__init__(parent)
         self.hold_time = hold_time
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        self.setStyleSheet("background: transparent; border: none;")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Opacity Effekt für die Animation
+        self.browser = DraggableChat(self)
+        layout.addWidget(self.browser)
+
+        self.browser.loadFinished.connect(self._prepare_height)
+
+        # --- DER FIX: Base URL mitgeben ---
+        # Wir geben den Pfad des aktuellen Ordners als "Heimat" an.
+        base_url = QUrl.fromLocalFile(os.path.abspath("."))
+        self.browser.setHtml(html, base_url)
+
         self.opacity_effect = QGraphicsOpacityEffect(self)
-        self.opacity_effect.setOpacity(1.0)  # <--- Das hier erzwingt volle Schärfe von Anfang an
+        self.opacity_effect.setOpacity(1.0)
         self.setGraphicsEffect(self.opacity_effect)
 
-        # Inhalt setzen
-        self.add_animated_message(html)
-        self.adjust_height()
+    def _prepare_height(self):
+        """Ersatz für das alte adjust_height."""
+        # Wir fragen JavaScript nach der scrollHeight (tatsächliche Höhe des Inhalts)
+        self.browser.page().runJavaScript(
+            "document.documentElement.scrollHeight",
+            self._apply_height_callback
+        )
 
-        # Timer für den Start des Fade-Outs
-        if self.hold_time > 0:
-            QTimer.singleShot(self.hold_time * 1000, self.start_fade_out)
+    def _apply_height_callback(self, height):
+        """Wird aufgerufen, sobald JavaScript die Höhe berechnet hat."""
+        if height:
+            new_h = int(height) + 10  # Kleiner Puffer
+            self.setFixedHeight(new_h)
+            self.browser.setFixedHeight(new_h)
 
-    def adjust_height(self):
-        """Passt die Höhe des Widgets an den Textinhalt an."""
-        self.document().setTextWidth(self.width())
-        new_h = int(self.document().size().height()) + 5
-        self.setFixedHeight(new_h)
+            # Erst JETZT starten wir den Timer für das Verschwinden
+            if self.hold_time > 0:
+                QTimer.singleShot(self.hold_time * 1000, self.start_fade_out)
 
     def start_fade_out(self):
-        # Animation: Von 1.0 (sichtbar) zu 0.0 (unsichtbar)
+        """Bleibt fast gleich, nutzt aber QPropertyAnimation auf den Container."""
         self.anim = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.anim.setDuration(2000)  # 2 Sekunden Fading
+        self.anim.setDuration(2000)
         self.anim.setStartValue(1.0)
         self.anim.setEndValue(0.0)
         self.anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
@@ -173,8 +123,9 @@ class ChatMessageWidget(DraggableChat):  # Wir erben von deinem Browser
         self.anim.start()
 
     def destroy_message(self):
+        """Bleibt genau gleich."""
         self.hide()
-        self.deleteLater()  # Sicher aus dem Speicher löschen
+        self.deleteLater()
 
 # --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
 class PathDrawingLayer(QWidget):
@@ -449,40 +400,59 @@ class QtOverlay(QWidget):
         enabled = True
         always_on = False
         game_running = False
-
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
             always_on = self.gui_ref.config.get("twitch", {}).get("always_on", False)
             game_running = getattr(self.gui_ref, 'ps2_running', False)
 
-        # Logik: Zeigen wenn (Test) ODER (Aktiv UND (Spiel läuft ODER AlwaysOn)) ODER (Edit-Mode)
         should_process = is_test or (enabled and (game_running or always_on)) or self.edit_mode
+        if not should_process: return
 
-        if not should_process:
-            return # Nachricht wird ignoriert, da Bedingungen nicht erfüllt
-
-        # Container sicherheitshalber zeigen
         self.chat_container.show()
 
+        # PFAD-FIX für WebEngine
+        # Wir machen aus emote://C:\pfad -> file:///C:/pfad
+        html_msg = html_msg.replace('src="emote://', 'src="file:///')
+        html_msg = html_msg.replace('\\', '/')
+
         safe_color = self.get_readable_color(color)
-
-        # Hol dir die aktuellen Werte (falls sie in update_twitch_style gespeichert wurden)
         f_size = getattr(self, 'current_chat_font_size', 12)
-        full_html = f"""
-                <div style="font-size: {f_size}pt; line-height: 125%; font-weight: 800;">
-                    <span style="color: {safe_color}; font-weight: 900; letter-spacing: 0.5px;
-                                 text-shadow: 0px 0px 8px {safe_color}, 1px 1px 0px #000, -1px -1px 0px #000;">
-                        {user}:
-                    </span>
-                    <span style="color: #ffffff; text-shadow: 2px 2px 2px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;">
-                        {html_msg}
-                    </span>
-                </div>
-                """
 
+        full_html = f"""
+                        <html>
+                        <head>
+                            <style>
+                                body {{ 
+                                    margin: 0; padding: 5px; 
+                                    overflow: hidden; 
+                                    font-family: 'Segoe UI', Arial;
+                                    background-color: transparent;
+                                    color: white;
+                                }}
+                                .message {{
+                                    font-size: {f_size}pt;
+                                    font-weight: 800;
+                                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
+                                }}
+                                .user {{
+                                    color: {safe_color};
+                                    font-weight: 900;
+                                    text-shadow: 0px 0px 8px {safe_color}, 1px 1px 1px #000;
+                                }}
+                                img {{ vertical-align: middle; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div class="message">
+                                <span class="user">{user}:</span> {html_msg}
+                            </div>
+                        </body>
+                        </html>
+                        """
+
+        # Widget erstellen (Höhe regelt sich intern von selbst!)
         msg_widget = ChatMessageWidget(self.chat_container, full_html, self.chat_hold_time)
         msg_widget.setFixedWidth(self.chat_container.width())
-        msg_widget.adjust_height()
         self.chat_layout.addWidget(msg_widget)
 
         if self.chat_layout.count() > 50:

@@ -1,15 +1,44 @@
 import os
 import sys
 import ctypes
-# DPI Awareness erzwingen, bevor GUI-Module geladen werden
+import os
+from dotenv import load_dotenv
+
+# Ganz oben beim Programmstart
+load_dotenv()
+import sys
+import ctypes
+
+# 1. DPI Awareness (Muss als ALLERERSTES passieren)
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)  # 1 = Process_System_DPI_Aware
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
+
+# 2. Die Pfad-Logik (Muss vor der Nutzung definiert sein)
+def resource_path(relative_path):
+    """ Errechnet den Pfad zur Ressource, egal ob Skript oder EXE. """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# 3. Qt & WebEngine Umgebungsvariablen
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+# Falls RivaTuner immer noch nervt, hier der GPU-Disable-Flag:
+# os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+
+from PyQt6.QtCore import QCoreApplication
+
+# 4. Plugin-Pfad für imageformats (Wichtig für WebP/GIF)
+# Wir fügen das Verzeichnis hinzu, das den Ordner 'imageformats' ENTHÄLT
+plugin_path = resource_path(".")
+QCoreApplication.addLibraryPath(plugin_path)
 
 # Qt-Skalierung fixen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+
 import shutil
 import subprocess
 import time
@@ -27,11 +56,14 @@ import launcher_qt
 import characters_qt
 import settings_qt
 import overlay_config_qt
-from census_worker import CensusWorker, S_ID, PS2_DETECTION
+from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
 from dior_utils import BASE_DIR, get_asset_path, log_exception, clean_path
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
+import sys
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWebEngineCore import QWebEngineSettings
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
@@ -55,8 +87,7 @@ from PyQt6.QtCore import (
     QPoint,
     QSize
 )
-import os
-from PyQt6.QtCore import QCoreApplication
+
 
 # Pfad zum aktuellen Verzeichnis ermitteln
 basedir = os.path.dirname(os.path.abspath(__file__))
@@ -153,6 +184,7 @@ class DiorClientGUI:
         # 1. BASIS & DB INITIALISIERUNG
         self.BASE_DIR = BASE_DIR  # Kommt jetzt aus dem Import 'dior_utils'
         self.db = DatabaseHandler()  # Kommt aus 'dior_db'
+        self.s_id = os.getenv("CENSUS_S_ID", "s:example")
 
         # 2. DATEN LADEN
         self.config = self.load_config()
@@ -265,7 +297,7 @@ class DiorClientGUI:
         threading.Thread(target=self.cache_worker, daemon=True).start()
         print("SYS: Cache Worker Thread gestartet.")
 
-        self.census = CensusWorker(self)
+        self.census = CensusWorker(self, self.s_id)
         self.census.start()
 
         threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
@@ -1132,7 +1164,7 @@ class DiorClientGUI:
         error_msg = ""
 
         try:
-            url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}"
+            url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}"
             response = requests.get(url, timeout=10)
             r = response.json()
 
@@ -2041,28 +2073,60 @@ class DiorClientGUI:
         except Exception as e:
             print(f"Fehler beim Laden der Item-DB: {e}")
 
-
     def load_config(self):
-        """Lädt die zentrale Konfiguration."""
-        config_path = os.path.join(BASE_DIR, "config.json")
+        """
+        Lädt die zentrale Konfiguration.
+        Sorgt dafür, dass Voreinstellungen aus der EXE beim ersten Start
+        nach außen kopiert werden.
+        """
+        # 1. Pfade definieren
+        # 'user_config_path' ist die beschreibbare Datei neben deiner .exe
+        if hasattr(sys, '_MEIPASS'):
+            # Wenn als EXE gestartet: Ordner der .exe finden
+            base_dir_exe = os.path.dirname(sys.executable)
+            user_config_path = os.path.join(base_dir_exe, "config.json")
+        else:
+            # Wenn als Skript gestartet: Aktueller Ordner
+            user_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+        # 'template_path' ist die voreingestellte Datei INNERHALB der EXE
+        template_path = resource_path("config.json")
+
+        # 2. Deine Originalen Standard-Werte (Fallback)
         default_conf = {
             "ps2_path": "",
-            "overlay_master_active": True,  # <--- WICHTIG: Standard auf True setzen!
+            "overlay_master_active": True,
             "crosshair": {"file": "crosshair.png", "size": 32, "active": True},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True}
         }
 
-        loaded_conf = {}
-        if os.path.exists(config_path):
+        # 3. ERST-START LOGIK: Template nach außen kopieren
+        # Falls keine config.json neben der EXE liegt, nehmen wir die mitgelieferte
+        if not os.path.exists(user_config_path) and os.path.exists(template_path):
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                import shutil
+                shutil.copy2(template_path, user_config_path)
+                print("SYS: Voreingestellte Konfiguration extrahiert.")
+            except Exception as e:
+                print(f"Config Template Copy Error: {e}")
+
+        # 4. LADEN
+        loaded_conf = {}
+        if os.path.exists(user_config_path):
+            try:
+                with open(user_config_path, "r", encoding="utf-8") as f:
                     loaded_conf = json.load(f)
             except Exception as e:
                 print(f"Config Load Error: {e}")
 
-        # Fehlende Werte mit Standards auffüllen (Merge)
+        # 5. MERGEN (Deine Logik)
+        # Fehlende Werte mit Standards auffüllen
         default_conf.update(loaded_conf)
+
+        # Sicherstellen, dass wir den Pfad für spätere Speichervorgänge behalten
+        self.config_path = user_config_path
+
         return default_conf
 
 
@@ -2197,19 +2261,25 @@ class DiorClientGUI:
         return f"Unknown ({world_id})"
 
     def save_config(self):
-        """Speichert die aktuelle Konfiguration sicher auf Festplatte."""
+        """Speichert die aktuelle Konfiguration sicher auf Festplatte (EXE-kompatibel)."""
         try:
-            # Wir säubern die Config von evtl. eingeschlichenen Qt-Objekten
+            # 1. Pfad-Sicherung
+            # Falls aus irgendeinem Grund self.config_path nicht gesetzt wurde, Fallback:
+            target_path = getattr(self, 'config_path', os.path.join(os.path.abspath("."), "config.json"))
+
+            # 2. Säuberung (Deine bewährte Logik)
             clean_config = {}
             for k, v in self.config.items():
-                # Nur einfache Datentypen zulassen
+                # Nur einfache Datentypen zulassen (verhindert Qt-Objekt-Fehler)
                 if isinstance(v, (str, int, float, bool, dict, list)):
                     clean_config[k] = v
 
-            config_path = os.path.join(self.BASE_DIR, "config.json")
-            with open(config_path, "w", encoding="utf-8") as f:
+            # 3. Speichern
+            with open(target_path, "w", encoding="utf-8") as f:
                 json.dump(clean_config, f, indent=4)
-            self.add_log("SYS: Konfiguration erfolgreich gespeichert.")
+
+            self.add_log(f"SYS: Konfiguration in {os.path.basename(target_path)} gesichert.")
+
         except Exception as e:
             self.add_log(f"ERR: Fehler beim Speichern der JSON: {e}")
 
@@ -3321,7 +3391,7 @@ class DiorClientGUI:
             if ids:
                 try:
                     # Abfrage an Census mit allen Details (inklusive Outfit!)
-                    url = (f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/"
+                    url = (f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/"
                            f"?character_id={','.join(ids)}"
                            f"&c:show=character_id,name.first,faction_id,battle_rank"
                            f"&c:resolve=outfit")
@@ -3464,7 +3534,7 @@ class DiorClientGUI:
         def worker():
             try:
                 # 1. API ABFRAGE
-                url = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history,weapon_stat_by_faction"
+                url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history,weapon_stat_by_faction"
                 r = requests.get(url, timeout=30).json()
 
                 if not r.get('character_list'):

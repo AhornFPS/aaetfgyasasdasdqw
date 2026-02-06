@@ -7,7 +7,7 @@ import websockets
 import requests  # Wichtig für den Faction-Check beim Login
 
 # --- KONSTANTEN & MAPPINGS ---
-S_ID = "s:1799912354"
+
 
 PS2_DETECTION = {
     "CATEGORIES": {"Knife": "Knife Kill", "Grenade": "Nade Kill"},
@@ -57,8 +57,9 @@ def get_asset_path_local(filename):
 
 
 class CensusWorker:
-    def __init__(self, controller):
+    def __init__(self, controller, service_id):
         self.c = controller
+        self.s_id = service_id
         self.loop = None
         self.websocket = None
         self.event_cache = set()
@@ -75,7 +76,7 @@ class CensusWorker:
         t.start()
 
     async def listener(self):
-        uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={S_ID}"
+        uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={self.s_id}"
 
         while True:
             try:
@@ -161,7 +162,7 @@ class CensusWorker:
                                         # --- RESTORED FEATURE: LOGIN EVENT TRIGGER ---
                                         def trigger_login_event(cid_val):
                                             try:
-                                                u = f"https://census.daybreakgames.com/{S_ID}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
+                                                u = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
                                                 r = requests.get(u, timeout=3).json()
                                                 f_id = "0"
                                                 if r.get("returned", 0) > 0:
