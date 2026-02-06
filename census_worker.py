@@ -6,8 +6,10 @@ import os
 import websockets
 import requests  # Wichtig für den Faction-Check beim Login
 
-# --- KONSTANTEN & MAPPINGS ---
+# --- FIX: Import der zentralen Pfad-Logik ---
+from dior_utils import get_asset_path
 
+# --- KONSTANTEN & MAPPINGS ---
 
 PS2_DETECTION = {
     "CATEGORIES": {"Knife": "Knife Kill", "Grenade": "Nade Kill"},
@@ -48,12 +50,6 @@ PS2_EXP_DETECTION = {
     "Bounty Kill": ["593"],
     "Gunner Assist": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"]
 }
-
-
-def get_asset_path_local(filename):
-    if not filename: return ""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_dir, "assets", filename)
 
 
 class CensusWorker:
@@ -237,7 +233,10 @@ class CensusWorker:
             icon_html = ""
             if is_hs:
                 hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "headshot.png")
-                hs_path = get_asset_path_local(hs_icon).replace("\\", "/")
+
+                # --- FIX: Nutze zentrales get_asset_path für EXE Support ---
+                hs_path = get_asset_path(hs_icon).replace("\\", "/")
+
                 if os.path.exists(hs_path):
                     icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
 
@@ -343,9 +342,6 @@ class CensusWorker:
                         if final_event: self.c.trigger_overlay_event(final_event)
 
                     # -------------------------------------------------
-
-                    # Hitmarker (immer etwas verzögert)
-                    time.sleep(0.05)
                     self.c.trigger_overlay_event("Hitmarker")
                     base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
