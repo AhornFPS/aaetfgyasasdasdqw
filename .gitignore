@@ -23,7 +23,7 @@ _emote_cache/
 # Virtuelle Umgebungen
 venv/
 .venv/
-env/
+.env/
 
 # Binaries
 *.exe

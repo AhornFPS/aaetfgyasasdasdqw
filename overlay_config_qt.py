@@ -338,25 +338,50 @@ class OverlayConfigWindow(QWidget):
         layout.addStretch()  # Push everything up
         layout.addWidget(master_box)
 
+    def toggle_sub_container(self, widget):
+        """Universelle Funktion zum Auf/Zuklappen von Untermenüs."""
+        is_visible = widget.isVisible()
+        widget.setVisible(not is_visible)
+
     def setup_events_tab(self):
         layout = QVBoxLayout(self.tab_events)
         layout.setContentsMargins(10, 10, 10, 10)
 
+        # --- DEFINITION DER DROPDOWNS ---
+        # Hier sind jetzt deine neuen Heal-Werte eingepflegt
+        self.EXPANDABLE_EVENTS = {
+            "Heal": [
+                "Heal 100", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000", "Heal 10000"
+            ],
+            "Revive Given": [
+
+                "Revive 10", "Revive 25", "Revive 50", "Revive 100", "Revive 200"
+            ],
+            "Revive Taken": [
+
+                "Revive Taken 5", "Revive Taken 10", "Revive Taken 30"
+            ],
+            "Resupply": [
+
+                "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000", "Resupply 5000", "Resupply 10000"
+            ],
+            "Repair": [
+
+                "Repair 100", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000", "Repair 10000"
+            ]
+        }
+
         # --- 1. GLOBAL CONTROLS (Top) ---
         global_ctrl_layout = QHBoxLayout()
 
-        # Queue Toggle Button
         self.btn_queue_toggle = QPushButton("QUEUE: ON")
         self.btn_queue_toggle.setCheckable(True)
         self.btn_queue_toggle.setChecked(True)
         self.btn_queue_toggle.setFixedHeight(40)
-        # Style is set here initially, later overridden by controller
         self.btn_queue_toggle.setStyleSheet(
             "background-color: #004400; color: white; font-weight: bold; padding: 10px;")
-
         global_ctrl_layout.addWidget(self.btn_queue_toggle)
 
-        # --- NEW: Global Timer Input (For Queue: OFF mode) ---
         lbl_g_timer = QLabel("If Queue is off or no time set (ms):")
         lbl_g_timer.setStyleSheet("color: #aaa; margin-left: 15px; font-size: 11px;")
         global_ctrl_layout.addWidget(lbl_g_timer)
@@ -368,15 +393,14 @@ class OverlayConfigWindow(QWidget):
             "background-color: #0a141d; color: #00f2ff; border: 1px solid #333; padding: 5px;")
         global_ctrl_layout.addWidget(self.ent_global_duration)
 
-        # Bulk Action (Right aligned or after)
-        global_ctrl_layout.addStretch()  # Push rest to right
+        global_ctrl_layout.addStretch()
 
         self.btn_apply_all = QPushButton("APPLY LAYOUT TO ALL")
         self.btn_apply_all.setToolTip("Copies position and scale of the current event to ALL others.")
         self.btn_apply_all.setStyleSheet("background-color: #442200; color: #ffdddd; padding: 8px; border-radius: 4px;")
         self.btn_apply_all.setFixedHeight(40)
-
         global_ctrl_layout.addWidget(self.btn_apply_all)
+
         layout.addLayout(global_ctrl_layout)
 
         # --- 2. EVENT SELECTION GRID (Middle) ---
@@ -389,14 +413,14 @@ class OverlayConfigWindow(QWidget):
         grid_layout.setSpacing(10)
         grid_layout.setContentsMargins(0, 10, 0, 10)
 
+        # Kategorien definieren
         self.event_categories = {
             "STANDARD": ["Kill", "Headshot", "Death", "Hitmarker", "Team Kill", "Team Kill Victim"],
             "STREAKS": ["Squad Wiper", "Double Squad Wipe", "Squad Lead's Nightmare", "One Man Platoon"],
             "MULTI KILL": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill",
                            "Holy Shit"],
             "SPECIAL": ["Bounty Kill", "Domination", "Revenge", "Infil Kill", "Killstreak Stop", "Nade Kill",
-                        "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled",
-                        "Spitfire Kill", "Gunner Kill"],
+                        "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled", "Spitfire Kill", "Gunner Kill"],
             "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction",
                         "Mine Kill"],
             "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
@@ -421,8 +445,8 @@ class OverlayConfigWindow(QWidget):
             cat_vbox.addWidget(lbl_cat)
 
             for item in items:
+                # Haupt-Button erstellen
                 btn = QPushButton(item)
-                # Text left-aligned for better readability in list
                 btn.setStyleSheet("""
                     QPushButton { background-color: transparent; color: #ccc; border: none; padding: 3px; text-align: left; }
                     QPushButton:hover { background-color: #00f2ff; color: black; border-radius: 2px; }
@@ -432,11 +456,41 @@ class OverlayConfigWindow(QWidget):
                 cat_vbox.addWidget(btn)
                 self.event_buttons[item] = btn
 
+                # >>> AUTOMATISCHE DROPDOWN LOGIK (Heal, Revive, etc.) <<<
+                if item in self.EXPANDABLE_EVENTS:
+                    # 1. Container erstellen
+                    sub_container = QWidget()
+                    sub_layout = QVBoxLayout(sub_container)
+                    sub_layout.setContentsMargins(15, 0, 0, 0)  # Einrücken
+                    sub_layout.setSpacing(2)
+
+                    # 2. Sub-Buttons aus der Liste erstellen
+                    sub_items = self.EXPANDABLE_EVENTS[item]
+                    for sub_item in sub_items:
+                        sub_btn = QPushButton(sub_item)
+                        sub_btn.setStyleSheet("""
+                            QPushButton { background-color: transparent; color: #999; border: none; padding: 2px; text-align: left; font-size: 10px; }
+                            QPushButton:hover { background-color: #00f2ff; color: black; border-radius: 2px; }
+                        """)
+                        sub_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                        sub_btn.clicked.connect(lambda _, x=sub_item: self.select_event(x))
+                        sub_layout.addWidget(sub_btn)
+                        self.event_buttons[sub_item] = sub_btn  # Registrieren
+
+                    # 3. Standardmäßig verstecken
+                    sub_container.hide()
+                    cat_vbox.addWidget(sub_container)
+
+                    # 4. Haupt-Button verbindet mit Toggle-Funktion
+                    # Wir nutzen partial oder lambda mit default argument, um den richtigen Container zu binden
+                    btn.clicked.connect(lambda checked, c=sub_container: self.toggle_sub_container(c))
+                # >>> ENDE LOGIK <<<
+
             cat_vbox.addStretch()
             grid_layout.addWidget(cat_box)
 
         scroll.setWidget(grid_widget)
-        layout.addWidget(scroll, 1)  # Stretch factor 1
+        layout.addWidget(scroll, 1)
 
         # --- 3. EDIT AREA (Bottom) ---
         edit_box = QFrame(objectName="Group")
@@ -448,19 +502,18 @@ class OverlayConfigWindow(QWidget):
         self.lbl_editing.setStyleSheet("color: #00ff00; font-size: 16px; font-weight: bold; margin-bottom: 5px;")
         edit_layout.addWidget(self.lbl_editing)
 
-        # Container Split: Left Inputs, Right Preview
+        # Container Split
         editor_split = QHBoxLayout()
 
-        # --- LEFT: INPUTS ---
+        # LEFT: INPUTS
         input_container = QWidget()
         input_layout = QVBoxLayout(input_container)
-        input_layout.setContentsMargins(0, 0, 10, 0)  # Some spacing to right
+        input_layout.setContentsMargins(0, 0, 10, 0)
         input_layout.setSpacing(10)
 
-        # Image & Sound Row (Grid Layout for clean alignment)
+        # Image & Sound
         io_grid = QGridLayout()
         io_grid.setSpacing(8)
-
         io_grid.addWidget(QLabel("Image (PNG/JPG):"), 0, 0)
         self.ent_evt_img = QLineEdit()
         self.ent_evt_img.setPlaceholderText("Filename in assets folder...")
@@ -476,62 +529,46 @@ class OverlayConfigWindow(QWidget):
         self.btn_browse_evt_snd = QPushButton("...")
         self.btn_browse_evt_snd.setFixedWidth(40)
         io_grid.addWidget(self.btn_browse_evt_snd, 1, 2)
-
         input_layout.addLayout(io_grid)
 
-        # Scale & Duration Row
+        # Scale & Duration
         sd_layout = QHBoxLayout()
         sd_layout.setSpacing(15)
-
         sd_layout.addWidget(QLabel("Scale:"))
-
         self.slider_evt_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_evt_scale.setRange(10, 300)
         self.slider_evt_scale.setValue(100)
         self.slider_evt_scale.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-        # Scale Value Label
         self.lbl_scale_val = QLabel("1.00")
         self.lbl_scale_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
         self.lbl_scale_val.setFixedWidth(40)
         self.slider_evt_scale.valueChanged.connect(lambda val: self.lbl_scale_val.setText(f"{val / 100:.2f}"))
-
         sd_layout.addWidget(self.slider_evt_scale)
         sd_layout.addWidget(self.lbl_scale_val)
-
         sd_layout.addWidget(QLabel("Duration (ms):"))
         self.ent_evt_duration = QLineEdit("3000")
         self.ent_evt_duration.setFixedWidth(60)
         self.ent_evt_duration.setToolTip("If left empty or 0, the global timer is used.")
         sd_layout.addWidget(self.ent_evt_duration)
-
         input_layout.addLayout(sd_layout)
 
-        # >>> NEU: VOLUME SLIDER (HIER EINGEFÜGT) <<<
+        # Volume
         vol_layout = QHBoxLayout()
         vol_layout.setSpacing(15)
-
         vol_layout.addWidget(QLabel("Volume:"))
-
         self.slider_evt_vol = QSlider(Qt.Orientation.Horizontal)
         self.slider_evt_vol.setRange(0, 100)
         self.slider_evt_vol.setValue(100)
         self.slider_evt_vol.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
         self.lbl_vol_val = QLabel("100%")
         self.lbl_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
         self.lbl_vol_val.setFixedWidth(40)
-
-        # Live-Update des Labels
         self.slider_evt_vol.valueChanged.connect(lambda val: self.lbl_vol_val.setText(f"{val}%"))
-
         vol_layout.addWidget(self.slider_evt_vol)
         vol_layout.addWidget(self.lbl_vol_val)
-
         input_layout.addLayout(vol_layout)
-        # >>> ENDE NEU <<<
 
-        # Separator Line
+        # Separator
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
@@ -539,56 +576,41 @@ class OverlayConfigWindow(QWidget):
         line.setFixedHeight(1)
         input_layout.addWidget(line)
 
-        # Action Buttons
+        # Buttons
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
-
         self.btn_edit_hud = QPushButton("MOVE UI")
         self.btn_edit_hud.setObjectName("EditBtn")
         self.btn_edit_hud.setMinimumHeight(40)
         self.btn_edit_hud.setToolTip("Switches the overlay to Edit Mode to move the event.")
-
         self.btn_test_preview = QPushButton("TEST PREVIEW")
         self.btn_test_preview.setObjectName("TestBtn")
         self.btn_test_preview.setMinimumHeight(40)
-        self.btn_test_preview.setToolTip("Briefly shows the event in the overlay.")
-
         self.btn_save_event = QPushButton("SAVE EVENT")
         self.btn_save_event.setObjectName("SaveBtn")
         self.btn_save_event.setMinimumHeight(40)
-        self.btn_save_event.setToolTip("Saves the settings for THIS event.")
-
         btn_box.addWidget(self.btn_edit_hud)
         btn_box.addWidget(self.btn_test_preview)
         btn_box.addWidget(self.btn_save_event)
-
         input_layout.addLayout(btn_box)
 
-        # --- RIGHT: PREVIEW ---
-        # Custom AspectRatioLabel
+        # RIGHT: PREVIEW
         self.lbl_event_preview = AspectRatioLabel()
 
-        # WICHTIG: Policy auf Ignored setzen, damit das Bild das Layout nicht aufdrückt
+        # WICHTIG: Deine Layout-Verbesserungen sind hier integriert:
         self.lbl_event_preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-
-        # WICHTIG: Maximale Höhe setzen, damit quadratische Bilder den Bereich nicht sprengen.
-        # 280px entspricht ungefähr der Höhe der Eingabefelder auf der linken Seite.
         self.lbl_event_preview.setMaximumHeight(280)
 
         self.lbl_event_preview.setStyleSheet("border: 1px dashed #444; background-color: #151515;")
         self.lbl_event_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_event_preview.setText("PREVIEW")
 
-        # Assembly
-        # Stretch-Faktoren anpassen: Inputs bekommen etwas mehr Priorität
-        editor_split.addWidget(input_container, 55)  # 70% Breite für Inputs
-        editor_split.addWidget(self.lbl_event_preview, 45)  # 30% Breite für Bild
-
-        # Alignment hinzufügen, damit das Bild zentriert bleibt, falls es kleiner ist
+        editor_split.addWidget(input_container, 55)
+        editor_split.addWidget(self.lbl_event_preview, 45)
         editor_split.setAlignment(self.lbl_event_preview, Qt.AlignmentFlag.AlignCenter)
 
         edit_layout.addLayout(editor_split)
-        layout.addWidget(edit_box, 0)  # Stretch factor 0 (Fixed height based on content)
+        layout.addWidget(edit_box, 0)
 
     def select_event(self, event_name):
         """Called when clicking an event in the grid"""
