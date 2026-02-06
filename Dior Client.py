@@ -2632,14 +2632,14 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
         # ---------------------------------------------------------
-        # Wir rendern, wenn wir im Edit-Modus sind ODER im Test-Modus.
-        # Wenn beides nicht zutrifft, muss Master AN + Spiel RUNNING + Fokus vorhanden sein.
-
         should_render = False
+        mode_gameplay = False  # NEU: Trennung zwischen "Darf rendern" und "Spiel läuft wirklich"
+
         if edit_active or test_active:
             should_render = True
         elif master_switch and game_running and game_focused:
             should_render = True
+            mode_gameplay = True
 
         # ---------------------------------------------------------
         # ELEMENT-STEUERUNG
@@ -2647,10 +2647,12 @@ class DiorClientGUI:
         if should_render:
             # === A) STATS WIDGET ===
             stats_cfg = self.config.get("stats_widget", {})
-            # Sichtbar wenn (Config Active ODER Edit ODER Test)
-            if stats_cfg.get("active", True) or edit_active or test_active:
+            stats_editing = edit_active and ("stats" in getattr(self, "current_edit_targets", []))
+            
+            # LOGIK FIX: Nur anzeigen wenn (Active & Gameplay) ODER (Editing) ODER (Test)
+            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or test_active:
                 # Daten-Ermittlung
-                if test_active or (edit_active and not game_running):
+                if test_active or (stats_editing and not game_running):
                     html = DUMMY_STATS_HTML
                 else:
                     # Echte Stats-Berechnung
@@ -2693,27 +2695,38 @@ class DiorClientGUI:
 
             # === B) CROSSHAIR ===
             cross_conf = self.config.get("crosshair", {})
-            if cross_conf.get("active", True) or edit_active or test_active:
+            cross_editing = edit_active and ("crosshair" in getattr(self, "current_edit_targets", []))
+            
+            if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or test_active:
                 self.overlay_win.crosshair_label.show()
             else:
                 self.overlay_win.crosshair_label.hide()
 
             # === C) KILLFEED ===
             feed_conf = self.config.get("killfeed", {})
-            if feed_conf.get("active", True) or edit_active or test_active:
+            feed_editing = edit_active and ("feed" in getattr(self, "current_edit_targets", []))
+            
+            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or test_active:
                 self.overlay_win.feed_label.show()
             else:
                 self.overlay_win.feed_label.hide()
 
             # === D) KILLSTREAK ===
             streak_conf = self.config.get("streak", {})
-            if streak_conf.get("active", True) or edit_active or test_active:
-                if self.killstreak_count > 0 or edit_active:
+            streak_editing = edit_active and ("streak" in getattr(self, "current_edit_targets", []))
+            
+            if (streak_conf.get("active", True) and mode_gameplay) or streak_editing or test_active:
+                if self.killstreak_count > 0 or streak_editing:
                     self.overlay_win.streak_bg_label.show()
                     self.overlay_win.streak_text_label.show()
                     for k in self.overlay_win.knife_labels:
-                        if getattr(k, '_is_active', False) or edit_active:
+                        if getattr(k, '_is_active', False) or streak_editing:
                             k.show()
+                else:
+                     # FIX: Else-Block hinzugefügt, wenn Count 0 ist
+                    self.overlay_win.streak_bg_label.hide()
+                    self.overlay_win.streak_text_label.hide()
+                    for k in self.overlay_win.knife_labels: k.hide()
             else:
                 self.overlay_win.streak_bg_label.hide()
                 self.overlay_win.streak_text_label.hide()
@@ -2883,6 +2896,7 @@ class DiorClientGUI:
 
         ui = self.ovl_config_win
         targets = self.get_current_tab_targets()
+        self.current_edit_targets = targets # Store targets for visibility logic
 
         if not targets:
             self.add_log("INFO: Bitte erst einen Tab auswählen.")
@@ -3010,38 +3024,6 @@ class DiorClientGUI:
                 btn.setStyleSheet("")
 
                 # 3. Dummy Daten aufräumen (Leeren)
-            if "feed" in targets:
-                self.overlay_win.feed_label.clear()
-
-            if "stats" in targets:
-                # Größe Fix aufheben (auf Standard zurücksetzen)
-                if hasattr(self.overlay_win, 'stats_bg_label'):
-                    # QWIDGETSIZE_MAX (entfernt fixed size constraint)
-                    self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
-
-                    # Wenn wir nicht gerade spielen, Text verstecken
-                if not getattr(self, 'ps2_running', False):
-                    self.overlay_win.stats_text_label.clear()
-                    self.overlay_win.stats_bg_label.hide()
-                else:
-                    # Wenn wir spielen, echte Daten laden
-                    self.refresh_ingame_overlay()
-
-            if "event" in targets:
-                if hasattr(self.overlay_win, 'event_preview_label'):
-                    self.overlay_win.event_preview_label.hide()
-
-            if "streak" in targets:
-                if not getattr(self, 'ps2_running', False):
-                    self.overlay_win.streak_bg_label.hide()
-                    self.overlay_win.streak_text_label.hide()
-                    for l in self.overlay_win.knife_labels: l.hide()
-
-            if "crosshair" in targets:
-                if not getattr(self, 'ps2_running', False):
-                    if hasattr(self.overlay_win, 'crosshair_label'):
-                        self.overlay_win.crosshair_label.hide()
-
             # 4. Speichern
             if "event" in targets:
                 self.save_event_ui_data()
@@ -3051,6 +3033,15 @@ class DiorClientGUI:
                 self.save_stats_config_from_qt()
             elif "crosshair" in targets:
                 self.update_crosshair_from_qt()
+
+            # --- CLEANUP (Globale Bereinigung) ---
+            # Wenn das Spiel NICHT läuft, verstecken wir ALLES, um hängende Elemente zu vermeiden.
+            if not getattr(self, 'ps2_running', False):
+                self.stop_overlay_logic()
+
+                # Event Preview muss extra behandelt werden (gehört nicht zur Standard-Logik)
+                if hasattr(self.overlay_win, 'event_preview_label'):
+                    self.overlay_win.event_preview_label.hide()
 
             self.add_log("UI: Positionen gespeichert & Edit beendet.")
 
