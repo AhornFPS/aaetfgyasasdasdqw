@@ -319,15 +319,6 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
 
-        # --- SUPPORT COUNTERS ---
-        self.support_streaks = {
-            "Heal": 0,
-            "Revive Given": 0,
-            "Revive Taken": 0,
-            "Resupply": 0,
-            "Repair": 0
-        }
-        self.is_dead_state = False  # Status: Liegt am Boden
 
         # Twitch Variablen
         self.twitch_worker = None
@@ -2334,95 +2325,12 @@ class DiorClientGUI:
             self.overlay_enabled = True
             self.add_log("Overlay: aktiviert.")
 
-    def process_support_streak(self, event_name):
-        """
-        Verwaltet Support-Streaks mit intelligenter Reset-Logik.
-        Reset passiert nur, wenn man gestorben ist UND eine Aktion ausführt,
-        ohne vorher wiederbelebt worden zu sein (Indikator für Respawn).
-        """
-
-        # 1. Logik für Lebenszyklus (Death / Revive)
-        if event_name == "Death":
-            self.is_dead_state = True
-            # Wir resetten hier NOCH NICHT, da man ja wiederbelebt werden könnte.
-            return
-
-        if event_name == "Revive Taken" or event_name == "Revive Taken (Squad)":
-            # Juhu, wiederbelebt! Streak geht weiter.
-            self.is_dead_state = False
-            # Auch "Revive Taken" ist ein Counter wert
-            self.increment_and_trigger("Revive Taken")
-            return
-
-        # 2. Logik für Aktionen (Heal, Repair, Revive Given, Resupply)
-        # Liste der Events, die wir zählen wollen (Basis-Namen)
-        trackable_actions = ["Heal", "Revive Given", "Resupply", "Repair"]
-
-        # Prüfen, ob das Event zu einer dieser Kategorien gehört
-        current_action = None
-        for action in trackable_actions:
-            if event_name.startswith(action):
-                current_action = action
-                break
-
-        if current_action:
-            # RESET CHECK:
-            # Wenn wir Aktionen ausführen, obwohl wir "tot" waren, haben wir respawned -> RESET
-            if self.is_dead_state:
-                self.add_log("SYS: Respawn detected (Action while dead state). Resetting Support Streaks.")
-                for k in self.support_streaks:
-                    self.support_streaks[k] = 0
-                self.is_dead_state = False
-
-            # Zählen und Trigger prüfen
-            self.increment_and_trigger(current_action)
-
-    def increment_and_trigger(self, category):
-        """Erhöht den Counter und feuert das Event, falls ein Meilenstein erreicht ist."""
-        self.support_streaks[category] += 1
-        current_count = self.support_streaks[category]
-
-        # Den Event-Namen für den Meilenstein bauen (z.B. "Revive 25")
-        milestone_event = f"{category} {current_count}"
-
-        # Prüfen, ob der Nutzer dafür etwas eingestellt hat (existiert es in der Config?)
-        # Wir schauen einfach, ob es in den EXPANDABLE_EVENTS definiert ist,
-        # oder triggern es einfach. Das Overlay ignoriert es eh, wenn kein Bild/Sound hinterlegt ist.
-
-        # Optional: Nur triggern, wenn es ein "runder" Meilenstein ist, um Spam zu vermeiden?
-        # Nein, wir triggern genau den Namen. Wenn der User "Heal 100" konfiguriert hat, passt es.
-
-        # Wir rufen das Overlay auf.
-        # WICHTIG: Wir nutzen trigger_overlay_event, damit Bild/Sound abgespielt werden.
-        # Wir müssen sicherstellen, dass wir nicht in eine Endlosschleife geraten,
-        # also rufen wir direkt die Overlay-Funktion auf oder nutzen ein Flag.
-
-        # Da trigger_overlay_event normalerweise vom Worker kommt, rufen wir es hier manuell auf.
-        # Aber Vorsicht: trigger_overlay_event ruft normalerweise NICHT process_support_streak auf,
-        # es sei denn du hast das dort eingebaut.
-
-        # Wir senden es als "synthetisches" Event an das Overlay
-        if milestone_event in self.config.get("events", {}):
-            self.add_log(f"STREAK: {milestone_event} reached!")
-            self.trigger_overlay_event(milestone_event)
 
     def trigger_overlay_event(self, event_type):
         """
         Triggert Bild/Sound im Overlay.
-        Nutzt jetzt die zentrale Logik aus dior_utils.
+        Wird jetzt vom CensusWorker fix und fertig aufgerufen (inkl. Meilensteinen).
         """
-        # >>> NEU: SUPPORT STREAK LOGIK <<<
-        # Wir zählen nur die Basis-Events, um Rekursion bei Meilensteinen
-        # (z.B. "Heal 100") zu vermeiden.
-        streak_triggers = [
-            "Heal", "Revive Given", "Resupply", "Repair",
-            "Revive Taken", "Revive Taken (Squad)", "Death"
-        ]
-
-        if event_type in streak_triggers:
-            self.process_support_streak(event_type)
-        # >>> ENDE NEU <<<
-
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
@@ -2462,22 +2370,17 @@ class DiorClientGUI:
         if event_type.lower() == "hitmarker":
             dur = specific_dur
 
-        # 4. PFADE ERMITTELN (Jetzt viel schlanker!)
+        # 4. PFADE ERMITTELN
         img_path = ""
         img_name = event_data.get("img")
         if img_name:
-            # Versuch 1: via dior_utils (deckt Exe & Dev ab)
             path_candidate = get_asset_path(img_name)
-
             if os.path.exists(path_candidate):
                 img_path = path_candidate
-            # Versuch 2: Absoluter Pfad (falls User eigene Bilder von C:/ lädt)
             elif os.path.exists(img_name):
                 img_path = img_name
 
         sound_path = ""
-        # Hinweis: HAS_SOUND muss global definiert sein oder hier entfernt werden,
-        # falls du es nicht nutzt. Standardmäßig ist True sicherer.
         if globals().get("HAS_SOUND", True):
             snd_name = event_data.get("snd")
             if snd_name:

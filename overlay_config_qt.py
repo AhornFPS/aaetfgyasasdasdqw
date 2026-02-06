@@ -351,23 +351,21 @@ class OverlayConfigWindow(QWidget):
         # Hier sind jetzt deine neuen Heal-Werte eingepflegt
         self.EXPANDABLE_EVENTS = {
             "Heal": [
-                "Heal 100", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000", "Heal 10000"
+                "Heal 2", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000", "Heal 10000"
             ],
             "Revive Given": [
-
-                "Revive 10", "Revive 25", "Revive 50", "Revive 100", "Revive 200"
+                # WICHTIG: Die Namen müssen mit "Revive Given" anfangen!
+                "Revive Given 2", "Revive Given 10", "Revive Given 25", "Revive Given 50",
+                "Revive Given 100", "Revive Given 200"
             ],
             "Revive Taken": [
-
-                "Revive Taken 5", "Revive Taken 10", "Revive Taken 30"
+                "Revive Taken 2", "Revive Taken 5", "Revive Taken 10"
             ],
             "Resupply": [
-
-                "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000", "Resupply 5000", "Resupply 10000"
+                "Resupply 2", "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000"
             ],
             "Repair": [
-
-                "Repair 100", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000", "Repair 10000"
+                "Repair 2", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000"
             ]
         }
 

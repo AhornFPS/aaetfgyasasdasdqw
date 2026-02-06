@@ -61,6 +61,16 @@ class CensusWorker:
         self.event_cache = set()
         self.event_history = []
 
+        # --- SUPPORT TRACKING (HIERHER VERSCHOBEN) ---
+        self.support_streaks = {
+            "Heal": 0,
+            "Revive Given": 0,
+            "Revive Taken": 0,
+            "Resupply": 0,
+            "Repair": 0
+        }
+        self.is_dead_state = False
+
     def start(self):
         def run_loop():
             loop = asyncio.new_event_loop()
@@ -70,6 +80,49 @@ class CensusWorker:
 
         t = threading.Thread(target=run_loop, daemon=True)
         t.start()
+
+    # --- HELPER: ZENTRALE TRACKING LOGIK ---
+    def _process_stat_event(self, category, is_revive_taken=False):
+        """
+        Zählt Support-Events hoch und resettet bei Respawn.
+        Triggert Basis-Event (z.B. 'Heal') UND Meilenstein (z.B. 'Heal 100').
+        """
+
+        # 1. Reset Check
+        # Wenn 'is_revive_taken' True ist, wurden wir wiederbelebt -> KEIN Reset der Streaks.
+        # Wenn 'is_revive_taken' False ist (z.B. wir heilen jemanden), aber 'is_dead_state' noch True ist,
+        # bedeutet das, wir sind respawned (Tod -> Spawn -> Heal) -> RESET.
+
+        if is_revive_taken:
+            # Wir leben wieder (durch Revive) -> Status resetten, aber Zähler behalten
+            self.is_dead_state = False
+        elif self.is_dead_state:
+            # Wir machen was (Heal/Ammo), obwohl wir "tot" waren -> Respawn erkannt -> RESET
+            self.c.add_log("SYS: Respawn detected via Action. Resetting Support Streaks.")
+            for k in self.support_streaks:
+                self.support_streaks[k] = 0
+            self.is_dead_state = False
+
+        # 2. Zählen (falls Kategorie existiert)
+        if category in self.support_streaks:
+            self.support_streaks[category] += 1
+            count = self.support_streaks[category]
+
+            # 3. Events feuern
+            # A) Basis Event (damit z.B. bei jedem Revive Sound kommt, falls eingestellt)
+            self.c.trigger_overlay_event(category)
+
+            # B) Meilenstein Event (z.B. "Heal 100")
+            # Wir feuern es einfach ab. Das Overlay ignoriert es, wenn nichts in der Config steht.
+            milestone_event = f"{category} {count}"
+            self.c.trigger_overlay_event(milestone_event)
+
+            # Kleines Log für Debugging bei Runden Zahlen
+            if count > 0 and (count % 10 == 0 or count in [25, 50, 100, 250]):
+                self.c.add_log(f"STREAK: {milestone_event}")
+        else:
+            # Für Events ohne Counter (z.B. Base Capture) einfach nur triggern
+            self.c.trigger_overlay_event(category)
 
     async def listener(self):
         uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={self.s_id}"
@@ -379,6 +432,10 @@ class CensusWorker:
 
             # B) VICTIM
             elif victim_id == my_id:
+                # --- UPDATE: DEAD STATE SETZEN ---
+                self.is_dead_state = True
+
+
                 # --- KILLSTREAK LOGIK (Fix für "Double Death") ---
                 if self.c.killstreak_count > 0:
                     self.c.saved_streak = self.c.killstreak_count
@@ -466,7 +523,7 @@ class CensusWorker:
                 self.c.streak_slot_map = getattr(self.c, 'saved_slots', [])
                 self.c.update_streak_display()
 
-                self.c.trigger_overlay_event("Revive Taken")
+                self.c.trigger_overlay_event("Revive Taken", is_revive_taken=True)
                 self.c.trigger_auto_voice("revived")
 
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
@@ -494,13 +551,17 @@ class CensusWorker:
             except:
                 pass
 
-            # Trigger logic
+            # --- NEUE ZÄHL-LOGIK ---
+            # Anstatt direkt zu feuern, leiten wir es an _process_stat_event weiter.
+
             if exp_id in ["7", "53"]:
-                self.c.trigger_overlay_event("Revive Given")
+                # Revive Given zählen & triggern
+                self._process_stat_event("Revive Given")
             else:
+                # Alle anderen Support-Events (Heal, Resupply, etc.) aus der Liste prüfen
                 for event_name, id_list in PS2_EXP_DETECTION.items():
                     if exp_id in id_list:
-                        self.c.trigger_overlay_event(event_name)
+                        self._process_stat_event(event_name)
                         break
 
     def _handle_metagame(self, p):
