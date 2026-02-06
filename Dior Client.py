@@ -241,15 +241,13 @@ class DiorClientGUI:
         self.loop = None
 
         # Pfade
-        self.assets_path = os.path.join("assets", "Planetside 2 ini")
-        self.source_high = os.path.join(self.assets_path, "UserOptions_high.ini")
-        self.source_low = os.path.join(self.assets_path, "UserOptions_low.ini")
+        self.source_high = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_high.ini"))
+        self.source_low = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_low.ini"))
 
         # 3. QT APP & FENSTER INITIALISIEREN
         self.qt_app = QApplication.instance() or QApplication(sys.argv)
         self.qt_app.setStyle("Fusion")
 
-        # Unter-Fenster erstellen
         # Unter-Fenster erstellen
         self.dash_window = dashboard_qt.DashboardWidget(self)
         self.dash_controller = dashboard_qt.DashboardController(self.dash_window)
@@ -305,7 +303,7 @@ class DiorClientGUI:
         threading.Thread(target=self.ps2_process_monitor, daemon=True).start()
 
         # Item DB
-        csv_path = os.path.join(self.BASE_DIR, "assets", "sanction-list.csv")
+        csv_path = get_asset_path("sanction-list.csv")
         if os.path.exists(csv_path):
             self.load_item_db(csv_path)
 
@@ -578,6 +576,33 @@ class DiorClientGUI:
 
                 # Optional: Overlay ganz ausblenden (spart Ressourcen)
                 # self.overlay_win.hide()
+
+    def is_game_focused(self):
+        """Prüft, ob das aktive Fenster PlanetSide 2 ist (robust gegen Schreibweisen)."""
+        try:
+            # 1. Handle des aktuellen Vordergrund-Fensters holen
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+
+            # 2. Länge des Titels ermitteln
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length == 0:
+                return False
+
+            # 3. Puffer erstellen und Titel auslesen
+            buff = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+
+            # 4. Titel normalisieren (alles kleinschreiben)
+            window_title = buff.value.lower()
+
+            # Wir suchen nach "planetside", das deckt:
+            # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
+            if "planetside2" in window_title:
+                return True
+
+            return False
+        except Exception:
+            return False
 
     def toggle_twitch_always(self, checked):
         ui = self.ovl_config_win
@@ -2690,102 +2715,112 @@ class DiorClientGUI:
             self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
 
     def refresh_ingame_overlay(self):
-        """Der Herzschlag des Overlays: Daten, HTML und Position."""
+        """Der Herzschlag des Overlays: Steuert Sichtbarkeit mit Priorität für Test/Edit."""
         if not self.overlay_win: return
 
-        # Loop sofort neu planen (damit er nie stirbt, auch bei Fehlern)
-        # Wir speichern die ID, falls wir ihn mal stoppen müssten (optional)
+        # Loop am Leben halten
         QTimer.singleShot(1000, self.refresh_ingame_overlay)
 
-        # 1. Status prüfen
+        # 1. Status-Variablen
         master_switch = self.config.get("overlay_master_active", True)
         game_running = getattr(self, 'ps2_running', False)
         test_active = getattr(self, 'is_stats_test', False)
         edit_active = getattr(self, 'is_hud_editing', False)
+        game_focused = self.is_game_focused()
 
-        cfg = self.config.get("stats_widget", {})
-        active_config = cfg.get("active", True)
+        # ---------------------------------------------------------
+        # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
+        # ---------------------------------------------------------
+        # Wir rendern, wenn wir im Edit-Modus sind ODER im Test-Modus.
+        # Wenn beides nicht zutrifft, muss Master AN + Spiel RUNNING + Fokus vorhanden sein.
 
-        # Soll es sichtbar sein?
-        should_be_visible = (master_switch and (game_running or test_active) and active_config) or edit_active
+        should_render = False
+        if edit_active or test_active:
+            should_render = True
+        elif master_switch and game_running and game_focused:
+            should_render = True
 
-        if should_be_visible:
-            # 2. Daten sammeln
-            if test_active:
-                kills, deaths, hs, hsrkills, start_time = 15, 5, 6, 10, time.time() - 3600
-            elif edit_active and not game_running:
-                # Dummy Daten für Edit Mode (damit man was sieht)
-                kills, deaths, hs, hsrkills, start_time = 42, 12, 20, 45, time.time() - 3600
-            else:
-                # LIVE DATEN
-                my_id = self.current_character_id
-                if my_id and my_id in self.session_stats:
-                    s = self.session_stats[my_id]
+        # ---------------------------------------------------------
+        # ELEMENT-STEUERUNG
+        # ---------------------------------------------------------
+        if should_render:
+            # === A) STATS WIDGET ===
+            stats_cfg = self.config.get("stats_widget", {})
+            # Sichtbar wenn (Config Active ODER Edit ODER Test)
+            if stats_cfg.get("active", True) or edit_active or test_active:
+                # Daten-Ermittlung
+                if test_active or (edit_active and not game_running):
+                    html = DUMMY_STATS_HTML
+                else:
+                    # Echte Stats-Berechnung
+                    my_id = self.current_character_id
+                    s = self.session_stats.get(my_id, {}) if my_id else {}
                     kills = s.get("k", 0)
                     deaths = s.get("d", 0)
                     hs = s.get("hs", 0)
                     hsrkills = s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
-                else:
-                    kills, deaths, hs, hsrkills, start_time = 0, 0, 0, 0, time.time()
 
-            # 3. Berechnungen
-            kd = kills / max(1, deaths)
-            hsr = (hs / hsrkills * 100) if hsrkills > 0 else 0
-            dur_min = (time.time() - start_time) / 60
-            kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
-            hrs = int(dur_min // 60)
-            mns = int(dur_min % 60)
+                    kd = kills / max(1, deaths)
+                    calc_base = hsrkills if hsrkills > 0 else kills
+                    hsr = (hs / calc_base * 100) if calc_base > 0 else 0.0
+                    dur_min = (time.time() - start_time) / 60
+                    kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
+                    hrs, mns = int(dur_min // 60), int(dur_min % 60)
 
-            # 4. HTML Bauen
-            # Wir nutzen immer denselben Aufbau, damit nichts springt
-            kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
+                    kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
+                    html = f"""
+                    <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
+                                text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
+                        KD: <span style="color: {kd_col};">{kd:.2f}</span> &nbsp;&nbsp;
+                        K: <span style="color: white;">{kills}</span> &nbsp;&nbsp;
+                        D: <span style="color: white;">{deaths}</span> &nbsp;&nbsp;
+                        HSR: <span style="color: #ffcc00;">{hsr:.0f}%</span> &nbsp;&nbsp;
+                        KPM: <span style="color: #ffcc00;">{kpm:.1f}</span> &nbsp;&nbsp;
+                        <span style="color: #aaa;">TIME: {hrs:02d}:{mns:02d}</span>
+                    </div>
+                    """
 
-            # WICHTIG: Nutze exakt diesen String-Aufbau
-            html = f"""
-            <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
-                        text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
-                KD: <span style="color: {kd_col};">{kd:.2f}</span> &nbsp;&nbsp;
-                K: <span style="color: white;">{kills}</span> &nbsp;&nbsp;
-                D: <span style="color: white;">{deaths}</span> &nbsp;&nbsp;
-                HSR: <span style="color: #ffcc00;">{hsr:.0f}%</span> &nbsp;&nbsp;
-                KPM: <span style="color: #ffcc00;">{kpm:.1f}</span> &nbsp;&nbsp;
-                <span style="color: #aaa;">TIME: {hrs:02d}:{mns:02d}</span>
-            </div>
-            """
-
-            # Im Edit-Modus nehmen wir die Konstante, falls definiert, sonst den String von oben
-            if edit_active and not game_running:
-                # Falls du die DUMMY_STATS_HTML Konstante in main.py hast:
-                if 'DUMMY_STATS_HTML' in globals():
-                    html = DUMMY_STATS_HTML
-
-            # 5. Bild Pfad
-            raw_name = cfg.get("img", "").strip()
-            final_img_path = ""
-            if raw_name:
-                asset_path = get_asset_path(raw_name)
-                if os.path.exists(asset_path):
-                    final_img_path = asset_path
-                elif os.path.exists(raw_name):
-                    final_img_path = raw_name
-
-            # 6. Overlay Update (Inhalt)
-            # Hier wird nur Inhalt gesetzt, keine Position!
-            self.overlay_win.set_stats_html(html, final_img_path)
-
-            # 7. Position erzwingen (jedes Mal!)
-            # Das verhindert, dass es falsch liegt, wenn es sichtbar wird
-            from PyQt6.QtWidgets import QApplication
-            QApplication.processEvents()  # Zwingt Qt zum Neu-Berechnen der Größe
-
-            self.update_stats_position_safe()
-
-        else:
-            # Unsichtbar machen
-            if hasattr(self.overlay_win, 'stats_bg_label'):
+                raw_name = stats_cfg.get("img", "").strip()
+                self.overlay_win.set_stats_html(html, get_asset_path(raw_name) if raw_name else "")
+                self.overlay_win.stats_bg_label.show()
+                self.overlay_win.stats_text_label.show()
+                self.update_stats_position_safe()
+            else:
                 self.overlay_win.stats_bg_label.hide()
                 self.overlay_win.stats_text_label.hide()
+
+            # === B) CROSSHAIR ===
+            cross_conf = self.config.get("crosshair", {})
+            if cross_conf.get("active", True) or edit_active or test_active:
+                self.overlay_win.crosshair_label.show()
+            else:
+                self.overlay_win.crosshair_label.hide()
+
+            # === C) KILLFEED ===
+            feed_conf = self.config.get("killfeed", {})
+            if feed_conf.get("active", True) or edit_active or test_active:
+                self.overlay_win.feed_label.show()
+            else:
+                self.overlay_win.feed_label.hide()
+
+            # === D) KILLSTREAK ===
+            streak_conf = self.config.get("streak", {})
+            if streak_conf.get("active", True) or edit_active or test_active:
+                if self.killstreak_count > 0 or edit_active:
+                    self.overlay_win.streak_bg_label.show()
+                    self.overlay_win.streak_text_label.show()
+                    for k in self.overlay_win.knife_labels:
+                        if getattr(k, '_is_active', False) or edit_active:
+                            k.show()
+            else:
+                self.overlay_win.streak_bg_label.hide()
+                self.overlay_win.streak_text_label.hide()
+                for k in self.overlay_win.knife_labels: k.hide()
+
+        else:
+            # ALLES VERSTECKEN (Spiel aus / kein Fokus / kein Test)
+            self.stop_overlay_logic()
 
 
 
@@ -3145,6 +3180,7 @@ class DiorClientGUI:
         """
         Startet eine Vorschau mit 20 Messern (PyQt6 kompatibel).
         """
+        self.is_stats_test = True
         # 1. Vorherige Timer abbrechen
         if self._streak_test_timer:
             self._streak_test_timer.stop()
@@ -3187,6 +3223,7 @@ class DiorClientGUI:
                 self._streak_backup = None  # Backup löschen
 
             self._streak_test_timer = None
+            self.is_stats_test = False
             self.add_log("UI: Test beendet.")
 
         # 6. Timer starten (PyQt6 Weg)
