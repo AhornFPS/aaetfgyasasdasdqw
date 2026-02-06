@@ -13,6 +13,7 @@ build/
 *.spec
 
 # Lokale Daten & Datenbanken (Deine Liste)
+.env
 ps2_master.db
 config.json
 error_log.txt
