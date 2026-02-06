@@ -567,14 +567,25 @@ class OverlayConfigWindow(QWidget):
         # --- RIGHT: PREVIEW ---
         # Custom AspectRatioLabel
         self.lbl_event_preview = AspectRatioLabel()
-        self.lbl_event_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # WICHTIG: Policy auf Ignored setzen, damit das Bild das Layout nicht aufdrückt
+        self.lbl_event_preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+
+        # WICHTIG: Maximale Höhe setzen, damit quadratische Bilder den Bereich nicht sprengen.
+        # 280px entspricht ungefähr der Höhe der Eingabefelder auf der linken Seite.
+        self.lbl_event_preview.setMaximumHeight(280)
+
         self.lbl_event_preview.setStyleSheet("border: 1px dashed #444; background-color: #151515;")
         self.lbl_event_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_event_preview.setText("PREVIEW")
 
         # Assembly
-        editor_split.addWidget(input_container, 65)  # 65% Width
-        editor_split.addWidget(self.lbl_event_preview, 35)  # 35% Width
+        # Stretch-Faktoren anpassen: Inputs bekommen etwas mehr Priorität
+        editor_split.addWidget(input_container, 55)  # 70% Breite für Inputs
+        editor_split.addWidget(self.lbl_event_preview, 45)  # 30% Breite für Bild
+
+        # Alignment hinzufügen, damit das Bild zentriert bleibt, falls es kleiner ist
+        editor_split.setAlignment(self.lbl_event_preview, Qt.AlignmentFlag.AlignCenter)
 
         edit_layout.addLayout(editor_split)
         layout.addWidget(edit_box, 0)  # Stretch factor 0 (Fixed height based on content)
