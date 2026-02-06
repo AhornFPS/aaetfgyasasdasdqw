@@ -352,6 +352,15 @@ class QtOverlay(QWidget):
         self.auto_hide_timer.setSingleShot(True)
         self.auto_hide_timer.timeout.connect(self.fade_out_chat)
 
+    def get_master_volume(self):
+        """Holt das Master-Volume aus der Config (0-100) und gibt float (0.0-1.0) zurück."""
+        if self.gui_ref and hasattr(self.gui_ref, 'config'):
+            # Standard ist 50%, falls noch nichts gespeichert wurde
+            vol_percent = self.gui_ref.config.get("audio_volume", 50)
+            # Sicherstellen, dass es float ist und zwischen 0.0 und 1.0 liegt
+            return max(0.0, min(1.0, float(vol_percent) / 100.0))
+        return 0.5  # Fallback
+
     def run_garbage_collection(self):
         """Löscht Ressourcen, die länger als 20 Minuten nicht genutzt wurden."""
         now = time.time()
@@ -566,12 +575,15 @@ class QtOverlay(QWidget):
     # --- QUEUE & DISPLAY LOGIK ---
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False):
         # --- FALL A: HITMARKER (Sofort & Parallel) ---
+
+        master_vol = self.get_master_volume()
+
         if is_hitmarker:
             if sound_path:
                 try:
                     if 'pygame' in sys.modules:
                         snd = pygame.mixer.Sound(sound_path)
-                        snd.set_volume(volume) # <--- Volume setzen
+                        snd.set_volume(volume * master_vol) # <--- Volume setzen
                         snd.play()
                 except:
                     pass
@@ -591,7 +603,7 @@ class QtOverlay(QWidget):
                 try:
                     if 'pygame' in sys.modules:
                         snd = pygame.mixer.Sound(sound_path)
-                        snd.set_volume(volume) # <--- Volume setzen
+                        snd.set_volume(volume * master_vol) # <--- Volume setzen
                         snd.play()
                 except:
                     pass
@@ -649,16 +661,19 @@ class QtOverlay(QWidget):
 
         self.is_showing = True
         # Volume aus dem Tupel entpacken
-        img_path, sound_path, duration, x, y, scale, volume = self.event_queue.pop(0)
+        img_path, sound_path, duration, x, y, scale, event_vol = self.event_queue.pop(0)
 
         self.display_image(img_path, duration, x, y, scale)
 
         if sound_path:
             try:
                 if 'pygame' in sys.modules:
-                    # >>> NEU: Lautstärke setzen <<<
+                    # Master Volume frisch holen (falls User während der Queue den Regler bewegt hat)
+                    master_vol = self.get_master_volume()
+
                     snd = pygame.mixer.Sound(sound_path)
-                    snd.set_volume(volume)
+                    # HIER WIRD VERRECHNET
+                    snd.set_volume(event_vol * master_vol)
                     snd.play()
             except:
                 pass
