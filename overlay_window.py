@@ -1012,72 +1012,83 @@ class QtOverlay(QWidget):
                 skull_center = self.streak_bg_label.geometry().center()
                 path_data = cfg.get("custom_path", [])
 
-                while len(self.knife_labels) < len(factions):
-                    l = QLabel(self);
-                    l.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);
-                    self.knife_labels.append(l)
+                # >>> KNIFE TOGGLE LOGIK START <<<
+                if cfg.get("show_knives", True):
+                    # Zuerst Labels erstellen falls nötig
+                    while len(self.knife_labels) < len(factions):
+                        l = QLabel(self);
+                        l.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);
+                        self.knife_labels.append(l)
 
-                if len(path_data) > 2:
-                    segments = []
-                    total_l = 0
-                    pts = [QPoint(int(p[0]), int(p[1])) for p in path_data]
-                    for i in range(len(pts)):
-                        p1, p2 = pts[i], pts[(i + 1) % len(pts)]
-                        d = math.sqrt((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2)
-                        segments.append((p1, p2, d, total_l));
-                        total_l += d
+                    if len(path_data) > 2:
+                        segments = []
+                        total_l = 0
+                        pts = [QPoint(int(p[0]), int(p[1])) for p in path_data]
+                        for i in range(len(pts)):
+                            p1, p2 = pts[i], pts[(i + 1) % len(pts)]
+                            d = math.sqrt((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2)
+                            segments.append((p1, p2, d, total_l));
+                            total_l += d
 
-                    k_per_ring = 50
-                    for i in range(len(factions)):
-                        lbl = self.knife_labels[i]
-                        is_new = not lbl.isVisible()
-                        ftag = factions[i]
-                        kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
-                        kpath = get_asset_path(kfile)
+                        k_per_ring = 50
+                        for i in range(len(factions)):
+                            lbl = self.knife_labels[i]
+                            is_new = not lbl.isVisible()
+                            ftag = factions[i]
+                            kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
+                            kpath = get_asset_path(kfile)
 
-                        if not os.path.exists(kpath): lbl.hide(); continue  # Nur Pfad checken
+                            if not os.path.exists(kpath): lbl.hide(); continue  # Nur Pfad checken
 
-                        sidx = slot_map[i] if slot_map and i < len(slot_map) else i
-                        ridx = sidx // k_per_ring
-                        posring = sidx % k_per_ring
-                        rscale = 1.0 + (ridx * 0.28)
-                        tdist = (posring / k_per_ring) * total_l
-                        kx_off, ky_off = 0, 0
-                        for p1, p2, seg_d, start_l in segments:
-                            if start_l <= tdist <= start_l + seg_d:
-                                t = (tdist - start_l) / seg_d
-                                kx_off = (p1.x() + t * (p2.x() - p1.x())) * rscale
-                                ky_off = (p1.y() + t * (p2.y() - p1.y())) * rscale
-                                break
-                        angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
-                        kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
-                        self._place_knife(lbl, kpath, kx, ky, angle, is_new, skull_center)
+                            sidx = slot_map[i] if slot_map and i < len(slot_map) else i
+                            ridx = sidx // k_per_ring
+                            posring = sidx % k_per_ring
+                            rscale = 1.0 + (ridx * 0.28)
+                            tdist = (posring / k_per_ring) * total_l
+                            kx_off, ky_off = 0, 0
+                            for p1, p2, seg_d, start_l in segments:
+                                if start_l <= tdist <= start_l + seg_d:
+                                    t = (tdist - start_l) / seg_d
+                                    kx_off = (p1.x() + t * (p2.x() - p1.x())) * rscale
+                                    ky_off = (p1.y() + t * (p2.y() - p1.y())) * rscale
+                                    break
+                            angle = math.degrees(math.atan2(ky_off, kx_off)) + 90
+                            kx, ky = skull_center.x() + kx_off, skull_center.y() + ky_off
+                            self._place_knife(lbl, kpath, kx, ky, angle, is_new, skull_center)
+                    else:
+                        k_per_circle = 50
+                        rad_step = self.s(22)
+                        sx = (self.streak_bg_label.width() // 2) - self.s(15)
+                        sy = (self.streak_bg_label.height() // 2) - self.s(15)
+                        for i in range(len(factions)):
+                            lbl = self.knife_labels[i]
+                            is_new = not lbl.isVisible()
+                            ftag = factions[i]
+                            kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
+                            kpath = get_asset_path(kfile)
+                            if not os.path.exists(kpath): lbl.hide(); continue
+
+                            sidx = slot_map[i] if slot_map and i < len(slot_map) else i
+                            ridx = sidx // k_per_circle
+                            posring = sidx % k_per_circle
+                            angle = (posring * (360 / k_per_circle)) - 90
+                            rad = math.radians(angle)
+                            s_val = math.sin(rad)
+                            narrow = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
+                            kx = skull_center.x() + int((sx + (ridx * rad_step)) * narrow * math.cos(rad))
+                            ky = skull_center.y() - self.s(20) + int((sy + (ridx * rad_step)) * math.sin(rad))
+                            self._place_knife(lbl, kpath, kx, ky, angle + 90, is_new, skull_center)
+
+                    # Überschüssige Messer verstecken
+                    for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
+
                 else:
-                    k_per_circle = 50
-                    rad_step = self.s(22)
-                    sx = (self.streak_bg_label.width() // 2) - self.s(15)
-                    sy = (self.streak_bg_label.height() // 2) - self.s(15)
-                    for i in range(len(factions)):
-                        lbl = self.knife_labels[i]
-                        is_new = not lbl.isVisible()
-                        ftag = factions[i]
-                        kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
-                        kpath = get_asset_path(kfile)
-                        if not os.path.exists(kpath): lbl.hide(); continue
+                    # FALLS AUSGESCHALTET: Alle Messer verstecken
+                    for l in self.knife_labels:
+                        l.hide()
+                # >>> KNIFE TOGGLE LOGIK ENDE <<<
 
-                        sidx = slot_map[i] if slot_map and i < len(slot_map) else i
-                        ridx = sidx // k_per_circle
-                        posring = sidx % k_per_circle
-                        angle = (posring * (360 / k_per_circle)) - 90
-                        rad = math.radians(angle)
-                        s_val = math.sin(rad)
-                        narrow = 1.0 - (0.15 * s_val) if s_val > 0 else 1.0
-                        kx = skull_center.x() + int((sx + (ridx * rad_step)) * narrow * math.cos(rad))
-                        ky = skull_center.y() - self.s(20) + int((sy + (ridx * rad_step)) * math.sin(rad))
-                        self._place_knife(lbl, kpath, kx, ky, angle + 90, is_new, skull_center)
-
-                for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
-
+                # Text/Zahl wird IMMER gezeichnet (außerhalb des if-Blocks)
                 fc, fs, sh = cfg.get("color", "#fff"), cfg.get("size", 26), int(cfg.get("shadow_size", 0))
                 stl = [f"font-family: 'Black Ops One';", f"font-size: {int(fs * sc)}px;", f"color: {fc};"]
                 if sh > 0: stl.append(f"text-shadow: {sh}px {sh}px 0 #000;")

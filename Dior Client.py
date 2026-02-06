@@ -826,6 +826,9 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
 
+        # Knive On/Off
+        self.safe_connect(ui.btn_toggle_knives.clicked, self.toggle_knife_visibility)
+
         # ---------------------------------------------------------
         # 5. OVERLAY TAB: CROSSHAIR
         # ---------------------------------------------------------
@@ -1290,6 +1293,23 @@ class DiorClientGUI:
 
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
 
+    def toggle_knife_visibility(self):
+        """Schaltet die Messer-Icons an/aus und aktualisiert das UI."""
+        ui = self.ovl_config_win
+        is_on = ui.btn_toggle_knives.isChecked()
+
+        if is_on:
+            ui.btn_toggle_knives.setText("KNIFE ICONS: ON")
+            ui.btn_toggle_knives.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600;")
+        else:
+            ui.btn_toggle_knives.setText("KNIFE ICONS: OFF")
+            ui.btn_toggle_knives.setStyleSheet(
+                "background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000;")
+
+        # Speichern & Overlay updaten
+        self.save_streak_settings_from_qt()
+
     def save_streak_settings_from_qt(self):
         """
         Liest Killstreak-Settings aus der GUI, sichert den Live-Pfad
@@ -1314,6 +1334,7 @@ class DiorClientGUI:
         # --- B) DATEN AUS DER GUI LESEN ---
         is_active = s_ui.check_streak_master.isChecked()
         anim_active = s_ui.check_streak_anim.isChecked()
+        show_knives = s_ui.btn_toggle_knives.isChecked()
 
         main_img = clean_path(s_ui.ent_streak_img.text())
         if not main_img: main_img = "KS_Counter.png"
@@ -1352,6 +1373,7 @@ class DiorClientGUI:
         self.config["streak"].update({
             "active": is_active,
             "anim_active": anim_active,
+            "show_knives": show_knives,
             "img": main_img,
             "speed": speed,
             "tx": tx,
@@ -1538,6 +1560,23 @@ class DiorClientGUI:
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
         ui.check_streak_master.blockSignals(False)
         ui.check_streak_anim.blockSignals(False)
+
+        # >>> NEU: KNIFE BUTTON STATUS LADEN (Teil C) <<<
+        knives_active = s_conf.get("show_knives", True)
+        # Signale kurz blockieren, falls nötig (hier meist nicht kritisch, aber sicher ist sicher)
+        ui.btn_toggle_knives.blockSignals(True)
+        ui.btn_toggle_knives.setChecked(knives_active)
+
+        if knives_active:
+            ui.btn_toggle_knives.setText("KNIFE ICONS: ON")
+            ui.btn_toggle_knives.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600;")
+        else:
+            ui.btn_toggle_knives.setText("KNIFE ICONS: OFF")
+            ui.btn_toggle_knives.setStyleSheet(
+                "background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000;")
+        ui.btn_toggle_knives.blockSignals(False)
+        # >>> ENDE NEU <<<
 
         ui.combo_font_size.blockSignals(True)
         current_size = str(s_conf.get("size", 26))

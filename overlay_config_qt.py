@@ -745,6 +745,17 @@ class OverlayConfigWindow(QWidget):
         path_layout.addLayout(btn_path_row)
         main_layout.addWidget(path_group)
 
+        # KNIFE TOGGLE BUTTON
+        self.btn_toggle_knives = QPushButton("KNIFE ICONS: ON")
+        self.btn_toggle_knives.setCheckable(True)
+        self.btn_toggle_knives.setChecked(True)
+        self.btn_toggle_knives.setFixedHeight(35)
+        self.btn_toggle_knives.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Standard-Style (Grün = An)
+        self.btn_toggle_knives.setStyleSheet(
+            "background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600;")
+        main_layout.addWidget(self.btn_toggle_knives)
+
         # --- 5. POSITION & SCALE ---
         pos_group = QFrame()
         pos_group.setStyleSheet("background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 5px;")
