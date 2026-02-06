@@ -461,7 +461,7 @@ class QtOverlay(QWidget):
                                         .user {{
                                             color: {safe_color};
                                             font-weight: 900;
-                                            text-shadow: 0px 0px 8px {safe_color}, 1px 1px 1px #000;
+                                            text-shadow: 0px 0px 8px #000, 1px 1px 1px #000;
                                         }}
                                         img {{ vertical-align: middle; max-height: 2em; }}
                                     </style>

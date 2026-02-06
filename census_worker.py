@@ -343,10 +343,10 @@ class CensusWorker:
                         if final_event: self.c.trigger_overlay_event(final_event)
 
                     # -------------------------------------------------
-
+                    self.c.trigger_overlay_event("Hitmarker")
                     # Hitmarker (immer etwas verzögert)
                     time.sleep(0.05)
-                    self.c.trigger_overlay_event("Hitmarker")
+
                     base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
                     # Killfeed Message bauen
