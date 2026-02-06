@@ -464,17 +464,15 @@ class DiorClientGUI:
             vol = data["audio_volume"]
             self.config["audio_volume"] = vol
 
-            # Falls du PyGame Sound nutzt, hier direkt Volume setzen
-            if globals().get("HAS_SOUND", False):
-                try:
-                    # Pygame Volume ist float 0.0 bis 1.0
-                    import pygame
-                    # Wir setzen einen globalen Mix, falls Sounds abgespielt werden
-                    # (Hinweis: pygame.mixer.Sound(path).set_volume(...) müsste pro Sound passieren,
-                    # aber wir speichern es hier für spätere Nutzung)
-                    pass
-                except:
-                    pass
+            # OPTIONAL: Live-Update an Overlay senden (falls Sound gerade spielt)
+            # Das ist aber meist nicht nötig, da das Overlay sich den Wert eh holt.
+
+            # WICHTIG: Wir entfernen hier den Spam-Log für Volume,
+            # oder loggen es nur, wenn es kein Slider-Drag ist.
+            # print(f"DEBUG: Volume set to {vol}")
+
+        # Speichern auf die Festplatte
+        self.save_config()
 
         self.save_config()
         self.add_log(f"SYS: Globale Einstellungen gespeichert (Vol: {data.get('audio_volume')}%)")

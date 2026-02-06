@@ -122,8 +122,13 @@ class SettingsWidget(QWidget):
         self.lbl_vol_val = QLabel("50%")
         self.lbl_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold; width: 40px;")
 
-        # Live Update Label
-        self.slider_vol.valueChanged.connect(lambda v: self.lbl_vol_val.setText(f"{v}%"))
+        # --- WICHTIG: AUTOMATISCHES SPEICHERN ---
+
+        # 1. Visuelles Update beim Ziehen (ändert nur Text)
+        self.slider_vol.valueChanged.connect(self.update_volume_label)
+
+        # 2. Speichern beim Loslassen (Performance!)
+        self.slider_vol.sliderReleased.connect(self.request_save)
 
         vol_row.addWidget(self.slider_vol)
         vol_row.addWidget(self.lbl_vol_val)
@@ -153,10 +158,11 @@ class SettingsWidget(QWidget):
         # Spacer nach unten
         main_layout.addStretch()
 
-        # --- SAVE BUTTON ---
+        # --- SAVE BUTTON (Manual) ---
         self.btn_save = QPushButton("SAVE SETTINGS", objectName="SaveBtn")
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_save.clicked.connect(self.collect_and_save)
+        # Auch der Button nutzt jetzt die zentrale request_save Methode
+        self.btn_save.clicked.connect(self.request_save)
         main_layout.addWidget(self.btn_save)
 
     def load_config(self, config_data, ps2_dir):
@@ -166,11 +172,21 @@ class SettingsWidget(QWidget):
 
         # 2. Audio Volume
         vol = config_data.get("audio_volume", 50)
+
+        # --- WICHTIG: Signale blockieren beim Laden ---
+        # Verhindert, dass das Setzen des Wertes ein "Speichern"-Event auslöst
+        self.slider_vol.blockSignals(True)
         self.slider_vol.setValue(int(vol))
+        self.slider_vol.blockSignals(False)
+
         self.lbl_vol_val.setText(f"{vol}%")
 
-    def collect_and_save(self):
-        """Sammelt nur noch relevante Daten (Volume). Pfad & BG werden direkt gespeichert."""
+    def update_volume_label(self, val):
+        """Nur für die Optik beim Ziehen."""
+        self.lbl_vol_val.setText(f"{val}%")
+
+    def request_save(self):
+        """Sammelt Daten und sendet sie an Main (zum Speichern)."""
         data = {
             "audio_volume": self.slider_vol.value()
         }
