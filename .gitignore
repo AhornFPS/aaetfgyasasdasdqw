@@ -1,6 +1,28 @@
-.idea
-__pycache__
-error_log.txt
+# IDE & System
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Python & Build
+__pycache__/
+*.py[cod]
+*$py.class
+dist/
+build/
+*.spec
+
+# Lokale Daten & Datenbanken (Deine Liste)
 ps2_master.db
 config.json
+error_log.txt
 crash_log.txt
+_emote_cache/
+
+# Virtuelle Umgebungen
+venv/
+.venv/
+env/
+
+# Binaries
+*.exe
