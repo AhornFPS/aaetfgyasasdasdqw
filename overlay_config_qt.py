@@ -488,9 +488,6 @@ class OverlayConfigWindow(QWidget):
         self.slider_evt_scale = QSlider(Qt.Orientation.Horizontal)
         self.slider_evt_scale.setRange(10, 300)
         self.slider_evt_scale.setValue(100)
-
-        # CHANGE 1: Removed fixed width and set SizePolicy to Expanding
-        # This makes the slider fill the space between "Scale:" and "Duration"
         self.slider_evt_scale.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         # Scale Value Label
@@ -502,9 +499,6 @@ class OverlayConfigWindow(QWidget):
         sd_layout.addWidget(self.slider_evt_scale)
         sd_layout.addWidget(self.lbl_scale_val)
 
-        # CHANGE 2: Removed addStretch()
-        # sd_layout.addStretch()  <-- Previously consumed space
-
         sd_layout.addWidget(QLabel("Duration (ms):"))
         self.ent_evt_duration = QLineEdit("3000")
         self.ent_evt_duration.setFixedWidth(60)
@@ -512,6 +506,30 @@ class OverlayConfigWindow(QWidget):
         sd_layout.addWidget(self.ent_evt_duration)
 
         input_layout.addLayout(sd_layout)
+
+        # >>> NEU: VOLUME SLIDER (HIER EINGEFÜGT) <<<
+        vol_layout = QHBoxLayout()
+        vol_layout.setSpacing(15)
+
+        vol_layout.addWidget(QLabel("Volume:"))
+
+        self.slider_evt_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_evt_vol.setRange(0, 100)
+        self.slider_evt_vol.setValue(100)
+        self.slider_evt_vol.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self.lbl_vol_val = QLabel("100%")
+        self.lbl_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
+        self.lbl_vol_val.setFixedWidth(40)
+
+        # Live-Update des Labels
+        self.slider_evt_vol.valueChanged.connect(lambda val: self.lbl_vol_val.setText(f"{val}%"))
+
+        vol_layout.addWidget(self.slider_evt_vol)
+        vol_layout.addWidget(self.lbl_vol_val)
+
+        input_layout.addLayout(vol_layout)
+        # >>> ENDE NEU <<<
 
         # Separator Line
         line = QFrame()

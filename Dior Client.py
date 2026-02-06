@@ -2255,8 +2255,9 @@ class DiorClientGUI:
             abs_x = int(event_data.get("x", event_data.get("x_offset", 0)))
             abs_y = int(event_data.get("y", event_data.get("y_offset", 0)))
             scale = float(event_data.get("scale", 1.0))
+            volume = float(event_data.get("volume", 1.0))
         except (ValueError, TypeError):
-            abs_x, abs_y, scale = 0, 0, 1.0
+            abs_x, abs_y, scale, volume = 0, 0, 1.0, 1.0
 
         # --- NEUE DAUER-LOGIK (DURATION) ---
         queue_active = self.config.get("event_queue_active", True)
@@ -2303,7 +2304,7 @@ class DiorClientGUI:
 
         # 6. SIGNAL SENDEN
         if img_path or sound_path:
-            self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, is_hitmarker)
+            self.overlay_win.signals.show_image.emit(img_path, sound_path, dur, abs_x, abs_y, scale, volume, is_hitmarker)
 
     def start_fade_out(self, tag):
         """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
@@ -2411,6 +2412,9 @@ class DiorClientGUI:
         raw_scale = data.get("scale", 1.0)
         ui.slider_evt_scale.setValue(int(raw_scale * 100))
 
+        raw_vol = data.get("volume", 1.0)
+        ui.slider_evt_vol.setValue(int(raw_vol * 100))
+
         # Label aktualisieren
         ui.lbl_editing.setText(f"EDITING: {event_type}")
 
@@ -2465,6 +2469,7 @@ class DiorClientGUI:
             "img": img_val,
             "snd": snd_val,
             "scale": ui.slider_evt_scale.value() / 100.0,
+            "volume": ui.slider_evt_vol.value() / 100.0,
             "duration": dur_val,
             "x": save_x,
             "y": save_y

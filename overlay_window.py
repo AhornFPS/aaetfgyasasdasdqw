@@ -35,7 +35,7 @@ def get_asset_path(filename):
 
 # --- SIGNALE ---
 class OverlaySignals(QObject):
-    show_image = pyqtSignal(str, str, int, int, int, float, bool)
+    show_image = pyqtSignal(str, str, int, int, int, float, float, bool)
     killfeed_entry = pyqtSignal(str)
     update_stats = pyqtSignal(str, str)
     update_streak = pyqtSignal(str, int, list, dict, list)
@@ -557,13 +557,15 @@ class QtOverlay(QWidget):
         self.pixmap_cache.clear()
 
     # --- QUEUE & DISPLAY LOGIK ---
-    def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, is_hitmarker=False):
-
+    def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False):
         # --- FALL A: HITMARKER (Sofort & Parallel) ---
         if is_hitmarker:
             if sound_path:
                 try:
-                    if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
+                    if 'pygame' in sys.modules:
+                        snd = pygame.mixer.Sound(sound_path)
+                        snd.set_volume(volume) # <--- Volume setzen
+                        snd.play()
                 except:
                     pass
 
@@ -580,14 +582,18 @@ class QtOverlay(QWidget):
 
             if sound_path:
                 try:
-                    if 'pygame' in sys.modules: pygame.mixer.Sound(sound_path).play()
+                    if 'pygame' in sys.modules:
+                        snd = pygame.mixer.Sound(sound_path)
+                        snd.set_volume(volume) # <--- Volume setzen
+                        snd.play()
                 except:
                     pass
 
             self.display_image(img_path, duration, x, y, scale)
             return
 
-        self.event_queue.append((img_path, sound_path, duration, x, y, scale))
+        # Queue AN: Volume mit speichern
+        self.event_queue.append((img_path, sound_path, duration, x, y, scale, volume))
 
         if not self.is_showing:
             self.process_next_event()
@@ -635,14 +641,18 @@ class QtOverlay(QWidget):
             return
 
         self.is_showing = True
-        img_path, sound_path, duration, x, y, scale = self.event_queue.pop(0)
+        # Volume aus dem Tupel entpacken
+        img_path, sound_path, duration, x, y, scale, volume = self.event_queue.pop(0)
 
         self.display_image(img_path, duration, x, y, scale)
 
         if sound_path:
             try:
                 if 'pygame' in sys.modules:
-                    pygame.mixer.Sound(sound_path).play()
+                    # >>> NEU: Lautstärke setzen <<<
+                    snd = pygame.mixer.Sound(sound_path)
+                    snd.set_volume(volume)
+                    snd.play()
             except:
                 pass
 
