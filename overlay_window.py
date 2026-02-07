@@ -3,6 +3,7 @@ import os
 import ctypes
 import math
 import time
+import re
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from overlay_server import OverlayServer
@@ -1000,15 +1001,12 @@ class QtOverlay(QWidget):
 
     # --- ELEMENT UPDATES ---
     def add_killfeed_row(self, html_msg):
-        scaled = html_msg
-        for size in [19, 16]: scaled = scaled.replace(f"{size}px", f"{(size * self.ui_scale)}px")
-        if "style=\"" in scaled: scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
-        self.feed_messages.insert(0, scaled)
+        # Wir speichern jetzt die UN-SKALIERTE Nachricht
+        self.feed_messages.insert(0, html_msg)
         self.feed_messages = self.feed_messages[:6]
-        self.feed_label.setText(
-            f'<div style="text-align: right; margin-right: 5px;">{"".join(self.feed_messages)}</div>')
-        self.feed_label.show()
-        self.repaint()
+        self.update_killfeed_ui()
+        
+        # Broadcast (unskaliert für Server)
         kf_x, kf_y = 50, 200  # Defaults
         if self.gui_ref:
             conf = self.gui_ref.config.get("killfeed", {})
@@ -1020,6 +1018,25 @@ class QtOverlay(QWidget):
             "x": int(kf_x),
             "y": int(kf_y)
         })
+
+    def update_killfeed_ui(self):
+        """Skaliert alle Nachrichten im Feed und setzt den Label-Text."""
+        scaled_msgs = []
+        for msg in self.feed_messages:
+            # On-the-fly Skalierung via Regex
+            # 1. Font-Größen (XXpx)
+            scaled = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", msg)
+            # 2. Bild-Dimensionen (width="XX" height="XX")
+            scaled = re.sub(r'(width|height)="(\d+)"', 
+                            lambda m: f'{m.group(1)}="{int(int(m.group(2)) * self.ui_scale)}"', scaled)
+            
+            if "style=\"" in scaled: scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
+            scaled_msgs.append(scaled)
+            
+        self.feed_label.setText(
+            f'<div style="text-align: right; margin-right: 5px;">{"".join(scaled_msgs)}</div>')
+        self.feed_label.show()
+        self.repaint()
 
     def clear_killfeed(self):
         self.feed_messages = []
@@ -1054,9 +1071,8 @@ class QtOverlay(QWidget):
             self.stats_bg_label.hide()
 
         # 2. Text HTML skalieren
-        scaled_html = html
-        for size in [28, 22, 20, 19, 16, 14]:
-            scaled_html = scaled_html.replace(f"{size}px", f"{int(size * self.ui_scale)}px")
+        # NEW: Regex-basierte Skalierung für ALLE Font-Größen
+        scaled_html = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html)
 
         self.stats_text_label.setText(scaled_html)
         self.stats_text_label.adjustSize()
@@ -1064,13 +1080,30 @@ class QtOverlay(QWidget):
         self.stats_text_label.raise_()
         bg_name = os.path.basename(img_path) if img_path else ""
 
-        # Position holen
-        st_x, st_y, st_scale = 50, 500, 1.0
+        # Position holen & Anwenden
+        st_x, st_y = 50, 500
+        tx_off, ty_off = 0, 0
+        st_scale = 1.0
         if self.gui_ref:
             conf = self.gui_ref.config.get("stats_widget", {})
             st_x = conf.get("x", 50)
             st_y = conf.get("y", 500)
+            tx_off = conf.get("tx", 0)
+            ty_off = conf.get("ty", 0)
             st_scale = conf.get("scale", 1.0)
+
+        # Background positionieren
+        self.safe_move(self.stats_bg_label, self.s(st_x), self.s(st_y))
+
+        # Text auf Hintergrund zentrieren (+ Offset)
+        bg_rect = self.stats_bg_label.geometry()
+        txt_rect = self.stats_text_label.geometry()
+        
+        cx, cy = bg_rect.center().x(), bg_rect.center().y()
+        final_tx = cx - (txt_rect.width() / 2) + self.s(tx_off)
+        final_ty = cy - (txt_rect.height() / 2) + self.s(ty_off)
+        
+        self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
 
         self.server.broadcast("stats", {
             "html": html,
@@ -1190,7 +1223,7 @@ class QtOverlay(QWidget):
                 # Text/Zahl wird IMMER gezeichnet (außerhalb des if-Blocks)
                 fc, fs, sh = cfg.get("color", "#fff"), cfg.get("size", 26), int(cfg.get("shadow_size", 0))
                 stl = [f"font-family: 'Black Ops One';", f"font-size: {int(fs * sc)}px;", f"color: {fc};"]
-                if sh > 0: stl.append(f"text-shadow: {sh}px {sh}px 0 #000;")
+                if sh > 0: stl.append(f"text-shadow: {int(sh * sc)}px {int(sh * sc)}px 0 #000;")
                 if cfg.get("bold"): stl.append("font-weight: bold;")
                 if cfg.get("underline"): stl.append("text-decoration: underline;")
                 self.streak_text_label.setText(f'<div style="{" ".join(stl)}">{cnt}</div>')

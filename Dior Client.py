@@ -98,9 +98,9 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 # Qt anweisen, im Unterordner nach Plugins zu suchen
 QCoreApplication.addLibraryPath(os.path.join(basedir, 'imageformats'))
 
-DUMMY_STATS_HTML = """
+DUMMY_STATS_TEMPLATE = """
 <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
-            text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
+            text-shadow: 1px 1px 2px #000; text-align: center; font-size: {f_size}px; white-space: nowrap;">
     KD: <span style="color: #00ff00;">3.50</span> &nbsp;&nbsp;
     K: <span style="color: white;">42</span> &nbsp;&nbsp;
     D: <span style="color: white;">12</span> &nbsp;&nbsp;
@@ -956,6 +956,11 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_toggle_feed.clicked, self.toggle_killfeed_visibility)
         self.safe_connect(ui.check_show_revives.toggled, self.save_stats_config_from_qt)
 
+        # LIVE UPDATE FONT SIZE (Dropdown) / HS ICON SIZE
+        self.safe_connect(ui.combo_st_font.currentTextChanged, self.save_stats_config_from_qt)
+        self.safe_connect(ui.combo_feed_font.currentTextChanged, self.save_stats_config_from_qt)
+        self.safe_connect(ui.combo_hs_scale.currentTextChanged, self.save_stats_config_from_qt) # NEU: Dropdown signal
+
         # ---------------------------------------------------------
         # 7. OVERLAY TAB: VOICE MACROS
         # ---------------------------------------------------------
@@ -1503,7 +1508,10 @@ class DiorClientGUI:
 
             # Position behalten
             "x": current_st_conf.get("x", 50),
-            "y": current_st_conf.get("y", 500)
+            "y": current_st_conf.get("y", 500),
+
+            # NEW: Font Size (Dropdown)
+            "font_size": int(s_ui.combo_st_font.currentText())
         }
 
         # --- KILLFEED DATEN ---
@@ -1517,7 +1525,11 @@ class DiorClientGUI:
 
             # Position behalten
             "x": current_kf_conf.get("x", 50),
-            "y": current_kf_conf.get("y", 200)
+            "y": current_kf_conf.get("y", 200),
+
+            # NEW: Font Size (Dropdown) / HS Scale (Dropdown)
+            "font_size": int(s_ui.combo_feed_font.currentText()),
+            "hs_icon_size": int(s_ui.combo_hs_scale.currentText())  # NEU: currentText statt value
         }
 
         # Dictionaries updaten (Merge)
@@ -1530,9 +1542,10 @@ class DiorClientGUI:
         self.save_config()
         self.add_log("SYS: Stats & Killfeed configuration updated.")
 
-        # Positionen live anwenden
+        # Positionen & Style live anwenden
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
+            self.overlay_win.update_killfeed_ui()  # <--- NEU: Sofortige Skalierung bei Font-Wechsel
             self.refresh_ingame_overlay()
 
     def save_voice_config_from_qt(self):
@@ -1696,9 +1709,13 @@ class DiorClientGUI:
         ui.slider_st_ty.blockSignals(True);
         ui.slider_st_ty.setValue(st_conf.get("ty", 0));
         ui.slider_st_ty.blockSignals(False)
-        ui.slider_st_scale.blockSignals(True);
         ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100));
         ui.slider_st_scale.blockSignals(False)
+
+        # NEW: Font Size (Stats) - Dropdown Support
+        ui.combo_st_font.blockSignals(True)
+        ui.combo_st_font.setCurrentText(str(int(st_conf.get("font_size", 22))))
+        ui.combo_st_font.blockSignals(False)
 
         # 2. Killfeed Button Status
         kf_active = kf_conf.get("active", True)
@@ -1713,6 +1730,14 @@ class DiorClientGUI:
 
         ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
         ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
+        
+        # NEW: Font Size (Feed) - Dropdown Support / HS Icon Size
+        ui.combo_feed_font.blockSignals(True)
+        ui.combo_feed_font.setCurrentText(str(int(kf_conf.get("font_size", 19))))
+        ui.combo_feed_font.blockSignals(False)
+        ui.combo_hs_scale.blockSignals(True)
+        ui.combo_hs_scale.setCurrentText(str(int(kf_conf.get("hs_icon_size", 19))))
+        ui.combo_hs_scale.blockSignals(False)
 
         # --- TAB 6: VOICE MACROS ---
         for key, combo in ui.voice_combos.items():
@@ -2792,15 +2817,17 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         if should_render:
             # === A) STATS WIDGET ===
-            stats_cfg = self.config.get("stats_widget", {})
+            stats_cfg_raw = self.config.get("stats_widget", {})
+            stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
             stats_editing = edit_active and ("stats" in getattr(self, "current_edit_targets", []))
 
             # Zeigen bei: (Gameplay & Aktiv) ODER (Editieren) ODER (Stats Test)
             # WICHTIG: streak_test_active fehlt hier absichtlich!
             if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active:
                 # Daten-Ermittlung
+                f_size = int(stats_cfg.get("font_size", 22))
                 if stats_test_active or (stats_editing and not game_running):
-                    html = DUMMY_STATS_HTML
+                    html = DUMMY_STATS_TEMPLATE.format(f_size=f_size)
                 else:
                     # Echte Stats-Berechnung
                     my_id = self.current_character_id
@@ -2826,10 +2853,13 @@ class DiorClientGUI:
                     kpm = kills / max(1, dur_min) if dur_min > 0 else 0.0
                     hrs, mns = int(dur_min // 60), int(dur_min % 60)
 
+                    # NEW: Font Size from Config
+                    f_size = int(stats_cfg.get("font_size", 22))
+
                     kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
                     html = f"""
                     <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
-                                text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
+                                text-shadow: 1px 1px 2px #000; text-align: center; font-size: {f_size}px; white-space: nowrap;">
                         KD: <span style="color: {kd_col};">{kd:.2f}</span> &nbsp;&nbsp;
                         K: <span style="color: white;">{kills}</span> &nbsp;&nbsp;
                         D: <span style="color: white;">{eff_deaths}</span> &nbsp;&nbsp;
@@ -2960,7 +2990,11 @@ class DiorClientGUI:
 
         def send_fake_feed(t_type, name, tag, is_hs, kd_val):
             # Basis-Style für den Text
-            base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+            # Killfeed Font Size (Robust)
+            kf_cfg_raw = self.config.get("killfeed", {})
+            kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+            kf_f = kf_cfg.get("font_size", 19)
+            base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
             # Tag Formatierung
             tag_display = f"[{tag}]" if tag else ""
@@ -2972,7 +3006,8 @@ class DiorClientGUI:
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
                     # Icon ganz links
-                    icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
+                    hs_size = kf_cfg.get("hs_icon_size", 19)
+                    icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
 
             # HTML zusammenbauen
             if t_type == "kill":
@@ -3091,7 +3126,10 @@ class DiorClientGUI:
 
                 # Zwinge sofortiges Update mit dem konstanten Dummy
                 # Damit ist es sofort da und sieht bunt aus
-                self.overlay_win.set_stats_html(DUMMY_STATS_HTML, img_path)
+                stats_cfg_raw = self.config.get("stats_widget", {})
+                stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
+                f_size = stats_cfg.get("font_size", 22)
+                self.overlay_win.set_stats_html(DUMMY_STATS_TEMPLATE.format(f_size=f_size), img_path)
 
                 self.overlay_win.stats_bg_label.show()
 
@@ -3111,7 +3149,11 @@ class DiorClientGUI:
             if "feed" in targets:
                 # Wir füllen den Feed mit Fake-Zeilen, damit die Box groß genug zum Klicken ist
                 fake_feed = []
-                base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+                # Killfeed Font Size (Robust)
+                kf_cfg_raw = self.config.get("killfeed", {})
+                kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+                kf_f = kf_cfg.get("font_size", 19)
+                base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
                 # 3 Zeilen simulieren
                 line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'

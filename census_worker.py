@@ -313,11 +313,18 @@ class CensusWorker:
                 hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
-                    icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
+                    # NEU: HS Icon Size aus Config
+                    hs_size = self.c.config.get("killfeed", {}).get("hs_icon_size", 19)
+                    icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
 
             w_info = self.c.item_db.get(weapon_id, {})
             category = w_info.get("type", "Unknown")
-            base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+            
+            # NEU: Font Size aus Config (Robust)
+            kf_cfg_raw = self.c.config.get("killfeed", {})
+            kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+            kf_font = kf_cfg.get("font_size", 19)
+            base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
             # === A) ICH HABE GETÖTET ===
             if killer_id == my_id and victim_id != my_id:
@@ -592,8 +599,11 @@ class CensusWorker:
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
                     m_name = self.c.name_cache.get(char_id, "Medic")
 
-                    # Style Update
-                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+                    # NEU: Font Size aus Config (Robust)
+                    kf_cfg_raw = self.c.config.get("killfeed", {})
+                    kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+                    kf_font = kf_cfg.get("font_size", 19)
+                    base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
                     msg = f'<div style="{base_style}"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
 

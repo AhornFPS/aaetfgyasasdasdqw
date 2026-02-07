@@ -1073,6 +1073,16 @@ class OverlayConfigWindow(QWidget):
         self.slider_st_scale.setValue(100)
         st_layout.addWidget(self.slider_st_scale)
 
+        # FONT SIZE (STATS)
+        st_fs_layout = QHBoxLayout()
+        st_fs_layout.addWidget(QLabel("Font Size:"))
+        self.combo_st_font = QComboBox()
+        self.combo_st_font.addItems(["8", "10", "12", "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72", "100"])
+        self.combo_st_font.setCurrentText("22")
+        st_fs_layout.addWidget(self.combo_st_font)
+        st_fs_layout.addStretch()
+        st_layout.addLayout(st_fs_layout)
+
         layout.addWidget(stats_group)
 
         # ==========================================
@@ -1108,6 +1118,28 @@ class OverlayConfigWindow(QWidget):
         self.check_show_revives = QCheckBox("Show Revives in Feed")
         self.check_show_revives.setStyleSheet("color: #00ff00;")
         kf_layout.addWidget(self.check_show_revives)
+
+        # FONT SIZE (FEED)
+        kf_fs_layout = QHBoxLayout()
+        kf_fs_layout.addWidget(QLabel("Feed Font Size:"))
+        self.combo_feed_font = QComboBox()
+        self.combo_feed_font.addItems(["8", "10", "12", "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72", "100"])
+        # Standard Feed Font is 19 - we add it if not present
+        if self.combo_feed_font.findText("19") == -1:
+            self.combo_feed_font.addItem("19")
+        self.combo_feed_font.setCurrentText("19")
+        kf_fs_layout.addWidget(self.combo_feed_font)
+        
+        # NEU: HS Icon Skalierung (Dropdown)
+        kf_fs_layout.addWidget(QLabel("   Icon Size:"))
+        self.combo_hs_scale = QComboBox()
+        self.combo_hs_scale.addItems(["16", "19", "24", "28", "32", "36", "48", "64", "72", "80", "100"])
+        self.combo_hs_scale.setCurrentText("19")
+        self.combo_hs_scale.setFixedWidth(60)
+        kf_fs_layout.addWidget(self.combo_hs_scale)
+        
+        kf_fs_layout.addStretch()
+        kf_layout.addLayout(kf_fs_layout)
 
         layout.addWidget(feed_group)
 
