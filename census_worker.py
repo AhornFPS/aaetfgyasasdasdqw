@@ -564,7 +564,7 @@ class CensusWorker:
                 self.c.streak_slot_map = getattr(self.c, 'saved_slots', [])
                 self.c.update_streak_display()
 
-                self.c.trigger_overlay_event("Revive Taken", is_revive_taken=True)
+                self.c.trigger_overlay_event("Revive Taken")
                 self.c.trigger_auto_voice("revived")
 
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
