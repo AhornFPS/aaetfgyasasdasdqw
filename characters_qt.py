@@ -314,7 +314,7 @@ class CharacterWidget(QWidget):
         self.directive_table.setSortingEnabled(False)
 
         if isinstance(data_list, dict) and "Categories" in data_list:
-            rows = self._build_tree_rows(data_list)
+            rows = self._build_directive_rows(data_list)
             self._render_directive_rows(rows)
             self.directive_table.setSortingEnabled(True)
             self.add_log(f"Fetch: {len(rows)} Directives loaded.")
@@ -371,15 +371,33 @@ class CharacterWidget(QWidget):
         self.add_log(f"Fetch: {len(data_list)} Directives loaded.")
         self.update_directive_overview(data_list)
 
-    def _build_tree_rows(self, directive_set):
+    def _build_directive_rows(self, directive_set):
         rows = []
         for category in directive_set.get("Categories", []):
             for tree in category.get("Trees", []):
-                rows.append({
-                    "entry": tree.get("Entry", {}) or {},
-                    "tree": tree.get("Tree", {}) or {},
-                    "tiers": tree.get("Tiers", []) or []
-                })
+                tree_entry = tree.get("Entry", {}) or {}
+                tree_meta = tree.get("Tree", {}) or {}
+                tiers = tree.get("Tiers", []) or []
+                tree_id = str(tree_entry.get("TreeID") or tree_meta.get("ID") or "")
+                tree_name = tree_meta.get("Name") or self.directives_db.get(tree_id, {}).get(
+                    "name",
+                    f"Unknown ({tree_id})"
+                )
+                for tier in tiers:
+                    tier_meta = tier.get("Tier", {}) or {}
+                    tier_id = int(tier.get("TierID") or 0)
+                    tier_name = tier_meta.get("Name") or f"Tier {tier_id}"
+                    for directive in tier.get("Directives", []) or []:
+                        rows.append({
+                            "type": "directive",
+                            "tree_entry": tree_entry,
+                            "tree": tree_meta,
+                            "tree_name": tree_name,
+                            "tier": tier,
+                            "tier_id": tier_id,
+                            "tier_name": tier_name,
+                            "directive": directive,
+                        })
         return rows
 
     def _has_completion_date(self, value):
@@ -397,54 +415,27 @@ class CharacterWidget(QWidget):
 
     def _render_directive_rows(self, rows):
         for row_data in rows:
-            tree_entry = row_data["entry"]
-            tree_meta = row_data["tree"]
-            tiers = row_data["tiers"]
+            tree_name = row_data["tree_name"]
+            tier_name = row_data["tier_name"]
+            directive = row_data["directive"]
 
-            tree_id = str(tree_entry.get("TreeID") or tree_meta.get("ID") or "")
-            name = tree_meta.get("Name")
-            if not name:
-                name = self.directives_db.get(tree_id, {}).get("name", f"Unknown ({tree_id})")
+            directive_name = directive.get("Name") or directive.get("Directive", {}).get("Name") or "Unknown"
+            progress = directive.get("Progress")
+            goal = directive.get("Goal")
 
-            current_tier_id = int(tree_entry.get("CurrentTier") or 0)
-            current_level = int(tree_entry.get("CurrentLevel") or 0)
-            current_tier = next(
-                (tier for tier in tiers if tier.get("TierID") == current_tier_id),
-                None
-            )
-
-            tier_label = str(current_tier_id)
-            if current_tier:
-                tier_name = current_tier.get("Tier", {}).get("Name")
-                if tier_name:
-                    tier_label = tier_name
-                else:
-                    tier_label = f"Tier {current_tier_id}"
-            if current_level:
-                tier_label = f"{tier_label} (Lvl {current_level})"
-
-            completion_date = tree_entry.get("CompletionDate")
-            if self._has_completion_date(completion_date):
+            status = "In Progress"
+            if self._directive_is_complete(directive):
                 status = "Completed"
-            else:
-                status = "In Progress"
-                if current_tier:
-                    directives = current_tier.get("Directives", []) or []
-                    completed = sum(self._directive_is_complete(d) for d in directives)
-                    completion_count = current_tier.get("Tier", {}).get("CompletionCount")
-                    if completion_count:
-                        percent = round((completed / completion_count) * 100)
-                        status = f"{completed}/{completion_count} ({percent:.0f}%)"
-                    elif directives:
-                        percent = round((completed / len(directives)) * 100)
-                        status = f"{completed}/{len(directives)} ({percent:.0f}%)"
+            elif progress is not None and goal:
+                percent = round((progress / goal) * 100)
+                status = f"{progress}/{goal} ({percent:.0f}%)"
 
             row = self.directive_table.rowCount()
             self.directive_table.insertRow(row)
 
-            self.directive_table.setItem(row, 0, QTableWidgetItem(name))
+            self.directive_table.setItem(row, 0, QTableWidgetItem(f"{tree_name} - {directive_name}"))
 
-            tier_item = QTableWidgetItem(tier_label)
+            tier_item = QTableWidgetItem(tier_name)
             tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.directive_table.setItem(row, 1, tier_item)
 
@@ -456,7 +447,7 @@ class CharacterWidget(QWidget):
             self.directive_table.setItem(row, 2, status_item)
 
     def update_directive_overview(self, data_list):
-        if isinstance(data_list, list) and (not data_list or "entry" in data_list[0]):
+        if isinstance(data_list, list) and (not data_list or data_list[0].get("type") == "directive"):
             total_lines = len(data_list)
             completed = 0
             in_progress = 0
@@ -465,11 +456,11 @@ class CharacterWidget(QWidget):
             top_level = -1
 
             for row in data_list:
-                entry = row["entry"]
+                entry = row["tree_entry"]
                 tree = row["tree"]
                 current_tier = int(entry.get("CurrentTier") or 0)
                 current_level = int(entry.get("CurrentLevel") or 0)
-                is_completed = self._has_completion_date(entry.get("CompletionDate"))
+                is_completed = self._directive_is_complete(row["directive"])
                 if is_completed:
                     completed += 1
                 else:
