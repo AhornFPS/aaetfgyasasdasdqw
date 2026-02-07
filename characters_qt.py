@@ -17,6 +17,7 @@ class CharacterSignals(QObject):
 
     # Von Logik -> GUI (Triggert process_search_results_qt)
     search_finished = pyqtSignal(dict, list)
+    directives_fetched = pyqtSignal(list)
 
 
 # --- STYLESHEET ---
@@ -50,6 +51,7 @@ class CharacterWidget(QWidget):
 
         # Signale initialisieren
         self.signals = CharacterSignals()
+        self.signals.directives_fetched.connect(self.update_directive_table)
 
         # Instanzattribute
         self.info_labels = {}
@@ -281,11 +283,7 @@ class CharacterWidget(QWidget):
             r = requests.get(url, timeout=10)
             data = r.json()
             
-            # Auf Hauptthread updaten
-            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
-            QMetaObject.invokeMethod(self, "update_directive_table", 
-                                     Qt.ConnectionType.QueuedConnection,
-                                     Q_ARG(list, data.get("characters_directive_tier_list", [])))
+            self.signals.directives_fetched.emit(data.get("characters_directive_tier_list", []))
             
         except Exception as e:
             print(f"Directive API Error: {e}")
