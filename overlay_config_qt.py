@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QSizePolicy,QSpinBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
 from PyQt6.QtGui import QColor, QPixmap
+from PyQt6.QtGui import QClipboard
 
 
 # --- SIGNALS ---
@@ -222,6 +223,105 @@ class AspectRatioLabel(QLabel):
             self.setText("NO PREVIEW")
 
 
+class TabStreaming(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # --- HEADLINE ---
+        head = QLabel("OBS STUDIO INTEGRATION")
+        # Nutzt deinen existierenden Style für Header
+        head.setObjectName("Header")
+        head.setStyleSheet("font-size: 22px; margin-bottom: 10px;")
+        layout.addWidget(head)
+
+        # --- INFO GROUP ---
+        info_group = QFrame(objectName="Group")
+        info_group.setStyleSheet("#Group { background-color: #222; border: 1px solid #333; border-radius: 5px; }")
+        info_layout = QVBoxLayout(info_group)
+
+        info_text = QLabel(
+            "If you capture Planetside with game capture, use the <b>Browser Source</b> method.<br>"
+            "This renders the overlay via a local web server."
+        )
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: #ccc; font-size: 13px; line-height: 1.4;")
+        info_layout.addWidget(info_text)
+
+        layout.addWidget(info_group)
+
+        # --- URL SECTION ---
+        url_group = QFrame(objectName="Group")
+        url_layout = QHBoxLayout(url_group)
+
+        self.lbl_url = QLabel("http://localhost:8000/")
+        self.lbl_url.setStyleSheet("color: #00ff00; font-family: 'Consolas'; font-size: 18px; font-weight: bold;")
+
+        self.btn_copy = QPushButton("COPY URL")
+        self.btn_copy.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy.setFixedWidth(120)
+        # Nutzt deinen Button-Style, aber mit spezifischen Farben
+        self.btn_copy.setStyleSheet("""
+            QPushButton { background-color: #004400; color: #00ff00; border: 1px solid #006600; font-weight: bold; padding: 8px; }
+            QPushButton:hover { background-color: #006600; color: white; border-color: #00ff00; }
+        """)
+        self.btn_copy.clicked.connect(self.copy_to_clipboard)
+
+        url_layout.addWidget(self.lbl_url)
+        url_layout.addWidget(self.btn_copy)
+        layout.addWidget(url_group)
+
+        # --- INSTRUCTIONS ---
+        step_group = QFrame(objectName="Group")
+        step_layout = QVBoxLayout(step_group)
+        step_layout.setSpacing(10)
+
+        lbl_instr = QLabel("SETUP INSTRUCTIONS:")
+        lbl_instr.setStyleSheet("color: #00f2ff; font-weight: bold; font-size: 14px;")
+        step_layout.addWidget(lbl_instr)
+
+        steps = [
+            "1. Open OBS Studio.",
+            "2. Add a new Source: <span style='color:#00f2ff;'>Browser</span>.",
+            "3. Uncheck 'Local file'.",
+            "4. Paste the URL above into the URL field.",
+            "5. Set Width to <b>1920</b> and Height to <b>1080</b>.",
+            "6. Check 'Refresh browser when scene becomes active'.",
+            "7. Click OK."
+        ]
+
+        for step in steps:
+            l = QLabel(step)
+            l.setStyleSheet("color: #ddd; font-size: 13px;")
+            step_layout.addWidget(l)
+
+        layout.addWidget(step_group)
+
+
+
+    def copy_to_clipboard(self):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.lbl_url.text())
+
+        # Feedback Animation (Text ändern)
+        orig_text = self.lbl_url.text()
+        self.lbl_url.setText("COPIED!")
+        self.lbl_url.setStyleSheet("color: #00f2ff; font-family: 'Consolas'; font-size: 18px; font-weight: bold;")
+
+        # Timer um Text zurückzusetzen (nutzt QTimer.singleShot)
+        from PyQt6.QtCore import QTimer  # Import falls lokal nötig, sonst oben
+        QTimer.singleShot(1500, lambda: self._reset_label(orig_text))
+
+    def _reset_label(self, text):
+        self.lbl_url.setText(text)
+        self.lbl_url.setStyleSheet("color: #00ff00; font-family: 'Consolas'; font-size: 18px; font-weight: bold;")
+
+
 class OverlayConfigWindow(QWidget):
     def __init__(self, controller=None):
         super().__init__()
@@ -273,6 +373,12 @@ class OverlayConfigWindow(QWidget):
         self.tab_twitch = QWidget()
         self.setup_twitch_tab()
         self.tabs.addTab(self.tab_twitch, " TWITCH CHAT ")  # Neuer Tab ganz rechts
+
+        # --- [NEU] TAB 8: STREAMING / OBS ---
+        # Hier nutzen wir die neue Klasse statt einer setup_Methode
+        self.tab_streaming = TabStreaming()
+        self.tabs.addTab(self.tab_streaming, " OBS / STREAM ")
+
 
         layout.addWidget(self.tabs)
 
@@ -1236,6 +1342,7 @@ class OverlayConfigWindow(QWidget):
 
         layout.addLayout(btn_box)
         layout.addStretch()
+
 
 
 if __name__ == "__main__":

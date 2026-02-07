@@ -5,6 +5,7 @@ import math
 import time
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
+from overlay_server import OverlayServer
 
 # Aus QtCore kommen die Logik- und Animations-Klassen
 from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
@@ -352,6 +353,8 @@ class QtOverlay(QWidget):
         self.auto_hide_timer.setSingleShot(True)
         self.auto_hide_timer.timeout.connect(self.fade_out_chat)
 
+        self.server = OverlayServer()
+
     def get_master_volume(self):
         """Holt das Master-Volume aus der Config (0-100) und gibt float (0.0-1.0) zurück."""
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
@@ -664,6 +667,17 @@ class QtOverlay(QWidget):
         img_path, sound_path, duration, x, y, scale, event_vol = self.event_queue.pop(0)
 
         self.display_image(img_path, duration, x, y, scale)
+        filename = os.path.basename(img_path)
+
+        if img_path:
+            filename = os.path.basename(img_path)
+            self.server.broadcast("event", {
+                "filename": filename,
+                "duration": duration,
+                "x": int(x),  # Position senden
+                "y": int(y),  # Position senden
+                "scale": scale  # Scale senden
+            })
 
         if sound_path:
             try:
@@ -988,6 +1002,17 @@ class QtOverlay(QWidget):
             f'<div style="text-align: right; margin-right: 5px;">{"".join(self.feed_messages)}</div>')
         self.feed_label.show()
         self.repaint()
+        kf_x, kf_y = 50, 200  # Defaults
+        if self.gui_ref:
+            conf = self.gui_ref.config.get("killfeed", {})
+            kf_x = conf.get("x", 50)
+            kf_y = conf.get("y", 200)
+
+        self.server.broadcast("feed", {
+            "html": html_msg,
+            "x": int(kf_x),
+            "y": int(kf_y)
+        })
 
     def clear_killfeed(self):
         self.feed_messages = []
@@ -1030,6 +1055,23 @@ class QtOverlay(QWidget):
         self.stats_text_label.adjustSize()
         self.stats_text_label.show()
         self.stats_text_label.raise_()
+        bg_name = os.path.basename(img_path) if img_path else ""
+
+        # Position holen
+        st_x, st_y, st_scale = 50, 500, 1.0
+        if self.gui_ref:
+            conf = self.gui_ref.config.get("stats_widget", {})
+            st_x = conf.get("x", 50)
+            st_y = conf.get("y", 500)
+            st_scale = conf.get("scale", 1.0)
+
+        self.server.broadcast("stats", {
+            "html": html,
+            "bg_filename": bg_name,
+            "x": int(st_x),
+            "y": int(st_y),
+            "scale": st_scale
+        })
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if not cfg.get("active", True) and not self.edit_mode:
