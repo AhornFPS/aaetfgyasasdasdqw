@@ -152,6 +152,7 @@ class CensusWorker:
                                 "name": self.c.name_cache.get(cid, "Searching..."),
                                 "faction": current_faction_name,  # Setze Fraktion basierend auf Event
                                 "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
+                                "revives_received": 0,
                                 "start": time.time(),
                                 "last_kill_time": time.time(),
                                 "world_id": str(p.get("world_id", "0"))
@@ -507,7 +508,9 @@ class CensusWorker:
             a_obj["a"] += 1
         if exp_id in ["7", "53"]:
             r_obj = get_stat_obj(other_id, p.get("team_id"))
-            if r_obj["d"] > 0: r_obj["d"] -= 1
+            # STATT Deaths abzuziehen, zählen wir Revives hoch
+            # if r_obj["d"] > 0: r_obj["d"] -= 1
+            r_obj["revives_received"] = r_obj.get("revives_received", 0) + 1
 
         # A) EVENTS DIE MIR PASSIEREN
         if my_id and other_id == my_id:

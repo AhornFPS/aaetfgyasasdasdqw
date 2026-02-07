@@ -82,6 +82,12 @@ class CharacterWidget(QWidget):
         self.weapon_tab = QWidget()
         self.setup_weapon_tab()
         self.tabs.addTab(self.weapon_tab, "WEAPON STATS")
+        
+        self.directive_tab = QWidget()
+        self.directive_table = QTableWidget(0, 3) # Name, Tier, Progress
+        self.setup_directive_tab()
+        self.tabs.addTab(self.directive_tab, "DIRECTIVES")
+
         main_layout.addWidget(self.tabs)
 
         # --- 3. LOG AREA ---
@@ -151,6 +157,21 @@ class CharacterWidget(QWidget):
         self.weapon_table.verticalHeader().setVisible(False)
         layout.addWidget(self.weapon_table)
 
+    def setup_directive_tab(self):
+        layout = QVBoxLayout(self.directive_tab)
+        # Tabelle konfigurieren
+        self.directive_table.setHorizontalHeaderLabels(["DIRECTIVE LINE", "CURRENT TIER", "STATUS"])
+        
+        h = self.directive_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        
+        self.directive_table.verticalHeader().setVisible(False)
+        self.directive_table.setAlternatingRowColors(True)
+        self.directive_table.setStyleSheet("alternate-background-color: #161616;")
+        layout.addWidget(self.directive_table)
+
     # --- LOGIK ---
 
     def trigger_search(self):
@@ -201,6 +222,86 @@ class CharacterWidget(QWidget):
 
     def add_log(self, text):
         self.log_area.append(f"[{time.strftime('%H:%M:%S')}] {text}")
+
+    # --- DIRECTIVE LOGIC ---
+
+    def fetch_directives(self, char_id):
+        """Startet den Thread zum Laden der Directives."""
+        self.directive_table.setRowCount(0)
+        self.add_log("Fetch: Loading Directives...")
+        
+        t = threading.Thread(target=self._fetch_thread, args=(char_id,), daemon=True)
+        t.start()
+
+    def _fetch_thread(self, char_id):
+        url = f"https://census.daybreakgames.com/s:ahornstream/get/ps2:v2/characters_directive_tier?character_id={char_id}&c:limit=500&c:join=type:directive%5Eon:directive_tree_id%5Eto:directive_tree_id&c:lang=en"
+        try:
+            r = requests.get(url, timeout=10)
+            data = r.json()
+            
+            # Auf Hauptthread updaten
+            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
+            QMetaObject.invokeMethod(self, "update_directive_table", 
+                                     Qt.ConnectionType.QueuedConnection,
+                                     Q_ARG(list, data.get("characters_directive_tier_list", [])))
+            
+        except Exception as e:
+            print(f"Directive API Error: {e}")
+
+    @pyqtSignal(list)
+    def update_directive_table(self, data_list):
+        """Wird vom Thread aufgerufen, wenn Daten da sind."""
+        self.directive_table.setRowCount(0)
+        self.directive_table.setSortingEnabled(False)
+
+        for item in data_list:
+            tree_id = item.get("directive_tree_id")
+            tier_id = item.get("directive_tier_id", "0")
+            
+            # 1. Namen auflösen (Lokal)
+            dir_info = self.directives_db.get(tree_id, {})
+            name = dir_info.get("name", f"Unknown ({tree_id})")
+            
+            # 2. Tier Name via Join (API Payload)
+            # Da wir c:join nutzen, ist 'directive_tree_id_join_directive' im Payload
+            # ABER: characters_directive_tier gibt nur TIER ID.
+            # Der Join in der URL 'type:directive^on:directive_tree_id^to:directive_tree_id' 
+            # ist etwas tricky, da er auf 'directive' joint, nicht 'directive_tier'.
+            # Wir schauen mal was wir bekommen.
+            # Fallback: Tier ID anzeigen
+            
+            tier_val = int(tier_id)
+            # Einfache Mapping-Logik für Standard Directives (1=Bronze, 2=Silver, 3=Gold, 4=Aurax)
+            # Manche haben aber andere IDs. Wir nehmen einfach die ID als Indikator.
+            
+            # Status berechnen (Progress)
+            # Die API gibt oft auch 'current_directive_tier' zurück.
+            
+            row = self.directive_table.rowCount()
+            self.directive_table.insertRow(row)
+            
+            # Name
+            self.directive_table.setItem(row, 0, QTableWidgetItem(name))
+            
+            # Tier
+            tier_item = QTableWidgetItem(str(tier_val))
+            tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.directive_table.setItem(row, 1, tier_item)
+            
+            # Status (API liefert oft completion date)
+            ts = item.get("completion_time", "0")
+            status = "Completed" if ts != "0" else "In Progress"
+            
+            status_item = QTableWidgetItem(status)
+            if status == "Completed":
+                status_item.setForeground(Qt.GlobalColor.green)
+            else:
+                status_item.setForeground(Qt.GlobalColor.yellow)
+            
+            self.directive_table.setItem(row, 2, status_item)
+
+        self.directive_table.setSortingEnabled(True)
+        self.add_log(f"Fetch: {len(data_list)} Directives loaded.")
 
 
 if __name__ == "__main__":

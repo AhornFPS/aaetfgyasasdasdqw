@@ -240,6 +240,10 @@ class DiorClientGUI:
         self.websocket = None
         self.loop = None
 
+        # --- KD MODE TOGGLE ---
+        # True = Revive KD (Deaths - Revives), False = Real KD (Total Deaths)
+        self.kd_mode_revive = True
+
         # Pfade
         self.source_high = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_high.ini"))
         self.source_low = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_low.ini"))
@@ -2193,6 +2197,30 @@ class DiorClientGUI:
         self.update_live_graph()
 
 
+    def toggle_kd_mode(self):
+        """Wechselt zwischen 'Real KD' und 'Revive KD'."""
+        self.kd_mode_revive = not self.kd_mode_revive
+
+        mode_str = "REVIVE KD" if self.kd_mode_revive else "REAL KD"
+        self.add_log(f"MODE: Switched to {mode_str}")
+
+        # Dashboard-Button Text updaten (via Signal oder direkt)
+        if hasattr(self, 'dash_window') and hasattr(self.dash_window, 'btn_toggle_kd'):
+            txt = "KD MODE: REVIVE" if self.kd_mode_revive else "KD MODE: REAL"
+            self.dash_window.btn_toggle_kd.setText(txt)
+            # Farbe anpassen
+            col = "#00ff00" if self.kd_mode_revive else "#ff0000"
+            self.dash_window.btn_toggle_kd.setStyleSheet(f"""
+                QPushButton {{ 
+                    background-color: #2b2b2b; color: {col}; border: 1px solid #333; 
+                    font-size: 10px; font-weight: bold; padding: 4px; 
+                }}
+                QPushButton:hover {{ border: 1px solid {col}; }}
+            """)
+        
+        # Sofort alle Daten neu berechnen und senden
+        self.update_dashboard_elements()
+
     def update_dashboard_elements(self):
         """Sendet echte Live-Daten an das neue PyQt6 Dashboard via Signale."""
         if not hasattr(self, 'dash_window') or not hasattr(self, 'dash_controller'):
@@ -2248,12 +2276,25 @@ class DiorClientGUI:
             p_start = p.get("start", now)
             active_min = max((now - p_start) / 60, 0.5)
 
+            # --- KD CALCULATION (Real vs Revive) ---
+            raw_deaths = p.get("d", 0)
+            revives = p.get("revives_received", 0)
+
+            if self.kd_mode_revive:
+                # Revive Mode: Deaths werden durch Revives reduziert (min 0)
+                eff_deaths = max(0, raw_deaths - revives)
+            else:
+                # Real Mode: Alle Deaths zählen
+                eff_deaths = raw_deaths
+
             # Paket schnüren
+            # WICHTIG: Wir senden 'eff_deaths' als 'd', damit das Dashboard (Tabelle + Graph)
+            # automatisch die richtigen Werte anzeigt, ohne dass wir dort Logik ändern müssen.
             prepared_players.append({
                 "name": p_name,
                 "fac": p.get("faction", "NSO"),  # Hier ist NSO ok, damit man sieht wer es ist
                 "k": p.get("k", 0),
-                "d": p.get("d", 0),
+                "d": eff_deaths,
                 "a": p.get("a", 0),
                 "active_min": active_min
             })
@@ -2674,12 +2715,20 @@ class DiorClientGUI:
                     my_id = self.current_character_id
                     s = self.session_stats.get(my_id, {}) if my_id else {}
                     kills = s.get("k", 0)
-                    deaths = s.get("d", 0)
+                    raw_deaths = s.get("d", 0)
+                    revives = s.get("revives_received", 0)
+
+                    # --- KD LOGIC ---
+                    if self.kd_mode_revive:
+                        eff_deaths = max(0, raw_deaths - revives)
+                    else:
+                        eff_deaths = raw_deaths
+
                     hs = s.get("hs", 0)
                     hsrkills = s.get("hsrkill", 0)
                     start_time = s.get("start", time.time())
 
-                    kd = kills / max(1, deaths)
+                    kd = kills / max(1, eff_deaths)
                     calc_base = hsrkills if hsrkills > 0 else kills
                     hsr = (hs / calc_base * 100) if calc_base > 0 else 0.0
                     dur_min = (time.time() - start_time) / 60
@@ -2692,7 +2741,7 @@ class DiorClientGUI:
                                 text-shadow: 1px 1px 2px #000; text-align: center; font-size: 22px; white-space: nowrap;">
                         KD: <span style="color: {kd_col};">{kd:.2f}</span> &nbsp;&nbsp;
                         K: <span style="color: white;">{kills}</span> &nbsp;&nbsp;
-                        D: <span style="color: white;">{deaths}</span> &nbsp;&nbsp;
+                        D: <span style="color: white;">{eff_deaths}</span> &nbsp;&nbsp;
                         HSR: <span style="color: #ffcc00;">{hsr:.0f}%</span> &nbsp;&nbsp;
                         KPM: <span style="color: #ffcc00;">{kpm:.1f}</span> &nbsp;&nbsp;
                         <span style="color: #aaa;">TIME: {hrs:02d}:{mns:02d}</span>

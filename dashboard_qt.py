@@ -429,6 +429,19 @@ class DashboardWidget(QWidget):
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
+        # BUTTON LINKS: KD MODE
+        self.btn_toggle_kd = QPushButton("KD MODE: REVIVE")
+        self.btn_toggle_kd.setFixedWidth(120)
+        self.btn_toggle_kd.setStyleSheet("""
+            QPushButton { 
+                background-color: #2b2b2b; color: #00ff00; border: 1px solid #333; 
+                font-size: 10px; font-weight: bold; padding: 4px; 
+            }
+            QPushButton:hover { border: 1px solid #00ff00; }
+        """)
+        self.btn_toggle_kd.clicked.connect(self.on_toggle_kd_clicked)
+        header_layout.addWidget(self.btn_toggle_kd)
+
         header_layout.addStretch()
 
         header_layout.addWidget(QLabel("SERVER:"))
@@ -499,6 +512,17 @@ class DashboardWidget(QWidget):
         self.lbl_db_count.setStyleSheet("color: #666; font-family: 'Consolas'; font-size: 11px; font-weight: bold;")
         self.lbl_db_count.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
         self.lbl_db_count.show()  # Wichtig, da es nicht im Layout liegt
+
+    def on_toggle_kd_clicked(self):
+        if self.controller:
+            # Wir rufen direkt die Methode im MainClient auf,
+            # da dieser die Logik und den State (kd_mode_revive) besitzt.
+            if hasattr(self.controller, 'toggle_kd_mode'):
+                self.controller.toggle_kd_mode()
+            else:
+                print("DEBUG: Controller has no toggle_kd_mode method")
+        else:
+            print("DEBUG: No Controller connected")
 
     def toggle_graph_mode(self):
         self.graph.show_factions = not self.graph.show_factions
