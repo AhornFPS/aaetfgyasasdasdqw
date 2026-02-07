@@ -99,7 +99,7 @@ class CharacterWidget(QWidget):
         self.tabs.addTab(self.weapon_tab, "WEAPON STATS")
         
         self.directive_tab = QWidget()
-        self.directive_table = QTableWidget(0, 3) # Name, Tier, Progress
+        self.directive_table = QTableWidget(0, 4) # Name, Tier, Progress, Status
         self.setup_directive_tab()
         self.tabs.addTab(self.directive_tab, "DIRECTIVES")
 
@@ -200,12 +200,13 @@ class CharacterWidget(QWidget):
     def setup_directive_tab(self):
         layout = QVBoxLayout(self.directive_tab)
         # Tabelle konfigurieren
-        self.directive_table.setHorizontalHeaderLabels(["DIRECTIVE LINE", "CURRENT TIER", "STATUS"])
+        self.directive_table.setHorizontalHeaderLabels(["DIRECTIVE LINE", "CURRENT TIER", "PROGRESS", "STATUS"])
         
         h = self.directive_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         
         self.directive_table.verticalHeader().setVisible(False)
         self.directive_table.setAlternatingRowColors(True)
@@ -355,17 +356,21 @@ class CharacterWidget(QWidget):
             tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.directive_table.setItem(row, 1, tier_item)
             
+            progress_item = QTableWidgetItem("-")
+            progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.directive_table.setItem(row, 2, progress_item)
+
             # Status (API liefert oft completion date)
             ts = item.get("completion_time", "0")
             status = "Completed" if ts != "0" else "In Progress"
-            
+
             status_item = QTableWidgetItem(status)
             if status == "Completed":
                 status_item.setForeground(Qt.GlobalColor.green)
             else:
                 status_item.setForeground(Qt.GlobalColor.yellow)
-            
-            self.directive_table.setItem(row, 2, status_item)
+
+            self.directive_table.setItem(row, 3, status_item)
 
         self.directive_table.setSortingEnabled(True)
         self.add_log(f"Fetch: {len(data_list)} Directives loaded.")
@@ -383,10 +388,26 @@ class CharacterWidget(QWidget):
                     "name",
                     f"Unknown ({tree_id})"
                 )
+                rows.append({
+                    "type": "tree",
+                    "tree_entry": tree_entry,
+                    "tree": tree_meta,
+                    "tree_name": tree_name,
+                    "tiers": tiers,
+                })
                 for tier in tiers:
                     tier_meta = tier.get("Tier", {}) or {}
                     tier_id = int(tier.get("TierID") or 0)
                     tier_name = tier_meta.get("Name") or f"Tier {tier_id}"
+                    rows.append({
+                        "type": "tier",
+                        "tree_entry": tree_entry,
+                        "tree": tree_meta,
+                        "tree_name": tree_name,
+                        "tier": tier,
+                        "tier_id": tier_id,
+                        "tier_name": tier_name,
+                    })
                     for directive in tier.get("Directives", []) or []:
                         rows.append({
                             "type": "directive",
@@ -415,6 +436,68 @@ class CharacterWidget(QWidget):
 
     def _render_directive_rows(self, rows):
         for row_data in rows:
+            row = self.directive_table.rowCount()
+            self.directive_table.insertRow(row)
+
+            row_type = row_data["type"]
+            if row_type == "tree":
+                tree_entry = row_data["tree_entry"]
+                tree_name = row_data["tree_name"]
+                current_tier_id = int(tree_entry.get("CurrentTier") or 0)
+                current_level = int(tree_entry.get("CurrentLevel") or 0)
+                tier_label = f"Tier {current_tier_id}" if current_tier_id else "-"
+                if current_level:
+                    tier_label = f"{tier_label} (Lvl {current_level})"
+                completion_date = tree_entry.get("CompletionDate")
+                status = "Completed" if self._has_completion_date(completion_date) else "In Progress"
+
+                self.directive_table.setItem(row, 0, QTableWidgetItem(tree_name))
+
+                tier_item = QTableWidgetItem(tier_label)
+                tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.directive_table.setItem(row, 1, tier_item)
+
+                progress_item = QTableWidgetItem("-")
+                progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.directive_table.setItem(row, 2, progress_item)
+
+                status_item = QTableWidgetItem(status)
+                status_item.setForeground(Qt.GlobalColor.green if status == "Completed" else Qt.GlobalColor.yellow)
+                self.directive_table.setItem(row, 3, status_item)
+                continue
+
+            if row_type == "tier":
+                tier = row_data["tier"]
+                tier_name = row_data["tier_name"]
+                directives = tier.get("Directives", []) or []
+                completed = sum(self._directive_is_complete(d) for d in directives)
+                completion_count = tier.get("Tier", {}).get("CompletionCount")
+                progress_text = "-"
+                status = "In Progress"
+                if completion_count:
+                    percent = round((completed / completion_count) * 100) if completion_count else 0
+                    progress_text = f"{completed}/{completion_count} ({percent:.0f}%)"
+                    if completed >= completion_count:
+                        status = "Completed"
+                elif directives:
+                    percent = round((completed / len(directives)) * 100)
+                    progress_text = f"{completed}/{len(directives)} ({percent:.0f}%)"
+
+                self.directive_table.setItem(row, 0, QTableWidgetItem(f"  {tier_name}"))
+
+                tier_item = QTableWidgetItem(str(row_data["tier_id"]))
+                tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.directive_table.setItem(row, 1, tier_item)
+
+                progress_item = QTableWidgetItem(progress_text)
+                progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.directive_table.setItem(row, 2, progress_item)
+
+                status_item = QTableWidgetItem(status)
+                status_item.setForeground(Qt.GlobalColor.green if status == "Completed" else Qt.GlobalColor.yellow)
+                self.directive_table.setItem(row, 3, status_item)
+                continue
+
             tree_name = row_data["tree_name"]
             tier_name = row_data["tier_name"]
             directive = row_data["directive"]
@@ -424,38 +507,45 @@ class CharacterWidget(QWidget):
             goal = directive.get("Goal")
 
             status = "In Progress"
+            progress_text = "-"
             if self._directive_is_complete(directive):
                 status = "Completed"
             elif progress is not None and goal:
                 percent = round((progress / goal) * 100)
-                status = f"{progress}/{goal} ({percent:.0f}%)"
+                progress_text = f"{progress}/{goal} ({percent:.0f}%)"
+            elif progress is not None and goal == 0:
+                progress_text = f"{progress}/0"
 
-            row = self.directive_table.rowCount()
-            self.directive_table.insertRow(row)
-
-            self.directive_table.setItem(row, 0, QTableWidgetItem(f"{tree_name} - {directive_name}"))
+            self.directive_table.setItem(
+                row,
+                0,
+                QTableWidgetItem(f"    {tree_name} - {directive_name}")
+            )
 
             tier_item = QTableWidgetItem(tier_name)
             tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.directive_table.setItem(row, 1, tier_item)
 
+            progress_item = QTableWidgetItem(progress_text)
+            progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.directive_table.setItem(row, 2, progress_item)
+
             status_item = QTableWidgetItem(status)
-            if status == "Completed":
-                status_item.setForeground(Qt.GlobalColor.green)
-            else:
-                status_item.setForeground(Qt.GlobalColor.yellow)
-            self.directive_table.setItem(row, 2, status_item)
+            status_item.setForeground(Qt.GlobalColor.green if status == "Completed" else Qt.GlobalColor.yellow)
+            self.directive_table.setItem(row, 3, status_item)
 
     def update_directive_overview(self, data_list):
-        if isinstance(data_list, list) and (not data_list or data_list[0].get("type") == "directive"):
-            total_lines = len(data_list)
+        if isinstance(data_list, list) and (not data_list or data_list[0].get("type")):
+            directive_rows = [row for row in data_list if row.get("type") == "directive"]
+            tree_rows = [row for row in data_list if row.get("type") == "tree"]
+            total_lines = len(directive_rows)
             completed = 0
             in_progress = 0
             top_entry = None
             top_tier = -1
             top_level = -1
 
-            for row in data_list:
+            for row in directive_rows:
                 entry = row["tree_entry"]
                 tree = row["tree"]
                 current_tier = int(entry.get("CurrentTier") or 0)
@@ -466,6 +556,11 @@ class CharacterWidget(QWidget):
                 else:
                     in_progress += 1
 
+            for row in tree_rows:
+                entry = row["tree_entry"]
+                tree = row["tree"]
+                current_tier = int(entry.get("CurrentTier") or 0)
+                current_level = int(entry.get("CurrentLevel") or 0)
                 if current_tier > top_tier or (current_tier == top_tier and current_level > top_level):
                     top_tier = current_tier
                     top_level = current_level
