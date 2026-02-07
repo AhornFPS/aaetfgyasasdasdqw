@@ -1,5 +1,9 @@
+import json
+import os
 import sys
+import threading
 import time
+import requests
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
                              QHeaderView, QPushButton, QFrame, QTabWidget, QTextEdit)
@@ -49,7 +53,9 @@ class CharacterWidget(QWidget):
         # Instanzattribute
         self.info_labels = {}
         self.stats_ui = {}
+        self.directive_overview_labels = {}
         self.weapon_table = QTableWidget(0, 4)
+        self.directives_db = self.load_directives_db()
 
         # Layout direkt auf self anwenden
         main_layout = QVBoxLayout(self)
@@ -151,6 +157,31 @@ class CharacterWidget(QWidget):
             perf_layout.addLayout(col)
         layout.addWidget(perf_box, 2)
 
+        # Directives Overview
+        dir_box = QFrame()
+        dir_box.setObjectName("StatCard")
+        dir_layout = QVBoxLayout(dir_box)
+
+        dir_title = QLabel("DIRECTIVES OVERVIEW")
+        dir_title.setObjectName("GroupTitle")
+        dir_layout.addWidget(dir_title)
+
+        for field in ["Total Lines:", "Completed:", "In Progress:", "Top Directive:"]:
+            row = QHBoxLayout()
+            field_label = QLabel(field)
+            field_label.setObjectName("StatLabel")
+            row.addWidget(field_label)
+
+            val = QLabel("-")
+            val.setObjectName("StatValue")
+            val.setAlignment(Qt.AlignmentFlag.AlignRight)
+            self.directive_overview_labels[field] = val
+            row.addWidget(val)
+            dir_layout.addLayout(row)
+
+        dir_layout.addStretch()
+        layout.addWidget(dir_box, 1)
+
     def setup_weapon_tab(self):
         layout = QVBoxLayout(self.weapon_tab)
         self.weapon_table.setHorizontalHeaderLabels(["WEAPON", "KILLS", "ACC %", "HSR %"])
@@ -186,6 +217,7 @@ class CharacterWidget(QWidget):
         # 2. Stats auf "SEARCHING..." setzen
         for lbl in self.info_labels.values(): lbl.setText("...")
         for lbl in self.stats_ui.values(): lbl.setText("...")
+        for lbl in self.directive_overview_labels.values(): lbl.setText("...")
         self.weapon_table.setRowCount(0)
 
         # 3. Signal an Dior Client.py senden
@@ -225,6 +257,14 @@ class CharacterWidget(QWidget):
         self.log_area.append(f"[{time.strftime('%H:%M:%S')}] {text}")
 
     # --- DIRECTIVE LOGIC ---
+    def load_directives_db(self):
+        path = os.path.join(os.path.dirname(__file__), "assets", "directives.json")
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except Exception as exc:
+            print(f"ERR: Failed to load directives.json ({exc})")
+            return {}
 
     def fetch_directives(self, char_id):
         """Startet den Thread zum Laden der Directives."""
@@ -256,7 +296,7 @@ class CharacterWidget(QWidget):
         self.directive_table.setSortingEnabled(False)
 
         for item in data_list:
-            tree_id = item.get("directive_tree_id")
+            tree_id = str(item.get("directive_tree_id"))
             tier_id = item.get("directive_tier_id", "0")
             
             # 1. Namen auflösen (Lokal)
@@ -303,6 +343,41 @@ class CharacterWidget(QWidget):
 
         self.directive_table.setSortingEnabled(True)
         self.add_log(f"Fetch: {len(data_list)} Directives loaded.")
+        self.update_directive_overview(data_list)
+
+    def update_directive_overview(self, data_list):
+        total_lines = len(data_list)
+        completed = 0
+        in_progress = 0
+        top_entry = None
+        top_tier = -1
+
+        for item in data_list:
+            tier_id = int(item.get("directive_tier_id", "0"))
+            is_completed = item.get("completion_time", "0") != "0"
+            if is_completed:
+                completed += 1
+            else:
+                in_progress += 1
+
+            if tier_id > top_tier:
+                top_tier = tier_id
+                top_entry = item
+
+        top_name = "-"
+        if top_entry:
+            tree_id = str(top_entry.get("directive_tree_id"))
+            dir_info = self.directives_db.get(tree_id, {})
+            top_name = dir_info.get("name", f"Unknown ({tree_id})")
+
+        if "Total Lines:" in self.directive_overview_labels:
+            self.directive_overview_labels["Total Lines:"].setText(str(total_lines))
+        if "Completed:" in self.directive_overview_labels:
+            self.directive_overview_labels["Completed:"].setText(str(completed))
+        if "In Progress:" in self.directive_overview_labels:
+            self.directive_overview_labels["In Progress:"].setText(str(in_progress))
+        if "Top Directive:" in self.directive_overview_labels:
+            self.directive_overview_labels["Top Directive:"].setText(top_name)
 
 
 if __name__ == "__main__":

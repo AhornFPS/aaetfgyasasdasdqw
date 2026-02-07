@@ -760,6 +760,9 @@ class DiorClientGUI:
             self.add_log("DASHBOARD: Rendering Character Data...")
             self.char_win.update_overview(stats)
             self.char_win.update_weapons(weapons)
+            char_id = stats.get("character_id")
+            if char_id and char_id != "-" and hasattr(self.char_win, "fetch_directives"):
+                self.char_win.fetch_directives(char_id)
 
             self.char_win.btn_search.setEnabled(True)
             self.char_win.btn_search.setText("SEARCH")
@@ -3756,6 +3759,7 @@ class DiorClientGUI:
 
                 # WICHTIG: Keys exakt so benennen, wie dein UI sie erwartet!
                 custom_stats = {
+                    'character_id': char_data.get('character_id', '-'),
                     'name': char_data.get('name', {}).get('first', '-'),
                     'fac_short': {"1": "VS", "2": "NC", "3": "TR"}.get(str(char_data.get('faction_id')), "NSO"),
                     'server': self.get_server_name_by_id(char_data.get('world_id', '0')),
