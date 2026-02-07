@@ -39,6 +39,7 @@ class CharacterWidget(QWidget):
         self.setObjectName("Characters")
         self.resize(1000, 900)
 
+
         # WICHTIG: Stylesheet anwenden
         self.setStyleSheet(CHAR_STYLE)
 
@@ -248,7 +249,7 @@ class CharacterWidget(QWidget):
         except Exception as e:
             print(f"Directive API Error: {e}")
 
-    @pyqtSignal(list)
+   # @pyqtSignal(list)
     def update_directive_table(self, data_list):
         """Wird vom Thread aufgerufen, wenn Daten da sind."""
         self.directive_table.setRowCount(0)
