@@ -1152,6 +1152,10 @@ class QtOverlay(QWidget):
                 self.streak_bg_label.raise_();
                 self.streak_text_label.raise_()
 
+                # Fix Z-Order: Wenn Path-Edit aktiv ist, muss der Path-Layer (Marker) über dem Bild liegen
+                if getattr(self, "path_edit_active", False):
+                    self.path_layer.raise_()
+
     def _place_knife(self, lbl, path, kx, ky, angle, is_new, center):
         # --- CACHE GENUTZT (WICHTIG!) ---
         base_pix = self.get_cached_pixmap(path)

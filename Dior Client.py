@@ -1896,6 +1896,14 @@ class DiorClientGUI:
             self.overlay_win.activateWindow()
             self.overlay_win.setFocus()
 
+            # --- CLICK-THROUGH FIX ---
+            # Wir machen die Bilder "unsichtbar" für die Maus, damit der Klick auf dem Path-Layer landet
+            if hasattr(self.overlay_win, 'streak_bg_label'):
+                self.overlay_win.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            if hasattr(self.overlay_win, 'streak_text_label'):
+                self.overlay_win.streak_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+
             # QT BUTTON UPDATE
             ui.btn_path_record.setText("STOP RECORDING (SPACE)")
             ui.btn_path_record.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
@@ -1912,6 +1920,13 @@ class DiorClientGUI:
             self.overlay_win.path_edit_active = False
             self.overlay_win.set_mouse_passthrough(True)
             self.overlay_win.path_layer.hide()
+
+            # --- CLICK-THROUGH RESTORE ---
+            # Wieder klickbar machen für Move UI
+            if hasattr(self.overlay_win, 'streak_bg_label'):
+                self.overlay_win.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            if hasattr(self.overlay_win, 'streak_text_label'):
+                self.overlay_win.streak_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
 
             # QT BUTTON RESET
             ui.btn_path_record.setText("REC PATH")
