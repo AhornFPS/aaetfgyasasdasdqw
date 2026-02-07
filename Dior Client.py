@@ -716,6 +716,16 @@ class DiorClientGUI:
         ui = self.ovl_config_win
         ui.cross_canvas.set_brush_size(value)
 
+    def set_crosshair_symmetry_qt(self, value):
+        ui = self.ovl_config_win
+        mapping = {
+            "None": "none",
+            "Horizontal": "horizontal",
+            "Vertical": "vertical",
+            "Both (Quadrant)": "both",
+        }
+        ui.cross_canvas.set_symmetry_mode(mapping.get(value, "none"))
+
     def clear_crosshair_canvas_qt(self):
         ui = self.ovl_config_win
         ui.cross_canvas.clear()
@@ -968,6 +978,7 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_cross_color.clicked, self.pick_crosshair_color_qt)
         self.safe_connect(ui.spin_cross_brush.valueChanged, self.set_crosshair_brush_size_qt)
+        self.safe_connect(ui.combo_cross_symmetry.currentTextChanged, self.set_crosshair_symmetry_qt)
         self.safe_connect(ui.btn_cross_clear.clicked, self.clear_crosshair_canvas_qt)
         self.safe_connect(ui.btn_cross_save.clicked, self.save_crosshair_canvas_qt)
 
@@ -1733,6 +1744,7 @@ class DiorClientGUI:
         ui.cross_path.blockSignals(False)
         ui.btn_cross_color.setStyleSheet(
             "background-color: #00f2ff; color: black; font-weight: bold;")
+        ui.combo_cross_symmetry.setCurrentText("None")
 
         # --- TAB 5: STATS & FEED ---
         st_active = st_conf.get("active", True)

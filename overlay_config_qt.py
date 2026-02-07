@@ -27,6 +27,7 @@ class CrosshairCanvas(QWidget):
         self._last_point = QPoint()
         self._drawing = False
         self._erase_mode = False
+        self._symmetry_mode = "none"
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def set_brush_color(self, color):
@@ -43,6 +44,9 @@ class CrosshairCanvas(QWidget):
     def save_image(self, path):
         return self._image.save(path, "PNG")
 
+    def set_symmetry_mode(self, mode):
+        self._symmetry_mode = mode or "none"
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(15, 15, 15))
@@ -53,6 +57,11 @@ class CrosshairCanvas(QWidget):
             painter.drawLine(x, 0, x, self.height())
         for y in range(0, self.height(), 10):
             painter.drawLine(0, y, self.width(), y)
+
+        center = self._center_point()
+        painter.setPen(QPen(QColor(0, 242, 255), 1))
+        painter.drawLine(center.x() - 6, center.y(), center.x() + 6, center.y())
+        painter.drawLine(center.x(), center.y() - 6, center.x(), center.y() + 6)
 
         painter.drawImage(0, 0, self._image)
 
@@ -84,8 +93,38 @@ class CrosshairCanvas(QWidget):
             pen = QPen(self._brush_color, self._brush_size,
                        Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
-        painter.drawLine(start, end)
+        for mirrored_start, mirrored_end in self._mirrored_lines(start, end):
+            painter.drawLine(mirrored_start, mirrored_end)
         self.update()
+
+    def _center_point(self):
+        return QPoint(self.width() // 2, self.height() // 2)
+
+    def _mirrored_lines(self, start, end):
+        center = self._center_point()
+        mirror_x = self._symmetry_mode in ("horizontal", "both")
+        mirror_y = self._symmetry_mode in ("vertical", "both")
+
+        points = [(start, end)]
+        if mirror_x:
+            points.append((self._mirror_point(start, center, mirror_x=True),
+                           self._mirror_point(end, center, mirror_x=True)))
+        if mirror_y:
+            points.append((self._mirror_point(start, center, mirror_y=True),
+                           self._mirror_point(end, center, mirror_y=True)))
+        if mirror_x and mirror_y:
+            points.append((self._mirror_point(start, center, mirror_x=True, mirror_y=True),
+                           self._mirror_point(end, center, mirror_x=True, mirror_y=True)))
+        return points
+
+    def _mirror_point(self, point, center, mirror_x=False, mirror_y=False):
+        x = point.x()
+        y = point.y()
+        if mirror_x:
+            x = center.x() - (x - center.x())
+        if mirror_y:
+            y = center.y() - (y - center.y())
+        return QPoint(x, y)
 
 
 # --- STYLESHEET ---
@@ -847,6 +886,12 @@ class OverlayConfigWindow(QWidget):
         self.spin_cross_brush.setRange(1, 20)
         self.spin_cross_brush.setValue(3)
         tools_layout.addWidget(self.spin_cross_brush)
+        tools_layout.addWidget(QLabel("Symmetry:"))
+        self.combo_cross_symmetry = QComboBox()
+        self.combo_cross_symmetry.addItems(
+            ["None", "Horizontal", "Vertical", "Both (Quadrant)"]
+        )
+        tools_layout.addWidget(self.combo_cross_symmetry)
         tools_layout.addStretch()
         creator_layout.addLayout(tools_layout)
 
