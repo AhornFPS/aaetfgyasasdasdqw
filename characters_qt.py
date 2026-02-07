@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
                              QHeaderView, QPushButton, QFrame, QTabWidget, QTextEdit)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtGui import QFont, QColor
 
 
 # --- SIGNALE ---
@@ -317,7 +318,7 @@ class CharacterWidget(QWidget):
         if isinstance(data_list, dict) and "Categories" in data_list:
             rows = self._build_directive_rows(data_list)
             self._render_directive_rows(rows)
-            self.directive_table.setSortingEnabled(True)
+            self.directive_table.setSortingEnabled(False)
             self.add_log(f"Fetch: {len(rows)} Directives loaded.")
             self.update_directive_overview(rows)
             return
@@ -430,6 +431,9 @@ class CharacterWidget(QWidget):
             return True
         goal = directive.get("Goal")
         progress = directive.get("Progress")
+        if progress is None:
+            objective = directive.get("CharacterObjective") or {}
+            progress = objective.get("StateData", progress)
         if goal is None or progress is None:
             return False
         return progress >= goal
@@ -443,6 +447,8 @@ class CharacterWidget(QWidget):
             if row_type == "tree":
                 tree_entry = row_data["tree_entry"]
                 tree_name = row_data["tree_name"]
+                tree_font = QFont()
+                tree_font.setBold(True)
                 current_tier_id = int(tree_entry.get("CurrentTier") or 0)
                 current_level = int(tree_entry.get("CurrentLevel") or 0)
                 tier_label = f"Tier {current_tier_id}" if current_tier_id else "-"
@@ -451,17 +457,26 @@ class CharacterWidget(QWidget):
                 completion_date = tree_entry.get("CompletionDate")
                 status = "Completed" if self._has_completion_date(completion_date) else "In Progress"
 
-                self.directive_table.setItem(row, 0, QTableWidgetItem(tree_name))
+                name_item = QTableWidgetItem(tree_name)
+                name_item.setFont(tree_font)
+                name_item.setBackground(QColor("#1f1f1f"))
+                self.directive_table.setItem(row, 0, name_item)
 
                 tier_item = QTableWidgetItem(tier_label)
                 tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                tier_item.setFont(tree_font)
+                tier_item.setBackground(QColor("#1f1f1f"))
                 self.directive_table.setItem(row, 1, tier_item)
 
                 progress_item = QTableWidgetItem("-")
                 progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                progress_item.setFont(tree_font)
+                progress_item.setBackground(QColor("#1f1f1f"))
                 self.directive_table.setItem(row, 2, progress_item)
 
                 status_item = QTableWidgetItem(status)
+                status_item.setFont(tree_font)
+                status_item.setBackground(QColor("#1f1f1f"))
                 status_item.setForeground(Qt.GlobalColor.green if status == "Completed" else Qt.GlobalColor.yellow)
                 self.directive_table.setItem(row, 3, status_item)
                 continue
@@ -469,6 +484,8 @@ class CharacterWidget(QWidget):
             if row_type == "tier":
                 tier = row_data["tier"]
                 tier_name = row_data["tier_name"]
+                tier_font = QFont()
+                tier_font.setItalic(True)
                 directives = tier.get("Directives", []) or []
                 completed = sum(self._directive_is_complete(d) for d in directives)
                 completion_count = tier.get("Tier", {}).get("CompletionCount")
@@ -483,17 +500,26 @@ class CharacterWidget(QWidget):
                     percent = round((completed / len(directives)) * 100)
                     progress_text = f"{completed}/{len(directives)} ({percent:.0f}%)"
 
-                self.directive_table.setItem(row, 0, QTableWidgetItem(f"  {tier_name}"))
+                tier_name_item = QTableWidgetItem(f"  {tier_name}")
+                tier_name_item.setFont(tier_font)
+                tier_name_item.setBackground(QColor("#181818"))
+                self.directive_table.setItem(row, 0, tier_name_item)
 
                 tier_item = QTableWidgetItem(str(row_data["tier_id"]))
                 tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                tier_item.setFont(tier_font)
+                tier_item.setBackground(QColor("#181818"))
                 self.directive_table.setItem(row, 1, tier_item)
 
                 progress_item = QTableWidgetItem(progress_text)
                 progress_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                progress_item.setFont(tier_font)
+                progress_item.setBackground(QColor("#181818"))
                 self.directive_table.setItem(row, 2, progress_item)
 
                 status_item = QTableWidgetItem(status)
+                status_item.setFont(tier_font)
+                status_item.setBackground(QColor("#181818"))
                 status_item.setForeground(Qt.GlobalColor.green if status == "Completed" else Qt.GlobalColor.yellow)
                 self.directive_table.setItem(row, 3, status_item)
                 continue
@@ -505,6 +531,9 @@ class CharacterWidget(QWidget):
             directive_name = directive.get("Name") or directive.get("Directive", {}).get("Name") or "Unknown"
             progress = directive.get("Progress")
             goal = directive.get("Goal")
+            if progress is None:
+                objective = directive.get("CharacterObjective") or {}
+                progress = objective.get("StateData", progress)
 
             status = "In Progress"
             progress_text = "-"
