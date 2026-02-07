@@ -40,6 +40,7 @@ class CharacterWidget(QWidget):
     def __init__(self, controller=None):
         super().__init__()
         self.controller = controller
+        self.service_id = getattr(controller, "s_id", os.getenv("CENSUS_S_ID", "s:example"))
         self.setObjectName("Characters")
         self.resize(1000, 900)
 
@@ -275,7 +276,7 @@ class CharacterWidget(QWidget):
         t.start()
 
     def _fetch_thread(self, char_id):
-        url = f"https://census.daybreakgames.com/s:ahornstream/get/ps2:v2/characters_directive_tier?character_id={char_id}&c:limit=500&c:join=type:directive%5Eon:directive_tree_id%5Eto:directive_tree_id&c:lang=en"
+        url = f"https://census.daybreakgames.com/{self.service_id}/get/ps2:v2/characters_directive_tier?character_id={char_id}&c:limit=500&c:join=type:directive%5Eon:directive_tree_id%5Eto:directive_tree_id&c:lang=en"
         try:
             r = requests.get(url, timeout=10)
             data = r.json()
