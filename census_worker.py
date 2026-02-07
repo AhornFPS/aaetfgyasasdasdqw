@@ -101,6 +101,15 @@ class CensusWorker:
             self.c.add_log("SYS: Respawn detected via Action. Resetting Support Streaks.")
             for k in self.support_streaks:
                 self.support_streaks[k] = 0
+            
+            # --- NEU: AUCH KILLSTREAK RESETTEN ---
+            if self.c.killstreak_count > 0:
+                self.c.killstreak_count = 0
+                self.c.streak_factions = []
+                self.c.streak_slot_map = []
+                self.c.update_streak_display()
+                self.c.add_log("STREAK: Support Action after Death -> Streak Reset.")
+
             self.is_dead_state = False
 
         # 2. Zählen (falls Kategorie existiert)
@@ -177,6 +186,10 @@ class CensusWorker:
                             p = data["payload"]
                             e_name = p.get("event_name")
                             payload_world = str(p.get("world_id", "0"))
+
+                            # --- COMPATIBILITY LAYER (Emerald -> Osprey / Cobalt -> Wainwright) ---
+                            if payload_world == "17": payload_world = "1"
+                            if payload_world == "13": payload_world = "10"
 
                             # DUPLIKAT FILTER
                             uid = f"{e_name}_{p.get('timestamp')}_{p.get('character_id')}_{p.get('attacker_character_id')}"
@@ -341,6 +354,14 @@ class CensusWorker:
                 else:
                     # Streak Logic
                     if self.c.config.get("streak", {}).get("active", True):
+                        # --- NEU: RESPAWN CHECK ---
+                        # Wenn wir tot waren und NICHT revived wurden -> Respawn -> Reset!
+                        if self.c.is_dead and not self.c.was_revived:
+                            self.c.add_log("STREAK: Respawn detected (New Kill). Resetting.")
+                            self.c.killstreak_count = 0
+                            self.c.streak_factions = []
+                            self.c.streak_slot_map = []
+
                         if self.c.killstreak_count == 0:
                             self.c.killstreak_count = 1
                             self.c.streak_factions = []
@@ -476,15 +497,16 @@ class CensusWorker:
                     self.c.trigger_overlay_event("Team Kill Victim")
 
                 else:
-                    # FALL B: NORMALER TOD / SUICIDE -> RESET
-                    self.c.killstreak_count = 0
-                    self.c.streak_factions = []
-                    self.c.streak_slot_map = []
+                    # FALL B: NORMALER TOD / SUICIDE
+                    self.c.add_log("DEBUG: Handling Death -> Hiding Streak.")
+                    self.c.hide_streak_display()
                     self.c.trigger_overlay_event("Death")
 
                 # --- 3. STATUS UPDATEN ---
                 self.c.is_dead = True
-                self.c.update_streak_display()
+                self.c.was_revived = False
+                self.c.add_log(f"DEBUG: Death State Set. Streak Count: {self.c.killstreak_count}")
+                # self.c.update_streak_display()
 
                 # --- 4. KILLFEED INFO ---
                 if killer_id and killer_id != "0":
@@ -558,10 +580,10 @@ class CensusWorker:
             if exp_id in ["7", "53"]:
                 self.c.was_revived = True
                 self.c.is_dead = False
-                # Streak wiederherstellen
-                self.c.killstreak_count = getattr(self.c, 'saved_streak', 0)
-                self.c.streak_factions = getattr(self.c, 'saved_factions', [])
-                self.c.streak_slot_map = getattr(self.c, 'saved_slots', [])
+                self.is_dead_state = False
+                
+                # Streak NICHT wiederherstellen (da wir ihn beim Tod nicht mehr löschen!)
+                # Wir updaten nur das Display, falls es ausgeblendet war.
                 self.c.update_streak_display()
 
                 self.c.trigger_overlay_event("Revive Taken")
@@ -585,7 +607,14 @@ class CensusWorker:
                 self.c.myWorldID = int(p.get("world_id", 0))
                 self.c.currentZone = int(p.get("zone_id", 0))
 
+                self.c.myWorldID = int(p.get("world_id", 0))
+
                 payload_world = str(p.get("world_id", "0"))
+
+                # --- COMPATIBILITY LAYER ---
+                if payload_world == "17": payload_world = "1"
+                if payload_world == "13": payload_world = "10"
+
                 if payload_world != "0" and payload_world != str(self.c.current_world_id):
                     s_name = self.c.get_server_name_by_id(payload_world)
                     self.c.switch_server(s_name, payload_world)

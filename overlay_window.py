@@ -1085,11 +1085,13 @@ class QtOverlay(QWidget):
             self.streak_bg_label.hide();
             self.streak_text_label.hide()
             for l in self.knife_labels: l.hide()
+            self.repaint()  # Force update
             return
         if count <= 0 and not self.edit_mode:
             self.streak_bg_label.hide();
             self.streak_text_label.hide()
             for l in self.knife_labels: l.hide(); l._is_active = False
+            self.repaint()  # Force update
             return
 
         cnt = count if count > 0 else 10

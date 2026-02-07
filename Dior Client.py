@@ -87,7 +87,8 @@ from PyQt6.QtCore import (
     QObject,
     QTimer,
     QPoint,
-    QSize
+    QSize,
+    QThread
 )
 
 
@@ -115,6 +116,8 @@ class WorkerSignals(QObject):
     add_char_finished = pyqtSignal(bool, str, str)
     # NEUES SIGNAL für den Monitor
     game_status_changed = pyqtSignal(bool)  # True = Start, False = Stop
+    # SIGNAL für Server Switch (Thread-Safe)
+    request_server_switch = pyqtSignal(str, str)
 
 
 class DiorMainHub(QMainWindow):
@@ -204,13 +207,14 @@ class DiorClientGUI:
 
         self.server_map = {
             "Wainwright (EU)": "10", "Osprey (US)": "1",
-            "SolTech (Asia)": "40", "Jaeger": "19"
+            "SolTech (Asia)": "40", "Jaeger (Events)": "19"
         }
 
         # Signale für Worker
         self.worker_signals = WorkerSignals()
         self.worker_signals.add_char_finished.connect(self.finalize_add_char_slot)
         self.worker_signals.game_status_changed.connect(self.handle_game_status_change)
+        self.worker_signals.request_server_switch.connect(self.switch_server)
 
         # Tracking Variables
         self.killstreak_count = 0
@@ -1840,7 +1844,14 @@ class DiorClientGUI:
         # Hier könntest du den Websocket neu starten oder die Config speichern
         self.config["world_id"] = world_id
         self.save_config()
-        self.start_websocket_thread()
+        self.save_config()
+        
+        # Websocket Restart Logic
+        if self.census and self.census.is_alive():
+            self.census.c.needs_reconnect = True
+        else:
+            self.census = CensusWorker(self, self.s_id)
+            self.census.start()
 
     def ps2_process_monitor(self):
         """Überwacht den Prozess und nutzt Signale."""
@@ -2349,7 +2360,12 @@ class DiorClientGUI:
 
 
     def switch_server(self, name, new_id):
-        """Wechselt die Anzeige-ID und löscht lokale Stats (kein Reconnect nötig)"""
+        """Wechselt die Anzeige-ID und löscht lokale Stats (Thread-Safe)"""
+        # THREAD-SAFETY CHECK
+        if QThread.currentThread() != QApplication.instance().thread():
+            self.worker_signals.request_server_switch.emit(name, str(new_id))
+            return
+
         if str(new_id) == str(self.current_world_id) and getattr(self, "needs_reconnect", False) == False:
             return
 
@@ -2373,8 +2389,20 @@ class DiorClientGUI:
         self.active_players = {}
         self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
 
-        if self.current_tab == "Dashboard":
+        if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
             self.update_dashboard_elements()
+
+        # 5. UI SYNC (Jetzt sicher im Main Thread)
+        if hasattr(self, 'dash_window') and hasattr(self.dash_window, 'server_combo'):
+            cb = self.dash_window.server_combo
+            cb.blockSignals(True)
+            idx = cb.findText(name)
+            if idx >= 0:
+                cb.setCurrentIndex(idx)
+            else:
+                # Fallback falls Name leicht abweicht
+                cb.setCurrentText(name)
+            cb.blockSignals(False)
 
     def get_server_name_by_id(self, world_id):
         """Sucht den Anzeigenamen zum Server anhand der World-ID"""
@@ -2847,7 +2875,12 @@ class DiorClientGUI:
             # HIER kommt streak_test_active dazu!
             if (streak_conf.get("active",
                                 True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active:
-                if self.killstreak_count > 0 or streak_editing:
+                
+                # FIX: Nur anzeigen, wenn wir leben! (is_dead Check hinzugefügt)
+                # Ausnahme: Edit-Modus oder Streak-Test
+                show_condition = (self.killstreak_count > 0 and not getattr(self, "is_dead", False))
+                
+                if show_condition or streak_editing or streak_test_active:
                     self.overlay_win.streak_bg_label.show()
                     self.overlay_win.streak_text_label.show()
                     for k in self.overlay_win.knife_labels:
@@ -3221,6 +3254,10 @@ class DiorClientGUI:
 
         current_streak = getattr(self, 'killstreak_count', 0)
         factions = getattr(self, 'streak_factions', [])
+        
+        # DEBUG: Trace unwanted updates
+        if current_streak > 0:
+            print(f"DEBUG: update_streak_display called! Count: {current_streak}, Factions: {len(factions)}")
 
         slot_map = getattr(self, 'streak_slot_map', [])
 
@@ -3231,6 +3268,17 @@ class DiorClientGUI:
             factions,
             streak_cfg,
             slot_map
+        )
+
+    def hide_streak_display(self):
+        """Versteckt die Streak-Anzeige, ohne den Zähler zurückzusetzen."""
+        if not self.overlay_win: return
+        
+        print("DEBUG: hide_streak_display called in GUI.")
+        # Wir senden einfach 0 als Count, das sorgt im Overlay für .hide()
+        # Aber wir ändern self.killstreak_count NICHT!
+        self.overlay_win.signals.update_streak.emit(
+            "", 0, [], {}, []
         )
 
     def test_streak_visuals(self):
@@ -3269,19 +3317,22 @@ class DiorClientGUI:
 
         # 5. Reset-Funktion definieren
         def reset_action():
-            if self._streak_backup:
-                self.killstreak_count = self._streak_backup['count']
-                self.streak_factions = self._streak_backup['factions']
-                self.streak_slot_map = self._streak_backup['slots']
+            try:
+                if self._streak_backup:
+                    self.killstreak_count = self._streak_backup['count']
+                    self.streak_factions = self._streak_backup['factions']
+                    self.streak_slot_map = self._streak_backup['slots']
 
-                # Overlay zurücksetzen
-                self.update_streak_display()
+                    # Overlay zurücksetzen
+                    self.update_streak_display()
 
-                self._streak_backup = None  # Backup löschen
-
-            self._streak_test_timer = None
-            self.is_streak_test = False
-            self.add_log("UI: Test beendet.")
+                    self._streak_backup = None  # Backup löschen
+            except Exception as e:
+                self.add_log(f"ERR: Streak Test Reset failed: {e}")
+            finally:
+                self._streak_test_timer = None
+                self.is_streak_test = False
+                self.add_log("UI: Test beendet.")
 
         # 6. Timer starten (PyQt6 Weg)
         self._streak_test_timer = QTimer()

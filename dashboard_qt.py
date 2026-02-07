@@ -447,8 +447,8 @@ class DashboardWidget(QWidget):
         header_layout.addWidget(QLabel("SERVER:"))
         self.server_combo = QComboBox()
         self.server_map = {
-            "Wainwright (EU)": "10",
-            "Osprey (US)": "1",
+            "Wainwright (EU)": "10",  
+            "Osprey (US)": "1",       
             "SolTech (Asia)": "40",
             "Jaeger (Events)": "19"
         }
