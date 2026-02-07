@@ -153,8 +153,17 @@ class CharacterWidget(QWidget):
 
     def setup_weapon_tab(self):
         layout = QVBoxLayout(self.weapon_tab)
-        self.weapon_table.setHorizontalHeaderLabels(["WEAPON", "KILLS", "ACC %", "HSR %"])
-        self.weapon_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        # NEUE SPALTEN: KPM, K/D, ACC, HSR, VEHICLE KILLS, VEHICLE KPM, TIME
+        headers = ["WEAPON", "KILLS", "KPM", "K/D", "ACC %", "HSR %", "V.KILLS", "V.KPM", "TIME"]
+        self.weapon_table.setColumnCount(len(headers))
+        self.weapon_table.setHorizontalHeaderLabels(headers)
+        
+        h = self.weapon_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        # Alle anderen spalten an Inhalt anpassen
+        for i in range(1, len(headers)):
+            h.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            
         self.weapon_table.verticalHeader().setVisible(False)
         layout.addWidget(self.weapon_table)
 
@@ -210,16 +219,60 @@ class CharacterWidget(QWidget):
 
     def update_weapons(self, weapon_list):
         self.weapon_table.setRowCount(0)
+        self.weapon_table.setSortingEnabled(False)  # Performance beim Füllen
+
         for w in sorted(weapon_list, key=lambda x: x.get('kills', 0), reverse=True):
             row = self.weapon_table.rowCount()
             self.weapon_table.insertRow(row)
+            
+            # DATEN HOLEN
             kills = w.get('kills', 0)
-            acc = (w.get('hits', 0) / w.get('shots', 1) * 100) if w.get('shots', 0) > 0 else 0
-            hsr = (w.get('hs', 0) / kills * 100) if kills > 0 else 0
+            deaths = w.get('deaths', 0)
+            shots = w.get('shots', 0)
+            hits = w.get('hits', 0)
+            hs = w.get('hs', 0)
+            vkills = w.get('vkills', 0)
+            play_time = w.get('time', 0)  # Sekunden
+            
+            # BERECHNUNGEN
+            acc = (hits / shots * 100) if shots > 0 else 0.0
+            hsr = (hs / kills * 100) if kills > 0 else 0.0
+            kd = kills / max(1, deaths)
+            
+            minutes = play_time / 60.0
+            kpm = kills / max(1, minutes) if minutes > 0 else 0.0
+            vkpm = vkills / max(1, minutes) if minutes > 0 else 0.0
+            
+            # Time Formatting (HH:MM)
+            hours = int(play_time // 3600)
+            rem_min = int((play_time % 3600) // 60)
+            time_str = f"{hours}h {rem_min}m"
+
+            # IN TABELLE SCHREIBEN
+            # 0: WEAPON, 1: KILLS, 2: KPM, 3: K/D, 4: ACC %, 5: HSR %, 6: V.KILLS, 7: V.KPM, 8: TIME
+            
             self.weapon_table.setItem(row, 0, QTableWidgetItem(w.get('name', '?')))
-            self.weapon_table.setItem(row, 1, QTableWidgetItem(f"{kills:,}"))
-            self.weapon_table.setItem(row, 2, QTableWidgetItem(f"{acc:.1f}%"))
-            self.weapon_table.setItem(row, 3, QTableWidgetItem(f"{hsr:.1f}%"))
+            
+            item_kills = QTableWidgetItem(f"{kills:,}")
+            item_kills.setData(Qt.ItemDataRole.DisplayRole, kills) # Sortierbar machen
+            self.weapon_table.setItem(row, 1, item_kills)
+            
+            self.weapon_table.setItem(row, 2, QTableWidgetItem(f"{kpm:.2f}"))
+            self.weapon_table.setItem(row, 3, QTableWidgetItem(f"{kd:.2f}"))
+            self.weapon_table.setItem(row, 4, QTableWidgetItem(f"{acc:.1f}%"))
+            self.weapon_table.setItem(row, 5, QTableWidgetItem(f"{hsr:.1f}%"))
+            
+            item_vkills = QTableWidgetItem(f"{vkills:,}")
+            item_vkills.setData(Qt.ItemDataRole.DisplayRole, vkills)
+            self.weapon_table.setItem(row, 6, item_vkills)
+            
+            self.weapon_table.setItem(row, 7, QTableWidgetItem(f"{vkpm:.2f}"))
+            
+            item_time = QTableWidgetItem(time_str)
+            item_time.setData(Qt.ItemDataRole.UserRole, play_time) # Für Sortierung (müsste man Custom Sorter bauen, aber UserRole hilft evtl)
+            self.weapon_table.setItem(row, 8, item_time)
+
+        self.weapon_table.setSortingEnabled(True)
 
     def add_log(self, text):
         self.log_area.append(f"[{time.strftime('%H:%M:%S')}] {text}")

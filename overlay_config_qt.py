@@ -953,16 +953,15 @@ class OverlayConfigWindow(QWidget):
             QPushButton:hover { background-color: #6600cc; border-color: #ff00ff; }
         """)
 
-        self.combo_font_size = QComboBox()
-        self.combo_font_size.addItems(["12", "16", "20", "24", "26", "28", "32", "36", "48", "72"])
-        self.combo_font_size.setCurrentText("26")
-        self.combo_font_size.setFixedWidth(50)
-        self.combo_font_size.setStyleSheet(
-            "background-color: #111; color: #eee; border: 1px solid #444; padding: 1px; font-size: 11px;")
+        self.slider_font_size = QSlider(Qt.Orientation.Horizontal)
+        self.slider_font_size.setRange(10, 150)
+        self.slider_font_size.setValue(26)
+        self.slider_font_size.setFixedWidth(100)
+        self.slider_font_size.setFixedHeight(15)
 
         design_box.addWidget(self.btn_pick_color)
         design_box.addWidget(QLabel("Size:", styleSheet="border:none; color:#ddd; margin-left:10px; font-size: 11px;"))
-        design_box.addWidget(self.combo_font_size)
+        design_box.addWidget(self.slider_font_size)
         design_box.addStretch()
 
         pos_layout.addLayout(design_box, 4, 1, 1, 2)

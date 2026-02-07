@@ -892,7 +892,7 @@ class DiorClientGUI:
 
         # Design (Farbe/Größe)
         self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
-        self.safe_connect(ui.combo_font_size.currentTextChanged, self.save_streak_settings_from_qt)
+        self.safe_connect(ui.slider_font_size.valueChanged, self.save_streak_settings_from_qt)
 
         # Path Recording
         self.safe_connect(ui.btn_path_record.clicked, self.start_path_record)
@@ -1425,10 +1425,7 @@ class DiorClientGUI:
         ty = s_ui.slider_ty.value()
         scale = s_ui.slider_scale.value() / 100.0
 
-        try:
-            size_val = int(s_ui.combo_font_size.currentText())
-        except ValueError:
-            size_val = 26
+        size_val = s_ui.slider_font_size.value()
 
         knife_tr = clean_path(s_ui.knife_inputs["TR"].text())
         knife_nc = clean_path(s_ui.knife_inputs["NC"].text())
@@ -1655,14 +1652,10 @@ class DiorClientGUI:
         ui.btn_toggle_knives.blockSignals(False)
         # >>> ENDE NEU <<<
 
-        ui.combo_font_size.blockSignals(True)
-        current_size = str(s_conf.get("size", 26))
-        idx = ui.combo_font_size.findText(current_size)
-        if idx >= 0:
-            ui.combo_font_size.setCurrentIndex(idx)
-        else:
-            ui.combo_font_size.setCurrentText(current_size)
-        ui.combo_font_size.blockSignals(False)
+        ui.slider_font_size.blockSignals(True)
+        current_size = int(s_conf.get("size", 26))
+        ui.slider_font_size.setValue(current_size)
+        ui.slider_font_size.blockSignals(False)
 
         c_hex = s_conf.get("color", "#ffffff")
         text_col = "black" if QColor(c_hex).lightness() > 128 else "white"
@@ -2745,7 +2738,11 @@ class DiorClientGUI:
         # 1. Status-Variablen
         master_switch = self.config.get("overlay_master_active", True)
         game_running = getattr(self, 'ps2_running', False)
-        test_active = getattr(self, 'is_stats_test', False)
+
+        # --- FIX: TEST-MODI TRENNEN ---
+        stats_test_active = getattr(self, 'is_stats_test', False)  # Testet Stats, Crosshair, Feed
+        streak_test_active = getattr(self, 'is_streak_test', False)  # Testet NUR Streak
+
         edit_active = getattr(self, 'is_hud_editing', False)
         game_focused = self.is_game_focused()
 
@@ -2753,9 +2750,10 @@ class DiorClientGUI:
         # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
         # ---------------------------------------------------------
         should_render = False
-        mode_gameplay = False  # NEU: Trennung zwischen "Darf rendern" und "Spiel läuft wirklich"
+        mode_gameplay = False  # Trennung zwischen "Darf rendern" und "Spiel läuft wirklich"
 
-        if edit_active or test_active:
+        # Rendern, wenn irgendein Test oder Edit läuft
+        if edit_active or stats_test_active or streak_test_active:
             should_render = True
         elif master_switch and game_running and game_focused:
             should_render = True
@@ -2768,11 +2766,12 @@ class DiorClientGUI:
             # === A) STATS WIDGET ===
             stats_cfg = self.config.get("stats_widget", {})
             stats_editing = edit_active and ("stats" in getattr(self, "current_edit_targets", []))
-            
-            # LOGIK FIX: Nur anzeigen wenn (Active & Gameplay) ODER (Editing) ODER (Test)
-            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or test_active:
+
+            # Zeigen bei: (Gameplay & Aktiv) ODER (Editieren) ODER (Stats Test)
+            # WICHTIG: streak_test_active fehlt hier absichtlich!
+            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active:
                 # Daten-Ermittlung
-                if test_active or (stats_editing and not game_running):
+                if stats_test_active or (stats_editing and not game_running):
                     html = DUMMY_STATS_HTML
                 else:
                     # Echte Stats-Berechnung
@@ -2824,8 +2823,9 @@ class DiorClientGUI:
             # === B) CROSSHAIR ===
             cross_conf = self.config.get("crosshair", {})
             cross_editing = edit_active and ("crosshair" in getattr(self, "current_edit_targets", []))
-            
-            if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or test_active:
+
+            # Crosshair nur bei Gameplay/Edit oder Stats-Test (nicht bei Streak-Test)
+            if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active:
                 self.overlay_win.crosshair_label.show()
             else:
                 self.overlay_win.crosshair_label.hide()
@@ -2833,8 +2833,9 @@ class DiorClientGUI:
             # === C) KILLFEED ===
             feed_conf = self.config.get("killfeed", {})
             feed_editing = edit_active and ("feed" in getattr(self, "current_edit_targets", []))
-            
-            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or test_active:
+
+            # Feed nur bei Gameplay/Edit oder Stats-Test
+            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or stats_test_active:
                 self.overlay_win.feed_label.show()
             else:
                 self.overlay_win.feed_label.hide()
@@ -2842,8 +2843,10 @@ class DiorClientGUI:
             # === D) KILLSTREAK ===
             streak_conf = self.config.get("streak", {})
             streak_editing = edit_active and ("streak" in getattr(self, "current_edit_targets", []))
-            
-            if (streak_conf.get("active", True) and mode_gameplay) or streak_editing or test_active:
+
+            # HIER kommt streak_test_active dazu!
+            if (streak_conf.get("active",
+                                True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active:
                 if self.killstreak_count > 0 or streak_editing:
                     self.overlay_win.streak_bg_label.show()
                     self.overlay_win.streak_text_label.show()
@@ -2851,7 +2854,6 @@ class DiorClientGUI:
                         if getattr(k, '_is_active', False) or streak_editing:
                             k.show()
                 else:
-                     # FIX: Else-Block hinzugefügt, wenn Count 0 ist
                     self.overlay_win.streak_bg_label.hide()
                     self.overlay_win.streak_text_label.hide()
                     for k in self.overlay_win.knife_labels: k.hide()
@@ -3235,7 +3237,7 @@ class DiorClientGUI:
         """
         Startet eine Vorschau mit 20 Messern (PyQt6 kompatibel).
         """
-        self.is_stats_test = True
+        self.is_streak_test = True
         # 1. Vorherige Timer abbrechen
         if self._streak_test_timer:
             self._streak_test_timer.stop()
@@ -3278,7 +3280,7 @@ class DiorClientGUI:
                 self._streak_backup = None  # Backup löschen
 
             self._streak_test_timer = None
-            self.is_stats_test = False
+            self.is_streak_test = False
             self.add_log("UI: Test beendet.")
 
         # 6. Timer starten (PyQt6 Weg)
@@ -3654,22 +3656,43 @@ class DiorClientGUI:
         if hasattr(self, 'char_win'):
             self.char_win.add_log(text)
 
+    def apply_main_background(self, path):
+        """Setzt das Hintergrundbild via Stylesheet für das Hauptfenster."""
+        if not path or not os.path.exists(path):
+            return
+
+        # Windows-Pfade müssen für CSS in Slashes umgewandelt werden
+        clean_path = path.replace("\\", "/")
+
+        # Stylesheet setzen: border-image skaliert das Bild auf Fenstergröße
+        style = f"""
+        QMainWindow {{
+            border-image: url("{clean_path}") 0 0 0 0 stretch stretch;
+        }}
+        """
+        self.main_hub.setStyleSheet(style)
 
     def change_background_file(self):
-        # Filter für statische Bilder (JPG/PNG)
-        f = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.jpeg *.png")])
-        if f:
-            self.gif_path = f
+        """Öffnet den File-Dialog und speichert den Hintergrund (PyQt6 Version)."""
+        from PyQt6.QtWidgets import QFileDialog
 
-            # Den Pfad in das Config-Objekt schreiben
-            self.config["main_background_path"] = f
+        # 1. Datei auswählen (PyQt Dialog statt Tkinter)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_hub,
+            "Hintergrundbild wählen",
+            "",
+            "Images (*.png *.jpg *.jpeg)"
+        )
 
-            # Die Config-Datei permanent speichern
+        if file_path:
+            # 2. Config speichern
+            self.config["main_background_path"] = file_path
             self.save_config()
 
-            # Die GUI sofort aktualisieren
-            self.update_background_view(self.root.winfo_width(), self.root.winfo_height())
-            self.add_log(f"SYS: Hintergrund dauerhaft auf {os.path.basename(f)} gesetzt.")
+            # 3. Hintergrund sofort anwenden
+            self.apply_main_background(file_path)
+
+            self.add_log(f"SYS: Hintergrund geändert auf {os.path.basename(file_path)}")
 
     def execute_launch(self, mode):
         # 1. Verzeichnis-Check
@@ -3721,16 +3744,22 @@ class DiorClientGUI:
 
         def worker():
             try:
-                # 1. API ABFRAGE
-                url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history,weapon_stat_by_faction"
+                # 1. ERSTE API ABFRAGE (Basis-Daten & History)
+                # WICHTIG: Kein 'weapon_stat_by_faction' hier, da es das Limit sprengt!
+                url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history"
                 r = requests.get(url, timeout=30).json()
 
                 if not r.get('character_list'):
                     self.add_log(f"DEBUG: Character {name} nicht gefunden.")
+                    # UI FEEDBACK: "Character doesnt exist"
+                    QTimer.singleShot(0, lambda: self.char_win.search_input.setText("Character doesnt exist."))
+                    # Button Text zurücksetzen!
+                    QTimer.singleShot(0, lambda: self.char_win.btn_search.setText("SEARCH"))
                     QTimer.singleShot(0, lambda: self.char_win.btn_search.setEnabled(True))
                     return
 
                 char_data = r['character_list'][0]
+                char_id = char_data['character_id']
                 all_stats_container = char_data.get('stats', {})
 
                 # --- SCHRITT 2: STATS EXTRAKTION ---
@@ -3775,37 +3804,55 @@ class DiorClientGUI:
                     'm30_score': f"{int(m30_score / 1000)}k"
                 }
 
-                # --- SCHRITT 3: WAFFEN-LOGIK ---
+                # --- SCHRITT 3: ZWEITE API ABFRAGE (WAFFEN) ---
+                # Wir holen NUR die Waffen-Stats, aber dafür bis zu 5000 Einträge
+                # Das umgeht das Standard-Limit von resolve
+                url_wep = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/characters_weapon_stat_by_faction?character_id={char_id}&c:limit=5000"
+                r_wep = requests.get(url_wep, timeout=30).json()
+                
+                w_stats_list = r_wep.get('characters_weapon_stat_by_faction_list', [])
+
                 weapon_list = []
                 temp_w = {}
-                w_stats = all_stats_container.get('weapon_stat_by_faction', [])
 
-                for entry in w_stats:
+                for entry in w_stats_list:
                     i_id = entry.get('item_id')
                     if not i_id or i_id == "0": continue
+                    
                     if i_id not in temp_w:
                         db_info = self.item_db.get(i_id, {"name": f"Unknown ({i_id})"})
-                        temp_w[i_id] = {'id': i_id, 'name': db_info['name'], 'kills': 0, 'shots': 0, 'hits': 0, 'hs': 0}
+                        temp_w[i_id] = {
+                            'id': i_id, 'name': db_info['name'], 
+                            'kills': 0, 'deaths': 0, 
+                            'shots': 0, 'hits': 0, 'hs': 0, 
+                            'vkills': 0, 'time': 0
+                        }
 
-                    total_val = int(entry.get('value_vs', 0)) + int(entry.get('value_nc', 0)) + int(
-                        entry.get('value_tr', 0))
+                    total_val = int(entry.get('value_vs', 0)) + int(entry.get('value_nc', 0)) + int(entry.get('value_tr', 0))
                     s_name = entry.get('stat_name')
-                    if s_name in ['weapon_kills', 'weapon_vehicle_kills']:
+                    
+                    if s_name == 'weapon_kills':
                         temp_w[i_id]['kills'] += total_val
+                    elif s_name == 'weapon_vehicle_kills':
+                        temp_w[i_id]['vkills'] += total_val
+                    elif s_name == 'weapon_deaths':
+                        temp_w[i_id]['deaths'] += total_val
                     elif s_name == 'weapon_fire_count':
                         temp_w[i_id]['shots'] += total_val
                     elif s_name == 'weapon_hit_count':
                         temp_w[i_id]['hits'] += total_val
                     elif s_name == 'weapon_headshots':
                         temp_w[i_id]['hs'] += total_val
+                    elif s_name == 'weapon_play_time':
+                        temp_w[i_id]['time'] += total_val
 
-                weapon_list = sorted([w for w in temp_w.values() if w['kills'] > 0],
-                                     key=lambda x: x['kills'], reverse=True)[:100]
+                # Nur Waffen mit mindestens 1 Kill ODER 1 Death anzeigen (optional)
+                weapon_list = sorted([w for w in temp_w.values() if w['kills'] > 0 or w['deaths'] > 0],
+                                     key=lambda x: x['kills'], reverse=True)
 
-                self.add_log(f"DEBUG: Processing complete. Found {len(weapon_list)} weapons.")
+                self.add_log(f"DEBUG: Processing complete. Found {len(weapon_list)} weapons (API Limit Bypass).")
 
                 # --- DER SICHERE TRANSFER VIA SIGNAL ---
-                # Wir "feuern" das Signal ab - Qt kümmert sich um den Rest
                 self.char_win.signals.search_finished.emit(custom_stats, weapon_list)
 
             except Exception as e:

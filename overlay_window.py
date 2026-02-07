@@ -258,11 +258,14 @@ class QtOverlay(QWidget):
 
         # 2. WIDGETS
         self.crosshair_label = QLabel(self)
+        self.crosshair_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.crosshair_label.hide()
 
         self.stats_bg_label = QLabel(self)
+        self.stats_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.stats_bg_label.hide()
         self.stats_text_label = QLabel(self)
+        self.stats_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.stats_text_label.hide()
 
         shadow_stats = QGraphicsDropShadowEffect()
@@ -273,13 +276,16 @@ class QtOverlay(QWidget):
         self.stats_text_label.setGraphicsEffect(shadow_stats)
 
         self.streak_bg_label = QLabel(self)
+        self.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.streak_bg_label.hide()
         self.streak_text_label = QLabel(self)
+        self.streak_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.streak_text_label.hide()
 
         # Killfeed
         self.feed_messages = []
         self.feed_label = QLabel(self)
+        self.feed_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.feed_w = int(600 * self.ui_scale)
         self.feed_h = int(550 * self.ui_scale)
         self.feed_label.setFixedSize(self.feed_w, self.feed_h)
@@ -294,6 +300,7 @@ class QtOverlay(QWidget):
         self.feed_label.setGraphicsEffect(shadow_feed)
 
         self.event_preview_label = QLabel(self)
+        self.event_preview_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.event_preview_label.hide()
 
         self.img_label = QLabel(self)

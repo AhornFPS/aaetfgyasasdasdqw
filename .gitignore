@@ -19,6 +19,7 @@ config.json
 error_log.txt
 crash_log.txt
 _emote_cache/
+config_backup.json
 
 # Virtuelle Umgebungen
 venv/
