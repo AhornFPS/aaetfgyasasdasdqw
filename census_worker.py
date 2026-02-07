@@ -266,14 +266,22 @@ class CensusWorker:
         is_hs = (p.get("is_headshot") == "1")
         weapon_id = p.get("attacker_weapon_id")
 
-        # Global Stats
-        if p.get("attacker_team_id") != p.get("team_id"):
+        # Helper: Ist es ein Teamkill? (Suicide zählt nicht als TK hier)
+        is_tk = (p.get("attacker_team_id") == p.get("team_id")) and (killer_id != victim_id)
+
+        # -------------------------------------------------
+        # 1. GLOBAL STATS (Dashboard)
+        # -------------------------------------------------
+        # NUR zählen, wenn es KEIN Teamkill ist!
+        if not is_tk:
             if killer_id and killer_id != "0" and killer_id != victim_id:
                 w_info = self.c.item_db.get(weapon_id, {})
                 cat = w_info.get("type", "Unknown")
+
                 k_obj = get_stat_obj(killer_id, p.get("attacker_team_id"))
                 k_obj["k"] += 1
                 k_obj["last_kill_time"] = time.time()
+
                 if cat in HSR_WEAPON_CATEGORY:
                     k_obj["hsrkill"] += 1
                     if is_hs: k_obj["hs"] += 1
@@ -282,33 +290,54 @@ class CensusWorker:
                 v_obj = get_stat_obj(victim_id, p.get("team_id"))
                 v_obj["d"] += 1
 
-        # MY EVENTS
+        # -------------------------------------------------
+        # 2. MY EVENTS (Overlay)
+        # -------------------------------------------------
         if my_id:
+            # Icon Vorbereitung
             icon_html = ""
             if is_hs:
                 hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "headshot.png")
-
-                # --- FIX: Nutze zentrales get_asset_path für EXE Support ---
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
-
                 if os.path.exists(hs_path):
                     icon_html = f'<img src="{hs_path}" width="19" height="19" style="vertical-align: middle;">&nbsp;'
 
             w_info = self.c.item_db.get(weapon_id, {})
             category = w_info.get("type", "Unknown")
+            base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
-            # A) KILLER
+            # === A) ICH HABE GETÖTET ===
             if killer_id == my_id and victim_id != my_id:
                 curr_time = time.time()
+                # Spam-Schutz (Manchmal sendet API doppelt)
                 if getattr(self.c, "last_victim_id", None) == victim_id and (
                         curr_time - getattr(self.c, "last_victim_time", 0)) < 0.5:
                     return
                 self.c.last_victim_id = victim_id
                 self.c.last_victim_time = curr_time
 
-                if p.get("attacker_team_id") == p.get("team_id"):
+                v_name = self.c.name_cache.get(victim_id, "Unknown")
+                raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
+                v_tag = f"[{raw_tag}] " if raw_tag else ""
+
+                # --- FALL 1: TEAMKILL (Ich töte Teammate) ---
+                if is_tk:
                     self.c.trigger_auto_voice("tk")
                     self.c.trigger_overlay_event("Team Kill")
+
+                    # Spezieller Feed Eintrag
+                    msg = f"""<div style="{base_style}">
+                            <span style="color: #ffaa00;">⚠️ TEAMKILL </span>
+                            <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
+                            </div>"""
+
+                    if self.c.config.get("killfeed", {}).get("active", True):
+                        if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
+
+                    # WICHTIG: Hier abbrechen, damit keine Streak/Multi-Kill Logik läuft!
+                    return
+
+                    # --- FALL 2: NORMALER KILL (Gegner) ---
                 else:
                     # Streak Logic
                     if self.c.config.get("streak", {}).get("active", True):
@@ -334,15 +363,10 @@ class CensusWorker:
                         self.c.kill_counter = 1
                     self.c.last_kill_time = curr_time
 
-                    # -------------------------------------------------
                     # EVENT ERMITTLUNG (QUEUE LOGIC START)
-                    # -------------------------------------------------
-
-                    # 1. Basis-Events sammeln
                     base_events = []
                     weapon_name = w_info.get("name", "Unknown")
 
-                    # Special IDs / Kategorien / Namen
                     if weapon_id in PS2_DETECTION["SPECIAL_IDS"]:
                         base_events.append(PS2_DETECTION["SPECIAL_IDS"][weapon_id])
                     elif category in PS2_DETECTION["CATEGORIES"]:
@@ -353,7 +377,7 @@ class CensusWorker:
                     if is_hs and "Headshot" not in base_events:
                         base_events.append("Headshot")
 
-                    # 2. Streak Events
+                    # Streak Events
                     streak_event = None
                     streak_map = {
                         12: "Squad Wiper", 24: "Double Squad Wipe",
@@ -362,7 +386,7 @@ class CensusWorker:
                     if self.c.killstreak_count in streak_map:
                         streak_event = streak_map[self.c.killstreak_count]
 
-                    # 3. Multi Events
+                    # Multi Events
                     multi_event = None
                     if self.c.kill_counter > 1:
                         multi_map = {
@@ -373,51 +397,44 @@ class CensusWorker:
                         if self.c.kill_counter in multi_map:
                             multi_event = multi_map[self.c.kill_counter]
 
-                    # -------------------------------------------------
-                    # ENTSCHEIDUNG: QUEUE AN ODER AUS?
-                    # -------------------------------------------------
+                    # QUEUE AN ODER AUS?
                     is_queue_active = self.c.config.get("event_queue_active", True)
 
                     if is_queue_active:
-                        # ALLES senden (Basis -> Multi -> Streak)
                         for evt in base_events: self.c.trigger_overlay_event(evt)
                         if multi_event: self.c.trigger_overlay_event(multi_event)
                         if streak_event: self.c.trigger_overlay_event(streak_event)
                     else:
-                        # NUR PRIORITÄT senden (Streak > Multi > Base)
                         final_event = None
                         if streak_event:
                             final_event = streak_event
                         elif multi_event:
                             final_event = multi_event
                         elif base_events:
-                            final_event = base_events[0]  # Nimm das erste (meist speziellste)
-
+                            final_event = base_events[0]
                         if final_event: self.c.trigger_overlay_event(final_event)
 
-                    # -------------------------------------------------
                     self.c.trigger_overlay_event("Hitmarker")
-                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
-                    # Killfeed Message bauen
-                    v_name = self.c.name_cache.get(victim_id, "Unknown")
-                    raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
-                    v_tag = f"[{raw_tag}] " if raw_tag else ""
-
+                    # Killfeed Message bauen (Normal)
                     s_vic = self.c.session_stats.get(victim_id, {})
                     try:
-                        kd_str = f"{(s_vic.get('k', 0) / max(1, s_vic.get('d', 1))):.1f}"
+                        # Echte KD berechnen (unter Beachtung von Revive Mode)
+                        raw_d = s_vic.get('d', 1)
+                        if self.c.kd_mode_revive:
+                            raw_d = max(0, raw_d - s_vic.get('revives_received', 0))
+                        kd_str = f"{(s_vic.get('k', 0) / max(1, raw_d)):.1f}"
                     except:
                         kd_str = "0.0"
 
                     msg = f"""<div style="{base_style}">
-                                                {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
-                                                <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+                            {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
+                            <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
 
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
-                    # Voice
+                    # Voice Checks
                     v_load = p.get("character_loadout_id")
                     kd_val = float(kd_str)
                     if v_load in LOADOUT_MAP["max"]:
@@ -431,13 +448,14 @@ class CensusWorker:
                     elif is_hs:
                         self.c.trigger_auto_voice("kill_hs")
 
-            # B) VICTIM
+            # === B) ICH WURDE GETÖTET (VICTIM) ===
             elif victim_id == my_id:
                 # --- UPDATE: DEAD STATE SETZEN ---
                 self.is_dead_state = True
 
-
-                # --- KILLSTREAK LOGIK (Fix für "Double Death") ---
+                # --- 1. STATUS SICHERN (BACKUP) ---
+                # Wir sichern den Stand IMMER.
+                # Grund: Falls du wiederbelebt wirst, nutzt die Revive-Logik dieses Backup.
                 if self.c.killstreak_count > 0:
                     self.c.saved_streak = self.c.killstreak_count
                     self.c.saved_factions = getattr(self.c, 'streak_factions', [])
@@ -447,28 +465,48 @@ class CensusWorker:
                     self.c.saved_factions = []
                     self.c.saved_slots = []
 
-                # Reset
-                self.c.killstreak_count = 0
-                self.c.streak_factions = []
-                self.c.streak_slot_map = []
+                # --- 2. RESET ENTSCHEIDUNG ---
+                if is_tk:
+                    # FALL A: TEAMKILL -> KEIN RESET!
+                    self.c.add_log("STREAK: Teamkill erkannt - Streak behalten!")
+                    # Wir setzen den Zähler NICHT auf 0.
+                    # Wir leeren die Listen NICHT.
+                    # Der Streak bleibt im Overlay sichtbar.
+
+                    self.c.trigger_overlay_event("Team Kill Victim")
+
+                else:
+                    # FALL B: NORMALER TOD / SUICIDE -> RESET
+                    self.c.killstreak_count = 0
+                    self.c.streak_factions = []
+                    self.c.streak_slot_map = []
+                    self.c.trigger_overlay_event("Death")
+
+                # --- 3. STATUS UPDATEN ---
                 self.c.is_dead = True
                 self.c.update_streak_display()
-                self.c.trigger_overlay_event("Death")
 
+                # --- 4. KILLFEED INFO ---
                 if killer_id and killer_id != "0":
                     k_name = self.c.name_cache.get(killer_id, "Unknown")
                     raw_tag = getattr(self.c, "outfit_cache", {}).get(killer_id, "")
                     k_tag = f"[{raw_tag}] " if raw_tag else ""
+
+                    # KD des Killers holen
                     k_vic = self.c.session_stats.get(killer_id, {})
                     try:
                         k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
                     except:
                         k_kd = "0.0"
 
-                    # Auch hier den gleichen Style nutzen
-                    base_style = "font-family: 'Black Ops One', sans-serif; font-size: 19px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
-
-                    msg = f"""<div style="{base_style}">
+                    # TEAMKILL DISPLAY CHECK
+                    if is_tk:
+                        msg = f"""<div style="{base_style}">
+                                            <span style="color: #ffaa00;">⚠️ TK BY </span>
+                                            <span style="color: #888;">{k_tag}</span><span style="color: #ffffff;">{k_name}</span>
+                                            </div>"""
+                    else:
+                        msg = f"""<div style="{base_style}">
                                             {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
                                             <span style="color: #aaa; font-size: 16px;"> ({k_kd})</span></div>"""
 

@@ -294,6 +294,21 @@ class DiorClientGUI:
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
 
+        # --- CONFIG STATUS MELDUNG ---
+        if hasattr(self, '_startup_config_status'):
+            status = self._startup_config_status
+            if status == "BACKUP":
+                self.add_log("WARNUNG: Haupt-Config war defekt. Backup wurde geladen!")
+                # Zeige Popup Warnung
+                tk.messagebox.showwarning("Config Wiederhergestellt",
+                                          "Deine Konfigurationsdatei war beschädigt.\nEs wurde erfolgreich ein Backup geladen.")
+            elif status == "RESET":
+                self.add_log("FEHLER: Config defekt & kein Backup. Einstellungen zurückgesetzt.")
+                tk.messagebox.showerror("Config Reset",
+                                        "Deine Konfiguration war unlesbar und kein Backup vorhanden.\nEinstellungen wurden zurückgesetzt.")
+            else:
+                self.add_log("SYS: Konfiguration erfolgreich geladen.")
+
         # 7. ANZEIGEN
         self.main_hub.show()
 
@@ -2120,57 +2135,91 @@ class DiorClientGUI:
 
     def load_config(self):
         """
-        Lädt die zentrale Konfiguration.
-        Sorgt dafür, dass Voreinstellungen aus der EXE beim ersten Start
-        nach außen kopiert werden.
+        Lädt die Konfiguration mit intelligenter Backup-Strategie.
+        Reihenfolge:
+        1. config.json (Hauptdatei)
+        2. config_backup.json (Falls Hauptdatei korrupt/leer)
+        3. Standardwerte (Falls alles fehlschlägt)
         """
         # 1. Pfade definieren
-        # 'user_config_path' ist die beschreibbare Datei neben deiner .exe
         if hasattr(sys, '_MEIPASS'):
-            # Wenn als EXE gestartet: Ordner der .exe finden
             base_dir_exe = os.path.dirname(sys.executable)
             user_config_path = os.path.join(base_dir_exe, "config.json")
         else:
-            # Wenn als Skript gestartet: Aktueller Ordner
             user_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
-        # 'template_path' ist die voreingestellte Datei INNERHALB der EXE
+        # Pfad zur Backup-Datei
+        backup_config_path = user_config_path.replace("config.json", "config_backup.json")
+
+        # Template Pfad (in der EXE)
         template_path = resource_path("config.json")
 
-        # 2. Deine Originalen Standard-Werte (Fallback)
+        # 2. Standard-Werte (Fallback)
         default_conf = {
             "ps2_path": "",
             "overlay_master_active": True,
             "crosshair": {"file": "crosshair.png", "size": 32, "active": True},
             "events": {},
-            "streak": {"img": "KS_Counter.png", "active": True}
+            "streak": {"img": "KS_Counter.png", "active": True},
+            "stats_widget": {"active": True},
+            "killfeed": {"active": True}
         }
 
-        # 3. ERST-START LOGIK: Template nach außen kopieren
-        # Falls keine config.json neben der EXE liegt, nehmen wir die mitgelieferte
-        if not os.path.exists(user_config_path) and os.path.exists(template_path):
+        # 3. ERST-START LOGIK: Template extrahieren
+        if not os.path.exists(user_config_path) and not os.path.exists(backup_config_path) and os.path.exists(
+                template_path):
             try:
-                import shutil
                 shutil.copy2(template_path, user_config_path)
-                print("SYS: Voreingestellte Konfiguration extrahiert.")
+                print("SYS: Standard-Konfiguration erstellt.")
             except Exception as e:
                 print(f"Config Template Copy Error: {e}")
 
-        # 4. LADEN
+        # 4. LADEN MIT FEHLERBEHANDLUNG
         loaded_conf = {}
+        load_source = "DEFAULT"
+
+        # Versuch 1: Hauptdatei
         if os.path.exists(user_config_path):
             try:
                 with open(user_config_path, "r", encoding="utf-8") as f:
-                    loaded_conf = json.load(f)
-            except Exception as e:
-                print(f"Config Load Error: {e}")
+                    content = f.read().strip()
+                    if not content:
+                        raise ValueError("Datei ist leer")
+                    loaded_conf = json.loads(content)
+                    load_source = "MAIN"
+            except (json.JSONDecodeError, ValueError, Exception) as e:
+                print(f"WARNUNG: config.json ist defekt ({e}). Versuche Backup...")
 
-        # 5. MERGEN (Deine Logik)
-        # Fehlende Werte mit Standards auffüllen
+                # Versuch 2: Backup Datei
+                if os.path.exists(backup_config_path):
+                    try:
+                        with open(backup_config_path, "r", encoding="utf-8") as f:
+                            loaded_conf = json.load(f)
+                        print("ERFOLG: Konfiguration aus Backup wiederhergestellt!")
+                        load_source = "BACKUP"
+
+                        # Wir reparieren sofort die kaputte Hauptdatei
+                        try:
+                            shutil.copy2(backup_config_path, user_config_path)
+                            print("SYS: Haupt-Config wurde durch Backup repariert.")
+                        except:
+                            pass
+
+                    except Exception as e2:
+                        print(f"FEHLER: Auch Backup ist defekt: {e2}. Nutze Standards.")
+                        load_source = "RESET"
+                else:
+                    print("FEHLER: Kein Backup gefunden. Nutze Standards.")
+                    load_source = "RESET"
+
+        # 5. MERGEN (Standards mit Geladenem mischen)
         default_conf.update(loaded_conf)
 
-        # Sicherstellen, dass wir den Pfad für spätere Speichervorgänge behalten
+        # Pfad speichern für save_config
         self.config_path = user_config_path
+
+        # Status speichern, um ihn später im Log anzuzeigen (da add_log hier evtl. noch nicht geht)
+        self._startup_config_status = load_source
 
         return default_conf
 
@@ -2343,27 +2392,42 @@ class DiorClientGUI:
         return f"Unknown ({world_id})"
 
     def save_config(self):
-        """Speichert die aktuelle Konfiguration sicher auf Festplatte (EXE-kompatibel)."""
+        """
+        Speichert die Konfiguration in config.json UND config_backup.json.
+        """
         try:
-            # 1. Pfad-Sicherung
-            # Falls aus irgendeinem Grund self.config_path nicht gesetzt wurde, Fallback:
+            # 1. Pfad holen
             target_path = getattr(self, 'config_path', os.path.join(os.path.abspath("."), "config.json"))
+            backup_path = target_path.replace("config.json", "config_backup.json")
 
-            # 2. Säuberung (Deine bewährte Logik)
+            # 2. Daten bereinigen (Nur serialisierbare Daten)
             clean_config = {}
             for k, v in self.config.items():
-                # Nur einfache Datentypen zulassen (verhindert Qt-Objekt-Fehler)
-                if isinstance(v, (str, int, float, bool, dict, list)):
+                if isinstance(v, (str, int, float, bool, dict, list, type(None))):
                     clean_config[k] = v
 
-            # 3. Speichern
+            # 3. Hauptdatei speichern
             with open(target_path, "w", encoding="utf-8") as f:
                 json.dump(clean_config, f, indent=4)
 
-            self.add_log(f"SYS: Konfiguration in {os.path.basename(target_path)} gesichert.")
+            # 4. Backup Datei speichern (Sicherheitskopie)
+            try:
+                with open(backup_path, "w", encoding="utf-8") as f:
+                    json.dump(clean_config, f, indent=4)
+            except Exception as e:
+                print(f"ERR: Backup konnte nicht geschrieben werden: {e}")
+
+            # Optional: Log nur schreiben, wenn GUI schon läuft
+            if hasattr(self, 'log_area'):
+                # Nur "System"-Logs, nicht bei jedem Slider-Move spammen
+                # self.add_log(f"SYS: Config & Backup gesichert.")
+                pass
 
         except Exception as e:
-            self.add_log(f"ERR: Fehler beim Speichern der JSON: {e}")
+            if hasattr(self, 'add_log'):
+                self.add_log(f"ERR: Critical Save Error: {e}")
+            else:
+                print(f"ERR: Critical Save Error: {e}")
 
     def destroy_overlay_window(self):
         if self.overlay_win:
@@ -3326,6 +3390,8 @@ class DiorClientGUI:
                 self.pop_history.pop(0)
                 self.pop_history.append(total_pop)
                 self.last_graph_point_time = now
+
+
 
             # 3. UI UPDATE
             if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
