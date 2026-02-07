@@ -3,9 +3,9 @@ import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QFrame, QTabWidget,
                              QCheckBox, QComboBox, QSlider, QScrollArea, QGridLayout,
-                             QSizePolicy,QSpinBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
-from PyQt6.QtGui import QColor, QPixmap
+                             QSizePolicy, QSpinBox)
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize, QPoint
+from PyQt6.QtGui import QColor, QPixmap, QPainter, QImage, QPen
 from PyQt6.QtGui import QClipboard
 
 
@@ -14,6 +14,78 @@ class OverlaySignals(QObject):
     setting_changed = pyqtSignal(str, object)  # Key, Value
     test_trigger = pyqtSignal(str)  # Event Name for Test
     edit_mode_toggled = pyqtSignal(str)  # Which HUD element is being moved
+
+
+class CrosshairCanvas(QWidget):
+    def __init__(self, size=220, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self._image = QImage(size, size, QImage.Format.Format_ARGB32)
+        self._image.fill(Qt.GlobalColor.transparent)
+        self._brush_color = QColor("#00f2ff")
+        self._brush_size = 3
+        self._last_point = QPoint()
+        self._drawing = False
+        self._erase_mode = False
+        self.setCursor(Qt.CursorShape.CrossCursor)
+
+    def set_brush_color(self, color):
+        if color:
+            self._brush_color = QColor(color)
+
+    def set_brush_size(self, size):
+        self._brush_size = max(1, int(size))
+
+    def clear(self):
+        self._image.fill(Qt.GlobalColor.transparent)
+        self.update()
+
+    def save_image(self, path):
+        return self._image.save(path, "PNG")
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(15, 15, 15))
+
+        grid_color = QColor(35, 35, 35)
+        painter.setPen(grid_color)
+        for x in range(0, self.width(), 10):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), 10):
+            painter.drawLine(0, y, self.width(), y)
+
+        painter.drawImage(0, 0, self._image)
+
+    def mousePressEvent(self, event):
+        if event.button() in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            self._drawing = True
+            self._erase_mode = event.button() == Qt.MouseButton.RightButton
+            self._last_point = event.position().toPoint()
+            self._draw_line(self._last_point, self._last_point)
+
+    def mouseMoveEvent(self, event):
+        if self._drawing:
+            current_point = event.position().toPoint()
+            self._draw_line(self._last_point, current_point)
+            self._last_point = current_point
+
+    def mouseReleaseEvent(self, event):
+        if event.button() in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            self._drawing = False
+            self._erase_mode = False
+
+    def _draw_line(self, start, end):
+        painter = QPainter(self._image)
+        if self._erase_mode:
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+            pen = QPen(Qt.GlobalColor.transparent, self._brush_size,
+                       Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        else:
+            pen = QPen(self._brush_color, self._brush_size,
+                       Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawLine(start, end)
+        self.update()
 
 
 # --- STYLESHEET ---
@@ -736,6 +808,7 @@ class OverlayConfigWindow(QWidget):
     def setup_crosshair_tab(self):
         layout = QVBoxLayout(self.tab_cross)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(12)
 
         self.check_cross = QCheckBox("Show Crosshair")
         self.check_cross.setObjectName("Header")
@@ -749,6 +822,46 @@ class OverlayConfigWindow(QWidget):
         self.btn_browse_cross = QPushButton("Browse")
         img_layout.addWidget(self.btn_browse_cross)
         layout.addLayout(img_layout)
+
+        creator_group = QFrame(objectName="Group")
+        creator_layout = QVBoxLayout(creator_group)
+        creator_layout.setSpacing(8)
+
+        creator_title = QLabel("CROSSHAIR CREATOR")
+        creator_title.setObjectName("Header")
+        creator_layout.addWidget(creator_title)
+
+        creator_hint = QLabel("Draw with left mouse button, erase with right mouse button.")
+        creator_hint.setObjectName("SubText")
+        creator_layout.addWidget(creator_hint)
+
+        self.cross_canvas = CrosshairCanvas()
+        creator_layout.addWidget(self.cross_canvas, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        tools_layout = QHBoxLayout()
+        self.btn_cross_color = QPushButton("Pick Color")
+        tools_layout.addWidget(self.btn_cross_color)
+
+        tools_layout.addWidget(QLabel("Brush Size:"))
+        self.spin_cross_brush = QSpinBox()
+        self.spin_cross_brush.setRange(1, 20)
+        self.spin_cross_brush.setValue(3)
+        tools_layout.addWidget(self.spin_cross_brush)
+        tools_layout.addStretch()
+        creator_layout.addLayout(tools_layout)
+
+        save_layout = QHBoxLayout()
+        self.cross_creator_name = QLineEdit("crosshair_custom.png")
+        save_layout.addWidget(self.cross_creator_name)
+
+        self.btn_cross_clear = QPushButton("Clear")
+        save_layout.addWidget(self.btn_cross_clear)
+
+        self.btn_cross_save = QPushButton("Save To Assets")
+        save_layout.addWidget(self.btn_cross_save)
+        creator_layout.addLayout(save_layout)
+
+        layout.addWidget(creator_group)
 
         self.btn_edit_cross = QPushButton("MOVE UI", objectName="EditBtn")
         layout.addWidget(self.btn_edit_cross)

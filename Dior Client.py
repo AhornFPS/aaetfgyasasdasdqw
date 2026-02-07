@@ -701,6 +701,45 @@ class DiorClientGUI:
             current_size = self.config["crosshair"].get("size", 32)
             self.overlay_win.update_crosshair(full_path, current_size, should_show)
 
+    def pick_crosshair_color_qt(self):
+        from PyQt6.QtWidgets import QColorDialog
+
+        ui = self.ovl_config_win
+        color = QColorDialog.getColor(parent=ui, title="Crosshair Farbe auswählen")
+        if color.isValid():
+            ui.cross_canvas.set_brush_color(color)
+            text_col = "black" if color.lightness() > 128 else "white"
+            ui.btn_cross_color.setStyleSheet(
+                f"background-color: {color.name()}; color: {text_col}; font-weight: bold;")
+
+    def set_crosshair_brush_size_qt(self, value):
+        ui = self.ovl_config_win
+        ui.cross_canvas.set_brush_size(value)
+
+    def clear_crosshair_canvas_qt(self):
+        ui = self.ovl_config_win
+        ui.cross_canvas.clear()
+
+    def save_crosshair_canvas_qt(self):
+        ui = self.ovl_config_win
+        raw_name = ui.cross_creator_name.text().strip()
+        filename = raw_name if raw_name else "crosshair_custom.png"
+        if not filename.lower().endswith(".png"):
+            filename = f"{filename}.png"
+
+        full_path = get_asset_path(filename)
+        saved = ui.cross_canvas.save_image(full_path)
+
+        if saved:
+            ui.cross_path.blockSignals(True)
+            ui.cross_path.setText(filename)
+            ui.cross_path.blockSignals(False)
+            ui.check_cross.setChecked(True)
+            self.update_crosshair_from_qt()
+            self.add_log(f"CROSSHAIR: Creator gespeichert -> {filename}")
+        else:
+            self.add_log("CROSSHAIR: Fehler beim Speichern der Creator-Datei.")
+
     def center_crosshair_qt(self):
         """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
         # 1. Logik ausführen
@@ -927,6 +966,10 @@ class DiorClientGUI:
         # Center & Edit
         self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
+        self.safe_connect(ui.btn_cross_color.clicked, self.pick_crosshair_color_qt)
+        self.safe_connect(ui.spin_cross_brush.valueChanged, self.set_crosshair_brush_size_qt)
+        self.safe_connect(ui.btn_cross_clear.clicked, self.clear_crosshair_canvas_qt)
+        self.safe_connect(ui.btn_cross_save.clicked, self.save_crosshair_canvas_qt)
 
         # ---------------------------------------------------------
         # 6. OVERLAY TAB: STATS & FEED
@@ -1688,6 +1731,8 @@ class DiorClientGUI:
         ui.cross_path.setText(saved_file)
         ui.check_cross.blockSignals(False)
         ui.cross_path.blockSignals(False)
+        ui.btn_cross_color.setStyleSheet(
+            "background-color: #00f2ff; color: black; font-weight: bold;")
 
         # --- TAB 5: STATS & FEED ---
         st_active = st_conf.get("active", True)
