@@ -3327,6 +3327,13 @@ class DiorClientGUI:
             # 1. Overlay wieder durchlässig machen
             self.overlay_win.set_mouse_passthrough(True)
             self.overlay_win.clear_edit_visuals()
+            self.current_edit_targets = []
+
+            twitch_active = self.config.get("twitch", {}).get("active", True)
+            self.overlay_win.update_twitch_visibility(twitch_active)
+            self.overlay_win.update_killfeed_pos()
+            self.update_streak_display()
+            self.refresh_ingame_overlay()
 
             # 2. Buttons zurücksetzen
             for btn in btn_list:
