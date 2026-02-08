@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
 from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtGui import QClipboard
+# NEW IMPORT
+from crosshair_editor import CrosshairEditorWindow
 
 
 # --- SIGNALS ---
@@ -755,6 +757,29 @@ class OverlayConfigWindow(QWidget):
 
         self.btn_center_cross = QPushButton("AUTO-CENTER (Middle)")
         layout.addWidget(self.btn_center_cross)
+
+        # --- NEW EDITOR BUTTON ---
+        self.btn_open_editor = QPushButton("CROSSHAIR EDITOR")
+        self.btn_open_editor.setStyleSheet("background-color: #004080; color: white; border: 1px solid #0055aa; font-weight: bold; margin-top: 10px; padding: 10px;")
+        self.btn_open_editor.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_editor.clicked.connect(self.open_crosshair_editor)
+        layout.addWidget(self.btn_open_editor)
+
+    def open_crosshair_editor(self):
+        """Öffnet den neuen Crosshair Editor."""
+        self.editor_win = CrosshairEditorWindow()
+        # Verbinde das Signal: Wenn gespeichert, Pfad update
+        self.editor_win.crosshair_saved.connect(self.apply_generated_crosshair)
+        self.editor_win.showFullScreen()
+
+    def apply_generated_crosshair(self, filename):
+        """Callback wenn der Editor speichert."""
+        self.cross_path.setText(filename)
+        # Direktes Update triggern (via Signal oder direkt Controller falls vorhanden)
+        # Das setText triggert normalerweise nichts, wenn wir nicht explizit 'textChanged' connected haben
+        # Aber der Controller liest es beim 'Save' aus. Wir können 'Save' simulieren oder Controller notifyen.
+        if self.controller:
+            self.controller.update_crosshair_from_qt()
 
     def setup_streak_tab(self):
         layout = QVBoxLayout(self.tab_streak)
