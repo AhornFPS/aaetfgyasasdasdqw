@@ -42,7 +42,6 @@ PS2_EXP_DETECTION = {
     "Sunderer Spawn": ["233"],
     "Base Capture": ["19", "598"],
     "Break Construction": ["604", "616", "628"],
-    "Alert End": ["328"],
     "RoadKill": ["26"],
     "Domination": ["10"],
     "Revenge": ["11"],
@@ -144,8 +143,8 @@ class CensusWorker:
                     # SUBSCRIBE
                     msg = {
                         "service": "event", "action": "subscribe",
-                        "characters": ["all"], "worlds": ["all"],
-                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
+                        "characters": ["all"], "worlds": ["1","19","10","40"],
+                        "eventNames": ["Death","GainExperience","PlayerLogin","PlayerLogout","MetagameEvent"]
                     }
                     await websocket.send(json.dumps(msg))
                     self.c.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
@@ -578,11 +577,20 @@ class CensusWorker:
             # STATT Deaths abzuziehen, zählen wir Revives hoch
             # if r_obj["d"] > 0: r_obj["d"] -= 1
             r_obj["revives_received"] = r_obj.get("revives_received", 0) + 1
+        if exp_id in ["593"]:
+            print("Bounty Test 1")
+        if exp_id == "593":
+            print("Bounty Test 2")
+        if exp_id in ["26"]:
+            print("Roadkill Test 1")
+        if exp_id == "26":
+            print("Roadkill Test 2")
+
 
         # A) EVENTS DIE MIR PASSIEREN
         if my_id and other_id == my_id:
             if exp_id == "26":
-                self.c.trigger_overlay_event("Get Roadkilled")
+                self.c.trigger_overlay_event("Get RoadKilled")
 
             if exp_id in ["7", "53"]:
                 self.c.was_revived = True

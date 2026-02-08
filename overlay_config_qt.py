@@ -524,7 +524,7 @@ class OverlayConfigWindow(QWidget):
             "MULTI KILL": ["Double Kill", "Multi Kill", "Mega Kill", "Ultra Kill", "Monster Kill", "Ludicrous Kill",
                            "Holy Shit"],
             "SPECIAL": ["Bounty Kill", "Domination", "Revenge", "Infil Kill", "Killstreak Stop", "Nade Kill",
-                        "Knife Kill", "Max Kill", "RoadKill", "Get Roadkilled", "Spitfire Kill", "Gunner Kill"],
+                        "Knife Kill", "Max Kill", "RoadKill", "Get RoadKilled", "Spitfire Kill", "Gunner Kill"],
             "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction",
                         "Mine Kill"],
             "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Gunner Assist", "Alert End",
