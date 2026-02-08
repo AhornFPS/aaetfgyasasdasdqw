@@ -532,7 +532,7 @@ class DiorClientGUI:
             # Nur verstecken, wenn wir nicht gerade editieren
             if not getattr(self, "is_hud_editing", False):
                 # 1. Crosshair weg
-                self.overlay_win.crosshair_label.hide()
+                self.overlay_win.crosshair_container.hide()
 
                 # 2. Stats weg (NEU)
                 self.overlay_win.stats_container.hide()
@@ -2776,8 +2776,8 @@ class DiorClientGUI:
                 l.hide()
 
         # 4. Crosshair
-        if hasattr(self.overlay_win, 'crosshair_label'):
-            self.overlay_win.crosshair_label.hide()
+        if hasattr(self.overlay_win, 'crosshair_container'):
+            self.overlay_win.crosshair_container.hide()
 
     def stop_overlay_logic(self):
         """Versteckt alle Overlay-Elemente und RESETTET alle Daten/Zähler (z.B. bei Spiel-Ende)"""
@@ -2930,9 +2930,9 @@ class DiorClientGUI:
 
             # Crosshair nur bei Gameplay/Edit oder Stats-Test (nicht bei Streak-Test)
             if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active:
-                self.overlay_win.crosshair_label.show()
+                self.overlay_win.crosshair_container.show()
             else:
-                self.overlay_win.crosshair_label.hide()
+                self.overlay_win.crosshair_container.hide()
 
             # === C) KILLFEED ===
             feed_conf = self.config.get("killfeed", {})
@@ -3259,9 +3259,9 @@ class DiorClientGUI:
             if "crosshair" in targets:
                 # Sicherstellen, dass die aktuellen Settings geladen sind
                 self.update_crosshair_from_qt()
-                if hasattr(self.overlay_win, 'crosshair_label'):
-                    self.overlay_win.crosshair_label.show()
-                    self.overlay_win.crosshair_label.raise_()
+                if hasattr(self.overlay_win, 'crosshair_container'):
+                    self.overlay_win.crosshair_container.show()
+                    self.overlay_win.crosshair_container.raise_()
 
             self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
 

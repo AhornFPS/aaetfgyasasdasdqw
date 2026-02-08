@@ -264,9 +264,12 @@ class QtOverlay(QWidget):
         self.path_layer.hide()
 
         # 2. WIDGETS
-        self.crosshair_label = QLabel(self)
-        self.crosshair_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.crosshair_label.hide()
+        self.crosshair_container = QWidget(self)
+        self.crosshair_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.crosshair_container.hide()
+
+        self.crosshair_browser = DraggableChat(self.crosshair_container)
+        self.crosshair_browser.hide()
 
         self.stats_container = QWidget(self)
         self.stats_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -357,6 +360,7 @@ class QtOverlay(QWidget):
         self.update_twitch_browser_content()
         self.update_feed_browser_content()
         self.update_stats_browser_content()
+        self.update_crosshair_browser_content()
 
         self.auto_hide_timer = QTimer(self)
         self.auto_hide_timer.setSingleShot(True)
@@ -612,6 +616,41 @@ class QtOverlay(QWidget):
         base_url = QUrl.fromLocalFile(os.path.abspath("."))
         self.stats_browser.setHtml(template, base_url)
         self.stats_browser.show()
+
+    def update_crosshair_browser_content(self):
+        """Initialisiert oder resettet den Crosshair-Browser."""
+        template = """
+        <html>
+        <head>
+            <style>
+                body {
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                    background: transparent;
+                }
+                #crosshair-img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    display: block;
+                }
+            </style>
+        </head>
+        <body>
+            <img id="crosshair-img" src="" />
+            <script>
+                function setCrosshair(src) {
+                    const img = document.getElementById('crosshair-img');
+                    img.src = src || '';
+                }
+            </script>
+        </body>
+        </html>
+        """
+        base_url = QUrl.fromLocalFile(os.path.abspath("."))
+        self.crosshair_browser.setHtml(template, base_url)
+        self.crosshair_browser.show()
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
         # 1. Sichtbarkeit prüfen
@@ -1031,8 +1070,10 @@ class QtOverlay(QWidget):
                         self.streak_bg_label.adjustSize()
 
                 if "crosshair" in targets:
-                    self.crosshair_label.setStyleSheet(hl_style)
-                    self.crosshair_label.show()
+                    self.crosshair_container.setStyleSheet(hl_style)
+                    if self.crosshair_container.width() == 0 or self.crosshair_container.height() == 0:
+                        self.crosshair_container.resize(int(64 * self.ui_scale), int(64 * self.ui_scale))
+                    self.crosshair_container.show()
 
                 if "event" in targets:
                     if hasattr(self, 'event_preview_label'):
@@ -1070,7 +1111,7 @@ class QtOverlay(QWidget):
         elif target == "streak":
             widget = self.streak_bg_label
         elif target == "crosshair":
-            widget = self.crosshair_label
+            widget = self.crosshair_container
         elif target == "twitch":
             widget = self.twitch_drag_cover
 
@@ -1119,8 +1160,8 @@ class QtOverlay(QWidget):
                 self.streak_bg_label.setText("")
 
         # Crosshair
-        if hasattr(self, 'crosshair_label'):
-            self.crosshair_label.setStyleSheet("background: transparent;")
+        if hasattr(self, 'crosshair_container'):
+            self.crosshair_container.setStyleSheet("background: transparent;")
 
         # Event Preview
         if hasattr(self, 'event_preview_label'):
@@ -1144,9 +1185,9 @@ class QtOverlay(QWidget):
         elif "border" in self.streak_bg_label.styleSheet() and self.streak_bg_label.geometry().contains(pos):
             self.dragging_widget = "streak"
             self.drag_offset = pos - self.streak_bg_label.pos()
-        elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
+        elif "border" in self.crosshair_container.styleSheet() and self.crosshair_container.geometry().contains(pos):
             self.dragging_widget = "crosshair"
-            self.drag_offset = pos - self.crosshair_label.pos()
+            self.drag_offset = pos - self.crosshair_container.pos()
         elif self.twitch_drag_cover.isVisible() and self.twitch_drag_cover.geometry().contains(pos):
             self.dragging_widget = "twitch"
             self.drag_offset = pos - self.twitch_drag_cover.pos()
@@ -1162,7 +1203,7 @@ class QtOverlay(QWidget):
             self.safe_move(self.feed_container, new_pos.x(), new_pos.y())
             self.update_edit_mask(["feed"])
         elif self.dragging_widget == "crosshair":
-            self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
+            self.safe_move(self.crosshair_container, new_pos.x(), new_pos.y())
             self.update_edit_mask(["crosshair"])
         elif self.dragging_widget == "stats":
             self.safe_move(self.stats_container, new_pos.x(), new_pos.y())
@@ -1201,9 +1242,9 @@ class QtOverlay(QWidget):
                 self.gui_ref.config["events"][ename]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
             elif self.dragging_widget == "crosshair":
-                curr = self.crosshair_label.pos()
-                center_x = curr.x() + (self.crosshair_label.width() / 2)
-                center_y = curr.y() + (self.crosshair_label.height() / 2)
+                curr = self.crosshair_container.pos()
+                center_x = curr.x() + (self.crosshair_container.width() / 2)
+                center_y = curr.y() + (self.crosshair_container.height() / 2)
                 if "crosshair" not in self.gui_ref.config: self.gui_ref.config["crosshair"] = {}
                 self.gui_ref.config["crosshair"]["x"] = uns(center_x)
                 self.gui_ref.config["crosshair"]["y"] = uns(center_y)
@@ -1533,26 +1574,28 @@ class QtOverlay(QWidget):
 
     def update_crosshair(self, path, size, enabled):
         if (not enabled and not self.edit_mode) or not os.path.exists(path):
-            self.crosshair_label.hide();
+            self.crosshair_container.hide();
             return
 
-        # --- CACHE GENUTZT ---
-        pix = self.get_cached_pixmap(path)
-        if not pix.isNull():
-            pix = pix.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.crosshair_label.setPixmap(pix);
-            self.crosshair_label.adjustSize()
-            tx, ty = 0, 0
-            if self.gui_ref:
-                c = self.gui_ref.config.get("crosshair", {})
-                rx, ry = c.get("x", 0), c.get("y", 0)
-                if rx == 0 and ry == 0:
-                    tx, ty = self.width() // 2, self.height() // 2
-                else:
-                    tx, ty = self.s(rx), self.s(ry)
-            self.safe_move(self.crosshair_label, tx - (self.crosshair_label.width() // 2),
-                           ty - (self.crosshair_label.height() // 2))
-            self.crosshair_label.show()
+        tx, ty = 0, 0
+        if self.gui_ref:
+            c = self.gui_ref.config.get("crosshair", {})
+            rx, ry = c.get("x", 0), c.get("y", 0)
+            if rx == 0 and ry == 0:
+                tx, ty = self.width() // 2, self.height() // 2
+            else:
+                tx, ty = self.s(rx), self.s(ry)
+
+        self.crosshair_container.setGeometry(
+            int(tx - (size // 2)),
+            int(ty - (size // 2)),
+            int(size),
+            int(size),
+        )
+        self.crosshair_browser.setGeometry(self.crosshair_container.rect())
+        src = QUrl.fromLocalFile(path).toString()
+        self.crosshair_browser.page().runJavaScript(f"setCrosshair({json.dumps(src)})")
+        self.crosshair_container.show()
 
     def update_twitch_visibility(self, enabled):
         """Entscheidet, ob der Chat-Container wirklich sichtbar sein darf."""
