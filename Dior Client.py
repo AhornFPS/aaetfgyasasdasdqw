@@ -2790,48 +2790,62 @@ class DiorClientGUI:
 
 
 
+    def hide_overlay_temporary(self):
+        """Versteckt alle Overlay-Elemente ohne Daten zu löschen (z.B. für Alt-Tab)"""
+        if not self.overlay_win: return
+
+        # 1. Stats Widget
+        if hasattr(self.overlay_win, 'stats_bg_label'):
+            self.overlay_win.stats_bg_label.hide()
+            self.overlay_win.stats_text_label.hide()
+
+        # 2. Killfeed
+        if hasattr(self.overlay_win, 'feed_label'):
+            self.overlay_win.feed_label.hide()
+
+        # 3. Killstreak
+        if hasattr(self.overlay_win, 'streak_bg_label'):
+            self.overlay_win.streak_bg_label.hide()
+        if hasattr(self.overlay_win, 'streak_text_label'):
+            self.overlay_win.streak_text_label.hide()
+        if hasattr(self.overlay_win, 'knife_labels'):
+            for l in self.overlay_win.knife_labels:
+                l.hide()
+
+        # 4. Crosshair
+        if hasattr(self.overlay_win, 'crosshair_label'):
+            self.overlay_win.crosshair_label.hide()
+
     def stop_overlay_logic(self):
-        """Versteckt alle Overlay-Elemente (Stats, Crosshair, Feed, Streak)"""
+        """Versteckt alle Overlay-Elemente und RESETTET alle Daten/Zähler (z.B. bei Spiel-Ende)"""
 
-        if self.overlay_win:
-            # 1. Stats Widget verstecken
-            if hasattr(self.overlay_win, 'stats_bg_label'):
-                self.overlay_win.stats_bg_label.hide()
-                self.overlay_win.stats_text_label.hide()
+        # Erst alles verstecken
+        self.hide_overlay_temporary()
 
-            # 2. Killfeed verstecken & leeren
-            if hasattr(self.overlay_win, 'feed_label'):
-                self.overlay_win.feed_label.hide()
-                self.overlay_win.feed_label.setText("")
+        # Dann Killfeed-Text leeren (harter Reset)
+        if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
+            self.overlay_win.feed_label.setText("")
 
-            # 3. Killstreak komplett aufräumen
-            if hasattr(self.overlay_win, 'streak_bg_label'):
-                self.overlay_win.streak_bg_label.hide()
-            if hasattr(self.overlay_win, 'streak_text_label'):
-                self.overlay_win.streak_text_label.hide()
-            # Alle Messer-Labels verstecken
-            if hasattr(self.overlay_win, 'knife_labels'):
-                for l in self.overlay_win.knife_labels:
-                    l.hide()
-                    l._is_active = False
-
-            # --- NEU: Crosshair explizit verstecken ---
-            # Das sorgt dafür, dass es sofort weg ist, wenn Overlay gestoppt wird
-            if hasattr(self.overlay_win, 'crosshair_label'):
-                self.overlay_win.crosshair_label.hide()
-
-        # Zähler  resetten
+        # Zähler resetten
         self.killstreak_count = 0
         self.kill_counter = 0
         self.streak_factions = []
         self.streak_slot_map = []
+
+        # Messer-Status im Overlay resetten
+        if self.overlay_win and hasattr(self.overlay_win, 'knife_labels'):
+            for l in self.overlay_win.knife_labels:
+                l._is_active = False
 
         # WICHTIG: Das Overlay über den neuen Stand (0) informieren
         self.update_streak_display()
 
         # 4. Status im GUI updaten
         if hasattr(self, 'ovl_status_label'):
-            self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
+            try:
+                self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
+            except:
+                pass
 
     def refresh_ingame_overlay(self):
         """Der Herzschlag des Overlays: Steuert Sichtbarkeit mit Priorität für Test/Edit."""
@@ -2851,6 +2865,12 @@ class DiorClientGUI:
         edit_active = getattr(self, 'is_hud_editing', False)
         game_focused = self.is_game_focused()
 
+        # --- NEU: Fokus-Wechsel erkennen für automatisches Refresh ---
+        was_focused = getattr(self, "_last_focus_state", True)
+        self._last_focus_state = game_focused
+        focus_regained = game_focused and not was_focused
+        focus_lost = not game_focused and was_focused
+
         # ---------------------------------------------------------
         # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
         # ---------------------------------------------------------
@@ -2868,6 +2888,19 @@ class DiorClientGUI:
         # ELEMENT-STEUERUNG
         # ---------------------------------------------------------
         if should_render:
+            # Wenn wir gerade wieder Fokus bekommen haben: Positionen auffrischen
+            if focus_regained:
+                if self.overlay_win:
+                    # FIX: Wenn wir im Spiel sind, müssen die Edit-Rahmen weg!
+                    if edit_active:
+                        self.overlay_win.set_mouse_passthrough(True)
+                    self.overlay_win.update_killfeed_pos()
+                self.update_streak_display()
+
+            # Wenn wir im Edit-Modus sind und den Fokus VERLIEREN (zum Client zurück), Edit wieder an
+            if focus_lost and edit_active:
+                if self.overlay_win:
+                    self.overlay_win.set_mouse_passthrough(False, active_targets=getattr(self, "current_edit_targets", []))
             # === A) STATS WIDGET ===
             stats_cfg_raw = self.config.get("stats_widget", {})
             stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
@@ -2979,7 +3012,11 @@ class DiorClientGUI:
 
         else:
             # ALLES VERSTECKEN (Spiel aus / kein Fokus / kein Test)
-            self.stop_overlay_logic()
+            if not game_running or not master_switch:
+                self.stop_overlay_logic()
+            else:
+                # Nur temporär verstecken (z.B. Alt-Tab), aber Daten behalten
+                self.hide_overlay_temporary()
 
 
 

@@ -809,6 +809,9 @@ class QtOverlay(QWidget):
         """
         # 1. Qt Flags setzen (Dies kann das Fenster zerstören und neu erstellen!)
         if enabled:
+            # 0. Erst Visuals säubern
+            self.clear_edit_visuals()
+
             # Normaler Overlay-Modus (Klicks gehen durch)
             self.edit_mode = False
             self.setWindowFlags(
@@ -894,6 +897,34 @@ class QtOverlay(QWidget):
 
         except Exception as e:
             print(f"Passthrough Error: {e}")
+
+    def clear_edit_visuals(self):
+        """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
+        # Stats
+        if hasattr(self, 'stats_bg_label'):
+            self.stats_bg_label.setStyleSheet("background: transparent;")
+        
+        # Killfeed
+        if hasattr(self, 'feed_label'):
+            self.feed_label.setStyleSheet("background: transparent;")
+            # Falls nur Dummy-Text drin war, leeren (optional, aber sauberer)
+            if "DRAG AREA" in self.feed_label.text():
+                self.feed_label.setText("")
+        
+        # Streak
+        if hasattr(self, 'streak_bg_label'):
+            self.streak_bg_label.setStyleSheet("background: transparent;")
+            if "STREAK AREA" in self.streak_bg_label.text():
+                self.streak_bg_label.setText("")
+
+        # Crosshair
+        if hasattr(self, 'crosshair_label'):
+            self.crosshair_label.setStyleSheet("background: transparent;")
+
+        # Event Preview
+        if hasattr(self, 'event_preview_label'):
+            self.event_preview_label.setStyleSheet("background: transparent;")
+            self.event_preview_label.hide()
 
     # --- MOUSE EVENTS (DRAG & DROP) ---
     def mousePressEvent(self, event):
