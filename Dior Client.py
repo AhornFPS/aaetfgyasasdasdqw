@@ -693,6 +693,7 @@ class DiorClientGUI:
         # 1. Rohdaten aus UI
         is_active = ui.check_cross.isChecked()
         raw_text = ui.cross_path.text().strip()
+        shadow_enabled = ui.btn_toggle_cross_shadow.isChecked()
 
         # 2. Bereinigen: Wir wollen nur den Dateinamen speichern!
         # Falls der User einen vollen Pfad reinkopiert hat, schneiden wir ihn ab.
@@ -708,6 +709,8 @@ class DiorClientGUI:
 
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = filename  # Nur der Name!
+        self.config["crosshair"]["shadow"] = shadow_enabled
+        self.update_crosshair_shadow_button(shadow_enabled)
 
         # Speichern
         self.save_config()
@@ -723,6 +726,17 @@ class DiorClientGUI:
 
             current_size = self.config["crosshair"].get("size", 32)
             self.overlay_win.update_crosshair(full_path, current_size, should_show)
+
+    def update_crosshair_shadow_button(self, enabled):
+        ui = self.ovl_config_win
+        if enabled:
+            ui.btn_toggle_cross_shadow.setText("CROSSHAIR SHADOW: ON")
+            ui.btn_toggle_cross_shadow.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600;")
+        else:
+            ui.btn_toggle_cross_shadow.setText("CROSSHAIR SHADOW: OFF")
+            ui.btn_toggle_cross_shadow.setStyleSheet(
+                "background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000;")
 
     def center_crosshair_qt(self):
         """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
@@ -939,6 +953,7 @@ class DiorClientGUI:
         # Checkbox & Textfeld Änderung -> Sofort speichern
         self.safe_connect(ui.check_cross.toggled, self.update_crosshair_from_qt)
         self.safe_connect(ui.cross_path.textChanged, self.update_crosshair_from_qt)
+        self.safe_connect(ui.btn_toggle_cross_shadow.toggled, self.update_crosshair_from_qt)
 
         # Browse
         try:
@@ -1721,6 +1736,11 @@ class DiorClientGUI:
         saved_file = c_conf.get("file", "")
         if not saved_file: saved_file = "crosshair.png"
         ui.cross_path.setText(saved_file)
+        shadow_enabled = c_conf.get("shadow", False)
+        ui.btn_toggle_cross_shadow.blockSignals(True)
+        ui.btn_toggle_cross_shadow.setChecked(shadow_enabled)
+        self.update_crosshair_shadow_button(shadow_enabled)
+        ui.btn_toggle_cross_shadow.blockSignals(False)
         ui.check_cross.blockSignals(False)
         ui.cross_path.blockSignals(False)
 
@@ -2131,6 +2151,7 @@ class DiorClientGUI:
         # 1. Werte aus der GUI lesen
         is_active = ui.check_cross.isChecked()
         file_path = ui.cross_path.text().strip()
+        shadow_enabled = ui.btn_toggle_cross_shadow.isChecked()
 
         # 2. Config Dictionary vorbereiten, falls nicht existent
         if "crosshair" not in self.config:
@@ -2139,6 +2160,8 @@ class DiorClientGUI:
         # 3. Werte aktualisieren (alte Werte wie Größe/Position beibehalten)
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = file_path
+        self.config["crosshair"]["shadow"] = shadow_enabled
+        self.update_crosshair_shadow_button(shadow_enabled)
 
         # Fallback für Größe, falls noch nicht gesetzt
         if "size" not in self.config["crosshair"]:
@@ -2243,7 +2266,7 @@ class DiorClientGUI:
         default_conf = {
             "ps2_path": "",
             "overlay_master_active": True,
-            "crosshair": {"file": "crosshair.png", "size": 32, "active": True},
+            "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
             "stats_widget": {"active": True},
