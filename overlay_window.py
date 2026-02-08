@@ -1471,8 +1471,8 @@ class QtOverlay(QWidget):
                     shadow = QGraphicsDropShadowEffect()
                     shadow.setBlurRadius(6 * self.ui_scale)
                     shadow.setColor(QColor(0, 0, 0, 220))
-                    shadow.setXOffset(1 * self.ui_scale)
-                    shadow.setYOffset(1 * self.ui_scale)
+                    shadow.setXOffset(0)
+                    shadow.setYOffset(0)
                     self.crosshair_label.setGraphicsEffect(shadow)
                 else:
                     self.crosshair_label.setGraphicsEffect(None)
