@@ -590,27 +590,41 @@ class DiorClientGUI:
                 # self.overlay_win.hide()
 
     def is_game_focused(self):
-        """Prüft, ob das aktive Fenster PlanetSide 2 ist (robust gegen Schreibweisen)."""
+        """Prüft, ob das aktive Fenster PlanetSide2 ist."""
         try:
             # 1. Handle des aktuellen Vordergrund-Fensters holen
             hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return False
 
-            # 2. Länge des Titels ermitteln
+            # 2. Prozessname ermitteln (Planetside2.exe)
+            pid = ctypes.c_ulong()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value:
+                PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+                PROCESS_VM_READ = 0x0010
+                h_process = ctypes.windll.kernel32.OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, False, pid.value
+                )
+                if h_process:
+                    buf = ctypes.create_unicode_buffer(512)
+                    if ctypes.windll.psapi.GetModuleFileNameExW(h_process, None, buf, len(buf)):
+                        exe_name = os.path.basename(buf.value).lower()
+                        ctypes.windll.kernel32.CloseHandle(h_process)
+                        if "planetside2" in exe_name:
+                            return True
+                    ctypes.windll.kernel32.CloseHandle(h_process)
+
+            # 3. Fallback: Fenster-Titel prüfen
             length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
             if length == 0:
                 return False
 
-            # 3. Puffer erstellen und Titel auslesen
             buff = ctypes.create_unicode_buffer(length + 1)
             ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
 
-            # 4. Titel normalisieren (alles kleinschreiben)
-            window_title = buff.value.lower()
-            normalized_title = window_title.replace(" ", "")
-
-            # Wir suchen nach "planetside", das deckt:
-            # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
-            if "planetside2" in normalized_title:
+            window_title = buff.value.lower().replace(" ", "")
+            if "planetside2" in window_title:
                 return True
 
             return False
