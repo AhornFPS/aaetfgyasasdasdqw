@@ -199,13 +199,22 @@ class TwitchWorker(QObject):
     new_message = pyqtSignal(str, str, str)
     status_changed = pyqtSignal(str)
 
-    def __init__(self, channel, ignore_list=None):
+    def __init__(self, channel, ignore_list=None, ignore_special=False):
         super().__init__()
         self.channel = channel.lower().strip().replace("#", "")
         self.ignore_list = [n.lower() for n in ignore_list] if ignore_list else []
+        self.ignore_special = ignore_special
         self.running = False
         self.sock = None
         self.emote_mgr = EmoteManager()
+
+    def stop(self):
+        self.running = False
+        if self.sock:
+            try:
+                self.sock.close()
+            except:
+                pass
 
     def run(self):
         self.running = True
@@ -271,6 +280,10 @@ class TwitchWorker(QObject):
 
                                 # --- IGNORE CHECK (Login-Name prüfen ist sicherer) ---
                                 if raw_user in self.ignore_list:
+                                    continue
+                                
+                                # --- SPECIAL CHAR CHECK ---
+                                if self.ignore_special and raw_msg.startswith("!"):
                                     continue
 
                                 # 1. Nachricht in HTML umwandeln

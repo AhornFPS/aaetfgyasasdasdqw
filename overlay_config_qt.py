@@ -1291,6 +1291,15 @@ class OverlayConfigWindow(QWidget):
         self.ent_twitch_ignore.setPlaceholderText("e.g. Nightbot, StreamElements, user123...")
         i_layout.addWidget(self.ent_twitch_ignore)
 
+        # NEW: Ignore special characters
+        self.btn_twitch_ignore_special = QPushButton("IGNORE SPECIAL CHARS (!): OFF")
+        self.btn_twitch_ignore_special.setCheckable(True)
+        self.btn_twitch_ignore_special.setFixedHeight(30)
+        self.btn_twitch_ignore_special.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_twitch_ignore_special.setStyleSheet(
+            "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+        i_layout.addWidget(self.btn_twitch_ignore_special)
+
         layout.addWidget(ignore_group)
 
         # --- 3. APPEARANCE & POSITION ---

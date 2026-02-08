@@ -634,6 +634,25 @@ class DiorClientGUI:
             active = self.config["twitch"].get("active", True)
             self.overlay_win.update_twitch_visibility(active)
 
+    def toggle_twitch_ignore_special(self, checked):
+        ui = self.ovl_config_win
+        if "twitch" not in self.config: self.config["twitch"] = {}
+        self.config["twitch"]["ignore_special"] = checked
+        self.save_config()
+
+        if checked:
+            ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): ON")
+            ui.btn_twitch_ignore_special.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): OFF")
+            ui.btn_twitch_ignore_special.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
+
+        # Sofort an den Worker weitergeben
+        if hasattr(self, 'twitch_worker') and self.twitch_worker:
+            self.twitch_worker.ignore_special = checked
+
     # --- CROSSHAIR LOGIK (NEU) ---
     def browse_crosshair_qt(self):
         """Datei auswählen, kopieren und Textfeld setzen."""
@@ -1005,6 +1024,9 @@ class DiorClientGUI:
         #allways on
         self.safe_connect(ui.btn_twitch_always.toggled, self.toggle_twitch_always)
 
+        # Ignore special (!)
+        self.safe_connect(ui.btn_twitch_ignore_special.toggled, self.toggle_twitch_ignore_special)
+
         # MOVE UI Button
         # Wir machen daraus einen Toggle: Einmal klicken = Sichtbar machen, nochmal = Normal
         #self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_twitch_edit_mode)
@@ -1093,7 +1115,7 @@ class DiorClientGUI:
 
         # 2. Den NEUEN Worker erstellen
         # WICHTIG: Die ignore_list wird hier als Argument übergeben!
-        self.twitch_worker = TwitchWorker(channel, ignore_list=ignore_list)
+        self.twitch_worker = TwitchWorker(channel, ignore_list=ignore_list, ignore_special=ui.btn_twitch_ignore_special.isChecked())
 
         # 3. Signale verbinden (Im Haupt-Thread!)
         # Wir nutzen die Methode on_new_twitch_msg, die wir vorhin korrigiert haben
@@ -1152,6 +1174,7 @@ class DiorClientGUI:
             "active": ui.btn_toggle_twitch.isChecked(),
             "channel": ui.ent_twitch_channel.text().strip(),
             "ignore_list": ui.ent_twitch_ignore.text().strip(),
+            "ignore_special": ui.btn_twitch_ignore_special.isChecked(), # NEU
             "always_on": ui.btn_twitch_always.isChecked(),
             "x": ui.slider_twitch_x.value(),
             "y": ui.slider_twitch_y.value(),
@@ -1170,11 +1193,15 @@ class DiorClientGUI:
         # 1. Hold Time im Overlay setzen
         if hasattr(self.overlay_win, 'set_chat_hold_time'):
             self.overlay_win.set_chat_hold_time(data["hold_time"])
+            
+        # 2. Falls ein Worker läuft, diesen sofort updaten
+        if hasattr(self, 'twitch_worker') and self.twitch_worker:
+            self.twitch_worker.ignore_special = data["ignore_special"]
 
-        # 2. Visuelle Darstellung (Position, Opacity, Font) aktualisieren
+        # 3. Visuelle Darstellung (Position, Opacity, Font) aktualisieren
         # Das triggert die neue update_twitch_style Methode im Overlay
         self.update_twitch_visuals()
-        self.add_log("TWITCH: Settings saved (including Always On).")
+        self.add_log("TWITCH: Settings saved.")
 
     def browse_ps2_folder(self):
         """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
@@ -1814,6 +1841,19 @@ class DiorClientGUI:
         else:
             ui.btn_twitch_always.setText("PLANETSIDE")
             ui.btn_twitch_always.setStyleSheet("background-color: #440000; color: white; font-weight: bold;")
+
+        # IGNORE SPECIAL
+        is_ignore_special = twitch_conf.get("ignore_special", False)
+        ui.btn_twitch_ignore_special.blockSignals(True)
+        ui.btn_twitch_ignore_special.setChecked(is_ignore_special)
+        ui.btn_twitch_ignore_special.blockSignals(False)
+
+        if is_ignore_special:
+            ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): ON")
+            ui.btn_twitch_ignore_special.setStyleSheet("background-color: #004400; color: white; font-weight: bold; border-radius: 4px;")
+        else:
+            ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): OFF")
+            ui.btn_twitch_ignore_special.setStyleSheet("background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
 
         # 3. Font
         current_font = str(twitch_conf.get("font_size", 12))
