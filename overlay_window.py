@@ -1100,25 +1100,29 @@ class QtOverlay(QWidget):
             self.clearMask()
             return
 
-        target = targets[0]
-        widget = None
-        if target == "event":
-            widget = self.event_preview_label
-        elif target == "feed":
-            widget = self.feed_container
-        elif target == "stats":
-            widget = self.stats_container
-        elif target == "streak":
-            widget = self.streak_bg_label
-        elif target == "crosshair":
-            widget = self.crosshair_container
-        elif target == "twitch":
-            widget = self.twitch_drag_cover
+        regions = QRegion()
+        for target in targets:
+            widget = None
+            if target == "event":
+                widget = self.event_preview_label
+            elif target == "feed":
+                widget = self.feed_container
+            elif target == "stats":
+                widget = self.stats_container
+            elif target == "streak":
+                widget = self.streak_bg_label
+            elif target == "crosshair":
+                widget = self.crosshair_container
+            elif target == "twitch":
+                widget = self.twitch_drag_cover
 
-        if widget and widget.isVisible():
-            self.setMask(QRegion(widget.geometry()))
-        else:
+            if widget and widget.isVisible():
+                regions = regions.united(QRegion(widget.geometry()))
+
+        if regions.isEmpty():
             self.clearMask()
+        else:
+            self.setMask(regions)
 
     def clear_edit_visuals(self):
         """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
