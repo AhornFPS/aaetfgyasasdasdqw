@@ -2921,9 +2921,28 @@ class DiorClientGUI:
                     """
 
                 raw_name = stats_cfg.get("img", "").strip()
-                self.overlay_win.set_stats_html(html, get_asset_path(raw_name) if raw_name else "")
+                bg_path = get_asset_path(raw_name) if raw_name else ""
+                last_html = getattr(self, "_last_stats_html", None)
+                last_bg = getattr(self, "_last_stats_bg", None)
+                last_ts = getattr(self, "_last_stats_update_ts", 0.0)
+                now = time.time()
+                should_update = (
+                    stats_editing
+                    or stats_test_active
+                    or html != last_html
+                    or bg_path != last_bg
+                    or (now - last_ts) >= 2.0
+                )
+
+                if should_update:
+                    self.overlay_win.set_stats_html(html, bg_path)
+                    self._last_stats_html = html
+                    self._last_stats_bg = bg_path
+                    self._last_stats_update_ts = now
+                    self.update_stats_position_safe()
+                elif focus_regained:
+                    self.update_stats_position_safe()
                 self.overlay_win.stats_container.show()
-                self.update_stats_position_safe()
             else:
                 self.overlay_win.stats_container.hide()
 
