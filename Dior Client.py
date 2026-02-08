@@ -2164,6 +2164,12 @@ class DiorClientGUI:
         if "size" not in self.config["crosshair"]:
             self.config["crosshair"]["size"] = 32
 
+        # NEU: Size Slider auslesen (WICHTIG: Wiederhergestellt)
+        size_val = self.config["crosshair"]["size"]
+        if hasattr(ui, 'slider_cross_size'):
+            size_val = ui.slider_cross_size.value()
+            self.config["crosshair"]["size"] = size_val
+
         # 4. In datei speichern
         self.save_config()
 
