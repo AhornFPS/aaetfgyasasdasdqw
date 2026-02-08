@@ -440,8 +440,11 @@ class DiorClientGUI:
         bg_y = self.overlay_win.s(y_conf)
 
         width, height = self.overlay_win.last_stats_size
-        self.overlay_win.stats_container.setGeometry(bg_x, bg_y, width, height)
-        self.overlay_win.stats_browser.setGeometry(self.overlay_win.stats_container.rect())
+        geometry = (int(bg_x), int(bg_y), int(width), int(height))
+        if geometry != self.overlay_win.last_stats_geometry:
+            self.overlay_win.stats_container.setGeometry(*geometry)
+            self.overlay_win.stats_browser.setGeometry(self.overlay_win.stats_container.rect())
+            self.overlay_win.last_stats_geometry = geometry
         self.overlay_win.stats_container.raise_()
 
     def update_main_config_from_settings(self, data):
