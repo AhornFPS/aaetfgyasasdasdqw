@@ -427,6 +427,10 @@ class DiorClientGUI:
     def update_stats_position_safe(self):
         """Berechnet die Position des Stats-Widgets sicher und konsistent."""
         if not self.overlay_win: return
+        
+        # Guard: Wenn wir gerade ziehen, darf der Loop die Position NICHT überschreiben!
+        if getattr(self.overlay_win, "dragging_widget", None) == "stats":
+            return
 
         # 1. Config laden
         cfg = self.config.get("stats_widget", {})
@@ -3312,6 +3316,8 @@ class DiorClientGUI:
                     self.overlay_win.crosshair_label.show()
                     self.overlay_win.crosshair_label.raise_()
 
+            # Refresh mask one last time after all dummy data is set
+            self.overlay_win.update_edit_mask(targets)
             self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
 
         else:
