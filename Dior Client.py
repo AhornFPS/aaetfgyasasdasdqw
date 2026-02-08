@@ -2909,7 +2909,7 @@ class DiorClientGUI:
 
                     kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
                     html = f"""
-                    <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
+                    <div style="font-family: 'Black Ops One', sans-serif; font-weight: 500; color: #00f2ff; 
                                 text-shadow: 1px 1px 2px #000; text-align: center; font-size: {f_size}px; white-space: nowrap;">
                         KD: <span style="color: {kd_col};">{kd:.2f}</span> &nbsp;&nbsp;
                         K: <span style="color: white;">{kills}</span> &nbsp;&nbsp;
@@ -2931,7 +2931,6 @@ class DiorClientGUI:
                     or stats_test_active
                     or html != last_html
                     or bg_path != last_bg
-                    or (now - last_ts) >= 2.0
                 )
 
                 if should_update:

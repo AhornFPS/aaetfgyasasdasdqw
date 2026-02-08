@@ -609,8 +609,8 @@ class QtOverlay(QWidget):
                     box-sizing: border-box;
                 }
                 #stats-content {
-                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
-                    font-weight: 800;
+                    text-shadow: 1px 1px 2px #000;
+                    font-weight: 500;
                 }
             </style>
         </head>
@@ -1649,9 +1649,16 @@ class QtOverlay(QWidget):
 
                 # Text/Zahl wird IMMER gezeichnet (außerhalb des if-Blocks)
                 fc, fs, sh = cfg.get("color", "#fff"), cfg.get("size", 26), int(cfg.get("shadow_size", 0))
-                stl = [f"font-family: 'Black Ops One';", f"font-size: {int(fs * sc)}px;", f"color: {fc};"]
-                if sh > 0: stl.append(f"text-shadow: {int(sh * sc)}px {int(sh * sc)}px 0 #000;")
-                if cfg.get("bold"): stl.append("font-weight: bold;")
+                stl = [
+                    "font-family: 'Black Ops One';",
+                    f"font-size: {int(fs * sc)}px;",
+                    f"color: {fc};",
+                    "font-weight: 500;",
+                ]
+                if sh > 0:
+                    stl.append(f"text-shadow: {int(sh * sc)}px {int(sh * sc)}px 0 #000;")
+                if cfg.get("bold"):
+                    stl.append("font-weight: 700;")
                 if cfg.get("underline"): stl.append("text-decoration: underline;")
                 self.streak_text_label.setText(f'<div style="{" ".join(stl)}">{cnt}</div>')
                 self.streak_text_label.adjustSize()
