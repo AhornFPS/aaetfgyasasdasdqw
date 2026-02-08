@@ -3203,6 +3203,10 @@ class DiorClientGUI:
 
             # ZWINGE das Config-Fenster nach oben, damit man den "Stop Edit" Button immer klicken kann!
             # Wir machen das NACHDEM das Overlay handle neu erstellt wurde
+            self.ovl_config_win.setWindowFlags(
+                self.ovl_config_win.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+            )
+            self.ovl_config_win.show()
             self.ovl_config_win.raise_()
             self.ovl_config_win.activateWindow()
 
@@ -3322,6 +3326,7 @@ class DiorClientGUI:
 
             # 1. Overlay wieder durchlässig machen
             self.overlay_win.set_mouse_passthrough(True)
+            self.overlay_win.clear_edit_visuals()
 
             # 2. Buttons zurücksetzen
             for btn in btn_list:

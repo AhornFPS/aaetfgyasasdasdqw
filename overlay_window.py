@@ -968,7 +968,7 @@ class QtOverlay(QWidget):
         """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
         # Stats
         if hasattr(self, 'stats_bg_label'):
-            self.stats_bg_label.setStyleSheet("background: transparent;")
+            self.stats_bg_label.setStyleSheet("")
         
         # Twitch
         if hasattr(self, 'chat_container'):
@@ -993,24 +993,24 @@ class QtOverlay(QWidget):
         
         # Killfeed
         if hasattr(self, 'feed_label'):
-            self.feed_label.setStyleSheet("background: transparent;")
+            self.feed_label.setStyleSheet("")
             # Falls nur Dummy-Text drin war, leeren (optional, aber sauberer)
             if "DRAG AREA" in self.feed_label.text():
                 self.feed_label.setText("")
         
         # Streak
         if hasattr(self, 'streak_bg_label'):
-            self.streak_bg_label.setStyleSheet("background: transparent;")
+            self.streak_bg_label.setStyleSheet("")
             if "STREAK AREA" in self.streak_bg_label.text():
                 self.streak_bg_label.setText("")
 
         # Crosshair
         if hasattr(self, 'crosshair_label'):
-            self.crosshair_label.setStyleSheet("background: transparent;")
+            self.crosshair_label.setStyleSheet("")
 
         # Event Preview
         if hasattr(self, 'event_preview_label'):
-            self.event_preview_label.setStyleSheet("background: transparent;")
+            self.event_preview_label.setStyleSheet("")
             self.event_preview_label.hide()
 
     # --- MOUSE EVENTS (DRAG & DROP) ---
