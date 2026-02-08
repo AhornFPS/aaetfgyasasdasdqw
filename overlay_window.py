@@ -346,6 +346,7 @@ class QtOverlay(QWidget):
             "bg": "",
             "offset_x": None,
             "offset_y": None,
+            "align": "center",
         }
         self.last_stats_geometry = None
         self.pending_stats_resize = False
@@ -620,10 +621,16 @@ class QtOverlay(QWidget):
             </div>
             <script>
                 let currentBgUrl = '';
-                function setStatsContent(html, offsetX, offsetY) {
+                function setStatsContent(html, offsetX, offsetY, align) {
                     const content = document.getElementById('stats-content');
+                    const container = document.getElementById('stats-container');
                     content.innerHTML = html || '';
                     content.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                    if (align === 'top') {
+                        container.style.justifyContent = 'flex-start';
+                    } else {
+                        container.style.justifyContent = 'center';
+                    }
                 }
                 function setStatsBackground(bgUrl) {
                     const container = document.getElementById('stats-container');
@@ -1430,7 +1437,8 @@ class QtOverlay(QWidget):
             cfg = self.gui_ref.config.get("stats_widget", {})
         sc = cfg.get("scale", 1.0) * self.ui_scale
 
-        padding = int(12 * self.ui_scale)
+        f_size = int(cfg.get("font_size", 22))
+        padding = int(max(6, f_size * 0.4) * self.ui_scale)
         width = int(600 * self.ui_scale)
         height = int(60 * self.ui_scale)
         bg_url = ""
@@ -1477,10 +1485,12 @@ class QtOverlay(QWidget):
         self.stats_container.show()
         offset_x = self.s(tx_off)
         offset_y = self.s(ty_off)
+        align = "top" if st_y <= 0 else "center"
         content_changed = (
             scaled_html != self.last_stats_render["html"]
             or offset_x != self.last_stats_render["offset_x"]
             or offset_y != self.last_stats_render["offset_y"]
+            or align != self.last_stats_render["align"]
         )
         bg_changed = bg_url != self.last_stats_render["bg"]
         if hasattr(self, 'stats_browser') and (content_changed or bg_changed):
@@ -1491,10 +1501,16 @@ class QtOverlay(QWidget):
             if content_changed:
                 self.stats_browser.page().runJavaScript(
                     f"setStatsContent({json.dumps(scaled_html)}, "
-                    f"{json.dumps(offset_x)}, {json.dumps(offset_y)})"
+                    f"{json.dumps(offset_x)}, {json.dumps(offset_y)}, {json.dumps(align)})"
                 )
             self.last_stats_render.update(
-                {"html": scaled_html, "bg": bg_url, "offset_x": offset_x, "offset_y": offset_y}
+                {
+                    "html": scaled_html,
+                    "bg": bg_url,
+                    "offset_x": offset_x,
+                    "offset_y": offset_y,
+                    "align": align,
+                }
             )
 
         self.server.broadcast("stats", {
