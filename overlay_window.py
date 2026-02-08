@@ -985,14 +985,13 @@ class QtOverlay(QWidget):
         try:
             hwnd = int(widget.winId())
             GWL_EXSTYLE = -20
-            WS_EX_LAYERED = 0x80000
             WS_EX_TRANSPARENT = 0x20
 
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             if enabled:
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT)
             else:
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style & ~WS_EX_TRANSPARENT)
         except Exception as e:
             print(f"Passthrough Child Error: {e}")
 
