@@ -223,6 +223,10 @@ class QtOverlay(QWidget):
         self.dragging_widget = None
         self.drag_offset = None
         self.knife_labels = []
+        
+        # --- STATS CACHE (NEU gegen Flackern) ---
+        self._last_stats_html = ""
+        self._last_stats_img = ""
 
         # --- CACHE DICTIONARY (NEU) ---
         # Hier speichern wir alle geladenen Bilder
@@ -852,30 +856,25 @@ class QtOverlay(QWidget):
         Aktiviert oder deaktiviert die Klick-Durchlässigkeit.
         WICHTIG: Erst Qt-Flags setzen, DANN show(), DANN ctypes Styles!
         """
-        # 1. Qt Flags setzen (Dies kann das Fenster zerstören und neu erstellen!)
+        # 1. Qt Flags setzen (Nur wenn geänderte Flags vorliegen, um Flackern zu vermeiden)
+        new_flags = (Qt.WindowType.FramelessWindowHint |
+                     Qt.WindowType.WindowStaysOnTopHint |
+                     Qt.WindowType.Tool)
+        
         if enabled:
             # 0. Erst Visuals säubern
             self.clear_edit_visuals()
             self.active_edit_targets = []
-
-            # Normaler Overlay-Modus (Klicks gehen durch)
             self.edit_mode = False
-            self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint |
-                Qt.WindowType.WindowStaysOnTopHint |
-                Qt.WindowType.Tool |
-                Qt.WindowType.WindowTransparentForInput  # Qt-Level Transparenz
-            )
+            new_flags |= Qt.WindowType.WindowTransparentForInput
         else:
-            # Edit-Modus (Fenster fängt Klicks ab)
             self.edit_mode = True
             self.active_edit_targets = active_targets if active_targets else []
-            self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint |
-                Qt.WindowType.WindowStaysOnTopHint |
-                Qt.WindowType.Tool
-                # KEIN WindowTransparentForInput hier!
-            )
+
+        # Nur umschalten, wenn sich die Flags wirklich ändern
+        if self.windowFlags() != new_flags:
+            self.setWindowFlags(new_flags)
+            self.show()  # Nach setWindowFlags muss show() gerufen werden
 
         # 2. Fenster (wieder) anzeigen, damit es ein gültiges Handle bekommt
         self.show()
@@ -917,10 +916,16 @@ class QtOverlay(QWidget):
                     self.feed_label.setStyleSheet(feed_style)
                     self.feed_label.show()
                     self.feed_label.raise_()
-                    if not self.feed_label.text():
+                    
+                    # Ensure minimum size for dragging even if text is empty
+                    if not self.feed_label.text().strip():
                         self.feed_label.setText(
                             "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
                         self.feed_label.adjustSize()
+                    
+                    # Prevent it from being 0-height if adjustSize was called elsewhere
+                    if self.feed_label.height() < 50:
+                        self.feed_label.setFixedHeight(100)
 
                 if "stats" in targets:
                     self.stats_bg_label.setStyleSheet(hl_style)
@@ -960,28 +965,33 @@ class QtOverlay(QWidget):
             print(f"Passthrough Error: {e}")
 
     def update_edit_mask(self, targets):
-        """Limitiert Klicks auf das aktive Element, der Rest wird klick-through."""
+        """Limitiert Klicks auf alle aktiven Elemente, der Rest wird klick-through."""
         if not targets:
             self.clearMask()
             return
 
-        target = targets[0]
-        widget = None
-        if target == "event":
-            widget = self.event_preview_label
-        elif target == "feed":
-            widget = self.feed_label
-        elif target == "stats":
-            widget = self.stats_bg_label
-        elif target == "streak":
-            widget = self.streak_bg_label
-        elif target == "crosshair":
-            widget = self.crosshair_label
-        elif target == "twitch":
-            widget = self.twitch_drag_cover
+        combined_region = QRegion()
+        
+        for target in targets:
+            widget = None
+            if target == "event":
+                widget = self.event_preview_label
+            elif target == "feed":
+                widget = self.feed_label
+            elif target == "stats":
+                widget = self.stats_bg_label
+            elif target == "streak":
+                widget = self.streak_bg_label
+            elif target == "crosshair":
+                widget = self.crosshair_label
+            elif target == "twitch":
+                widget = self.twitch_drag_cover
+                
+            if widget and widget.isVisible():
+                combined_region = combined_region.united(QRegion(widget.geometry()))
 
-        if widget and widget.isVisible():
-            self.setMask(QRegion(widget.geometry()))
+        if not combined_region.isEmpty():
+            self.setMask(combined_region)
         else:
             self.clearMask()
 
@@ -1064,16 +1074,12 @@ class QtOverlay(QWidget):
 
         if self.dragging_widget == "event":
             self.safe_move(self.event_preview_label, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["event"])
         elif self.dragging_widget == "feed":
             self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["feed"])
         elif self.dragging_widget == "crosshair":
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["crosshair"])
         elif self.dragging_widget == "stats":
             self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["stats"])
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
                 bg_w, bg_h = self.stats_bg_label.width(), self.stats_bg_label.height()
@@ -1085,7 +1091,6 @@ class QtOverlay(QWidget):
                 self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
         elif self.dragging_widget == "streak":
             self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["streak"])
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("streak", {})
                 cx = self.streak_bg_label.x() + (self.streak_bg_label.width() // 2)
@@ -1095,11 +1100,13 @@ class QtOverlay(QWidget):
                                cy + self.s(cfg.get("ty", 0)) - (self.streak_text_label.height() // 2))
         elif self.dragging_widget == "twitch":
             self.safe_move(self.twitch_drag_cover, new_pos.x(), new_pos.y())
-            self.update_edit_mask(["twitch"])
             # Das eigentliche Container-Objekt ziehen wir mit
             self.chat_container.move(self.twitch_drag_cover.pos())
             # Update GUI Sliders via Signal
             self.notify_chat_moved(new_pos.x(), new_pos.y())
+            
+        # Refresh the mask for ALL active targets so nothing disappears
+        self.update_edit_mask(self.active_edit_targets)
 
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
@@ -1209,6 +1216,15 @@ class QtOverlay(QWidget):
         self.safe_move(self.feed_label, self.s(conf.get("x", 50)), self.s(conf.get("y", 200)))
 
     def set_stats_html(self, html, img_path):
+        # Change Detection: Nur updaten wenn nötig
+        scaled_html = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html)
+        
+        if scaled_html == self._last_stats_html and img_path == self._last_stats_img:
+            return
+            
+        self._last_stats_html = scaled_html
+        self._last_stats_img = img_path
+
         # 1. Bild / Hintergrund
         if os.path.exists(img_path) or self.edit_mode:
             if os.path.exists(img_path):
@@ -1231,10 +1247,7 @@ class QtOverlay(QWidget):
         else:
             self.stats_bg_label.hide()
 
-        # 2. Text HTML skalieren
-        # NEW: Regex-basierte Skalierung für ALLE Font-Größen
-        scaled_html = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html)
-
+        # 2. Text HTML setzen
         self.stats_text_label.setText(scaled_html)
         self.stats_text_label.adjustSize()
         self.stats_text_label.show()
@@ -1256,25 +1269,25 @@ class QtOverlay(QWidget):
             ty_off = conf.get("ty", 0)
             st_scale = conf.get("scale", 1.0)
 
-        # Background positionieren
-        self.safe_move(self.stats_bg_label, self.s(st_x), self.s(st_y))
+        # Background positionieren (NUR wenn nicht gerade aktiv bewegt über MouseEvents)
+        if getattr(self, "dragging_widget", None) != "stats":
+            self.safe_move(self.stats_bg_label, self.s(st_x), self.s(st_y))
 
-        # Text auf Hintergrund zentrieren (+ Offset)
-        bg_rect = self.stats_bg_label.geometry()
-        txt_rect = self.stats_text_label.geometry()
-        
-        cx, cy = bg_rect.center().x(), bg_rect.center().y()
-        final_tx = cx - (txt_rect.width() / 2) + self.s(tx_off)
-        final_ty = cy - (txt_rect.height() / 2) + self.s(ty_off)
-        
-        self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
+            # Text auf Hintergrund zentrieren (+ Offset)
+            bg_rect = self.stats_bg_label.geometry()
+            txt_rect = self.stats_text_label.geometry()
+            
+            cx, cy = bg_rect.center().x(), bg_rect.center().y()
+            final_tx = cx - (txt_rect.width() / 2) + self.s(tx_off)
+            final_ty = cy - (txt_rect.height() / 2) + self.s(ty_off)
+            
+            self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
 
         self.server.broadcast("stats", {
             "html": html,
             "bg_filename": bg_name,
             "x": int(st_x),
             "y": int(st_y),
-            "scale": st_scale
         })
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
@@ -1463,11 +1476,23 @@ class QtOverlay(QWidget):
             tx, ty = 0, 0
             if self.gui_ref:
                 c = self.gui_ref.config.get("crosshair", {})
+                shadow_enabled = c.get("shadow", False)
+                if shadow_enabled:
+                    shadow = QGraphicsDropShadowEffect()
+                    shadow.setBlurRadius(6 * self.ui_scale)
+                    shadow.setColor(QColor(0, 0, 0, 220))
+                    shadow.setXOffset(0)
+                    shadow.setYOffset(0)
+                    self.crosshair_label.setGraphicsEffect(shadow)
+                else:
+                    self.crosshair_label.setGraphicsEffect(None)
                 rx, ry = c.get("x", 0), c.get("y", 0)
                 if rx == 0 and ry == 0:
                     tx, ty = self.width() // 2, self.height() // 2
                 else:
                     tx, ty = self.s(rx), self.s(ry)
+            else:
+                self.crosshair_label.setGraphicsEffect(None)
             self.safe_move(self.crosshair_label, tx - (self.crosshair_label.width() // 2),
                            ty - (self.crosshair_label.height() // 2))
             self.crosshair_label.show()
