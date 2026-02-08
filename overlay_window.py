@@ -619,13 +619,20 @@ class QtOverlay(QWidget):
                 <div id="stats-content"></div>
             </div>
             <script>
-                function updateStats(html, bgUrl, offsetX, offsetY) {
-                    const container = document.getElementById('stats-container');
+                let currentBgUrl = '';
+                function setStatsContent(html, offsetX, offsetY) {
                     const content = document.getElementById('stats-content');
                     content.innerHTML = html || '';
                     content.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-                    if (bgUrl) {
-                        container.style.backgroundImage = `url('${bgUrl}')`;
+                }
+                function setStatsBackground(bgUrl) {
+                    const container = document.getElementById('stats-container');
+                    if (bgUrl === currentBgUrl) {
+                        return;
+                    }
+                    currentBgUrl = bgUrl || '';
+                    if (currentBgUrl) {
+                        container.style.backgroundImage = `url('${currentBgUrl}')`;
                     } else {
                         container.style.backgroundImage = 'none';
                     }
@@ -1470,17 +1477,22 @@ class QtOverlay(QWidget):
         self.stats_container.show()
         offset_x = self.s(tx_off)
         offset_y = self.s(ty_off)
-        render_changed = (
+        content_changed = (
             scaled_html != self.last_stats_render["html"]
-            or bg_url != self.last_stats_render["bg"]
             or offset_x != self.last_stats_render["offset_x"]
             or offset_y != self.last_stats_render["offset_y"]
         )
-        if hasattr(self, 'stats_browser') and render_changed:
-            self.stats_browser.page().runJavaScript(
-                f"updateStats({json.dumps(scaled_html)}, {json.dumps(bg_url)}, "
-                f"{json.dumps(offset_x)}, {json.dumps(offset_y)})"
-            )
+        bg_changed = bg_url != self.last_stats_render["bg"]
+        if hasattr(self, 'stats_browser') and (content_changed or bg_changed):
+            if bg_changed:
+                self.stats_browser.page().runJavaScript(
+                    f"setStatsBackground({json.dumps(bg_url)})"
+                )
+            if content_changed:
+                self.stats_browser.page().runJavaScript(
+                    f"setStatsContent({json.dumps(scaled_html)}, "
+                    f"{json.dumps(offset_x)}, {json.dumps(offset_y)})"
+                )
             self.last_stats_render.update(
                 {"html": scaled_html, "bg": bg_url, "offset_x": offset_x, "offset_y": offset_y}
             )
