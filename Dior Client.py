@@ -606,10 +606,11 @@ class DiorClientGUI:
 
             # 4. Titel normalisieren (alles kleinschreiben)
             window_title = buff.value.lower()
+            normalized_title = window_title.replace(" ", "")
 
             # Wir suchen nach "planetside", das deckt:
             # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
-            if "planetside2" in window_title:
+            if "planetside2" in normalized_title:
                 return True
 
             return False

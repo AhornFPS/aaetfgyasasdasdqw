@@ -68,6 +68,7 @@ class DraggableChat(QWebEngineView):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.page().setBackgroundColor(QColor(0, 0, 0, 0))
+        self.setStyleSheet("background: transparent;")
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
         settings = self.settings()
@@ -1493,6 +1494,7 @@ class QtOverlay(QWidget):
         if should_show:
             self.chat_container.show()
             if hasattr(self, 'twitch_browser'):
+                self.twitch_browser.setStyleSheet("background: transparent;")
                 self.twitch_browser.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
                 if not self.edit_mode:
                     self._set_native_mouse_passthrough(self.twitch_browser, True)
