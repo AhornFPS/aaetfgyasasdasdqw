@@ -347,6 +347,7 @@ class QtOverlay(QWidget):
             "offset_x": None,
             "offset_y": None,
         }
+        self.last_stats_geometry = None
 
         self.hitmarker_label = QLabel(self)
         self.hitmarker_label.setScaledContents(True)
@@ -589,7 +590,7 @@ class QtOverlay(QWidget):
                 body {
                     margin: 0;
                     padding: 0;
-                    overflow: hidden;
+                    overflow: visible;
                     background: transparent;
                     font-family: 'Segoe UI', Arial;
                     color: white;
@@ -602,6 +603,7 @@ class QtOverlay(QWidget):
                     justify-content: center;
                     background-size: 100% 100%;
                     background-repeat: no-repeat;
+                    overflow: visible;
                 }
                 #stats-content {
                     text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
@@ -1419,8 +1421,11 @@ class QtOverlay(QWidget):
         # Background positionieren
         x = self.s(st_x)
         y = self.s(st_y)
-        self.stats_container.setGeometry(x, y, width, height)
-        self.stats_browser.setGeometry(self.stats_container.rect())
+        geometry = (int(x), int(y), int(width), int(height))
+        if geometry != self.last_stats_geometry:
+            self.stats_container.setGeometry(*geometry)
+            self.stats_browser.setGeometry(self.stats_container.rect())
+            self.last_stats_geometry = geometry
 
         self.stats_container.show()
         offset_x = self.s(tx_off)
