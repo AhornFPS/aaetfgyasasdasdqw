@@ -310,7 +310,7 @@ class CensusWorker:
             # Icon Vorbereitung
             icon_html = ""
             if is_hs:
-                hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "headshot.png")
+                hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "Headshot.png")
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
                     # NEU: HS Icon Size aus Config

@@ -975,10 +975,14 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_toggle_feed.clicked, self.toggle_killfeed_visibility)
         self.safe_connect(ui.check_show_revives.toggled, self.save_stats_config_from_qt)
 
+        # LIVE-AUTO-SAVE für Textfelder (Stats & Feed)
+        self.safe_connect(ui.ent_stats_img.textChanged, self.save_stats_config_from_qt)
+        self.safe_connect(ui.ent_hs_icon.textChanged, self.save_stats_config_from_qt)
+
         # LIVE UPDATE FONT SIZE (Dropdown) / HS ICON SIZE
         self.safe_connect(ui.combo_st_font.currentTextChanged, self.save_stats_config_from_qt)
         self.safe_connect(ui.combo_feed_font.currentTextChanged, self.save_stats_config_from_qt)
-        self.safe_connect(ui.combo_hs_scale.currentTextChanged, self.save_stats_config_from_qt) # NEU: Dropdown signal
+        self.safe_connect(ui.combo_hs_scale.currentTextChanged, self.save_stats_config_from_qt)  # NEU: Dropdown signal
 
         # ---------------------------------------------------------
         # 7. OVERLAY TAB: VOICE MACROS
@@ -1727,16 +1731,19 @@ class DiorClientGUI:
             ui.btn_toggle_stats.setStyleSheet(
                 "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
 
+        ui.ent_stats_img.blockSignals(True)
         ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
+        ui.ent_stats_img.blockSignals(False)
 
         # Sliders (wie gehabt)
-        ui.slider_st_tx.blockSignals(True);
-        ui.slider_st_tx.setValue(st_conf.get("tx", 0));
+        ui.slider_st_tx.blockSignals(True)
+        ui.slider_st_tx.setValue(st_conf.get("tx", 0))
         ui.slider_st_tx.blockSignals(False)
-        ui.slider_st_ty.blockSignals(True);
-        ui.slider_st_ty.setValue(st_conf.get("ty", 0));
+        ui.slider_st_ty.blockSignals(True)
+        ui.slider_st_ty.setValue(st_conf.get("ty", 0))
         ui.slider_st_ty.blockSignals(False)
-        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100));
+        ui.slider_st_scale.blockSignals(True)
+        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
         ui.slider_st_scale.blockSignals(False)
 
         # NEW: Font Size (Stats) - Dropdown Support
@@ -1755,9 +1762,14 @@ class DiorClientGUI:
             ui.btn_toggle_feed.setStyleSheet(
                 "background-color: #440000; color: white; font-weight: bold; border-radius: 4px;")
 
-        ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "headshot.png"))
+        ui.ent_hs_icon.blockSignals(True)
+        ui.ent_hs_icon.setText(kf_conf.get("hs_icon", "Headshot.png"))
+        ui.ent_hs_icon.blockSignals(False)
+
+        ui.check_show_revives.blockSignals(True)
         ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
-        
+        ui.check_show_revives.blockSignals(False)
+
         # NEW: Font Size (Feed) - Dropdown Support / HS Icon Size
         ui.combo_feed_font.blockSignals(True)
         ui.combo_feed_font.setCurrentText(str(int(kf_conf.get("font_size", 19))))
