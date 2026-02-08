@@ -591,7 +591,7 @@ class QtOverlay(QWidget):
                 body {
                     margin: 0;
                     padding: 0;
-                    overflow: visible;
+                    overflow: hidden;
                     background: transparent;
                     font-family: 'Segoe UI', Arial;
                     color: white;
@@ -604,7 +604,9 @@ class QtOverlay(QWidget):
                     justify-content: center;
                     background-size: 100% 100%;
                     background-repeat: no-repeat;
-                    overflow: visible;
+                    overflow: hidden;
+                    padding: 12px;
+                    box-sizing: border-box;
                 }
                 #stats-content {
                     text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
@@ -1421,6 +1423,7 @@ class QtOverlay(QWidget):
             cfg = self.gui_ref.config.get("stats_widget", {})
         sc = cfg.get("scale", 1.0) * self.ui_scale
 
+        padding = int(12 * self.ui_scale)
         width = int(600 * self.ui_scale)
         height = int(60 * self.ui_scale)
         bg_url = ""
@@ -1451,6 +1454,8 @@ class QtOverlay(QWidget):
             st_scale = conf.get("scale", 1.0)
         self.last_stats_html = html
         self.last_stats_bg = bg_name
+        width = max(1, width + (padding * 2))
+        height = max(1, height + (padding * 2))
         self.last_stats_size = (width, height)
 
         # Background positionieren
@@ -1479,7 +1484,6 @@ class QtOverlay(QWidget):
             self.last_stats_render.update(
                 {"html": scaled_html, "bg": bg_url, "offset_x": offset_x, "offset_y": offset_y}
             )
-            self.request_stats_resize()
 
         self.server.broadcast("stats", {
             "html": html,
