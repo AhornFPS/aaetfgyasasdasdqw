@@ -591,22 +591,32 @@ class QtOverlay(QWidget):
             return QPixmap()
 
         # --- FIX: Selbstheilung für relative Pfade ---
-        # 1. Ist der Pfad so wie er ist gültig?
         if not os.path.exists(path):
-            # 2. Nein? Dann versuchen wir, ihn im Assets-Ordner zu finden
             resolved_path = get_asset_path(path)
             if os.path.exists(resolved_path):
-                path = resolved_path # Gefunden! Wir nutzen den korrigierten Pfad
+                path = resolved_path
             else:
-                # Weder direkt noch in Assets gefunden -> Abbruch
-                # print(f"DEBUG: Bild nicht gefunden: {path}")
                 return QPixmap()
 
-        # Ab hier normale Cache-Logik
-        if path not in self.pixmap_cache:
+        # --- MTIME CHECK (Hot-Reload fix) ---
+        # Wir prüfen, ob sich die Datei geändert hat
+        try:
+            current_mtime = os.path.getmtime(path)
+        except OSError:
+            return QPixmap()
+
+        if not hasattr(self, 'pixmap_mtimes'):
+            self.pixmap_mtimes = {}
+
+        cached_mtime = self.pixmap_mtimes.get(path, 0)
+
+        # Wenn nicht im Cache ODER Datei neuer als Cache -> Neu laden
+        if path not in self.pixmap_cache or current_mtime > cached_mtime:
             pm = QPixmap(path)
             if not pm.isNull():
                 self.pixmap_cache[path] = pm
+                self.pixmap_mtimes[path] = current_mtime
+                # print(f"DEBUG: Cache updated for {path}")
             else:
                 return QPixmap()
 

@@ -752,6 +752,25 @@ class OverlayConfigWindow(QWidget):
         img_layout.addWidget(self.btn_browse_cross)
         layout.addLayout(img_layout)
 
+        # Crosshair Size Slider
+        layout.addWidget(QLabel("Crosshair Display Size:"))
+        self.slider_cross_size = QSlider(Qt.Orientation.Horizontal)
+        self.slider_cross_size.setRange(8, 256)
+        self.slider_cross_size.setValue(32) # Default
+        self.lbl_cross_size = QLabel("32 px")
+        
+        # Connect slider update to label AND live update
+        self.slider_cross_size.valueChanged.connect(lambda v: self.lbl_cross_size.setText(f"{v} px"))
+        self.slider_cross_size.valueChanged.connect(self.trigger_live_update)
+        
+        # Connect text path change to live update
+        self.cross_path.textChanged.connect(self.trigger_live_update)
+        
+        size_layout = QHBoxLayout()
+        size_layout.addWidget(self.slider_cross_size)
+        size_layout.addWidget(self.lbl_cross_size)
+        layout.addLayout(size_layout)
+
         self.btn_edit_cross = QPushButton("MOVE UI", objectName="EditBtn")
         layout.addWidget(self.btn_edit_cross)
 
@@ -765,6 +784,11 @@ class OverlayConfigWindow(QWidget):
         self.btn_open_editor.clicked.connect(self.open_crosshair_editor)
         layout.addWidget(self.btn_open_editor)
 
+    def trigger_live_update(self):
+        """Triggers the controller to update the crosshair immediately."""
+        if self.controller and hasattr(self.controller, 'save_crosshair_settings_qt'):
+            self.controller.save_crosshair_settings_qt()
+
     def open_crosshair_editor(self):
         """Öffnet den neuen Crosshair Editor."""
         self.editor_win = CrosshairEditorWindow()
@@ -772,14 +796,17 @@ class OverlayConfigWindow(QWidget):
         self.editor_win.crosshair_saved.connect(self.apply_generated_crosshair)
         self.editor_win.showFullScreen()
 
-    def apply_generated_crosshair(self, filename):
+    def apply_generated_crosshair(self, filename, size_px=128):
         """Callback wenn der Editor speichert."""
         self.cross_path.setText(filename)
-        # Direktes Update triggern (via Signal oder direkt Controller falls vorhanden)
-        # Das setText triggert normalerweise nichts, wenn wir nicht explizit 'textChanged' connected haben
-        # Aber der Controller liest es beim 'Save' aus. Wir können 'Save' simulieren oder Controller notifyen.
-        if self.controller:
-            self.controller.update_crosshair_from_qt()
+        
+        # Automatisch die Größe anpassen, damit es 1:1 Pixel-Perfekt ist
+        if hasattr(self, 'slider_cross_size'):
+            # Block signals to prevent double update loop if needed, 
+             # though simpler is just to set it.
+            self.slider_cross_size.setValue(size_px)
+        
+        self.trigger_live_update()
 
     def setup_streak_tab(self):
         layout = QVBoxLayout(self.tab_streak)

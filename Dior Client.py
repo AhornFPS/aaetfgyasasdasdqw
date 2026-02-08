@@ -2127,39 +2127,33 @@ class DiorClientGUI:
         # 1. Werte aus der GUI lesen
         is_active = ui.check_cross.isChecked()
         file_path = ui.cross_path.text().strip()
+        
+        # NEU: Size Slider auslesen
+        size_val = 32
+        if hasattr(ui, 'slider_cross_size'):
+            size_val = ui.slider_cross_size.value()
 
         # 2. Config Dictionary vorbereiten, falls nicht existent
         if "crosshair" not in self.config:
             self.config["crosshair"] = {}
 
-        # 3. Werte aktualisieren (alte Werte wie Größe/Position beibehalten)
+        # 3. Werte aktualisieren
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = file_path
-
-        # Fallback für Größe, falls noch nicht gesetzt
-        if "size" not in self.config["crosshair"]:
-            self.config["crosshair"]["size"] = 32
+        self.config["crosshair"]["size"] = size_val # Speichern
 
         # 4. In datei speichern
         self.save_config()
 
-        # 5. Overlay live aktualisieren (wenn Spiel läuft oder Edit Mode an ist)
+        # 5. Overlay live aktualisieren
         if self.overlay_win:
-            # Pfad auflösen
             full_path = get_asset_path(file_path)
-
-            # Soll es angezeigt werden? (User will es AN + (Spiel läuft ODER Edit Mode))
             game_running = getattr(self, 'ps2_running', False)
             edit_mode = getattr(self, 'is_hud_editing', False)
             should_show = is_active and (game_running or edit_mode)
 
-            size = self.config["crosshair"].get("size", 32)
-
             # Update Befehl an Overlay senden
-            self.overlay_win.update_crosshair(full_path, size, should_show)
-
-        # Log nur schreiben, wenn es kein automatisches Event beim Tippen ist (optional)
-        # self.add_log("CROSSHAIR: Einstellungen gespeichert.")
+            self.overlay_win.update_crosshair(full_path, size_val, should_show)
 
     def get_time_diff_str(self, past_date_str, mode="login"):
         if not past_date_str or past_date_str == "Unknown":
