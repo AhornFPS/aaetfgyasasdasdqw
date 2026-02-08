@@ -341,6 +341,12 @@ class QtOverlay(QWidget):
         self.last_stats_html = ""
         self.last_stats_bg = ""
         self.last_stats_size = (int(600 * self.ui_scale), int(60 * self.ui_scale))
+        self.last_stats_render = {
+            "html": "",
+            "bg": "",
+            "offset_x": None,
+            "offset_y": None,
+        }
 
         self.hitmarker_label = QLabel(self)
         self.hitmarker_label.setScaledContents(True)
@@ -555,6 +561,16 @@ class QtOverlay(QWidget):
                 }
                 function clearFeed() {
                     document.getElementById('feed-log').innerHTML = '';
+                }
+                function addFeedMessage(html, maxItems) {
+                    const container = document.getElementById('feed-log');
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'feed-item';
+                    msgDiv.innerHTML = html;
+                    container.prepend(msgDiv);
+                    if (maxItems && container.children.length > maxItems) {
+                        container.removeChild(container.lastChild);
+                    }
                 }
             </script>
         </body>
@@ -1293,7 +1309,7 @@ class QtOverlay(QWidget):
         # Wir speichern jetzt die UN-SKALIERTE Nachricht
         self.feed_messages.insert(0, html_msg)
         self.feed_messages = self.feed_messages[:6]
-        self.update_killfeed_ui()
+        self.add_killfeed_message(html_msg)
         
         # Broadcast (unskaliert für Server)
         kf_x, kf_y = 50, 200  # Defaults
@@ -1307,6 +1323,23 @@ class QtOverlay(QWidget):
             "x": int(kf_x),
             "y": int(kf_y)
         })
+
+    def add_killfeed_message(self, html_msg):
+        """Fügt eine einzelne Killfeed-Nachricht hinzu (Twitch-like)."""
+        scaled = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html_msg)
+        scaled = re.sub(
+            r'(width|height)="(\d+)"',
+            lambda m: f'{m.group(1)}="{int(int(m.group(2)) * self.ui_scale)}"',
+            scaled,
+        )
+        if "style=\"" in scaled:
+            scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
+
+        if hasattr(self, 'feed_browser'):
+            self.feed_browser.page().runJavaScript(
+                f"addFeedMessage({json.dumps(scaled)}, {json.dumps(6)})"
+            )
+        self.feed_container.show()
 
     def update_killfeed_ui(self):
         """Skaliert alle Nachrichten im Feed und setzt den Browser-Text."""
@@ -1390,10 +1423,21 @@ class QtOverlay(QWidget):
         self.stats_browser.setGeometry(self.stats_container.rect())
 
         self.stats_container.show()
-        if hasattr(self, 'stats_browser'):
+        offset_x = self.s(tx_off)
+        offset_y = self.s(ty_off)
+        render_changed = (
+            scaled_html != self.last_stats_render["html"]
+            or bg_url != self.last_stats_render["bg"]
+            or offset_x != self.last_stats_render["offset_x"]
+            or offset_y != self.last_stats_render["offset_y"]
+        )
+        if hasattr(self, 'stats_browser') and render_changed:
             self.stats_browser.page().runJavaScript(
                 f"updateStats({json.dumps(scaled_html)}, {json.dumps(bg_url)}, "
-                f"{json.dumps(self.s(tx_off))}, {json.dumps(self.s(ty_off))})"
+                f"{json.dumps(offset_x)}, {json.dumps(offset_y)})"
+            )
+            self.last_stats_render.update(
+                {"html": scaled_html, "bg": bg_url, "offset_x": offset_x, "offset_y": offset_y}
             )
 
         self.server.broadcast("stats", {
