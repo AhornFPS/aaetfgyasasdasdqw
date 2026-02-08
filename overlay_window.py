@@ -529,6 +529,9 @@ class QtOverlay(QWidget):
         self.chat_container.show()
         if not self.twitch_browser.isVisible():
             self.twitch_browser.show()
+        self.twitch_browser.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        if not self.edit_mode:
+            self._set_native_mouse_passthrough(self.twitch_browser, True)
 
         # PFAD-FIX für WebEngine
         html_msg = html_msg.replace('src="emote://', 'src="file:///')
@@ -866,6 +869,8 @@ class QtOverlay(QWidget):
 
         # 2. Fenster (wieder) anzeigen, damit es ein gültiges Handle bekommt
         self.show()
+        if hasattr(self, 'twitch_browser'):
+            self._set_native_mouse_passthrough(self.twitch_browser, enabled)
 
         # Falls Edit-Modus: Fokus erzwingen, sonst landen Klicks im Spiel
         if not enabled:
@@ -942,6 +947,22 @@ class QtOverlay(QWidget):
 
         except Exception as e:
             print(f"Passthrough Error: {e}")
+
+    def _set_native_mouse_passthrough(self, widget, enabled):
+        """Setzt den Windows-Style für native Widgets wie QWebEngineView."""
+        try:
+            hwnd = int(widget.winId())
+            GWL_EXSTYLE = -20
+            WS_EX_LAYERED = 0x80000
+            WS_EX_TRANSPARENT = 0x20
+
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            if enabled:
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+            else:
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
+        except Exception as e:
+            print(f"Passthrough Child Error: {e}")
 
     def clear_edit_visuals(self):
         """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
