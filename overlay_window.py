@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowE
 
 # Aus QtGui kommen die Grafik-Ressourcen
 from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
-                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument)
+                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument, QRegion)
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -371,6 +371,7 @@ class QtOverlay(QWidget):
         # WICHTIG: Kein WA_TransparentForMouseEvents hier, damit es Klicks fängt!
 
         self.server = OverlayServer()
+        self.active_edit_targets = []
 
     def get_master_volume(self):
         """Holt das Master-Volume aus der Config (0-100) und gibt float (0.0-1.0) zurück."""
@@ -845,6 +846,7 @@ class QtOverlay(QWidget):
         if enabled:
             # 0. Erst Visuals säubern
             self.clear_edit_visuals()
+            self.active_edit_targets = []
 
             # Normaler Overlay-Modus (Klicks gehen durch)
             self.edit_mode = False
@@ -857,6 +859,7 @@ class QtOverlay(QWidget):
         else:
             # Edit-Modus (Fenster fängt Klicks ab)
             self.edit_mode = True
+            self.active_edit_targets = active_targets if active_targets else []
             self.setWindowFlags(
                 Qt.WindowType.FramelessWindowHint |
                 Qt.WindowType.WindowStaysOnTopHint |
@@ -873,6 +876,8 @@ class QtOverlay(QWidget):
             self.raise_()
             # IMMER den echten Chat verstecken, wenn Edit Mode - beugt Blocking vor!
             self.chat_container.hide()
+        else:
+            self.clearMask()
 
         # 3. Windows API Styles anwenden (Auf das NEUE Handle!)
         try:
@@ -939,9 +944,36 @@ class QtOverlay(QWidget):
                     self.twitch_drag_cover.raise_()
                     # Den echten Chat verstecken wir, damit er nicht stört
                     self.chat_container.hide()
+                self.update_edit_mask(targets)
 
         except Exception as e:
             print(f"Passthrough Error: {e}")
+
+    def update_edit_mask(self, targets):
+        """Limitiert Klicks auf das aktive Element, der Rest wird klick-through."""
+        if not targets:
+            self.clearMask()
+            return
+
+        target = targets[0]
+        widget = None
+        if target == "event":
+            widget = self.event_preview_label
+        elif target == "feed":
+            widget = self.feed_label
+        elif target == "stats":
+            widget = self.stats_bg_label
+        elif target == "streak":
+            widget = self.streak_bg_label
+        elif target == "crosshair":
+            widget = self.crosshair_label
+        elif target == "twitch":
+            widget = self.twitch_drag_cover
+
+        if widget and widget.isVisible():
+            self.setMask(QRegion(widget.geometry()))
+        else:
+            self.clearMask()
 
     def clear_edit_visuals(self):
         """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
@@ -1022,12 +1054,16 @@ class QtOverlay(QWidget):
 
         if self.dragging_widget == "event":
             self.safe_move(self.event_preview_label, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["event"])
         elif self.dragging_widget == "feed":
             self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["feed"])
         elif self.dragging_widget == "crosshair":
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["crosshair"])
         elif self.dragging_widget == "stats":
             self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["stats"])
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("stats_widget", {})
                 bg_w, bg_h = self.stats_bg_label.width(), self.stats_bg_label.height()
@@ -1039,6 +1075,7 @@ class QtOverlay(QWidget):
                 self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
         elif self.dragging_widget == "streak":
             self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["streak"])
             if self.gui_ref:
                 cfg = self.gui_ref.config.get("streak", {})
                 cx = self.streak_bg_label.x() + (self.streak_bg_label.width() // 2)
@@ -1048,6 +1085,7 @@ class QtOverlay(QWidget):
                                cy + self.s(cfg.get("ty", 0)) - (self.streak_text_label.height() // 2))
         elif self.dragging_widget == "twitch":
             self.safe_move(self.twitch_drag_cover, new_pos.x(), new_pos.y())
+            self.update_edit_mask(["twitch"])
             # Das eigentliche Container-Objekt ziehen wir mit
             self.chat_container.move(self.twitch_drag_cover.pos())
             # Update GUI Sliders via Signal
