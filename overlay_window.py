@@ -974,20 +974,39 @@ class QtOverlay(QWidget):
         screen_w, screen_h = self.width(), self.height()
         w_w, w_h = widget.width(), widget.height()
         snap = 25
+        release_margin = 10
 
-        if abs(x) < snap:
-            x = 0
-        elif abs(x - (screen_w - w_w)) < snap:
-            x = screen_w - w_w
-        elif abs(x - (screen_w // 2 - w_w // 2)) < snap:
-            x = screen_w // 2 - w_w // 2
+        if not hasattr(widget, "_snap_lock"):
+            widget._snap_lock = {"x": None, "y": None}
 
-        if abs(y) < snap:
-            y = 0
-        elif abs(y - (screen_h - w_h)) < snap:
-            y = screen_h - w_h
-        elif abs(y - (screen_h // 2 - w_h // 2)) < snap:
-            y = screen_h // 2 - w_h // 2
+        snap_targets_x = [0, screen_w - w_w, screen_w // 2 - w_w // 2]
+        snap_targets_y = [0, screen_h - w_h, screen_h // 2 - w_h // 2]
+
+        lock_x = widget._snap_lock["x"]
+        if lock_x is not None:
+            if abs(x - lock_x) > snap + release_margin:
+                widget._snap_lock["x"] = None
+            else:
+                x = lock_x
+        if widget._snap_lock["x"] is None:
+            for target in snap_targets_x:
+                if abs(x - target) < snap:
+                    x = target
+                    widget._snap_lock["x"] = target
+                    break
+
+        lock_y = widget._snap_lock["y"]
+        if lock_y is not None:
+            if abs(y - lock_y) > snap + release_margin:
+                widget._snap_lock["y"] = None
+            else:
+                y = lock_y
+        if widget._snap_lock["y"] is None:
+            for target in snap_targets_y:
+                if abs(y - target) < snap:
+                    y = target
+                    widget._snap_lock["y"] = target
+                    break
 
         final_x = max(0, min(int(x), screen_w - w_w))
         final_y = max(0, min(int(y), screen_h - w_h))
