@@ -348,6 +348,7 @@ class QtOverlay(QWidget):
             "offset_y": None,
         }
         self.last_stats_geometry = None
+        self.pending_stats_resize = False
 
         self.hitmarker_label = QLabel(self)
         self.hitmarker_label.setScaledContents(True)
@@ -626,6 +627,15 @@ class QtOverlay(QWidget):
                     } else {
                         container.style.backgroundImage = 'none';
                     }
+                }
+                function getStatsBounds() {
+                    const container = document.getElementById('stats-container');
+                    const content = document.getElementById('stats-content');
+                    const containerRect = container.getBoundingClientRect();
+                    const contentRect = content.getBoundingClientRect();
+                    const width = Math.ceil(Math.max(containerRect.width, contentRect.width));
+                    const height = Math.ceil(Math.max(containerRect.height, contentRect.height));
+                    return { width, height };
                 }
             </script>
         </body>
@@ -1463,6 +1473,7 @@ class QtOverlay(QWidget):
             self.last_stats_render.update(
                 {"html": scaled_html, "bg": bg_url, "offset_x": offset_x, "offset_y": offset_y}
             )
+            self.request_stats_resize()
 
         self.server.broadcast("stats", {
             "html": html,
@@ -1471,6 +1482,28 @@ class QtOverlay(QWidget):
             "y": int(st_y),
             "scale": st_scale
         })
+
+    def request_stats_resize(self):
+        if self.pending_stats_resize:
+            return
+        self.pending_stats_resize = True
+        self.stats_browser.page().runJavaScript("getStatsBounds()", self.apply_stats_resize)
+
+    def apply_stats_resize(self, bounds):
+        self.pending_stats_resize = False
+        if not bounds:
+            return
+        width = int(bounds.get("width", self.last_stats_size[0]))
+        height = int(bounds.get("height", self.last_stats_size[1]))
+        width = max(width, self.last_stats_size[0])
+        height = max(height, self.last_stats_size[1])
+
+        x, y = self.stats_container.x(), self.stats_container.y()
+        geometry = (int(x), int(y), int(width), int(height))
+        if geometry != self.last_stats_geometry:
+            self.stats_container.setGeometry(*geometry)
+            self.stats_browser.setGeometry(self.stats_container.rect())
+            self.last_stats_geometry = geometry
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if not cfg.get("active", True) and not self.edit_mode:
