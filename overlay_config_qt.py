@@ -758,6 +758,10 @@ class OverlayConfigWindow(QWidget):
         self.btn_center_cross = QPushButton("AUTO-CENTER (Middle)")
         layout.addWidget(self.btn_center_cross)
 
+        self.btn_toggle_cross_shadow = QPushButton("CROSSHAIR SHADOW: OFF")
+        self.btn_toggle_cross_shadow.setCheckable(True)
+        layout.addWidget(self.btn_toggle_cross_shadow)
+
         # --- NEW EDITOR BUTTON ---
         self.btn_open_editor = QPushButton("CROSSHAIR EDITOR")
         self.btn_open_editor.setStyleSheet("background-color: #004080; color: white; border: 1px solid #0055aa; font-weight: bold; margin-top: 10px; padding: 10px;")

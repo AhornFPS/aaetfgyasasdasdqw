@@ -1466,11 +1466,23 @@ class QtOverlay(QWidget):
             tx, ty = 0, 0
             if self.gui_ref:
                 c = self.gui_ref.config.get("crosshair", {})
+                shadow_enabled = c.get("shadow", False)
+                if shadow_enabled:
+                    shadow = QGraphicsDropShadowEffect()
+                    shadow.setBlurRadius(6 * self.ui_scale)
+                    shadow.setColor(QColor(0, 0, 0, 220))
+                    shadow.setXOffset(1 * self.ui_scale)
+                    shadow.setYOffset(1 * self.ui_scale)
+                    self.crosshair_label.setGraphicsEffect(shadow)
+                else:
+                    self.crosshair_label.setGraphicsEffect(None)
                 rx, ry = c.get("x", 0), c.get("y", 0)
                 if rx == 0 and ry == 0:
                     tx, ty = self.width() // 2, self.height() // 2
                 else:
                     tx, ty = self.s(rx), self.s(ry)
+            else:
+                self.crosshair_label.setGraphicsEffect(None)
             self.safe_move(self.crosshair_label, tx - (self.crosshair_label.width() // 2),
                            ty - (self.crosshair_label.height() // 2))
             self.crosshair_label.show()
