@@ -14,9 +14,13 @@ from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
                             QSize, QUrl, QRectF, QPropertyAnimation, QEasingCurve)
 
 # Aus QtWidgets kommen alle visuellen Komponenten und Effekte
-from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect,
-                                 QVBoxLayout, QHBoxLayout, QFrame, QTextBrowser,
-                                 QGraphicsOpacityEffect) # <--- Hier gehört er hin!
+from PyQt6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QVBoxLayout,
+    QGraphicsOpacityEffect,
+)  # <--- Hier gehört er hin!
 
 # Aus QtGui kommen die Grafik-Ressourcen
 from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
@@ -264,19 +268,12 @@ class QtOverlay(QWidget):
         self.crosshair_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.crosshair_label.hide()
 
-        self.stats_bg_label = QLabel(self)
-        self.stats_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.stats_bg_label.hide()
-        self.stats_text_label = QLabel(self)
-        self.stats_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.stats_text_label.hide()
+        self.stats_container = QWidget(self)
+        self.stats_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.stats_container.hide()
 
-        shadow_stats = QGraphicsDropShadowEffect()
-        shadow_stats.setBlurRadius(5 * self.ui_scale)
-        shadow_stats.setColor(QColor(0, 0, 0, 240))
-        shadow_stats.setXOffset(1 * self.ui_scale)
-        shadow_stats.setYOffset(1 * self.ui_scale)
-        self.stats_text_label.setGraphicsEffect(shadow_stats)
+        self.stats_browser = DraggableChat(self.stats_container)
+        self.stats_browser.hide()
 
         self.streak_bg_label = QLabel(self)
         self.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -287,20 +284,15 @@ class QtOverlay(QWidget):
 
         # Killfeed
         self.feed_messages = []
-        self.feed_label = QLabel(self)
-        self.feed_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.feed_container = QWidget(self)
+        self.feed_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.feed_container.hide()
         self.feed_w = int(600 * self.ui_scale)
         self.feed_h = int(550 * self.ui_scale)
-        self.feed_label.setFixedSize(self.feed_w, self.feed_h)
-        self.feed_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        self.feed_label.setStyleSheet("background: transparent;")
+        self.feed_container.setFixedSize(self.feed_w, self.feed_h)
 
-        shadow_feed = QGraphicsDropShadowEffect()
-        shadow_feed.setBlurRadius(4 * self.ui_scale)
-        shadow_feed.setXOffset(1 * self.ui_scale)
-        shadow_feed.setYOffset(1 * self.ui_scale)
-        shadow_feed.setColor(QColor(0, 0, 0, 255))
-        self.feed_label.setGraphicsEffect(shadow_feed)
+        self.feed_browser = DraggableChat(self.feed_container)
+        self.feed_browser.hide()
 
         self.event_preview_label = QLabel(self)
         self.event_preview_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -343,6 +335,10 @@ class QtOverlay(QWidget):
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
             self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
 
+        self.last_stats_html = ""
+        self.last_stats_bg = ""
+        self.last_stats_size = (int(600 * self.ui_scale), int(60 * self.ui_scale))
+
         self.hitmarker_label = QLabel(self)
         self.hitmarker_label.setScaledContents(True)
         self.hitmarker_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -359,6 +355,8 @@ class QtOverlay(QWidget):
         # Initialen Inhalt setzen
         self.chat_hold_time = 15
         self.update_twitch_browser_content()
+        self.update_feed_browser_content()
+        self.update_stats_browser_content()
 
         self.auto_hide_timer = QTimer(self)
         self.auto_hide_timer.setSingleShot(True)
@@ -513,6 +511,107 @@ class QtOverlay(QWidget):
         base_url = QUrl.fromLocalFile(os.path.abspath("."))
         self.twitch_browser.setHtml(template, base_url)
         self.twitch_browser.show()
+
+    def update_feed_browser_content(self):
+        """Initialisiert oder resettet den Killfeed-Browser."""
+        template = """
+        <html>
+        <head>
+            <style>
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateX(20px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+                body {
+                    margin: 0;
+                    padding: 5px;
+                    overflow: hidden;
+                    background: transparent;
+                    font-family: 'Segoe UI', Arial;
+                    color: white;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-end;
+                }
+                #feed-log { width: 100%; }
+                .feed-item {
+                    animation: fadeIn 0.5s ease-out forwards;
+                    margin-bottom: 2px;
+                    text-align: right;
+                    font-weight: 800;
+                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="feed-log"></div>
+            <script>
+                function setFeed(html) {
+                    document.getElementById('feed-log').innerHTML = html;
+                }
+                function clearFeed() {
+                    document.getElementById('feed-log').innerHTML = '';
+                }
+            </script>
+        </body>
+        </html>
+        """
+        base_url = QUrl.fromLocalFile(os.path.abspath("."))
+        self.feed_browser.setHtml(template, base_url)
+        self.feed_browser.show()
+
+    def update_stats_browser_content(self):
+        """Initialisiert oder resettet den Stats-Browser."""
+        template = """
+        <html>
+        <head>
+            <style>
+                body {
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                    background: transparent;
+                    font-family: 'Segoe UI', Arial;
+                    color: white;
+                }
+                #stats-container {
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-size: 100% 100%;
+                    background-repeat: no-repeat;
+                }
+                #stats-content {
+                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
+                    font-weight: 800;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="stats-container">
+                <div id="stats-content"></div>
+            </div>
+            <script>
+                function updateStats(html, bgUrl, offsetX, offsetY) {
+                    const container = document.getElementById('stats-container');
+                    const content = document.getElementById('stats-content');
+                    content.innerHTML = html || '';
+                    content.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                    if (bgUrl) {
+                        container.style.backgroundImage = `url('${bgUrl}')`;
+                    } else {
+                        container.style.backgroundImage = 'none';
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        """
+        base_url = QUrl.fromLocalFile(os.path.abspath("."))
+        self.stats_browser.setHtml(template, base_url)
+        self.stats_browser.show()
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
         # 1. Sichtbarkeit prüfen
@@ -904,19 +1003,24 @@ class QtOverlay(QWidget):
 
                 if "feed" in targets:
                     feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
-                    self.feed_label.setStyleSheet(feed_style)
-                    self.feed_label.show()
-                    self.feed_label.raise_()
-                    if not self.feed_label.text():
-                        self.feed_label.setText(
-                            "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
-                        self.feed_label.adjustSize()
+                    self.feed_container.setStyleSheet(feed_style)
+                    self.feed_container.show()
+                    self.feed_container.raise_()
+                    if not self.feed_messages:
+                        placeholder = "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>"
+                        self.feed_browser.page().runJavaScript(f"setFeed({json.dumps(placeholder)})")
 
                 if "stats" in targets:
-                    self.stats_bg_label.setStyleSheet(hl_style)
-                    self.stats_bg_label.show()
-                    self.stats_text_label.show()
-                    self.stats_text_label.raise_()
+                    self.stats_container.setStyleSheet(hl_style)
+                    if self.stats_container.width() == 0 or self.stats_container.height() == 0:
+                        self.stats_container.resize(*self.last_stats_size)
+                    self.stats_container.show()
+                    self.stats_container.raise_()
+                    if not self.last_stats_html:
+                        placeholder = "<div style='color:white; font-size:20px; padding:10px;'>STATS AREA</div>"
+                        self.stats_browser.page().runJavaScript(
+                            f"updateStats({json.dumps(placeholder)}, '', 0, 0)"
+                        )
 
                 if "streak" in targets:
                     self.streak_bg_label.setStyleSheet(hl_style)
@@ -960,9 +1064,9 @@ class QtOverlay(QWidget):
         if target == "event":
             widget = self.event_preview_label
         elif target == "feed":
-            widget = self.feed_label
+            widget = self.feed_container
         elif target == "stats":
-            widget = self.stats_bg_label
+            widget = self.stats_container
         elif target == "streak":
             widget = self.streak_bg_label
         elif target == "crosshair":
@@ -978,8 +1082,8 @@ class QtOverlay(QWidget):
     def clear_edit_visuals(self):
         """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
         # Stats
-        if hasattr(self, 'stats_bg_label'):
-            self.stats_bg_label.setStyleSheet("background: transparent;")
+        if hasattr(self, 'stats_container'):
+            self.stats_container.setStyleSheet("background: transparent;")
         
         # Twitch
         if hasattr(self, 'chat_container'):
@@ -1003,11 +1107,10 @@ class QtOverlay(QWidget):
             self.twitch_drag_cover.hide()
         
         # Killfeed
-        if hasattr(self, 'feed_label'):
-            self.feed_label.setStyleSheet("background: transparent;")
-            # Falls nur Dummy-Text drin war, leeren (optional, aber sauberer)
-            if "DRAG AREA" in self.feed_label.text():
-                self.feed_label.setText("")
+        if hasattr(self, 'feed_container'):
+            self.feed_container.setStyleSheet("background: transparent;")
+            if not self.feed_messages:
+                self.feed_browser.page().runJavaScript("clearFeed()")
         
         # Streak
         if hasattr(self, 'streak_bg_label'):
@@ -1032,12 +1135,12 @@ class QtOverlay(QWidget):
         if self.event_preview_label.isVisible() and self.event_preview_label.geometry().contains(pos):
             self.dragging_widget = "event"
             self.drag_offset = pos - self.event_preview_label.pos()
-        elif "border" in self.feed_label.styleSheet() and self.feed_label.geometry().contains(pos):
+        elif "border" in self.feed_container.styleSheet() and self.feed_container.geometry().contains(pos):
             self.dragging_widget = "feed"
-            self.drag_offset = pos - self.feed_label.pos()
-        elif "border" in self.stats_bg_label.styleSheet() and self.stats_bg_label.geometry().contains(pos):
+            self.drag_offset = pos - self.feed_container.pos()
+        elif "border" in self.stats_container.styleSheet() and self.stats_container.geometry().contains(pos):
             self.dragging_widget = "stats"
-            self.drag_offset = pos - self.stats_bg_label.pos()
+            self.drag_offset = pos - self.stats_container.pos()
         elif "border" in self.streak_bg_label.styleSheet() and self.streak_bg_label.geometry().contains(pos):
             self.dragging_widget = "streak"
             self.drag_offset = pos - self.streak_bg_label.pos()
@@ -1056,23 +1159,14 @@ class QtOverlay(QWidget):
             self.safe_move(self.event_preview_label, new_pos.x(), new_pos.y())
             self.update_edit_mask(["event"])
         elif self.dragging_widget == "feed":
-            self.safe_move(self.feed_label, new_pos.x(), new_pos.y())
+            self.safe_move(self.feed_container, new_pos.x(), new_pos.y())
             self.update_edit_mask(["feed"])
         elif self.dragging_widget == "crosshair":
             self.safe_move(self.crosshair_label, new_pos.x(), new_pos.y())
             self.update_edit_mask(["crosshair"])
         elif self.dragging_widget == "stats":
-            self.safe_move(self.stats_bg_label, new_pos.x(), new_pos.y())
+            self.safe_move(self.stats_container, new_pos.x(), new_pos.y())
             self.update_edit_mask(["stats"])
-            if self.gui_ref:
-                cfg = self.gui_ref.config.get("stats_widget", {})
-                bg_w, bg_h = self.stats_bg_label.width(), self.stats_bg_label.height()
-                txt_w, txt_h = self.stats_text_label.width(), self.stats_text_label.height()
-                tx_off, ty_off = self.s(cfg.get("tx", 0)), self.s(cfg.get("ty", 0))
-                cx, cy = new_pos.x() + (bg_w / 2), new_pos.y() + (bg_h / 2)
-                final_tx = cx - (txt_w / 2) + tx_off
-                final_ty = cy - (txt_h / 2) + ty_off
-                self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
         elif self.dragging_widget == "streak":
             self.safe_move(self.streak_bg_label, new_pos.x(), new_pos.y())
             self.update_edit_mask(["streak"])
@@ -1115,13 +1209,13 @@ class QtOverlay(QWidget):
                 self.gui_ref.config["crosshair"]["y"] = uns(center_y)
                 self.gui_ref.save_config()
             elif self.dragging_widget == "feed":
-                curr = self.feed_label.pos()
+                curr = self.feed_container.pos()
                 if "killfeed" not in self.gui_ref.config: self.gui_ref.config["killfeed"] = {}
                 self.gui_ref.config["killfeed"]["x"] = uns(curr.x())
                 self.gui_ref.config["killfeed"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
             elif self.dragging_widget == "stats":
-                curr = self.stats_bg_label.pos()
+                curr = self.stats_container.pos()
                 if "stats_widget" not in self.gui_ref.config: self.gui_ref.config["stats_widget"] = {}
                 self.gui_ref.config["stats_widget"]["x"] = uns(curr.x())
                 self.gui_ref.config["stats_widget"]["y"] = uns(curr.y())
@@ -1170,69 +1264,64 @@ class QtOverlay(QWidget):
         })
 
     def update_killfeed_ui(self):
-        """Skaliert alle Nachrichten im Feed und setzt den Label-Text."""
+        """Skaliert alle Nachrichten im Feed und setzt den Browser-Text."""
         scaled_msgs = []
         for msg in self.feed_messages:
             # On-the-fly Skalierung via Regex
             # 1. Font-Größen (XXpx)
             scaled = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", msg)
             # 2. Bild-Dimensionen (width="XX" height="XX")
-            scaled = re.sub(r'(width|height)="(\d+)"', 
+            scaled = re.sub(r'(width|height)="(\d+)"',
                             lambda m: f'{m.group(1)}="{int(int(m.group(2)) * self.ui_scale)}"', scaled)
-            
-            if "style=\"" in scaled: scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
-            scaled_msgs.append(scaled)
-            
-        self.feed_label.setText(
-            f'<div style="text-align: right; margin-right: 5px;">{"".join(scaled_msgs)}</div>')
-        self.feed_label.show()
+
+            if "style=\"" in scaled:
+                scaled = scaled.replace("style=\"", "style=\"line-height: 100%; ")
+            scaled_msgs.append(f"<div class='feed-item'>{scaled}</div>")
+
+        html = f'<div style="text-align: right; margin-right: 5px;">{"".join(scaled_msgs)}</div>'
+        if hasattr(self, 'feed_browser'):
+            self.feed_browser.page().runJavaScript(f"setFeed({json.dumps(html)})")
+        self.feed_container.show()
         self.repaint()
 
     def clear_killfeed(self):
         self.feed_messages = []
-        self.feed_label.clear()
+        if hasattr(self, 'feed_browser'):
+            self.feed_browser.page().runJavaScript("clearFeed()")
         self.repaint()
 
     def update_killfeed_pos(self):
         if not self.gui_ref: return
         conf = self.gui_ref.config.get("killfeed", {})
-        self.safe_move(self.feed_label, self.s(conf.get("x", 50)), self.s(conf.get("y", 200)))
+        x = self.s(conf.get("x", 50))
+        y = self.s(conf.get("y", 200))
+        self.feed_container.setGeometry(x, y, self.feed_w, self.feed_h)
+        self.feed_browser.setGeometry(self.feed_container.rect())
 
     def set_stats_html(self, html, img_path):
-        # 1. Bild / Hintergrund
-        if os.path.exists(img_path) or self.edit_mode:
-            if os.path.exists(img_path):
-                cfg = {}
-                if self.gui_ref: cfg = self.gui_ref.config.get("stats_widget", {})
-                sc = cfg.get("scale", 1.0) * self.ui_scale
+        # 1. Bild / Hintergrund Größe bestimmen
+        bg_name = os.path.basename(img_path) if img_path else ""
+        cfg = {}
+        if self.gui_ref:
+            cfg = self.gui_ref.config.get("stats_widget", {})
+        sc = cfg.get("scale", 1.0) * self.ui_scale
 
-                # --- CACHE GENUTZT ---
+        width = int(600 * self.ui_scale)
+        height = int(60 * self.ui_scale)
+        bg_url = ""
+        if (img_path and os.path.exists(img_path)) or self.edit_mode:
+            if img_path and os.path.exists(img_path):
                 pix = self.get_cached_pixmap(img_path)
-
                 if not pix.isNull():
-                    pix = pix.scaled(int(pix.width() * sc), int(pix.height() * sc), Qt.AspectRatioMode.KeepAspectRatio,
-                                     Qt.TransformationMode.SmoothTransformation)
-                    self.stats_bg_label.setPixmap(pix)
-                    self.stats_bg_label.setFixedSize(16777215, 16777215)
-                    self.stats_bg_label.adjustSize()
-            else:
-                self.stats_bg_label.clear()
-            self.stats_bg_label.show()
+                    width = int(pix.width() * sc)
+                    height = int(pix.height() * sc)
+                    bg_url = f"assets/{bg_name}"
+            self.stats_container.show()
         else:
-            self.stats_bg_label.hide()
+            self.stats_container.hide()
 
         # 2. Text HTML skalieren
-        # NEW: Regex-basierte Skalierung für ALLE Font-Größen
         scaled_html = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html)
-
-        self.stats_text_label.setText(scaled_html)
-        self.stats_text_label.adjustSize()
-        self.stats_text_label.show()
-        self.stats_text_label.raise_()
-        bg_name = os.path.basename(img_path) if img_path else ""
-
-        if not self.stats_bg_label.pixmap() or self.stats_bg_label.pixmap().isNull():
-            self.stats_bg_label.setFixedSize(int(600 * self.ui_scale), int(60 * self.ui_scale))
 
         # Position holen & Anwenden
         st_x, st_y = 50, 500
@@ -1245,19 +1334,22 @@ class QtOverlay(QWidget):
             tx_off = conf.get("tx", 0)
             ty_off = conf.get("ty", 0)
             st_scale = conf.get("scale", 1.0)
+        self.last_stats_html = html
+        self.last_stats_bg = bg_name
+        self.last_stats_size = (width, height)
 
         # Background positionieren
-        self.safe_move(self.stats_bg_label, self.s(st_x), self.s(st_y))
+        x = self.s(st_x)
+        y = self.s(st_y)
+        self.stats_container.setGeometry(x, y, width, height)
+        self.stats_browser.setGeometry(self.stats_container.rect())
 
-        # Text auf Hintergrund zentrieren (+ Offset)
-        bg_rect = self.stats_bg_label.geometry()
-        txt_rect = self.stats_text_label.geometry()
-        
-        cx, cy = bg_rect.center().x(), bg_rect.center().y()
-        final_tx = cx - (txt_rect.width() / 2) + self.s(tx_off)
-        final_ty = cy - (txt_rect.height() / 2) + self.s(ty_off)
-        
-        self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
+        self.stats_container.show()
+        if hasattr(self, 'stats_browser'):
+            self.stats_browser.page().runJavaScript(
+                f"updateStats({json.dumps(scaled_html)}, {json.dumps(bg_url)}, "
+                f"{json.dumps(self.s(tx_off))}, {json.dumps(self.s(ty_off))})"
+            )
 
         self.server.broadcast("stats", {
             "html": html,

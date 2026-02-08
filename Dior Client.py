@@ -383,8 +383,8 @@ class DiorClientGUI:
 
             # Sofort leeren/verstecken wenn ausgeschaltet
             if self.overlay_win:
-                self.overlay_win.feed_label.hide()
-                self.overlay_win.feed_label.clear()
+                self.overlay_win.feed_container.hide()
+                self.overlay_win.clear_killfeed()
 
         state_str = "ENABLED" if new_state else "DISABLED"
         self.add_log(f"UI: Killfeed {state_str}")
@@ -439,45 +439,10 @@ class DiorClientGUI:
         bg_x = self.overlay_win.s(x_conf)
         bg_y = self.overlay_win.s(y_conf)
 
-        # 2. Hintergrund bewegen
-        self.overlay_win.safe_move(self.overlay_win.stats_bg_label, bg_x, bg_y)
-
-        # 3. Text Position relativ dazu berechnen
-
-        # Größen erzwingen (Wichtig!)
-        self.overlay_win.stats_bg_label.adjustSize()
-        self.overlay_win.stats_text_label.adjustSize()
-
-        bg_w = self.overlay_win.stats_bg_label.width()
-        bg_h = self.overlay_win.stats_bg_label.height()
-
-        # Fallback Größen (falls Bild noch lädt oder fehlt)
-        # Dies ist wichtig für den "leeren" Edit-Modus
-        if bg_w < 10: bg_w = int(450 * self.overlay_win.ui_scale)
-        if bg_h < 10: bg_h = int(60 * self.overlay_win.ui_scale)
-
-        txt_w = self.overlay_win.stats_text_label.width()
-        txt_h = self.overlay_win.stats_text_label.height()
-
-        # Offsets aus Config (Slider)
-        tx_offset = self.overlay_win.s(cfg.get("tx", 0))
-        ty_offset = self.overlay_win.s(cfg.get("ty", 0))
-
-        # --- MATHE FIX ---
-
-        # 1. Mitte des Hintergrunds finden (Absolute Bildschirmkoordinaten)
-        center_bg_x = bg_x + (bg_w / 2)
-        center_bg_y = bg_y + (bg_h / 2)
-
-        # 2. Text-Startpunkt berechnen:
-        # Mitte - halbe Textbreite + Benutzer-Offset
-        final_text_x = center_bg_x - (txt_w / 2) + tx_offset
-        final_text_y = center_bg_y - (txt_h / 2) + ty_offset
-
-        self.overlay_win.safe_move(self.overlay_win.stats_text_label, int(final_text_x), int(final_text_y))
-
-        # Damit das Text-Label immer VOR dem Hintergrund liegt
-        self.overlay_win.stats_text_label.raise_()
+        width, height = self.overlay_win.last_stats_size
+        self.overlay_win.stats_container.setGeometry(bg_x, bg_y, width, height)
+        self.overlay_win.stats_browser.setGeometry(self.overlay_win.stats_container.rect())
+        self.overlay_win.stats_container.raise_()
 
     def update_main_config_from_settings(self, data):
         """Empfängt die bereinigten Daten aus settings_qt."""
@@ -540,9 +505,9 @@ class DiorClientGUI:
                 self.update_crosshair_from_qt()
 
                 # Killfeed (leeren)
-                if hasattr(self.overlay_win, 'feed_label'):
-                    self.overlay_win.feed_label.show()
-                    self.overlay_win.feed_label.setText("")
+                if hasattr(self.overlay_win, 'feed_container'):
+                    self.overlay_win.feed_container.show()
+                    self.overlay_win.clear_killfeed()
                     self.overlay_win.update_killfeed_pos()
 
                 # Streak
@@ -570,12 +535,11 @@ class DiorClientGUI:
                 self.overlay_win.crosshair_label.hide()
 
                 # 2. Stats weg (NEU)
-                self.overlay_win.stats_bg_label.hide()
-                self.overlay_win.stats_text_label.hide()
+                self.overlay_win.stats_container.hide()
 
                 # 3. Killfeed weg (NEU)
-                self.overlay_win.feed_label.hide()
-                self.overlay_win.feed_label.clear()
+                self.overlay_win.feed_container.hide()
+                self.overlay_win.clear_killfeed()
 
                 # 4. Streak weg
                 self.overlay_win.streak_bg_label.hide()
@@ -2795,13 +2759,12 @@ class DiorClientGUI:
         if not self.overlay_win: return
 
         # 1. Stats Widget
-        if hasattr(self.overlay_win, 'stats_bg_label'):
-            self.overlay_win.stats_bg_label.hide()
-            self.overlay_win.stats_text_label.hide()
+        if hasattr(self.overlay_win, 'stats_container'):
+            self.overlay_win.stats_container.hide()
 
         # 2. Killfeed
-        if hasattr(self.overlay_win, 'feed_label'):
-            self.overlay_win.feed_label.hide()
+        if hasattr(self.overlay_win, 'feed_container'):
+            self.overlay_win.feed_container.hide()
 
         # 3. Killstreak
         if hasattr(self.overlay_win, 'streak_bg_label'):
@@ -2823,8 +2786,8 @@ class DiorClientGUI:
         self.hide_overlay_temporary()
 
         # Dann Killfeed-Text leeren (harter Reset)
-        if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
-            self.overlay_win.feed_label.setText("")
+        if self.overlay_win and hasattr(self.overlay_win, 'feed_container'):
+            self.overlay_win.clear_killfeed()
 
         # Zähler resetten
         self.killstreak_count = 0
@@ -2956,12 +2919,10 @@ class DiorClientGUI:
 
                 raw_name = stats_cfg.get("img", "").strip()
                 self.overlay_win.set_stats_html(html, get_asset_path(raw_name) if raw_name else "")
-                self.overlay_win.stats_bg_label.show()
-                self.overlay_win.stats_text_label.show()
+                self.overlay_win.stats_container.show()
                 self.update_stats_position_safe()
             else:
-                self.overlay_win.stats_bg_label.hide()
-                self.overlay_win.stats_text_label.hide()
+                self.overlay_win.stats_container.hide()
 
             # === B) CROSSHAIR ===
             cross_conf = self.config.get("crosshair", {})
@@ -2979,9 +2940,9 @@ class DiorClientGUI:
 
             # Feed nur bei Gameplay/Edit oder Stats-Test
             if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or stats_test_active:
-                self.overlay_win.feed_label.show()
+                self.overlay_win.feed_container.show()
             else:
-                self.overlay_win.feed_label.hide()
+                self.overlay_win.feed_container.hide()
 
             # === D) KILLSTREAK ===
             streak_conf = self.config.get("streak", {})
@@ -3227,16 +3188,7 @@ class DiorClientGUI:
                 f_size = stats_cfg.get("font_size", 22)
                 self.overlay_win.set_stats_html(DUMMY_STATS_TEMPLATE.format(f_size=f_size), img_path)
 
-                self.overlay_win.stats_bg_label.show()
-
-                # Größe erzwingen für Rahmen (falls Bild fehlt)
-                if not img_path or not os.path.exists(img_path):
-                    w = int(600 * self.overlay_win.ui_scale)  # Etwas breiter machen für den langen Text
-                    h = int(60 * self.overlay_win.ui_scale)
-                    self.overlay_win.stats_bg_label.setFixedSize(w, h)
-                else:
-                    self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
-                    self.overlay_win.stats_bg_label.adjustSize()
+                self.overlay_win.stats_container.show()
 
                 # Loop anwerfen (der nutzt jetzt auch DUMMY_STATS_HTML, also kein Springen!)
                 self.refresh_ingame_overlay()
@@ -3256,9 +3208,9 @@ class DiorClientGUI:
                 line2 = f'<div style="{base_style}"><span style="color:#00ff00;">ALLY</span> <span style="color:white;">[HS]</span> <span style="color:#ff0000;">TARGET</span></div>'
                 line3 = f'<div style="{base_style}"><span style="color:#888;">[SKL]</span> <span style="color:#ff4444;">SWEATY</span> (4.2)</div>'
 
-                self.overlay_win.feed_label.setText(line1 + line2 + line3)
-                self.overlay_win.feed_label.adjustSize()
-                self.overlay_win.feed_label.show()
+                self.overlay_win.feed_messages = [line3, line2, line1]
+                self.overlay_win.update_killfeed_ui()
+                self.overlay_win.feed_container.show()
 
             # C) EVENTS (Preview Bild)
             if "event" in targets:
