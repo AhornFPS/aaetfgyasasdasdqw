@@ -1460,5 +1460,9 @@ class QtOverlay(QWidget):
 
         if should_show:
             self.chat_container.show()
+            if hasattr(self, 'twitch_browser'):
+                self.twitch_browser.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+                if not self.edit_mode:
+                    self._set_native_mouse_passthrough(self.twitch_browser, True)
         else:
             self.chat_container.hide()
