@@ -57,6 +57,7 @@ class CensusWorker:
         self.s_id = service_id
         self.loop = None
         self.websocket = None
+        self.msg_queue = None  # Buffer for incoming messages
         self.event_cache = set()
         self.event_history = []
 
@@ -75,6 +76,14 @@ class CensusWorker:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             self.loop = loop
+            
+            # Create the queue inside the loop's thread
+            self.msg_queue = asyncio.Queue()
+            
+            # Start the processor as a background task
+            loop.create_task(self.processor())
+            
+            # Run the listener as the main task
             loop.run_until_complete(self.listener())
 
         t = threading.Thread(target=run_loop, daemon=True)
@@ -132,7 +141,33 @@ class CensusWorker:
             # Für Events ohne Counter (z.B. Base Capture) einfach nur triggern
             self.c.trigger_overlay_event(category)
 
+    def _get_stat_obj(self, cid, tid, world_id):
+        # 1. Ermittle die Fraktion des AKTUELLEN Events
+        current_faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+
+        if cid not in self.c.session_stats:
+            # NEUER EINTRAG
+            self.c.session_stats[cid] = {
+                "id": cid,
+                "name": self.c.name_cache.get(cid, "Searching..."),
+                "faction": current_faction_name,  # Setze Fraktion basierend auf Event
+                "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
+                "revives_received": 0,
+                "start": time.time(),
+                "last_kill_time": time.time(),
+                "world_id": str(world_id)
+            }
+        else:
+            # BESTEHENDER EINTRAG
+            # Check: Ist der Spieler als "NSO" gespeichert, kämpft aber gerade für eine echte Fraktion?
+            obj = self.c.session_stats[cid]
+            if obj["faction"] == "NSO" and current_faction_name != "NSO":
+                obj["faction"] = current_faction_name
+
+        return self.c.session_stats[cid]
+
     async def listener(self):
+        """Websocket listener that only puts raw messages into the queue."""
         uri = f"wss://push.planetside2.com/streaming?environment=ps2&service-id={self.s_id}"
 
         while True:
@@ -143,133 +178,117 @@ class CensusWorker:
                     # SUBSCRIBE
                     msg = {
                         "service": "event", "action": "subscribe",
-                        "characters": ["all"], "worlds": ["1","19","10","40"],
-                        "eventNames": ["Death","GainExperience","PlayerLogin","PlayerLogout","MetagameEvent"]
+                        "characters": ["all"], "worlds": ["all"],
+                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
                     }
                     await websocket.send(json.dumps(msg))
                     self.c.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
 
-                    def get_stat_obj(cid, tid):
-                        # 1. Ermittle die Fraktion des AKTUELLEN Events
-                        current_faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-
-                        if cid not in self.c.session_stats:
-                            # NEUER EINTRAG
-                            self.c.session_stats[cid] = {
-                                "id": cid,
-                                "name": self.c.name_cache.get(cid, "Searching..."),
-                                "faction": current_faction_name,  # Setze Fraktion basierend auf Event
-                                "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
-                                "revives_received": 0,
-                                "start": time.time(),
-                                "last_kill_time": time.time(),
-                                "world_id": str(p.get("world_id", "0"))
-                            }
-                        else:
-                            # BESTEHENDER EINTRAG
-                            # Check: Ist der Spieler als "NSO" gespeichert, kämpft aber gerade für eine echte Fraktion?
-                            obj = self.c.session_stats[cid]
-                            if obj["faction"] == "NSO" and current_faction_name != "NSO":
-                                obj["faction"] = current_faction_name
-
-                        return self.c.session_stats[cid]
-
                     async for message in websocket:
+                        # Add message to queue without processing
+                        self.msg_queue.put_nowait(message)
+
                         if getattr(self.c, "needs_reconnect", False):
                             self.c.needs_reconnect = False
                             await websocket.close()
                             break
 
-                        data = json.loads(message)
-                        if "payload" in data:
-                            p = data["payload"]
-                            e_name = p.get("event_name")
-                            payload_world = str(p.get("world_id", "0"))
-
-                            # --- COMPATIBILITY LAYER (Emerald -> Osprey / Cobalt -> Wainwright) ---
-                            if payload_world == "17": payload_world = "1"
-                            if payload_world == "13": payload_world = "10"
-
-                            # DUPLIKAT FILTER
-                            uid = f"{e_name}_{p.get('timestamp')}_{p.get('character_id')}_{p.get('attacker_character_id')}"
-                            if uid in self.event_cache: continue
-                            self.event_cache.add(uid)
-                            self.event_history.append(uid)
-                            if len(self.event_history) > 500: self.event_cache.discard(self.event_history.pop(0))
-
-                            # -------------------------------------------------
-                            # 1. LOGIN / LOGOUT
-                            # -------------------------------------------------
-                            if e_name == "PlayerLogin":
-                                c_id = p.get("character_id")
-
-                                # Check if it's one of our tracked chars
-                                for name, saved_id in self.c.char_data.items():
-                                    if saved_id == c_id:
-                                        self.c.current_character_id = c_id
-                                        self.c.current_selected_char_name = name
-
-                                        # UI Update (Thread-Safe via Invoke)
-                                        from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
-                                        if hasattr(self.c, 'ovl_config_win'):
-                                            QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
-                                                                     Qt.ConnectionType.QueuedConnection,
-                                                                     Q_ARG(str, name))
-
-                                        # Server Switch
-                                        if payload_world != "0" and payload_world != str(self.c.current_world_id):
-                                            s_name = self.c.get_server_name_by_id(payload_world)
-                                            self.c.switch_server(s_name, payload_world)
-
-                                        # --- RESTORED FEATURE: LOGIN EVENT TRIGGER ---
-                                        def trigger_login_event(cid_val):
-                                            try:
-                                                u = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
-                                                r = requests.get(u, timeout=3).json()
-                                                f_id = "0"
-                                                if r.get("returned", 0) > 0:
-                                                    f_id = r["character_list"][0].get("faction_id", "0")
-
-                                                f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
-
-                                                self.c.trigger_overlay_event(f"Login {f_tag}")
-                                                self.c.add_log(f"AUTO-TRACK: {name} eingeloggt ({f_tag}).")
-                                            except:
-                                                pass
-
-                                        threading.Thread(target=trigger_login_event, args=(c_id,), daemon=True).start()
-                                        break
-
-                            elif e_name == "PlayerLogout":
-                                if p.get("character_id") == self.c.current_character_id:
-                                    self.c.current_character_id = ""
-                                    self.c.add_log("AUTO-TRACK: Ausgeloggt.")
-
-                            # -------------------------------------------------
-                            # SERVER FILTER
-                            # -------------------------------------------------
-                            track_id = p.get("character_id") or p.get("attacker_character_id")
-                            if track_id and track_id != "0":
-                                tid = p.get("team_id") or p.get("attacker_team_id")
-                                f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
-                                w_id = str(p.get("world_id", "0"))
-                                self.c.active_players[track_id] = (time.time(), f_name, w_id)
-                                if track_id not in self.c.name_cache:
-                                    self.c.id_queue.put(track_id)
-
-                            # -------------------------------------------------
-                            # EVENT PROCESSING
-                            # -------------------------------------------------
-                            if e_name == "Death":
-                                self._handle_death(p, get_stat_obj)
-                            elif e_name == "GainExperience":
-                                self._handle_experience(p, get_stat_obj)
-                            elif e_name == "MetagameEvent":
-                                self._handle_metagame(p)
-
             except Exception as e:
                 self.c.add_log(f"Websocket Reconnect: {e}")
                 await asyncio.sleep(5)
+
+    async def processor(self):
+        """Async worker that processes messages from the queue using current logic."""
+        while True:
+            message = await self.msg_queue.get()
+            try:
+                data = json.loads(message)
+                if "payload" in data:
+                    p = data["payload"]
+                    e_name = p.get("event_name")
+                    payload_world = str(p.get("world_id", "0"))
+
+                    # --- COMPATIBILITY LAYER ---
+                    if payload_world == "17": payload_world = "1"
+                    if payload_world == "13": payload_world = "10"
+
+                    # DUPLIKAT FILTER (Improved)
+                    if e_name == "GainExperience":
+                        uid = f"EXP_{p.get('timestamp')}_{p.get('character_id')}_{p.get('experience_id')}_{p.get('other_id')}"
+                    elif e_name == "Death":
+                        uid = f"DTH_{p.get('timestamp')}_{p.get('character_id')}_{p.get('attacker_character_id')}_{p.get('attacker_weapon_id')}"
+                    elif e_name == "MetagameEvent":
+                        uid = f"MTG_{p.get('timestamp')}_{p.get('world_id')}_{p.get('metagame_event_id')}_{p.get('metagame_event_state_name')}"
+                    else:
+                        uid = f"{e_name}_{p.get('timestamp')}_{p.get('character_id', '0')}_{p.get('attacker_character_id', '0')}"
+
+                    if uid in self.event_cache:
+                        self.msg_queue.task_done()
+                        continue
+                    self.event_cache.add(uid)
+                    self.event_history.append(uid)
+                    if len(self.event_history) > 1000:  # Erhöht auf 1000 für mehr Sicherheit
+                        self.event_cache.discard(self.event_history.pop(0))
+
+                    # Local helper for stat objects (adapted to use method)
+                    def get_stat_obj(cid, tid):
+                        return self._get_stat_obj(cid, tid, p.get("world_id", "0"))
+
+                    # 1. LOGIN / LOGOUT
+                    if e_name == "PlayerLogin":
+                        c_id = p.get("character_id")
+                        for name, saved_id in self.c.char_data.items():
+                            if saved_id == c_id:
+                                self.c.current_character_id = c_id
+                                self.c.current_selected_char_name = name
+                                from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
+                                if hasattr(self.c, 'ovl_config_win'):
+                                    QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
+                                                             Qt.ConnectionType.QueuedConnection, Q_ARG(str, name))
+                                if payload_world != "0" and payload_world != str(self.c.current_world_id):
+                                    s_name = self.c.get_server_name_by_id(payload_world)
+                                    self.c.switch_server(s_name, payload_world)
+
+                                def trigger_login_event(cid_val):
+                                    try:
+                                        u = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
+                                        r = requests.get(u, timeout=3).json()
+                                        f_id = "0"
+                                        if r.get("returned", 0) > 0:
+                                            f_id = r["character_list"][0].get("faction_id", "0")
+                                        f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
+                                        self.c.trigger_overlay_event(f"Login {f_tag}")
+                                        self.c.add_log(f"AUTO-TRACK: {name} eingeloggt ({f_tag}).")
+                                    except: pass
+                                threading.Thread(target=trigger_login_event, args=(c_id,), daemon=True).start()
+                                break
+                    elif e_name == "PlayerLogout":
+                        if p.get("character_id") == self.c.current_character_id:
+                            self.c.current_character_id = ""
+                            self.c.add_log("AUTO-TRACK: Ausgeloggt.")
+
+                    # 2. SERVER FILTER / PLAYER TRACKING
+                    track_id = p.get("character_id") or p.get("attacker_character_id")
+                    if track_id and track_id != "0":
+                        tid = p.get("team_id") or p.get("attacker_team_id")
+                        f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
+                        w_id = str(p.get("world_id", "0"))
+                        self.c.active_players[track_id] = (time.time(), f_name, w_id)
+                        if track_id not in self.c.name_cache:
+                            self.c.id_queue.put(track_id)
+
+                    # 3. EVENT PROCESSING (Dispatch)
+                    if e_name == "Death":
+                        self._handle_death(p, get_stat_obj)
+                    elif e_name == "GainExperience":
+                        self._handle_experience(p, get_stat_obj)
+                    elif e_name == "MetagameEvent":
+                        self._handle_metagame(p)
+
+            except Exception as e:
+                self.c.add_log(f"Processor Error: {e}")
+
+            self.msg_queue.task_done()
 
     def _handle_death(self, p, get_stat_obj):
         killer_id = p.get("attacker_character_id")
@@ -577,14 +596,7 @@ class CensusWorker:
             # STATT Deaths abzuziehen, zählen wir Revives hoch
             # if r_obj["d"] > 0: r_obj["d"] -= 1
             r_obj["revives_received"] = r_obj.get("revives_received", 0) + 1
-        if exp_id in ["593"]:
-            print("Bounty Test 1")
-        if exp_id == "593":
-            print("Bounty Test 2")
-        if exp_id in ["26"]:
-            print("Roadkill Test 1")
-        if exp_id == "26":
-            print("Roadkill Test 2")
+
 
 
         # A) EVENTS DIE MIR PASSIEREN
