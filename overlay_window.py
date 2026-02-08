@@ -1094,6 +1094,7 @@ class QtOverlay(QWidget):
                     pix = pix.scaled(int(pix.width() * sc), int(pix.height() * sc), Qt.AspectRatioMode.KeepAspectRatio,
                                      Qt.TransformationMode.SmoothTransformation)
                     self.stats_bg_label.setPixmap(pix)
+                    self.stats_bg_label.setFixedSize(16777215, 16777215)
                     self.stats_bg_label.adjustSize()
             else:
                 self.stats_bg_label.clear()
@@ -1110,6 +1111,9 @@ class QtOverlay(QWidget):
         self.stats_text_label.show()
         self.stats_text_label.raise_()
         bg_name = os.path.basename(img_path) if img_path else ""
+
+        if not self.stats_bg_label.pixmap() or self.stats_bg_label.pixmap().isNull():
+            self.stats_bg_label.setFixedSize(int(600 * self.ui_scale), int(60 * self.ui_scale))
 
         # Position holen & Anwenden
         st_x, st_y = 50, 500
