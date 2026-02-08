@@ -2874,11 +2874,12 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
         # ---------------------------------------------------------
+        path_recording = bool(self.overlay_win and getattr(self.overlay_win, "path_edit_active", False))
         should_render = False
         mode_gameplay = False  # Trennung zwischen "Darf rendern" und "Spiel läuft wirklich"
 
         # Rendern, wenn irgendein Test oder Edit läuft
-        if edit_active or stats_test_active or streak_test_active:
+        if edit_active or stats_test_active or streak_test_active or path_recording:
             should_render = True
         elif master_switch and game_running and game_focused:
             should_render = True
@@ -2989,13 +2990,13 @@ class DiorClientGUI:
 
             # HIER kommt streak_test_active dazu!
             if (streak_conf.get("active",
-                                True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active:
+                                True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active or path_recording:
                 
                 # FIX: Nur anzeigen, wenn wir leben! (is_dead Check hinzugefügt)
                 # Ausnahme: Edit-Modus oder Streak-Test
                 show_condition = (self.killstreak_count > 0 and not getattr(self, "is_dead", False))
                 
-                if show_condition or streak_editing or streak_test_active:
+                if show_condition or streak_editing or streak_test_active or path_recording:
                     self.overlay_win.streak_bg_label.show()
                     self.overlay_win.streak_text_label.show()
                     for k in self.overlay_win.knife_labels:
