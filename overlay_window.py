@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowE
 
 # Aus QtGui kommen die Grafik-Ressourcen
 from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
-                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument)
+                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument, QRegion)
 
 # Sound Support (Optional, falls pygame fehlt)
 try:
@@ -222,6 +222,7 @@ class QtOverlay(QWidget):
         self.edit_mode = False
         self.dragging_widget = None
         self.drag_offset = None
+        self.edit_targets = []
         self.knife_labels = []
 
         # --- CACHE DICTIONARY (NEU) ---
@@ -848,6 +849,8 @@ class QtOverlay(QWidget):
         if enabled:
             # 0. Erst Visuals säubern
             self.clear_edit_visuals()
+            self.edit_targets = []
+            self.clearMask()
 
             # Normaler Overlay-Modus (Klicks gehen durch)
             self.edit_mode = False
@@ -860,6 +863,7 @@ class QtOverlay(QWidget):
         else:
             # Edit-Modus (Fenster fängt Klicks ab)
             self.edit_mode = True
+            self.edit_targets = active_targets if active_targets else []
             self.setWindowFlags(
                 Qt.WindowType.FramelessWindowHint |
                 Qt.WindowType.WindowStaysOnTopHint |
@@ -945,8 +949,36 @@ class QtOverlay(QWidget):
                     # Den echten Chat verstecken wir, damit er nicht stört
                     self.chat_container.hide()
 
+                self.apply_edit_mask()
+
         except Exception as e:
             print(f"Passthrough Error: {e}")
+
+    def apply_edit_mask(self):
+        """Begrenzt die klickbare Fläche im Edit-Modus auf aktive Targets."""
+        if not self.edit_mode or not self.edit_targets:
+            self.clearMask()
+            return
+
+        region = QRegion()
+        for target in self.edit_targets:
+            if target == "feed" and hasattr(self, 'feed_label') and self.feed_label.isVisible():
+                region |= QRegion(self.feed_label.geometry())
+            elif target == "stats" and hasattr(self, 'stats_bg_label') and self.stats_bg_label.isVisible():
+                region |= QRegion(self.stats_bg_label.geometry())
+            elif target == "streak" and hasattr(self, 'streak_bg_label') and self.streak_bg_label.isVisible():
+                region |= QRegion(self.streak_bg_label.geometry())
+            elif target == "crosshair" and hasattr(self, 'crosshair_label') and self.crosshair_label.isVisible():
+                region |= QRegion(self.crosshair_label.geometry())
+            elif target == "event" and hasattr(self, 'event_preview_label') and self.event_preview_label.isVisible():
+                region |= QRegion(self.event_preview_label.geometry())
+            elif target == "twitch" and hasattr(self, 'twitch_drag_cover') and self.twitch_drag_cover.isVisible():
+                region |= QRegion(self.twitch_drag_cover.geometry())
+
+        if region.isEmpty():
+            self.clearMask()
+        else:
+            self.setMask(region)
 
     def _set_native_mouse_passthrough(self, widget, enabled):
         """Setzt den Windows-Style für native Widgets wie QWebEngineView."""
@@ -1073,6 +1105,7 @@ class QtOverlay(QWidget):
             self.chat_container.move(self.twitch_drag_cover.pos())
             # Update GUI Sliders via Signal
             self.notify_chat_moved(new_pos.x(), new_pos.y())
+        self.apply_edit_mask()
 
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
