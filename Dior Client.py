@@ -1033,7 +1033,7 @@ class DiorClientGUI:
 
         # MOVE UI Button
         # Wir machen daraus einen Toggle: Einmal klicken = Sichtbar machen, nochmal = Normal
-        #self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_twitch_edit_mode)
+        self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_hud_edit_mode)
         if self.overlay_win:
             self.overlay_win.signals.item_moved.connect(self.on_overlay_item_moved)
         self.ovl_config_win.spin_twitch_hold.valueChanged.connect(self.overlay_win.set_chat_hold_time)
@@ -3159,6 +3159,8 @@ class DiorClientGUI:
                 targets = ["streak"]
             elif "EVENTS" in tab_text:
                 targets = ["event"]
+            elif "TWITCH" in tab_text:
+                targets = ["twitch"]
 
             return targets
         except Exception as e:
@@ -3191,13 +3193,18 @@ class DiorClientGUI:
             return
 
         # Buttons zum Färben
-        btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats]
+        btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats, ui.btn_edit_twitch]
 
         if is_editing:
             # --- START EDIT (An) ---
 
             # 1. Overlay klickbar machen
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
+
+            # ZWINGE das Config-Fenster nach oben, damit man den "Stop Edit" Button immer klicken kann!
+            # Wir machen das NACHDEM das Overlay handle neu erstellt wurde
+            self.ovl_config_win.raise_()
+            self.ovl_config_win.activateWindow()
 
             # 2. Buttons rot färben
             for btn in btn_list:
@@ -3308,6 +3315,10 @@ class DiorClientGUI:
 
         else:
             # --- STOP EDIT (Aus) ---
+
+            # ZWINGE das Config-Fenster zurück (OnTop aus)
+            self.ovl_config_win.setWindowFlags(self.ovl_config_win.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint)
+            self.ovl_config_win.show()
 
             # 1. Overlay wieder durchlässig machen
             self.overlay_win.set_mouse_passthrough(True)

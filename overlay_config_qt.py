@@ -1376,7 +1376,11 @@ class OverlayConfigWindow(QWidget):
         self.btn_save_twitch.setObjectName("SaveBtn")
         self.btn_save_twitch.setMinimumHeight(35)
 
-        #btn_box.addWidget(self.btn_edit_twitch)
+        self.btn_edit_twitch = QPushButton("MOVE UI")
+        self.btn_edit_twitch.setObjectName("EditBtn")
+        self.btn_edit_twitch.setMinimumHeight(35)
+        
+        btn_box.addWidget(self.btn_edit_twitch)
         btn_box.addWidget(self.btn_test_twitch)
         btn_box.addWidget(self.btn_save_twitch)
 

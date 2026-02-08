@@ -4,6 +4,7 @@ import ctypes
 import math
 import time
 import re
+import json
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from overlay_server import OverlayServer
@@ -80,7 +81,7 @@ class DraggableChat(QWebEngineView):
         pass
 
     def clear(self):
-        self.setHtml("")
+        self.page().runJavaScript("clearChat()")
 
 
 class ChatMessageWidget(QWidget):
@@ -96,6 +97,7 @@ class ChatMessageWidget(QWidget):
         layout.addWidget(self.browser)
 
         self.browser.loadFinished.connect(self._prepare_height)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
         # --- DER FIX: Base URL mitgeben ---
         # Wir geben den Pfad des aktuellen Ordners als "Heimat" an.
@@ -347,19 +349,26 @@ class QtOverlay(QWidget):
         self.hitmarker_label.hide()
 
         self.chat_container = QWidget(self)
-        self.chat_layout = QVBoxLayout(self.chat_container)
-        self.chat_layout.setContentsMargins(0, 0, 0, 0)
-        self.chat_layout.setSpacing(5)
-
-        # GEÄNDERT: Nachrichten setzen jetzt oben an
-        self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
+        self.chat_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.chat_container.hide()
 
-        self.chat_hold_time = 15  # Standard: 15 Sekunden
+        # --- SINGLE TWITCH BROWSER ---
+        self.twitch_browser = DraggableChat(self.chat_container)
+        self.twitch_browser.hide()
+
+        # Initialen Inhalt setzen
+        self.chat_hold_time = 15
+        self.update_twitch_browser_content()
+
         self.auto_hide_timer = QTimer(self)
         self.auto_hide_timer.setSingleShot(True)
         self.auto_hide_timer.timeout.connect(self.fade_out_chat)
+
+        # --- TWITCH DRAG COVER (Fix für WebEngine Click-Interferenz) ---
+        self.twitch_drag_cover = QWidget(self)
+        self.twitch_drag_cover.setObjectName("twitch_drag_cover")
+        self.twitch_drag_cover.hide()
+        # WICHTIG: Kein WA_TransparentForMouseEvents hier, damit es Klicks fängt!
 
         self.server = OverlayServer()
 
@@ -421,12 +430,90 @@ class QtOverlay(QWidget):
                 border-radius: 5px; 
             }}
         """)
+        
+        if hasattr(self, 'twitch_browser'):
+            self.twitch_browser.setGeometry(self.chat_container.rect())
+        if hasattr(self, 'twitch_drag_cover'):
+            self.twitch_drag_cover.setGeometry(self.chat_container.geometry())
 
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
             self.update_twitch_visibility(enabled)
 
-    def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False): # <--- is_test hinzugefügt
+    def update_twitch_browser_content(self):
+        """Initialisiert oder resettet den Browser-Inhalt."""
+        template = """
+        <html>
+        <head>
+            <style>
+                @keyframes slideIn {
+                    from { transform: translateX(-30px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+                body { 
+                    margin: 0; padding: 5px; 
+                    overflow: hidden; 
+                    background: transparent;
+                    font-family: 'Segoe UI', Arial;
+                    color: white;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: flex-start;
+                }
+                #chat-log { width: 100%; }
+                .message-container {
+                    padding: 2px 0;
+                    margin-bottom: 4px;
+                    animation: slideIn 0.4s ease-out forwards;
+                    font-weight: 800;
+                    text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
+                }
+                .fade-out {
+                    animation: fadeOut 1.0s forwards;
+                }
+                .user { font-weight: 900; text-shadow: 0px 0px 8px #000, 1px 1px 1px #000; }
+                img { vertical-align: middle; max-height: 2em; }
+            </style>
+        </head>
+        <body>
+            <div id="chat-log"></div>
+            <script>
+                function addMessage(user, msg, userColor, fontSize, duration) {
+                    const container = document.getElementById('chat-log');
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message-container';
+                    msgDiv.style.fontSize = fontSize + 'pt';
+                    
+                    msgDiv.innerHTML = `<span class="user" style="color: ${userColor}">${user}:</span> ${msg}`;
+                    container.appendChild(msgDiv);
+                    
+                    if (container.children.length > 50) {
+                        container.removeChild(container.firstChild);
+                    }
+                    
+                    if (duration > 0) {
+                        setTimeout(() => {
+                            msgDiv.classList.add('fade-out');
+                            setTimeout(() => msgDiv.remove(), 1000);
+                        }, duration * 1000);
+                    }
+                }
+                function clearChat() {
+                    document.getElementById('chat-log').innerHTML = '';
+                }
+            </script>
+        </body>
+        </html>
+        """
+        base_url = QUrl.fromLocalFile(os.path.abspath("."))
+        self.twitch_browser.setHtml(template, base_url)
+        self.twitch_browser.show()
+
+    def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
         # 1. Sichtbarkeit prüfen
         enabled = True
         always_on = False
@@ -440,68 +527,23 @@ class QtOverlay(QWidget):
         if not should_process: return
 
         self.chat_container.show()
+        if not self.twitch_browser.isVisible():
+            self.twitch_browser.show()
 
         # PFAD-FIX für WebEngine
-        # Wir machen aus emote://C:\pfad -> file:///C:/pfad
         html_msg = html_msg.replace('src="emote://', 'src="file:///')
         html_msg = html_msg.replace('\\', '/')
 
         safe_color = self.get_readable_color(color)
         f_size = getattr(self, 'current_chat_font_size', 12)
 
-        full_html = f"""
-                                <html>
-                                <head>
-                                    <style>
-                                        @keyframes slideIn {{
-                                            from {{
-                                                transform: translateX(-30px);
-                                                opacity: 0;
-                                            }}
-                                            to {{
-                                                transform: translateX(0);
-                                                opacity: 1;
-                                            }}
-                                        }}
+        # In JS injecten
+        js = f"addMessage({json.dumps(user)}, {json.dumps(html_msg)}, {json.dumps(safe_color)}, {json.dumps(f_size)}, {json.dumps(self.chat_hold_time)})"
+        self.twitch_browser.page().runJavaScript(js)
 
-                                        body {{ 
-                                            margin: 0; padding: 5px; 
-                                            overflow: hidden; 
-                                            font-family: 'Segoe UI', Arial;
-                                            background-color: transparent;
-                                            color: white;
-                                            /* Hier wird die Animation auf den gesamten Body angewendet */
-                                            animation: slideIn 0.4s ease-out forwards;
-                                        }}
-                                        .message {{
-                                            font-size: {f_size}pt;
-                                            font-weight: 800;
-                                            text-shadow: 2px 2px 2px #000, 0px 0px 4px #000;
-                                        }}
-                                        .user {{
-                                            color: {safe_color};
-                                            font-weight: 900;
-                                            text-shadow: 0px 0px 8px #000, 1px 1px 1px #000;
-                                        }}
-                                        img {{ vertical-align: middle; max-height: 2em; }}
-                                    </style>
-                                </head>
-                                <body>
-                                    <div class="message">
-                                        <span class="user">{user}:</span> {html_msg}
-                                    </div>
-                                </body>
-                                </html>
-                                """
-
-        # Widget erstellen (Höhe regelt sich intern von selbst!)
-        msg_widget = ChatMessageWidget(self.chat_container, full_html, self.chat_hold_time)
-        msg_widget.setFixedWidth(self.chat_container.width())
-        self.chat_layout.addWidget(msg_widget)
-
-        if self.chat_layout.count() > 50:
-            item = self.chat_layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
+        # Auto-Hide Timer resetten (für den ganzen Container)
+        if self.chat_hold_time > 0:
+            self.auto_hide_timer.start((self.chat_hold_time + 2) * 1000)
 
     def get_readable_color(self, hex_color):
         """Prüft die Helligkeit und hellt dunkle Farben auf."""
@@ -538,16 +580,8 @@ class QtOverlay(QWidget):
             self.chat_container.show()
 
     def clear_twitch_chat(self):
-        """Entfernt alle aktuellen Nachrichten-Widgets aus dem Layout."""
-        while self.chat_layout.count():
-            item = self.chat_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                # Falls es ein ChatMessageWidget ist, stoppen wir das Movie
-                if hasattr(widget, 'movies'):
-                    for m in widget.movies.values():
-                        m.stop()
-                widget.deleteLater()
+        """Leert den Browser-Inhalt."""
+        self.twitch_browser.clear()
         self.add_log("TWITCH: Chat cleared.")
 
     # --- CACHE LOGIK ---
@@ -837,6 +871,8 @@ class QtOverlay(QWidget):
         if not enabled:
             self.activateWindow()
             self.raise_()
+            # IMMER den echten Chat verstecken, wenn Edit Mode - beugt Blocking vor!
+            self.chat_container.hide()
 
         # 3. Windows API Styles anwenden (Auf das NEUE Handle!)
         try:
@@ -895,6 +931,15 @@ class QtOverlay(QWidget):
                         self.event_preview_label.show()
                         self.event_preview_label.raise_()
 
+                if "twitch" in targets:
+                    # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
+                    # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
+                    self.twitch_drag_cover.setStyleSheet(hl_style)
+                    self.twitch_drag_cover.show()
+                    self.twitch_drag_cover.raise_()
+                    # Den echten Chat verstecken wir, damit er nicht stört
+                    self.chat_container.hide()
+
         except Exception as e:
             print(f"Passthrough Error: {e}")
 
@@ -903,6 +948,27 @@ class QtOverlay(QWidget):
         # Stats
         if hasattr(self, 'stats_bg_label'):
             self.stats_bg_label.setStyleSheet("background: transparent;")
+        
+        # Twitch
+        if hasattr(self, 'chat_container'):
+            # Reset style to what update_twitch_style would set
+            enabled = True
+            if self.gui_ref:
+                enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
+                self.update_twitch_style(
+                    self.chat_container.x(), self.chat_container.y(),
+                    self.chat_container.width(), self.chat_container.height(),
+                    self.gui_ref.config.get("twitch", {}).get("opacity", 30),
+                    self.gui_ref.config.get("twitch", {}).get("font_size", 12)
+                )
+            if not enabled:
+                self.chat_container.hide()
+            else:
+                self.chat_container.show()
+        
+        # Twitch Drag Cover verstecken
+        if hasattr(self, 'twitch_drag_cover'):
+            self.twitch_drag_cover.hide()
         
         # Killfeed
         if hasattr(self, 'feed_label'):
@@ -946,6 +1012,9 @@ class QtOverlay(QWidget):
         elif "border" in self.crosshair_label.styleSheet() and self.crosshair_label.geometry().contains(pos):
             self.dragging_widget = "crosshair"
             self.drag_offset = pos - self.crosshair_label.pos()
+        elif self.twitch_drag_cover.isVisible() and self.twitch_drag_cover.geometry().contains(pos):
+            self.dragging_widget = "twitch"
+            self.drag_offset = pos - self.twitch_drag_cover.pos()
 
     def mouseMoveEvent(self, event):
         if not self.edit_mode or not self.dragging_widget or not self.drag_offset: return
@@ -977,6 +1046,12 @@ class QtOverlay(QWidget):
                 self.safe_move(self.streak_text_label,
                                cx + self.s(cfg.get("tx", 0)) - (self.streak_text_label.width() // 2),
                                cy + self.s(cfg.get("ty", 0)) - (self.streak_text_label.height() // 2))
+        elif self.dragging_widget == "twitch":
+            self.safe_move(self.twitch_drag_cover, new_pos.x(), new_pos.y())
+            # Das eigentliche Container-Objekt ziehen wir mit
+            self.chat_container.move(self.twitch_drag_cover.pos())
+            # Update GUI Sliders via Signal
+            self.notify_chat_moved(new_pos.x(), new_pos.y())
 
     def mouseReleaseEvent(self, event):
         if not self.edit_mode or not self.dragging_widget: return
@@ -1018,6 +1093,12 @@ class QtOverlay(QWidget):
                 if "streak" not in self.gui_ref.config: self.gui_ref.config["streak"] = {}
                 self.gui_ref.config["streak"]["x"] = uns(curr.x())
                 self.gui_ref.config["streak"]["y"] = uns(curr.y())
+                self.gui_ref.save_config()
+            elif self.dragging_widget == "twitch":
+                curr = self.twitch_drag_cover.pos()
+                if "twitch" not in self.gui_ref.config: self.gui_ref.config["twitch"] = {}
+                self.gui_ref.config["twitch"]["x"] = uns(curr.x())
+                self.gui_ref.config["twitch"]["y"] = uns(curr.y())
                 self.gui_ref.save_config()
 
         self.dragging_widget = None
