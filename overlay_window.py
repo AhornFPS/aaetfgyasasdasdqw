@@ -633,9 +633,15 @@ class QtOverlay(QWidget):
                     const content = document.getElementById('stats-content');
                     const containerRect = container.getBoundingClientRect();
                     const contentRect = content.getBoundingClientRect();
-                    const width = Math.ceil(Math.max(containerRect.width, contentRect.width));
-                    const height = Math.ceil(Math.max(containerRect.height, contentRect.height));
-                    return { width, height };
+                    const left = Math.min(containerRect.left, contentRect.left);
+                    const right = Math.max(containerRect.right, contentRect.right);
+                    const top = Math.min(containerRect.top, contentRect.top);
+                    const bottom = Math.max(containerRect.bottom, contentRect.bottom);
+                    const width = Math.ceil(right - left);
+                    const height = Math.ceil(bottom - top);
+                    const offsetX = Math.floor(left - containerRect.left);
+                    const offsetY = Math.floor(top - containerRect.top);
+                    return { width, height, offsetX, offsetY };
                 }
             </script>
         </body>
@@ -1495,12 +1501,25 @@ class QtOverlay(QWidget):
             return
         width = int(bounds.get("width", self.last_stats_size[0]))
         height = int(bounds.get("height", self.last_stats_size[1]))
+        offset_x = int(bounds.get("offsetX", 0))
+        offset_y = int(bounds.get("offsetY", 0))
         width = max(width, self.last_stats_size[0])
         height = max(height, self.last_stats_size[1])
 
-        x, y = self.stats_container.x(), self.stats_container.y()
+        x = self.stats_container.x() + offset_x
+        y = self.stats_container.y() + offset_y
         geometry = (int(x), int(y), int(width), int(height))
-        if geometry != self.last_stats_geometry:
+        if not self.last_stats_geometry:
+            should_update = True
+        else:
+            last_x, last_y, last_w, last_h = self.last_stats_geometry
+            should_update = (
+                abs(geometry[0] - last_x) >= 2
+                or abs(geometry[1] - last_y) >= 2
+                or abs(geometry[2] - last_w) >= 2
+                or abs(geometry[3] - last_h) >= 2
+            )
+        if should_update:
             self.stats_container.setGeometry(*geometry)
             self.stats_browser.setGeometry(self.stats_container.rect())
             self.last_stats_geometry = geometry
