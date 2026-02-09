@@ -75,7 +75,7 @@ cd dist/Better\ Planetside
 
 ### PlanetSide 2
 - **Game Mode**: Borderless Windowed (required for overlay visibility)
-- **API Key**: Optional, for enhanced features
+
 
 ## 🎮 Usage
 
@@ -96,7 +96,7 @@ cd dist/Better\ Planetside
 ### Twitch Integration
 
 1. Go to **Settings** → **Twitch**
-2. Enter your **Twitch channel name**
+2. Enter the **Twitch channel name you want to get messages from**
 3. Configure **chat display settings**
 4. Chat messages appear in-game overlay
 
@@ -148,13 +148,7 @@ BetterPlanetside/
 - Check **internet connection**
 - Ensure Twitch channel exists and is live
 
-### Linux: Overlay moves with main window
-- The application should automatically use XWayland
-- If issues persist, run: `QT_QPA_PLATFORM=xcb python "Dior Client.py"`
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
 ## 📜 License
 
