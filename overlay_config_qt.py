@@ -164,6 +164,24 @@ QPushButton#RecordBtn:hover {
     background-color: #aa4400; 
     border-color: #ff8c00; 
 }
+QPushButton#RecordBtn:pressed {
+    background-color: #aa4400;
+    border-color: #ff8c00;
+}
+QPushButton#RecordBtn[recording="true"] {
+    background-color: #ff0000;
+    color: white;
+    font-weight: bold;
+    border: 1px solid #cc0000;
+}
+QPushButton#RecordBtn[recording="true"]:hover {
+    background-color: #ff3333;
+    border-color: #ff6666;
+}
+QPushButton#RecordBtn[recording="true"]:pressed {
+    background-color: #ff0000;
+    border-color: #ff6666;
+}
 
 /* CLEAR BUTTON (Very Dark) */
 QPushButton#ClearBtn { 
@@ -951,6 +969,7 @@ class OverlayConfigWindow(QWidget):
 
         self.btn_path_record = QPushButton("REC PATH")
         self.btn_path_record.setObjectName("RecordBtn")
+        self.btn_path_record.setProperty("recording", "false")
 
         self.btn_path_clear = QPushButton("CLEAR PATH")
         self.btn_path_clear.setObjectName("ClearBtn")
