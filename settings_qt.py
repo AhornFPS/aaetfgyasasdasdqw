@@ -31,25 +31,34 @@ QLabel#PathLabel {
 }
 
 QPushButton#ActionBtn { 
-    background-color: #1a2b3c; 
+    background-color: #2a2a2a; 
     color: #00f2ff; 
-    border: none; 
-    padding: 10px 15px; 
+    border: 1px solid #444; 
+    padding: 8px 15px; 
     font-weight: bold; 
     border-radius: 4px; 
-    text-align: left;
+    font-size: 12px;
 }
-QPushButton#ActionBtn:hover { background-color: #253c50; }
+QPushButton#ActionBtn:hover { 
+    background-color: #3a3a3a; 
+    border-color: #00f2ff; 
+    color: white;
+}
 
 QPushButton#SaveBtn {
     background-color: #004400;
-    color: white;
+    color: #00ff00;
     font-weight: bold;
     border-radius: 4px;
-    padding: 12px;
-    font-size: 14px;
+    padding: 10px 15px;
+    font-size: 12px;
+    border: 1px solid #006600;
 }
-QPushButton#SaveBtn:hover { background-color: #006600; }
+QPushButton#SaveBtn:hover { 
+    background-color: #006600; 
+    border-color: #00ff00; 
+    color: white;
+}
 """
 
 

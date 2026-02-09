@@ -22,6 +22,7 @@ class OverlaySignals(QObject):
 OVERLAY_STYLE = """
 /* --- MAIN WINDOW & TABS --- */
 QWidget#Overlay { background-color: #1a1a1a; }
+QWidget#StreakContent { background-color: #1a1a1a; }
 
 QTabWidget::pane { 
     border: 1px solid #333; 
@@ -155,10 +156,31 @@ QPushButton#RecordBtn {
     background-color: #883300; 
     color: white; 
     border: 1px solid #aa4400; 
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 6px 10px;
 }
 QPushButton#RecordBtn:hover { 
     background-color: #aa4400; 
     border-color: #ff8c00; 
+}
+QPushButton#RecordBtn:pressed {
+    background-color: #aa4400;
+    border-color: #ff8c00;
+}
+QPushButton#RecordBtn[recording="true"] {
+    background-color: #ff0000;
+    color: white;
+    font-weight: bold;
+    border: 1px solid #cc0000;
+}
+QPushButton#RecordBtn[recording="true"]:hover {
+    background-color: #ff3333;
+    border-color: #ff6666;
+}
+QPushButton#RecordBtn[recording="true"]:pressed {
+    background-color: #ff0000;
+    border-color: #ff6666;
 }
 
 /* CLEAR BUTTON (Very Dark) */
@@ -166,6 +188,9 @@ QPushButton#ClearBtn {
     background-color: #1a1a1a; 
     color: #888; 
     border: 1px solid #333; 
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 6px 10px;
 }
 QPushButton#ClearBtn:hover { 
     background-color: #222; 
@@ -178,6 +203,9 @@ QPushButton#ColorBtn {
     background-color: #440088; 
     color: white; 
     border: 1px solid #6600aa; 
+    border-radius: 3px;
+    font-size: 10px;
+    padding: 4px 8px;
 }
 QPushButton#ColorBtn:hover { 
     background-color: #5500aa; 
@@ -821,7 +849,7 @@ class OverlayConfigWindow(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: #1a1a1a;")
+        content_widget.setObjectName("StreakContent")
         main_layout = QVBoxLayout(content_widget)
         main_layout.setSpacing(10)  # COMPACT: Global spacing reduced
 
@@ -940,16 +968,11 @@ class OverlayConfigWindow(QWidget):
         btn_path_row.setContentsMargins(0, 0, 0, 0)
 
         self.btn_path_record = QPushButton("REC PATH")
-        self.btn_path_record.setStyleSheet("""
-            QPushButton { background-color: #aa4400; color: white; border: 1px solid #cc5500; padding: 5px; font-weight: bold; border-radius: 3px; font-size: 11px;}
-            QPushButton:hover { background-color: #bb5500; border-color: #ff8c00; }
-        """)
+        self.btn_path_record.setObjectName("RecordBtn")
+        self.btn_path_record.setProperty("recording", "false")
 
         self.btn_path_clear = QPushButton("CLEAR PATH")
-        self.btn_path_clear.setStyleSheet("""
-            QPushButton { background-color: #222; color: #888; border: 1px solid #333; padding: 5px; font-weight: bold; border-radius: 3px; font-size: 11px;}
-            QPushButton:hover { background-color: #333; color: #ccc; border-color: #555; }
-        """)
+        self.btn_path_clear.setObjectName("ClearBtn")
 
         btn_path_row.addWidget(self.btn_path_record)
         btn_path_row.addWidget(self.btn_path_clear)
@@ -1004,10 +1027,7 @@ class OverlayConfigWindow(QWidget):
 
         self.btn_pick_color = QPushButton("COLOR")
         self.btn_pick_color.setFixedWidth(70)
-        self.btn_pick_color.setStyleSheet("""
-            QPushButton { background-color: #5500aa; color: white; border: 1px solid #7700cc; padding: 3px; font-weight: bold; border-radius: 3px; font-size: 10px; }
-            QPushButton:hover { background-color: #6600cc; border-color: #ff00ff; }
-        """)
+        self.btn_pick_color.setObjectName("ColorBtn")
 
         self.slider_font_size = QSlider(Qt.Orientation.Horizontal)
         self.slider_font_size.setRange(10, 150)
@@ -1028,38 +1048,23 @@ class OverlayConfigWindow(QWidget):
         action_layout.setSpacing(10)
         action_layout.setContentsMargins(0, 5, 0, 0)  # Only little margin at top
 
-        # Button Style Templates (Compact)
-        style_base = "border-radius: 4px; font-weight: bold; font-size: 12px; padding: 5px;"
-
         # 1. MOVE UI (Blue)
         self.btn_edit_streak = QPushButton("MOVE UI")
         self.btn_edit_streak.setMinimumHeight(35)
         self.btn_edit_streak.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_edit_streak.setStyleSheet(f"""
-            QPushButton {{ background-color: #004080; color: white; border: 1px solid #0055aa; {style_base} }}
-            QPushButton:hover {{ background-color: #0066cc; border: 1px solid #00f2ff; }}
-            QPushButton:pressed {{ background-color: #00f2ff; color: black; }}
-        """)
+        self.btn_edit_streak.setObjectName("EditBtn")
 
         # 2. TEST ANIMATION (Grey)
         self.btn_test_streak = QPushButton("TEST")
         self.btn_test_streak.setMinimumHeight(35)
         self.btn_test_streak.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_test_streak.setStyleSheet(f"""
-            QPushButton {{ background-color: #333; color: #eee; border: 1px solid #555; {style_base} }}
-            QPushButton:hover {{ background-color: #444; border: 1px solid #ccc; }}
-            QPushButton:pressed {{ background-color: #666; }}
-        """)
+        self.btn_test_streak.setObjectName("TestBtn")
 
         # 3. SAVE SETTINGS (Green)
         self.btn_save_streak = QPushButton("SAVE SETTINGS")
         self.btn_save_streak.setMinimumHeight(35)
         self.btn_save_streak.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_save_streak.setStyleSheet(f"""
-            QPushButton {{ background-color: #004400; color: #00ff00; border: 1px solid #006600; {style_base} }}
-            QPushButton:hover {{ background-color: #006600; border: 1px solid #00ff00; color: white; }}
-            QPushButton:pressed {{ background-color: #00ff00; color: black; }}
-        """)
+        self.btn_save_streak.setObjectName("SaveBtn")
 
         action_layout.addWidget(self.btn_edit_streak)
         action_layout.addWidget(self.btn_test_streak)

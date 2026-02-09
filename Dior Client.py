@@ -2085,7 +2085,13 @@ class DiorClientGUI:
 
             # QT BUTTON UPDATE
             ui.btn_path_record.setText("STOP RECORDING (SPACE)")
-            ui.btn_path_record.setStyleSheet("background-color: #ff0000; color: white; font-weight: bold;")
+            ui.btn_path_record.setStyleSheet(
+                "QPushButton { background-color: #ff0000; color: white; font-weight: bold; "
+                "border: 1px solid #cc0000; border-radius: 4px; font-size: 11px; padding: 6px 10px; "
+                "min-height: 20px; }"
+                "QPushButton:hover { background-color: #ff3333; border-color: #ff6666; }"
+                "QPushButton:pressed { background-color: #ff0000; border-color: #ff6666; }"
+            )
 
             # Dummy Streak anzeigen
             self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
@@ -2109,7 +2115,10 @@ class DiorClientGUI:
 
             # QT BUTTON RESET
             ui.btn_path_record.setText("REC PATH")
-            ui.btn_path_record.setStyleSheet("background-color: #aa4400; color: white; font-weight: bold;")
+            ui.btn_path_record.setStyleSheet("")
+            ui.btn_path_record.style().unpolish(ui.btn_path_record)
+            ui.btn_path_record.style().polish(ui.btn_path_record)
+            ui.btn_path_record.update()
 
             # Pfad speichern (übernimmt custom_path automatisch aus Overlay)
             self.save_streak_settings_from_qt()
