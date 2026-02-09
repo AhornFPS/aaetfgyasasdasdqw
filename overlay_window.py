@@ -243,12 +243,23 @@ class QtOverlay(QWidget):
         self.gc_timer.start(120000)  # 120.000 ms = 2 Minuten
 
         # 1. FENSTER-KONFIGURATION
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.WindowTransparentForInput
-        )
+        # On Linux/Proton, ToolTip windows have the highest priority
+        if IS_WINDOWS:
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Tool |
+                Qt.WindowType.WindowTransparentForInput
+            )
+        else:
+            # Linux: Use ToolTip for maximum overlay priority over Proton games
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.ToolTip |  # ToolTip has highest priority on Linux
+                Qt.WindowType.WindowTransparentForInput |
+                Qt.WindowType.X11BypassWindowManagerHint
+            )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         screen = QApplication.primaryScreen().geometry()
         self.setGeometry(screen)
@@ -825,7 +836,12 @@ class QtOverlay(QWidget):
 
     def force_update(self):
         self.repaint()
-        if self.path_edit_active: self.path_layer.raise_()
+        if self.path_edit_active: 
+            self.path_layer.raise_()
+        
+        # Linux Fix: Periodically raise the window to stay on top
+        if not IS_WINDOWS and self.isVisible() and not self.edit_mode:
+            self.raise_()
 
     def s(self, value):
         return int(round(float(value) * self.ui_scale))
@@ -859,9 +875,15 @@ class QtOverlay(QWidget):
         WICHTIG: Erst Qt-Flags setzen, DANN show(), DANN ctypes Styles!
         """
         # 1. Qt Flags setzen (Nur wenn geänderte Flags vorliegen, um Flackern zu vermeiden)
-        new_flags = (Qt.WindowType.FramelessWindowHint |
-                     Qt.WindowType.WindowStaysOnTopHint |
-                     Qt.WindowType.Tool)
+        if IS_WINDOWS:
+            new_flags = (Qt.WindowType.FramelessWindowHint |
+                         Qt.WindowType.WindowStaysOnTopHint |
+                         Qt.WindowType.Tool)
+        else:
+            # Linux: ToolTip for maximum priority
+            new_flags = (Qt.WindowType.FramelessWindowHint |
+                         Qt.WindowType.WindowStaysOnTopHint |
+                         Qt.WindowType.ToolTip)
         
         if enabled:
             # 0. Erst Visuals säubern
@@ -869,6 +891,8 @@ class QtOverlay(QWidget):
             self.active_edit_targets = []
             self.edit_mode = False
             new_flags |= Qt.WindowType.WindowTransparentForInput
+            if not IS_WINDOWS:
+                new_flags |= Qt.WindowType.X11BypassWindowManagerHint # <--- Persistent Linux Fix
         else:
             self.edit_mode = True
             self.active_edit_targets = active_targets if active_targets else []

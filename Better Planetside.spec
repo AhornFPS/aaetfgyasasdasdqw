@@ -12,6 +12,7 @@ a = Analysis(
         ('imageformats', 'imageformats'),
         ('config.json', '.'), # Kopiert deine aktuelle Config in das Hauptverzeichnis der EXE
         ('assets/sanction-list.csv', 'assets'),
+        ('assets/BlackOpsOne-Regular.ttf', 'assets'),  # Font für Cross-Platform Support
     ],
     hiddenimports=[
         'PyQt6.QtWebEngineWidgets', 
