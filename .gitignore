@@ -20,6 +20,7 @@ error_log.txt
 crash_log.txt
 _emote_cache/
 config_backup.json
+custom_crosshair_gen.png
 
 # Virtuelle Umgebungen
 venv/

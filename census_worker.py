@@ -446,6 +446,9 @@ class CensusWorker:
                     # QUEUE AN ODER AUS?
                     is_queue_active = self.c.config.get("event_queue_active", True)
 
+                    # Trigger hitmarker first
+                    self.c.trigger_overlay_event("Hitmarker")
+
                     if is_queue_active:
                         for evt in base_events: self.c.trigger_overlay_event(evt)
                         if multi_event: self.c.trigger_overlay_event(multi_event)
@@ -460,7 +463,7 @@ class CensusWorker:
                             final_event = base_events[0]
                         if final_event: self.c.trigger_overlay_event(final_event)
 
-                    self.c.trigger_overlay_event("Hitmarker")
+
 
                     # Killfeed Message bauen (Normal)
                     s_vic = self.c.session_stats.get(victim_id, {})
