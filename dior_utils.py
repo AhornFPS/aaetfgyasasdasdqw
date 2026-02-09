@@ -2,6 +2,8 @@ import sys
 import os
 import traceback
 
+IS_WINDOWS = sys.platform.startswith("win")
+
 # ---------------------------------------------------------
 # 1. BASE_DIR: Hier liegen Configs, Logs und die DB
 # ---------------------------------------------------------
@@ -11,6 +13,8 @@ if getattr(sys, 'frozen', False):
 else:
     # Wenn wir ein Skript sind, ist das der Projektordner
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DB_PATH = os.path.join(BASE_DIR, "ps2_master.db")
 
 
 # ---------------------------------------------------------

@@ -5,7 +5,8 @@ import ctypes
 
 # 1. DPI Awareness (Muss als ALLERERSTES passieren)
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    if sys.platform.startswith("win"):
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
 
@@ -51,7 +52,10 @@ import tkinter as tk
 from tkinter import messagebox, filedialog, scrolledtext
 from queue import Queue, Empty
 from PIL import Image, ImageTk, ImageSequence, ImageGrab
-import pydirectinput
+try:
+    import pydirectinput
+except Exception:
+    pydirectinput = None
 import sqlite3
 import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
 import launcher_qt
@@ -60,7 +64,7 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, get_asset_path, log_exception, clean_path
+from dior_utils import BASE_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 import sys
@@ -416,7 +420,7 @@ class DiorClientGUI:
     def update_db_count_cache(self):
         """Liest die Anzahl der einzigartigen Spieler aus der DB."""
         try:
-            conn = sqlite3.connect("ps2_master.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             count = cursor.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
             conn.close()
@@ -595,6 +599,8 @@ class DiorClientGUI:
 
     def is_game_focused(self):
         """Prüft, ob das aktive Fenster PlanetSide 2 ist (robust gegen Schreibweisen)."""
+        if not IS_WINDOWS:
+            return True
         try:
             # 1. Handle des aktuellen Vordergrund-Fensters holen
             hwnd = ctypes.windll.user32.GetForegroundWindow()
@@ -3064,6 +3070,9 @@ class DiorClientGUI:
         # 3. Tastendruck simulieren (Thread damit Mainloop nicht hängt)
         def press():
             try:
+                if not pydirectinput:
+                    print("Voice Error: pydirectinput is unavailable on this platform.")
+                    return
                 # V drücken
                 pydirectinput.press('v')
                 time.sleep(0.05)  # Kurze Pause für das Menü
@@ -3727,7 +3736,7 @@ class DiorClientGUI:
 
         # --- OPTIONAL: Server-Switch Logik (falls vorhanden) ---
         try:
-            conn = sqlite3.connect("ps2_master.db")
+            conn = sqlite3.connect(DB_PATH)
             res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
             conn.close()
 
@@ -3810,7 +3819,7 @@ class DiorClientGUI:
                         try:
                             r = response.json()
                             if 'character_list' in r:
-                                conn = sqlite3.connect("ps2_master.db")
+                                conn = sqlite3.connect(DB_PATH)
                                 cursor = conn.cursor()
 
                                 # Sicherstellen, dass der RAM-Cache existiert
@@ -3843,7 +3852,7 @@ class DiorClientGUI:
                                 # GUI-Zähler aktualisieren
                                 if hasattr(self, 'cache_label') and self.cache_label.winfo_exists():
                                     try:
-                                        conn = sqlite3.connect("ps2_master.db")
+                                        conn = sqlite3.connect(DB_PATH)
                                         count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
                                         conn.close()
 

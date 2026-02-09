@@ -9,6 +9,8 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from overlay_server import OverlayServer
 
+IS_WINDOWS = sys.platform.startswith("win")
+
 # Aus QtCore kommen die Logik- und Animations-Klassen
 from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
                             QSize, QUrl, QRectF, QPropertyAnimation, QEasingCurve)
@@ -889,80 +891,136 @@ class QtOverlay(QWidget):
             self.clearMask()
 
         # 3. Windows API Styles anwenden (Auf das NEUE Handle!)
-        try:
-            hwnd = int(self.winId())
-            GWL_EXSTYLE = -20
-            WS_EX_LAYERED = 0x80000
-            WS_EX_TRANSPARENT = 0x20
+        if IS_WINDOWS:
+            try:
+                hwnd = int(self.winId())
+                GWL_EXSTYLE = -20
+                WS_EX_LAYERED = 0x80000
+                WS_EX_TRANSPARENT = 0x20
 
-            # Aktuellen Style holen
-            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                # Aktuellen Style holen
+                style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
-            if enabled:
-                # Durchlässig machen (Layered + Transparent)
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-                if hasattr(self, 'event_preview_label'):
-                    self.event_preview_label.hide()
-            else:
-                # Greifbar machen (Transparent-Bit entfernen)
-                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
-
-                # --- VISUALS FÜR EDIT MODE ---
-                hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
-                targets = active_targets if active_targets else []
-
-                if "feed" in targets:
-                    feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
-                    self.feed_label.setStyleSheet(feed_style)
-                    self.feed_label.show()
-                    self.feed_label.raise_()
-                    
-                    # Ensure minimum size for dragging even if text is empty
-                    if not self.feed_label.text().strip():
-                        self.feed_label.setText(
-                            "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
-                        self.feed_label.adjustSize()
-                    
-                    # Prevent it from being 0-height if adjustSize was called elsewhere
-                    if self.feed_label.height() < 50:
-                        self.feed_label.setFixedHeight(100)
-
-                if "stats" in targets:
-                    self.stats_bg_label.setStyleSheet(hl_style)
-                    self.stats_bg_label.show()
-                    self.stats_text_label.show()
-                    self.stats_text_label.raise_()
-
-                if "streak" in targets:
-                    self.streak_bg_label.setStyleSheet(hl_style)
-                    self.streak_bg_label.show()
-                    if not self.streak_bg_label.pixmap() or self.streak_bg_label.pixmap().isNull():
-                        self.streak_bg_label.setText("STREAK AREA")
-                        self.streak_bg_label.setStyleSheet(f"{hl_style} color: white; font-weight: bold;")
-                        self.streak_bg_label.adjustSize()
-
-                if "crosshair" in targets:
-                    self.crosshair_label.setStyleSheet(hl_style)
-                    self.crosshair_label.show()
-
-                if "event" in targets:
+                if enabled:
+                    # Durchlässig machen (Layered + Transparent)
+                    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
                     if hasattr(self, 'event_preview_label'):
-                        self.event_preview_label.setStyleSheet(hl_style)
-                        self.event_preview_label.show()
-                        self.event_preview_label.raise_()
+                        self.event_preview_label.hide()
+                else:
+                    # Greifbar machen (Transparent-Bit entfernen)
+                    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
 
-                if "twitch" in targets:
-                    # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
-                    # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
-                    self.twitch_drag_cover.setStyleSheet(hl_style)
-                    self.twitch_drag_cover.show()
-                    self.twitch_drag_cover.raise_()
-                    # Den echten Chat verstecken wir, damit er nicht stört
-                    self.chat_container.hide()
-                self.update_edit_mask(targets)
+                    # --- VISUALS FÜR EDIT MODE ---
+                    hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
+                    targets = active_targets if active_targets else []
 
-        except Exception as e:
-            print(f"Passthrough Error: {e}")
+                    if "feed" in targets:
+                        feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
+                        self.feed_label.setStyleSheet(feed_style)
+                        self.feed_label.show()
+                        self.feed_label.raise_()
+                        
+                        # Ensure minimum size for dragging even if text is empty
+                        if not self.feed_label.text().strip():
+                            self.feed_label.setText(
+                                "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
+                            self.feed_label.adjustSize()
+                        
+                        # Prevent it from being 0-height if adjustSize was called elsewhere
+                        if self.feed_label.height() < 50:
+                            self.feed_label.setFixedHeight(100)
+
+                    if "stats" in targets:
+                        self.stats_bg_label.setStyleSheet(hl_style)
+                        self.stats_bg_label.show()
+                        self.stats_text_label.show()
+                        self.stats_text_label.raise_()
+
+                    if "streak" in targets:
+                        self.streak_bg_label.setStyleSheet(hl_style)
+                        self.streak_bg_label.show()
+                        if not self.streak_bg_label.pixmap() or self.streak_bg_label.pixmap().isNull():
+                            self.streak_bg_label.setText("STREAK AREA")
+                            self.streak_bg_label.setStyleSheet(f"{hl_style} color: white; font-weight: bold;")
+                            self.streak_bg_label.adjustSize()
+
+                    if "crosshair" in targets:
+                        self.crosshair_label.setStyleSheet(hl_style)
+                        self.crosshair_label.show()
+
+                    if "event" in targets:
+                        if hasattr(self, 'event_preview_label'):
+                            self.event_preview_label.setStyleSheet(hl_style)
+                            self.event_preview_label.show()
+                            self.event_preview_label.raise_()
+
+                    if "twitch" in targets:
+                        # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
+                        # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
+                        self.twitch_drag_cover.setStyleSheet(hl_style)
+                        self.twitch_drag_cover.show()
+                        self.twitch_drag_cover.raise_()
+                        # Den echten Chat verstecken wir, damit er nicht stört
+                        self.chat_container.hide()
+                    self.update_edit_mask(targets)
+
+            except Exception as e:
+                print(f"Passthrough Error: {e}")
+        elif not enabled:
+            hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
+            targets = active_targets if active_targets else []
+
+            if "feed" in targets:
+                feed_style = "border: 2px solid #00ff00; background-color: rgba(0, 0, 0, 150);"
+                self.feed_label.setStyleSheet(feed_style)
+                self.feed_label.show()
+                self.feed_label.raise_()
+
+                # Ensure minimum size for dragging even if text is empty
+                if not self.feed_label.text().strip():
+                    self.feed_label.setText(
+                        "<div style='color:white; font-size:20px; padding:10px;'>KILLFEED DRAG AREA</div>")
+                    self.feed_label.adjustSize()
+
+                # Prevent it from being 0-height if adjustSize was called elsewhere
+                if self.feed_label.height() < 50:
+                    self.feed_label.setFixedHeight(100)
+
+            if "stats" in targets:
+                self.stats_bg_label.setStyleSheet(hl_style)
+                self.stats_bg_label.show()
+                self.stats_text_label.show()
+                self.stats_text_label.raise_()
+
+            if "streak" in targets:
+                self.streak_bg_label.setStyleSheet(hl_style)
+                self.streak_bg_label.show()
+                if not self.streak_bg_label.pixmap() or self.streak_bg_label.pixmap().isNull():
+                    self.streak_bg_label.setText("STREAK AREA")
+                    self.streak_bg_label.setStyleSheet(f"{hl_style} color: white; font-weight: bold;")
+                    self.streak_bg_label.adjustSize()
+
+            if "crosshair" in targets:
+                self.crosshair_label.setStyleSheet(hl_style)
+                self.crosshair_label.show()
+
+            if "event" in targets:
+                if hasattr(self, 'event_preview_label'):
+                    self.event_preview_label.setStyleSheet(hl_style)
+                    self.event_preview_label.show()
+                    self.event_preview_label.raise_()
+
+            if "twitch" in targets:
+                # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
+                # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
+                self.twitch_drag_cover.setStyleSheet(hl_style)
+                self.twitch_drag_cover.show()
+                self.twitch_drag_cover.raise_()
+                # Den echten Chat verstecken wir, damit er nicht stört
+                self.chat_container.hide()
+            self.update_edit_mask(targets)
+        elif hasattr(self, 'event_preview_label'):
+            self.event_preview_label.hide()
 
     def update_edit_mask(self, targets):
         """Limitiert Klicks auf alle aktiven Elemente, der Rest wird klick-through."""
