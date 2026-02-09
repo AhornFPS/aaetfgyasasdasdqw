@@ -29,6 +29,20 @@ QTableWidget { background-color: #121212; border: none; color: white; gridline-c
 QHeaderView::section { background-color: #1a1a1a; color: #00f2ff; padding: 5px; border: none; font-weight: bold; }
 QTextEdit#LogArea { background-color: #020508; color: #00f2ff; font-family: 'Consolas'; font-size: 10px; border: 1px solid #333; }
 QLineEdit { background-color: #222; color: white; border: 1px solid #444; padding: 5px; }
+QPushButton#ActionBtn {
+    background-color: #2a2a2a;
+    color: #00f2ff;
+    border: 1px solid #444;
+    padding: 6px 14px;
+    font-weight: bold;
+    border-radius: 4px;
+    font-size: 12px;
+}
+QPushButton#ActionBtn:hover {
+    background-color: #3a3a3a;
+    border-color: #00f2ff;
+    color: white;
+}
 """
 
 
@@ -65,9 +79,8 @@ class CharacterWidget(QWidget):
         self.search_input.setFixedWidth(250)
         self.search_input.returnPressed.connect(self.trigger_search)
 
-        self.btn_search = QPushButton("SEARCH")
+        self.btn_search = QPushButton("SEARCH", objectName="ActionBtn")
         self.btn_search.clicked.connect(self.trigger_search)
-        self.btn_search.setStyleSheet("background: #333; color: #00f2ff; padding: 5px 15px;")
 
         header_layout.addWidget(self.lbl_title)
         header_layout.addStretch()
