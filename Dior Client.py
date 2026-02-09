@@ -5,7 +5,8 @@ import ctypes
 
 # 1. DPI Awareness (Muss als ALLERERSTES passieren)
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    if sys.platform.startswith("win"):
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
 
@@ -25,6 +26,12 @@ def resource_path(relative_path):
 # 3. Umgebungsvariablen
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+
+# Linux-specific: Force XWayland for better overlay independence
+# On Wayland, ToolTip windows become "transient" children of the main window
+# XWayland gives us true independent overlay positioning
+if not sys.platform.startswith("win"):
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # WICHTIG: Falls WebEngine Grafikfehler macht (schwarze Felder), dies entkommentieren:
 # os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
@@ -47,11 +54,13 @@ import time
 import requests
 import threading
 import json
-import tkinter as tk
-from tkinter import messagebox, filedialog, scrolledtext
+# from tkinter import messagebox, filedialog, scrolledtext # Removed tkinter dependency
 from queue import Queue, Empty
-from PIL import Image, ImageTk, ImageSequence, ImageGrab
-import pydirectinput
+# from PIL import Image, ImageTk, ImageSequence, ImageGrab # Removed - unused and depends on tkinter via ImageTk
+try:
+    import pydirectinput
+except Exception:
+    pydirectinput = None
 import sqlite3
 import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
 import launcher_qt
@@ -60,7 +69,7 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, get_asset_path, log_exception, clean_path
+from dior_utils import BASE_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 import sys
@@ -70,7 +79,7 @@ from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QMainWindow, QListWidget, QStackedWidget, QGraphicsDropShadowEffect,
-    QColorDialog, QFileDialog # <--- QColorDialog und QFileDialog sicherstellen
+    QColorDialog, QFileDialog, QMessageBox # <--- Added QMessageBox
 )
 from PyQt6.QtGui import (
     QPixmap,
@@ -79,7 +88,8 @@ from PyQt6.QtGui import (
     QPen,
     QBrush,
     QTransform,
-    QMovie
+    QMovie,
+    QFontDatabase
 )
 from PyQt6.QtCore import (
     Qt,
@@ -304,11 +314,11 @@ class DiorClientGUI:
             if status == "BACKUP":
                 self.add_log("WARNUNG: Haupt-Config war defekt. Backup wurde geladen!")
                 # Zeige Popup Warnung
-                tk.messagebox.showwarning("Config Wiederhergestellt",
+                QMessageBox.warning(self.main_hub, "Config Wiederhergestellt",
                                           "Deine Konfigurationsdatei war beschädigt.\nEs wurde erfolgreich ein Backup geladen.")
             elif status == "RESET":
                 self.add_log("FEHLER: Config defekt & kein Backup. Einstellungen zurückgesetzt.")
-                tk.messagebox.showerror("Config Reset",
+                QMessageBox.critical(self.main_hub, "Config Reset",
                                         "Deine Konfiguration war unlesbar und kein Backup vorhanden.\nEinstellungen wurden zurückgesetzt.")
             else:
                 self.add_log("SYS: Konfiguration erfolgreich geladen.")
@@ -416,7 +426,7 @@ class DiorClientGUI:
     def update_db_count_cache(self):
         """Liest die Anzahl der einzigartigen Spieler aus der DB."""
         try:
-            conn = sqlite3.connect("ps2_master.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             count = cursor.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
             conn.close()
@@ -595,30 +605,67 @@ class DiorClientGUI:
 
     def is_game_focused(self):
         """Prüft, ob das aktive Fenster PlanetSide 2 ist (robust gegen Schreibweisen)."""
-        try:
-            # 1. Handle des aktuellen Vordergrund-Fensters holen
-            hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if IS_WINDOWS:
+            try:
+                # 1. Handle des aktuellen Vordergrund-Fensters holen
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
 
-            # 2. Länge des Titels ermitteln
-            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-            if length == 0:
+                # 2. Länge des Titels ermitteln
+                length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                if length == 0:
+                    return False
+
+                # 3. Puffer erstellen und Titel auslesen
+                buff = ctypes.create_unicode_buffer(length + 1)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+
+                # 4. Titel normalisieren (alles kleinschreiben)
+                window_title = buff.value.lower()
+
+                # Wir suchen nach "planetside", das deckt:
+                # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
+                if "planetside2" in window_title:
+                    return True
+
                 return False
-
-            # 3. Puffer erstellen und Titel auslesen
-            buff = ctypes.create_unicode_buffer(length + 1)
-            ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
-
-            # 4. Titel normalisieren (alles kleinschreiben)
-            window_title = buff.value.lower()
-
-            # Wir suchen nach "planetside", das deckt:
-            # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
-            if "planetside2" in window_title:
+            except Exception:
+                return False
+        else:
+            # Linux: Use xprop to get the active window title
+            try:
+                import subprocess
+                # Get the active window ID
+                result = subprocess.run(
+                    ["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1
+                )
+                
+                if result.returncode != 0:
+                    return True  # Fallback if xprop fails
+                
+                # Extract window ID from output like: "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x3400003"
+                window_id = result.stdout.strip().split()[-1]
+                
+                # Get the window name/title
+                result = subprocess.run(
+                    ["xprop", "-id", window_id, "WM_NAME", "_NET_WM_NAME"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1
+                )
+                
+                if result.returncode != 0:
+                    return True  # Fallback if xprop fails
+                
+                # Check if "planetside" is in the window title (case insensitive)
+                window_info = result.stdout.lower()
+                return "planetside" in window_info
+                
+            except Exception:
+                # If xprop is not available or fails, assume game is focused
                 return True
-
-            return False
-        except Exception:
-            return False
 
     def toggle_twitch_always(self, checked):
         ui = self.ovl_config_win
@@ -1966,10 +2013,18 @@ class DiorClientGUI:
 
         while True:
             try:
-                # Tasklist Abfrage
-                output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
-                    "cp1252", errors="ignore")
-                is_now_running = "PlanetSide2_x64.exe" in output
+                # Tasklist Abfrage (Windows) vs pgrep (Linux)
+                if IS_WINDOWS:
+                    output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
+                        "cp1252", errors="ignore")
+                    is_now_running = "PlanetSide2_x64.exe" in output
+                else:
+                    # Linux check via pgrep
+                    try:
+                        subprocess.check_output(["pgrep", "-f", "PlanetSide2_x64.exe"])
+                        is_now_running = True
+                    except subprocess.CalledProcessError:
+                        is_now_running = False
 
                 if self.ps2_running is None or is_now_running != self.ps2_running:
                     self.ps2_running = is_now_running
@@ -2907,6 +2962,10 @@ class DiorClientGUI:
             should_render = True
             mode_gameplay = True
 
+        # Linux Fix: On Wayland/Linux, we need to periodically raise the window
+        if should_render and not IS_WINDOWS and self.overlay_win:
+            self.overlay_win.raise_()
+
         # ---------------------------------------------------------
         # ELEMENT-STEUERUNG
         # ---------------------------------------------------------
@@ -3064,6 +3123,9 @@ class DiorClientGUI:
         # 3. Tastendruck simulieren (Thread damit Mainloop nicht hängt)
         def press():
             try:
+                if not pydirectinput:
+                    print("Voice Error: pydirectinput is unavailable on this platform.")
+                    return
                 # V drücken
                 pydirectinput.press('v')
                 time.sleep(0.05)  # Kurze Pause für das Menü
@@ -3659,8 +3721,7 @@ class DiorClientGUI:
             self.dash_window.raise_()  # In den Vordergrund
 
         # Info im Hauptfenster (da es jetzt leer ist)
-        tk.Label(self.root, text="DASHBOARD IS RUNNING IN SEPARATE WINDOW",
-                 font=("Arial", 16), fg="#444").pack(expand=True)
+        # Removed tk.Label usage
 
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
@@ -3727,7 +3788,7 @@ class DiorClientGUI:
 
         # --- OPTIONAL: Server-Switch Logik (falls vorhanden) ---
         try:
-            conn = sqlite3.connect("ps2_master.db")
+            conn = sqlite3.connect(DB_PATH)
             res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
             conn.close()
 
@@ -3810,7 +3871,7 @@ class DiorClientGUI:
                         try:
                             r = response.json()
                             if 'character_list' in r:
-                                conn = sqlite3.connect("ps2_master.db")
+                                conn = sqlite3.connect(DB_PATH)
                                 cursor = conn.cursor()
 
                                 # Sicherstellen, dass der RAM-Cache existiert
@@ -3843,7 +3904,7 @@ class DiorClientGUI:
                                 # GUI-Zähler aktualisieren
                                 if hasattr(self, 'cache_label') and self.cache_label.winfo_exists():
                                     try:
-                                        conn = sqlite3.connect("ps2_master.db")
+                                        conn = sqlite3.connect(DB_PATH)
                                         count = conn.execute("SELECT COUNT(*) FROM player_cache").fetchone()[0]
                                         conn.close()
 
@@ -3865,10 +3926,7 @@ class DiorClientGUI:
     def add_log(self, text):
 
         print(f"LOG: {text}")  # Backup in der Konsole
-        # Bestehender Tkinter Log
-        if hasattr(self, 'log_area') and self.log_area:
-            self.log_area.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {text}\n")
-            self.log_area.see(tk.END)
+        # Removed Tkinter Log logic as log_area doesn't exist
 
         # NEU: Auch an das Qt-Fenster senden
         if hasattr(self, 'char_win'):
@@ -4087,6 +4145,18 @@ if __name__ == "__main__":
 
         app = QApplication(sys.argv)
         app.setStyle("Fusion")  # Sorgt für ein einheitliches Dark-Design
+
+        # Font "Black Ops One" laden
+        font_path = resource_path(os.path.join("assets", "BlackOpsOne-Regular.ttf"))
+        if os.path.exists(font_path):
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id == -1:
+                print(f"Error: Font could not be loaded from {font_path}")
+            else:
+                family = QFontDatabase.applicationFontFamilies(font_id)[0]
+                print(f"Font loaded: {family}")
+        else:
+            print(f"Warning: Font file not found at {font_path}")
 
         # Deine Logik-Klasse initialisieren (sie erstellt intern den MainHub)
         client = DiorClientGUI()

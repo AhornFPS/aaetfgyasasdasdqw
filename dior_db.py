@@ -1,10 +1,11 @@
 import sqlite3
-import os
+
+from dior_utils import DB_PATH
 
 
 class DatabaseHandler:
-    def __init__(self, db_name="ps2_master.db"):
-        self.db_name = db_name
+    def __init__(self, db_name=None):
+        self.db_name = db_name or DB_PATH
         self.init_db()
 
     def init_db(self):
