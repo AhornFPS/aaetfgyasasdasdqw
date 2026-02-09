@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QSlider, QComboBox, QColorDialog, 
                              QFrame, QCheckBox, QApplication, QMessageBox, QFileDialog)
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRectF
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPixmap, QAction
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPixmap, QAction, QIcon
 
 # Import dior_utils relative to where this file will be (root of project)
 from dior_utils import get_asset_path, BASE_DIR
@@ -30,6 +30,21 @@ class CrosshairEditorWindow(QMainWindow):
             QComboBox { background-color: #222; border: 1px solid #444; padding: 4px; color: #eee; }
             QSlider::handle:horizontal { background-color: #00f2ff; width: 10px; margin: -5px 0; border-radius: 5px; }
             QSlider::groove:horizontal { background-color: #333; height: 4px; border-radius: 2px; }
+            
+            QPushButton#NavButton {
+                background-color: #000;
+                color: #fff;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #333;
+                border-radius: 4px;
+                width: 40px;
+                height: 30px;
+            }
+            QPushButton#NavButton:hover {
+                background-color: #222;
+                border-color: #666;
+            }
         """)
 
         # Default Settings
@@ -44,8 +59,59 @@ class CrosshairEditorWindow(QMainWindow):
             "outline_color": QColor(0, 0, 0),
             "outline_thickness": 1
         }
+        
+        # Background Images
+        self.bg_images = []
+        self.current_bg_index = 0
+        self.bg_pixmap = None
+        self.load_background_images()
 
         self.init_ui()
+
+    def load_background_images(self):
+        """Scans the assets/Crosshair_Ersteller_Bilder directory."""
+        bg_dir = os.path.join(BASE_DIR, "assets", "Crosshair_Ersteller_Bilder")
+        if not os.path.exists(bg_dir):
+            try:
+                os.makedirs(bg_dir)
+            except:
+                pass
+            return
+            
+        valid_exts = [".png", ".jpg", ".jpeg", ".bmp"]
+        try:
+            for f in os.listdir(bg_dir):
+                if any(f.lower().endswith(ext) for ext in valid_exts):
+                    self.bg_images.append(os.path.join(bg_dir, f))
+            self.bg_images.sort()
+        except Exception as e:
+            print(f"Error loading backgrounds: {e}")
+            
+        self.update_bg_pixmap()
+            
+    def update_bg_pixmap(self):
+        if not self.bg_images:
+            self.bg_pixmap = None
+            return
+            
+        try:
+            path = self.bg_images[self.current_bg_index]
+            self.bg_pixmap = QPixmap(path)
+        except Exception as e:
+            print(f"Error loading pixmap: {e}")
+            self.bg_pixmap = None
+
+    def prev_background(self):
+        if not self.bg_images: return
+        self.current_bg_index = (self.current_bg_index - 1) % len(self.bg_images)
+        self.update_bg_pixmap()
+        self.preview_area.update()
+
+    def next_background(self):
+        if not self.bg_images: return
+        self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        self.update_bg_pixmap()
+        self.preview_area.update()
 
     def init_ui(self):
         central = QWidget()
@@ -54,13 +120,42 @@ class CrosshairEditorWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1. PREVIEW AREA (Left/Center)
+        # 1. LEFT SIDE (Preview + Nav)
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 20) # Bottom margin for buttons
+        left_layout.setSpacing(10)
+        
+        # Preview Area
         self.preview_area = QWidget()
-        self.preview_area.setStyleSheet("background-color: #666666;") # Neutral Gray for better visibility
+        self.preview_area.setStyleSheet("background-color: #666666;") # Default incase no image
         # Override paintEvent for preview
         self.preview_area.paintEvent = self.paint_preview
         
-        main_layout.addWidget(self.preview_area, 1) # Expand
+        left_layout.addWidget(self.preview_area, 1) # Expand
+        
+        # Navigation Buttons (Bottom Center)
+        nav_container = QWidget()
+        nav_layout = QHBoxLayout(nav_container)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(20)
+        nav_layout.addStretch()
+        
+        self.btn_prev = QPushButton("←")
+        self.btn_prev.setObjectName("NavButton")
+        self.btn_prev.clicked.connect(self.prev_background)
+        
+        self.btn_next = QPushButton("→")
+        self.btn_next.setObjectName("NavButton")
+        self.btn_next.clicked.connect(self.next_background)
+        
+        nav_layout.addWidget(self.btn_prev)
+        nav_layout.addWidget(self.btn_next)
+        nav_layout.addStretch()
+        
+        left_layout.addWidget(nav_container)
+        
+        main_layout.addWidget(left_widget, 1)
 
         # 2. CONTROL PANEL (Right)
         control_panel = QFrame()
@@ -185,7 +280,22 @@ class CrosshairEditorWindow(QMainWindow):
         painter = QPainter(self.preview_area)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Draw Background Grid (Optional, for better visibility)
+        # Draw Background Image
+        if self.bg_pixmap and not self.bg_pixmap.isNull():
+            # Scale to cover
+            scaled_bg = self.bg_pixmap.scaled(
+                self.preview_area.size(),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            # Center the image
+            x = (self.preview_area.width() - scaled_bg.width()) / 2
+            y = (self.preview_area.height() - scaled_bg.height()) / 2
+            painter.drawPixmap(int(x), int(y), scaled_bg)
+        else:
+            # Fallback Grid or Solid Color if no image
+            painter.fillRect(self.preview_area.rect(), QColor("#666666"))
+
         w = self.preview_area.width()
         h = self.preview_area.height()
         cx = w / 2
