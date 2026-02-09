@@ -22,6 +22,7 @@ class OverlaySignals(QObject):
 OVERLAY_STYLE = """
 /* --- MAIN WINDOW & TABS --- */
 QWidget#Overlay { background-color: #1a1a1a; }
+QWidget#StreakContent { background-color: #1a1a1a; }
 
 QTabWidget::pane { 
     border: 1px solid #333; 
@@ -830,7 +831,7 @@ class OverlayConfigWindow(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: #1a1a1a;")
+        content_widget.setObjectName("StreakContent")
         main_layout = QVBoxLayout(content_widget)
         main_layout.setSpacing(10)  # COMPACT: Global spacing reduced
 
