@@ -692,15 +692,7 @@ class CensusWorker:
 
                         self._process_stat_event(event_name)
                         if event_name == "Gunner Assist":
-                            # FIX: Wir starten sofort den Such-Loop
-                            # other_id = Der Gunner
-                            # timestamp = Zeit des XP Events
-                            # retries = 10 (Wir versuchen es 10x alle 0.5s = 5 Sekunden lang)
-                            self._try_add_gunner_killfeed(
-                                p.get("other_id"),
-                                p.get("timestamp"),
-                                retries=10
-                            )
+                            self._emit_gunner_killfeed_from_victim(p.get("other_id"))
                         break
 
     def _try_add_gunner_killfeed(self, gunner_id, exp_ts, retries=0):
@@ -749,7 +741,7 @@ class CensusWorker:
             # Nach 5 Sekunden (10 * 0.5) immer noch kein passender Tod gefunden
             # Das passiert, wenn der Gunner z.B. nur ein Fahrzeug zerstört hat (kein Death Event für Insassen)
             # oder das Death Event verloren ging.
-            # self.c.add_log(f"DEBUG: Gunner Kill Time-Out. ID: {gunner_id}")
+            self.c.add_log(f"DEBUG: Gunner Kill Time-Out. ID: {gunner_id}")
             pass
 
     def _emit_gunner_killfeed(self, p):
@@ -763,9 +755,7 @@ class CensusWorker:
             return
 
         is_hs = (p.get("is_headshot") == "1")
-        is_tk = (p.get("attacker_team_id") == p.get("team_id")) and (
-            p.get("attacker_character_id") != victim_id
-        )
+
 
         icon_html = ""
         if is_hs:
@@ -796,16 +786,38 @@ class CensusWorker:
         except:
             kd_str = "0.0"
 
-        if is_tk:
-            msg = f"""<div style="{base_style}">
-                    <span style="color: #ffaa00;">GUNNER TK </span>
-                    <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
-                    </div>"""
-        else:
-            msg = f"""<div style="{base_style}">
-                    <span style="color: #ff8c00;">GUNNER </span>
-                    {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
-                    <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+
+        msg = f"""<div style="{base_style}">
+                <span style="color: #ff8c00;">GUNNER </span>
+                {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
+                <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+
+        self.c.overlay_win.signals.killfeed_entry.emit(msg)
+
+    def _emit_gunner_killfeed_from_victim(self, victim_id):
+        if not self.c.config.get("killfeed", {}).get("active", True):
+            return
+        if not self.c.overlay_win:
+            return
+        if not victim_id or victim_id == "0":
+            return
+
+        kf_cfg_raw = self.c.config.get("killfeed", {})
+        kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+        kf_font = kf_cfg.get("font_size", 19)
+        base_style = (
+            f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; "
+            "text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+        )
+
+        v_name = self.c.name_cache.get(victim_id, "Unknown")
+        raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
+        v_tag = f"[{raw_tag}] " if raw_tag else ""
+
+        msg = f"""<div style="{base_style}">
+                <span style="color: #ff8c00;">GUNNER KILL </span>
+                <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
+                </div>"""
 
         self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
