@@ -231,6 +231,7 @@ class DiorClientGUI:
         self.kill_counter = 0
         self.is_dead = False
         self.was_revived = False
+        self.debug_overlay_active = False
         self.streak_timeout = 12.0
         self.pop_history = [0] * 100
         self.myTeamId = 0
@@ -870,6 +871,29 @@ class DiorClientGUI:
             else:
                 self.on_game_stopped()
 
+    def toggle_debug_overlay(self, checked):
+        """Force overlay rendering without the game running."""
+        ui = self.ovl_config_win
+        self.debug_overlay_active = checked
+
+        if checked:
+            ui.btn_debug_overlay.setText("DEBUG OVERLAY: ON")
+            ui.btn_debug_overlay.setStyleSheet(
+                "background-color: #004400; color: white; font-weight: bold; border-radius: 4px; "
+                "border: 1px solid #006600;"
+            )
+            if self.overlay_win:
+                self.overlay_win.showFullScreen()
+                self.overlay_win.raise_()
+        else:
+            ui.btn_debug_overlay.setText("DEBUG OVERLAY: OFF")
+            ui.btn_debug_overlay.setStyleSheet(
+                "background-color: #440000; color: white; font-weight: bold; border-radius: 4px; "
+                "border: 1px solid #660000;"
+            )
+
+        self.refresh_ingame_overlay()
+
     def connect_all_qt_signals(self):
         """Zentrales Management aller PyQt6 Signale (Strukturiert & Clean)."""
         print("SYS: Connecting GUI signals...")
@@ -908,6 +932,9 @@ class DiorClientGUI:
         self.safe_connect(ui.char_input.returnPressed, self.add_char_qt)
         # Master Switch
         self.safe_connect(ui.check_master.toggled, self.toggle_master_switch_qt)
+        # Debug Overlay
+        if hasattr(ui, "btn_debug_overlay"):
+            self.safe_connect(ui.btn_debug_overlay.toggled, self.toggle_debug_overlay)
 
         # ---------------------------------------------------------
         # 3. OVERLAY TAB: EVENTS
@@ -2967,6 +2994,9 @@ class DiorClientGUI:
         # Rendern, wenn irgendein Test oder Edit läuft
         if edit_active or stats_test_active or streak_test_active or path_recording:
             should_render = True
+        elif getattr(self, "debug_overlay_active", False):
+            should_render = True
+            mode_gameplay = True
         elif master_switch and game_running and game_focused:
             should_render = True
             mode_gameplay = True
@@ -3115,6 +3145,8 @@ class DiorClientGUI:
 
     def trigger_auto_voice(self, trigger_key):
         """Drückt V + Zahl basierend auf der Config"""
+        if not self.is_game_focused():
+            return
         # 1. Config prüfen
         cfg = self.config.get("auto_voice", {})
         val = cfg.get(trigger_key, "OFF")

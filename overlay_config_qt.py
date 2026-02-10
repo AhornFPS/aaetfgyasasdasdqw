@@ -471,7 +471,26 @@ class OverlayConfigWindow(QWidget):
         self.check_master.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 16px; padding: 10px;")
         m_layout.addWidget(self.check_master)
 
+        # --- DEBUG OVERLAY ---
+        debug_group = QFrame(objectName="Group")
+        debug_layout = QVBoxLayout(debug_group)
+        debug_header = QLabel("DEBUG OVERLAY")
+        debug_header.setObjectName("Header")
+        debug_layout.addWidget(debug_header)
+        debug_layout.addWidget(QLabel("Force overlay to render without the game running.", objectName="SubText"))
+        self.btn_debug_overlay = QPushButton("DEBUG OVERLAY: OFF")
+        self.btn_debug_overlay.setCheckable(True)
+        self.btn_debug_overlay.setChecked(False)
+        self.btn_debug_overlay.setFixedHeight(35)
+        self.btn_debug_overlay.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_debug_overlay.setStyleSheet(
+            "background-color: #440000; color: white; font-weight: bold; border-radius: 4px; "
+            "border: 1px solid #660000;"
+        )
+        debug_layout.addWidget(self.btn_debug_overlay)
+
         layout.addStretch()  # Push everything up
+        layout.addWidget(debug_group)
         layout.addWidget(master_box)
 
     def toggle_sub_container(self, widget):

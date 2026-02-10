@@ -3,6 +3,8 @@ import json
 import time
 import threading
 import os
+from time import sleep
+
 import websockets
 import requests  # Wichtig für den Faction-Check beim Login
 
@@ -60,6 +62,10 @@ class CensusWorker:
         self.msg_queue = None  # Buffer for incoming messages
         self.event_cache = set()
         self.event_history = []
+        self.recent_deaths = []
+        self.recent_deaths_max = 100
+        self.gunner_match_delay = 0.2
+        self.recent_deaths_lock = threading.Lock()
 
         # --- SUPPORT TRACKING (HIERHER VERSCHOBEN) ---
         self.support_streaks = {
@@ -207,7 +213,6 @@ class CensusWorker:
                     p = data["payload"]
                     e_name = p.get("event_name")
                     payload_world = str(p.get("world_id", "0"))
-
                     # --- COMPATIBILITY LAYER ---
                     if payload_world == "17": payload_world = "1"
                     if payload_world == "13": payload_world = "10"
@@ -279,7 +284,8 @@ class CensusWorker:
 
                     # 3. EVENT PROCESSING (Dispatch)
                     if e_name == "Death":
-                        self._handle_death(p, get_stat_obj)
+                        self._handle_death(p, p.get("world_id", "0"))
+                        self._store_recent_death(p, p.get("world_id", "0"))
                     elif e_name == "GainExperience":
                         self._handle_experience(p, get_stat_obj)
                     elif e_name == "MetagameEvent":
@@ -290,7 +296,26 @@ class CensusWorker:
 
             self.msg_queue.task_done()
 
-    def _handle_death(self, p, get_stat_obj):
+    def _store_recent_death(self, p, world_id):
+        ts = 0
+        try:
+            ts = int(p.get("timestamp", "0"))
+        except:
+            ts = 0
+        with self.recent_deaths_lock:
+            self.recent_deaths.append({
+                "payload": p,
+                "world_id": world_id,
+                "timestamp": ts,
+                "gunner_matched": False
+            })
+            if len(self.recent_deaths) > self.recent_deaths_max:
+                self.recent_deaths = self.recent_deaths[-self.recent_deaths_max:]
+
+    def _handle_death(self, p, world_id):
+        def get_stat_obj(cid, tid):
+            return self._get_stat_obj(cid, tid, world_id)
+
         killer_id = p.get("attacker_character_id")
         victim_id = p.get("character_id")
         my_id = self.c.current_character_id
@@ -664,8 +689,125 @@ class CensusWorker:
                 # Alle anderen Support-Events (Heal, Resupply, etc.) aus der Liste prüfen
                 for event_name, id_list in PS2_EXP_DETECTION.items():
                     if exp_id in id_list:
+
                         self._process_stat_event(event_name)
+                        if event_name == "Gunner Assist":
+                            # FIX: Wir starten sofort den Such-Loop
+                            # other_id = Der Gunner
+                            # timestamp = Zeit des XP Events
+                            # retries = 10 (Wir versuchen es 10x alle 0.5s = 5 Sekunden lang)
+                            self._try_add_gunner_killfeed(
+                                p.get("other_id"),
+                                p.get("timestamp"),
+                                retries=10
+                            )
                         break
+
+    def _try_add_gunner_killfeed(self, gunner_id, exp_ts, retries=0):
+        """
+        Versucht rekursiv, den Gunner-Kill zu finden.
+        """
+        if not gunner_id or gunner_id == "0":
+            return
+
+        match_entry = None
+
+        # 1. VERSUCH: Suche in den vorhandenen Toden
+        with self.recent_deaths_lock:
+            for entry in self.recent_deaths:
+                d_p = entry["payload"]
+
+                # Bereits verarbeitete ignorieren
+                if entry.get("gunner_matched"):
+                    continue
+
+                # LOGIK: Der Angreifer (Attacker) im Death-Event muss unser Gunner sein
+                if d_p.get("attacker_character_id") == gunner_id:
+                    # Optional: Zeit-Check (Kill sollte zeitnah zum XP Event sein, +/- 10 sek)
+                    # Hier meist nicht nötig, da recent_deaths eh kurz ist.
+
+                    entry["gunner_matched"] = True
+                    match_entry = entry
+                    break
+
+        # 2. ERFOLG
+        if match_entry:
+            self.c.add_log(f"DEBUG: Gunner Kill gefunden! (Retries left: {retries})")
+            self._emit_gunner_killfeed(match_entry["payload"])
+            return
+
+        # 3. MISSERFOLG -> RETRY ODER ABBRUCH
+        if retries > 0:
+            # Noch nicht da? Warte 0.5 Sekunden und versuche es erneut (Rekursion)
+            # Wir nutzen threading.Timer, um den Main-Loop nicht zu blockieren
+            threading.Timer(
+                0.5,
+                self._try_add_gunner_killfeed,
+                args=(gunner_id, exp_ts, retries - 1)
+            ).start()
+        else:
+            # Nach 5 Sekunden (10 * 0.5) immer noch kein passender Tod gefunden
+            # Das passiert, wenn der Gunner z.B. nur ein Fahrzeug zerstört hat (kein Death Event für Insassen)
+            # oder das Death Event verloren ging.
+            # self.c.add_log(f"DEBUG: Gunner Kill Time-Out. ID: {gunner_id}")
+            pass
+
+    def _emit_gunner_killfeed(self, p):
+        if not self.c.config.get("killfeed", {}).get("active", True):
+            return
+        if not self.c.overlay_win:
+            return
+
+        victim_id = p.get("character_id")
+        if not victim_id or victim_id == "0":
+            return
+
+        is_hs = (p.get("is_headshot") == "1")
+        is_tk = (p.get("attacker_team_id") == p.get("team_id")) and (
+            p.get("attacker_character_id") != victim_id
+        )
+
+        icon_html = ""
+        if is_hs:
+            hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "Headshot.png")
+            hs_path = get_asset_path(hs_icon).replace("\\", "/")
+            if os.path.exists(hs_path):
+                hs_size = self.c.config.get("killfeed", {}).get("hs_icon_size", 19)
+                icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
+
+        kf_cfg_raw = self.c.config.get("killfeed", {})
+        kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+        kf_font = kf_cfg.get("font_size", 19)
+        base_style = (
+            f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; "
+            "text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+        )
+
+        v_name = self.c.name_cache.get(victim_id, "Unknown")
+        raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
+        v_tag = f"[{raw_tag}] " if raw_tag else ""
+
+        s_vic = self.c.session_stats.get(victim_id, {})
+        try:
+            raw_d = s_vic.get('d', 1)
+            if self.c.kd_mode_revive:
+                raw_d = max(0, raw_d - s_vic.get('revives_received', 0))
+            kd_str = f"{(s_vic.get('k', 0) / max(1, raw_d)):.1f}"
+        except:
+            kd_str = "0.0"
+
+        if is_tk:
+            msg = f"""<div style="{base_style}">
+                    <span style="color: #ffaa00;">GUNNER TK </span>
+                    <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
+                    </div>"""
+        else:
+            msg = f"""<div style="{base_style}">
+                    <span style="color: #ff8c00;">GUNNER </span>
+                    {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
+                    <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+
+        self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
     def _handle_metagame(self, p):
         state = p.get("metagame_event_state_name")
