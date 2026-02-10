@@ -6,15 +6,15 @@
 ```bash
 # For Arch/CachyOS/Manjaro
 sudo pacman -S python-pyqt6 python-pyqt6-webengine python-requests python-websockets \
-               python-pillow python-pygame python-dotenv xorg-xprop
+               python-pillow python-pygame python-dotenv xorg-xprop xdotool
 
 # For Ubuntu/Debian
 sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine python3-requests python3-websockets \
-                 python3-pil python3-pygame python3-dotenv x11-utils
+                 python3-pil python3-pygame python3-dotenv x11-utils xdotool
 
 # For Fedora
 sudo dnf install python3-qt6 python3-qt6-webengine python3-requests python3-websockets \
-                 python3-pillow python3-pygame python3-dotenv xorg-x11-utils
+                 python3-pillow python3-pygame python3-dotenv xorg-x11-utils xdotool
 ```
 
 ### Optional (for building from source)
@@ -117,6 +117,9 @@ Install system packages (see Required Packages above)
 
 ### "xprop: command not found"
 Install `xorg-xprop` (Arch) or `x11-utils` (Debian/Ubuntu)
+
+### "Voice macros don't trigger on Linux"
+Install `xdotool` and make sure the game window is focused (X11/XWayland).
 
 ### Overlay doesn't appear over game
 - Make sure the game is running in **Borderless Windowed** mode

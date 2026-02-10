@@ -61,6 +61,8 @@ try:
     import pydirectinput
 except Exception:
     pydirectinput = None
+
+XDO_TOOL = shutil.which("xdotool") if not sys.platform.startswith("win") else None
 import sqlite3
 import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
 import launcher_qt
@@ -3171,14 +3173,24 @@ class DiorClientGUI:
         # 3. Tastendruck simulieren (Thread damit Mainloop nicht hängt)
         def press():
             try:
-                if not pydirectinput:
-                    print("Voice Error: pydirectinput is unavailable on this platform.")
-                    return
-                # V drücken
-                pydirectinput.press('v')
-                time.sleep(0.05)  # Kurze Pause für das Menü
-                # Zahl drücken
-                pydirectinput.press(val)
+                if IS_WINDOWS:
+                    if not pydirectinput:
+                        print("Voice Error: pydirectinput is unavailable on this platform.")
+                        return
+                    # V drücken
+                    pydirectinput.press('v')
+                    time.sleep(0.05)  # Kurze Pause für das Menü
+                    # Zahl drücken
+                    pydirectinput.press(val)
+                else:
+                    if not XDO_TOOL:
+                        print("Voice Error: xdotool is not installed (required on Linux for voice macros).")
+                        return
+
+                    subprocess.run([XDO_TOOL, "key", "v"], check=False)
+                    time.sleep(0.05)
+                    subprocess.run([XDO_TOOL, "key", str(val)], check=False)
+
                 # Loggen für Debug
                 print(f"DEBUG: Auto-Voice V-{val} triggered by {trigger_key}")
             except Exception as e:
