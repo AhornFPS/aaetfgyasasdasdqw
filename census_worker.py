@@ -827,6 +827,8 @@ class CensusWorker:
     def _emit_gunner_killfeed_from_victim(self, victim_id):
         if not self.c.config.get("killfeed", {}).get("active", True):
             return
+        if not self.c.config.get("killfeed", {}).get("show_gunner", True):
+            return
         if not self.c.overlay_win:
             return
         if not victim_id or victim_id == "0":
@@ -853,6 +855,8 @@ class CensusWorker:
 
     def _emit_gunner_vehicle_killfeed(self, vehicle_name):
         if not self.c.config.get("killfeed", {}).get("active", True):
+            return
+        if not self.c.config.get("killfeed", {}).get("show_gunner", True):
             return
         if not self.c.overlay_win:
             return

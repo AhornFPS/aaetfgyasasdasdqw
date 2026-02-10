@@ -1067,6 +1067,8 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_toggle_stats.clicked, self.toggle_stats_visibility)
         self.safe_connect(ui.btn_toggle_feed.clicked, self.toggle_killfeed_visibility)
         self.safe_connect(ui.check_show_revives.toggled, self.save_stats_config_from_qt)
+        if hasattr(ui, "check_show_gunner"):
+            self.safe_connect(ui.check_show_gunner.toggled, self.save_stats_config_from_qt)
 
         # LIVE-AUTO-SAVE für Textfelder (Stats & Feed)
         self.safe_connect(ui.ent_stats_img.textChanged, self.save_stats_config_from_qt)
@@ -1646,6 +1648,7 @@ class DiorClientGUI:
             "active": kf_active_state,  # <--- WICHTIG
             "hs_icon": s_ui.ent_hs_icon.text(),
             "show_revives": s_ui.check_show_revives.isChecked(),  # Das ist OK (Checkbox existiert)
+            "show_gunner": s_ui.check_show_gunner.isChecked() if hasattr(s_ui, "check_show_gunner") else True,
 
             # Position behalten
             "x": current_kf_conf.get("x", 50),
@@ -1867,6 +1870,10 @@ class DiorClientGUI:
         ui.check_show_revives.blockSignals(True)
         ui.check_show_revives.setChecked(kf_conf.get("show_revives", True))
         ui.check_show_revives.blockSignals(False)
+        if hasattr(ui, "check_show_gunner"):
+            ui.check_show_gunner.blockSignals(True)
+            ui.check_show_gunner.setChecked(kf_conf.get("show_gunner", True))
+            ui.check_show_gunner.blockSignals(False)
 
         # NEW: Font Size (Feed) - Dropdown Support / HS Icon Size
         ui.combo_feed_font.blockSignals(True)

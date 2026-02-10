@@ -1199,6 +1199,10 @@ class OverlayConfigWindow(QWidget):
         self.check_show_revives.setStyleSheet("color: #00ff00;")
         kf_layout.addWidget(self.check_show_revives)
 
+        self.check_show_gunner = QCheckBox("Show Gunner Kills in Feed")
+        self.check_show_gunner.setStyleSheet("color: #00ff00;")
+        kf_layout.addWidget(self.check_show_gunner)
+
         # FONT SIZE (FEED)
         kf_fs_layout = QHBoxLayout()
         kf_fs_layout.addWidget(QLabel("Feed Font Size:"))
