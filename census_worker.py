@@ -66,6 +66,7 @@ class CensusWorker:
         self.recent_deaths_max = 100
         self.gunner_match_delay = 0.2
         self.recent_deaths_lock = threading.Lock()
+        self.vehicle_gunner_kill_map = self._load_vehicle_gunner_kill_map()
 
         # --- SUPPORT TRACKING (HIERHER VERSCHOBEN) ---
         self.support_streaks = {
@@ -76,6 +77,32 @@ class CensusWorker:
             "Repair": 0
         }
         self.is_dead_state = False
+
+    def _load_vehicle_gunner_kill_map(self):
+        mapping = {}
+        path = get_asset_path("experience.json")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            self.c.add_log(f"ERR: Failed to load experience.json: {e}")
+            return mapping
+
+        excluded = ("Infantry", "Engineer Turret", "Engi Turret", "Phalanx", "Drop Pod", "Spitfire", "HIVE")
+        for entry in data.get("experience_list", []):
+            desc = entry.get("description") or ""
+            vehicle = ""
+            if "Kill by" in desc and "Gunner" in desc and not desc.startswith("Player Kill by"):
+                # Example: "Flash Kill by Sunderer Gunner"
+                vehicle = desc.split(" Kill by ", 1)[0].strip()
+            else:
+                continue
+            if any(tag in vehicle for tag in excluded):
+                continue
+            exp_id = str(entry.get("experience_id", "")).strip()
+            if exp_id:
+                mapping[exp_id] = vehicle
+        return mapping
 
     def start(self):
         def run_loop():
@@ -682,6 +709,9 @@ class CensusWorker:
             # --- NEUE ZÄHL-LOGIK ---
             # Anstatt direkt zu feuern, leiten wir es an _process_stat_event weiter.
 
+            if exp_id in self.vehicle_gunner_kill_map:
+                self._emit_gunner_vehicle_killfeed(self.vehicle_gunner_kill_map[exp_id])
+
             if exp_id in ["7", "53"]:
                 # Revive Given zählen & triggern
                 self._process_stat_event("Revive Given")
@@ -817,6 +847,29 @@ class CensusWorker:
         msg = f"""<div style="{base_style}">
                 <span style="color: #ff8c00;">GUNNER KILL </span>
                 <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
+                </div>"""
+
+        self.c.overlay_win.signals.killfeed_entry.emit(msg)
+
+    def _emit_gunner_vehicle_killfeed(self, vehicle_name):
+        if not self.c.config.get("killfeed", {}).get("active", True):
+            return
+        if not self.c.overlay_win:
+            return
+        if not vehicle_name:
+            return
+
+        kf_cfg_raw = self.c.config.get("killfeed", {})
+        kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
+        kf_font = kf_cfg.get("font_size", 19)
+        base_style = (
+            f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; "
+            "text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+        )
+
+        msg = f"""<div style="{base_style}">
+                <span style="color: #ff8c00;">GUNNER KILL </span>
+                <span style="color: #ffffff;">{vehicle_name}</span>
                 </div>"""
 
         self.c.overlay_win.signals.killfeed_entry.emit(msg)
