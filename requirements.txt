@@ -1,0 +1,8 @@
+PyQt6
+PyQt6-WebEngine
+requests
+websockets
+Pillow
+pydirectinput
+pygame
+python-dotenv

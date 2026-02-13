@@ -1,0 +1,31 @@
+# IDE & System
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Python & Build
+__pycache__/
+*.py[cod]
+*$py.class
+dist/
+build/
+
+
+# Lokale Daten & Datenbanken (Deine Liste)
+.env
+ps2_master.db
+config.json
+error_log.txt
+crash_log.txt
+_emote_cache/
+config_backup.json
+custom_crosshair_gen.png
+
+# Virtuelle Umgebungen
+venv/
+.venv/
+.env/
+
+# Binaries
+*.exe
