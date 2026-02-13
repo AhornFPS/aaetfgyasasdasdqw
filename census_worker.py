@@ -164,21 +164,7 @@ class CensusWorker:
         Zählt Support-Events hoch und resettet bei Respawn.
         Triggert Basis-Event (z.B. 'Heal') UND Meilenstein (z.B. 'Heal 100').
         """
-
-
-
-        if is_revive_taken:
-            # Wir leben wieder (durch Revive) -> Status resetten, aber Zähler behalten
-            self.is_dead_state = False
-        elif self.is_dead_state:
-            # Wir machen was (Heal/Ammo), obwohl wir "tot" waren -> Respawn erkannt -> RESET
-            self.c.add_log("SYS: Respawn detected via Action. Resetting Support Streaks.")
-            for k in self.support_streaks:
-                self.support_streaks[k] = 0
-            
-
-            
-
+        
 
         # 2. Zählen (falls Kategorie existiert)
         if category in self.support_streaks:
@@ -508,6 +494,9 @@ class CensusWorker:
                             self.c.killstreak_count = 0
                             self.c.streak_factions = []
                             self.c.streak_slot_map = []
+                            # Reset Support Streak
+                            for k in self.support_streaks:
+                                self.support_streaks[k] = 0
                         
                         # TK Flag löschen, wir haben ja gerade erfolgreich getötet (wieder lebendig)
                         self.c.is_tk_death = False
@@ -653,6 +642,9 @@ class CensusWorker:
                      self.c.killstreak_count = 0
                      self.c.streak_factions = []
                      self.c.streak_slot_map = []
+                     # Reset Support Streak
+                     for k in self.support_streaks:
+                         self.support_streaks[k] = 0
 
                 # --- 2. STATUS SICHERN (BACKUP) ---
                 if self.c.killstreak_count > 0:
@@ -705,9 +697,15 @@ class CensusWorker:
                     # KD des Killers holen
                     k_vic = self.c.session_stats.get(killer_id, {})
                     try:
-                        k_kd = f"{(k_vic.get('k', 0) / max(1, k_vic.get('d', 1))):.1f}"
+                        raw_k_d = k_vic.get('d', 1)
+                        if self.c.kd_mode_revive:
+                            raw_k_d = max(0, raw_k_d - k_vic.get('revives_received', 0))
+                        
+                        k_kd = f"{(k_vic.get('k', 0) / max(1, raw_k_d)):.1f}"
                     except:
                         k_kd = "0.0"
+
+                    
 
                     # TEAMKILL DISPLAY CHECK
                     if is_tk:
