@@ -4,11 +4,11 @@ import sys
 import ctypes
 
 # 1. DPI Awareness (Must happen FIRST)
-try:
-    if sys.platform.startswith("win"):
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
-    pass
+# try:
+#     if sys.platform.startswith("win"):
+#         ctypes.windll.shcore.SetProcessDpiAwareness(1)
+# except Exception:
+#     pass
 
 # 2. Path logic for PyInstaller 6+ (_internal Support)
 def resource_path(relative_path):

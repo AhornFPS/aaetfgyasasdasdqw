@@ -1785,12 +1785,13 @@ class QtOverlay(QWidget):
             
             self.safe_move(self.stats_text_label, int(final_tx), int(final_ty))
 
-        self.server.broadcast("stats", {
-            "html": html,
-            "bg_filename": bg_name,
-            "x": int(st_x),
-            "y": int(st_y),
-        })
+        if hasattr(self, "server") and self.server:
+            self.server.broadcast("stats", {
+                "html": html,
+                "bg_filename": bg_name,
+                "x": int(st_x),
+                "y": int(st_y),
+            })
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if not cfg.get("active", True) and not self.edit_mode:
