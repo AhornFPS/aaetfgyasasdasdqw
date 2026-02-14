@@ -1046,13 +1046,14 @@ class QtOverlay(QWidget):
 
         if img_path:
             filename = os.path.basename(img_path)
-            self.server.broadcast("event", {
-                "filename": filename,
-                "duration": duration,
-                "x": int(x),  # Send position
-                "y": int(y),  # Send position
-                "scale": scale  # Send scale
-            })
+            if hasattr(self, "server") and self.server:
+                self.server.broadcast("event", {
+                    "filename": filename,
+                    "duration": duration,
+                    "x": int(x),  # Send position
+                    "y": int(y),  # Send position
+                    "scale": scale  # Send scale
+                })
 
         if sound_path:
             try:
@@ -1570,11 +1571,12 @@ class QtOverlay(QWidget):
             kf_x = conf.get("x", 50)
             kf_y = conf.get("y", 200)
 
-        self.server.broadcast("feed", {
-            "html": html_msg,
-            "x": int(kf_x),
-            "y": int(kf_y)
-        })
+        if hasattr(self, "server") and self.server:
+            self.server.broadcast("feed", {
+                "html": html_msg,
+                "x": int(kf_x),
+                "y": int(kf_y)
+            })
 
     def update_killfeed_ui(self):
         """Scales all messages in the feed and sets label text."""
