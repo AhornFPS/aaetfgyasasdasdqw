@@ -421,6 +421,7 @@ class CensusWorker:
                 v_obj = get_stat_obj(victim_id, p.get("team_id"))
                 v_obj["d"] += 1
                 if is_hs_weapon:
+                    v_obj["dhs_eligible"] += 1
                     if is_hs: v_obj["dhs"] += 1
 
         # -------------------------------------------------
