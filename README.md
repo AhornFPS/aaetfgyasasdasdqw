@@ -29,37 +29,46 @@ A powerful overlay and stat tracking application for PlanetSide 2, featuring rea
 
 ## 🚀 Quick Start
 
-### Windows
+### 🪟 Windows (Portable EXE)
 
-1. **Download** the latest release
-2. **Extract** the archive
-3. **Run** `Better Planetside.exe`
+1. **Download** the latest `Better-Planetside-Windows.zip` from the releases.
+2. **Extract** the folder to a location of your choice.
+3. **Run** `Better Planetside.exe`. 
+   * *Note: No installation required. All dependencies are bundled.*
 
-### Linux
+### 🐧 Linux (AppImage)
 
-#### Option 1: Run from Source (Recommended)
+The easiest way to run Better Planetside on any Linux distribution.
 
+1. **Download** the latest `Better_Planetside-x86_64.AppImage`.
+2. **Make it executable**:
+   ```bash
+   chmod +x Better_Planetside-x86_64.AppImage
+   ```
+3. **Run it**:
+   ```bash
+   ./Better_Planetside-x86_64.AppImage
+   ```
+
+#### Alternative: Running from Source
+If you prefer to run from source or need to develop:
+
+1. **Setup environment**: Create a `.env` file in the project root with your Census Service ID:
+   ```env
+   # Your census ID (Don't forget the s: at the beginning)
+   CENSUS_S_ID=s:YourCensusIDhere
+   ```
+2. **Run**:
+   ```bash
+   ./launch.sh
+   ```
+*Requires `python` and `pip` dependencies installed.*
+
+#### Alternative: Building your own AppImage
+You can build a fresh AppImage using our automation script:
 ```bash
-# Install system dependencies (Arch/CachyOS)
-sudo pacman -S python-pyqt6 python-pyqt6-webengine python-requests \
-               python-websockets python-pillow python-pygame python-dotenv xorg-xprop
-
-# Run the launcher
-./launch.sh
+./create-appimage.sh
 ```
-
-#### Option 2: Build Standalone Executable
-
-```bash
-# Build the application
-./build-linux.sh
-
-# Run from dist folder
-cd dist/Better\ Planetside
-./Better\ Planetside
-```
-
-**For other Linux distributions**, see [INSTALL-LINUX.md](INSTALL-LINUX.md)
 
 ## 📋 Requirements
 
@@ -68,10 +77,8 @@ cd dist/Better\ Planetside
 - All dependencies are bundled in the executable
 
 ### Linux
-- Python 3.10 or higher
-- PyQt6 and PyQt6-WebEngine
-- xprop (for window focus detection)
-- See [INSTALL-LINUX.md](INSTALL-LINUX.md) for complete list
+- **AppImage**: Self-contained. Just needs `xprop` installed on your system for focus detection.
+- **From Source**: Requires Python 3.10+, PyQt6, pygame, and other dependencies listed in [INSTALL-LINUX.md](INSTALL-LINUX.md).
 
 ### PlanetSide 2
 - **Game Mode**: Borderless Windowed (required for overlay visibility)

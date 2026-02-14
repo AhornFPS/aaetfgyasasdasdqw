@@ -10,6 +10,7 @@ __pycache__/
 *$py.class
 dist/
 build/
+AppDir/
 
 
 # Lokale Daten & Datenbanken (Deine Liste)
@@ -21,6 +22,7 @@ crash_log.txt
 _emote_cache/
 config_backup.json
 custom_crosshair_gen.png
+Better_Planetside-x86_64.AppImage
 
 # Virtuelle Umgebungen
 venv/
