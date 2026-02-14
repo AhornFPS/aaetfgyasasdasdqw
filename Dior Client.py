@@ -111,7 +111,7 @@ QCoreApplication.addLibraryPath(os.path.join(basedir, 'imageformats'))
 
 DUMMY_STATS_TEMPLATE = """
 <div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
-            text-shadow: 1px 1px 2px #000; text-align: center; font-size: {f_size}px; white-space: nowrap;">
+            text-align: center; font-size: {f_size}px; white-space: nowrap;">
     KD: <span style="color: #00ff00;">3.50</span> &nbsp;&nbsp;
     K: <span style="color: white;">42</span> &nbsp;&nbsp;
     D: <span style="color: white;">12</span> &nbsp;&nbsp;
@@ -1182,6 +1182,12 @@ class DiorClientGUI:
         for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
             self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
 
+        # Color Buttons for Stats
+        if hasattr(ui, 'btn_stats_label_color'):
+            self.safe_connect(ui.btn_stats_label_color.clicked, lambda: self.pick_stats_color("labels"))
+        if hasattr(ui, 'btn_stats_value_color'):
+            self.safe_connect(ui.btn_stats_value_color.clicked, lambda: self.pick_stats_color("values"))
+
         # Browse Buttons für Stats
         try:
             ui.btn_browse_stats_bg.clicked.disconnect()
@@ -1674,15 +1680,44 @@ class DiorClientGUI:
             # 2. Button-Farbe im UI aktualisieren (visuelles Feedback)
             # Wir setzen den Hintergrund des Buttons auf die gewählte Farbe
             # Und die Textfarbe auf Schwarz oder Weiß je nach Helligkeit
-            text_col = "black" if color.lightness() > 128 else "white"
-            self.ovl_config_win.btn_pick_color.setStyleSheet(
-                f"QPushButton {{ background-color: {hex_color}; color: {text_col}; font-weight: bold; border: 1px solid #555; padding: 3px; border-radius: 3px; outline: none; }} "
-                "QPushButton:focus { border: 1px solid #555; }"
-                "QPushButton:hover { border: 1px solid #00f2ff; }"
-            )
+            self._update_color_button_style(self.ovl_config_win.btn_pick_color, hex_color)
 
             # 3. Speichern und Overlay updaten
             self.save_streak_settings_from_qt()
+
+    def pick_stats_color(self, type_):
+        """Öffnet einen Farbwähler für Stats (Label oder Value)."""
+        st_conf = self.config.get("stats_widget", {})
+        conf_key = "label_color" if type_ == "labels" else "value_color"
+        default_hex = "#00f2ff" if type_ == "labels" else "#ffffff"
+        
+        current_hex = st_conf.get(conf_key, default_hex)
+        initial = QColor(current_hex)
+        
+        color = QColorDialog.getColor(initial, self.main_hub, f"Wähle {type_.capitalize()} Farbe")
+        
+        if color.isValid():
+            hex_color = color.name()
+            
+            if "stats_widget" not in self.config: self.config["stats_widget"] = {}
+            self.config["stats_widget"][conf_key] = hex_color
+            
+            # Button stylen
+            btn = self.ovl_config_win.btn_stats_label_color if type_ == "labels" else self.ovl_config_win.btn_stats_value_color
+            self._update_color_button_style(btn, hex_color)
+            
+            # Speichern & Update
+            self.save_stats_config_from_qt()
+
+    def _update_color_button_style(self, btn, hex_color):
+        """Hilfsmethode zum Stylen der Farb-Buttons."""
+        color = QColor(hex_color)
+        text_col = "black" if color.lightness() > 128 else "white"
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: {hex_color}; color: {text_col}; font-weight: bold; border: 1px solid #555; padding: 3px; border-radius: 3px; outline: none; }} "
+            "QPushButton:focus { border: 1px solid #555; }"
+            "QPushButton:hover { border: 1px solid #00f2ff; }"
+        )
 
     def safe_connect(self, signal, slot):
         """Trennt eine Verbindung sicherheitshalber, bevor sie neu gesetzt wird."""
@@ -1950,6 +1985,10 @@ class DiorClientGUI:
             "y": current_st_conf.get("y", 500),
 
             "font_size": int(s_ui.combo_st_font.currentText()),
+            
+            # NEU: Farben separat speichern (falls sie in der config_backup fehlen)
+            "label_color": current_st_conf.get("label_color", "#00f2ff"),
+            "value_color": current_st_conf.get("value_color", "#ffffff"),
 
             # Toggle Stats
             "show_k": s_ui.check_show_k.isChecked(),
@@ -2011,10 +2050,8 @@ class DiorClientGUI:
         
         # Test Data
         dummy = {
-            "VS": 33, "NC": 33, "TR": 33, "NSO": 1, "Total": 100,
-            "session_kills": 42, "session_deaths": 1, "session_revives": 5, "session_tks": 0,
-            "my_hs_rate": 45.0, "my_kpm": 1.5,
-            "session_time": 3600
+            "k": 42, "d": 1, "hs": 21, "hsrkill": 40, "dhs": 3, "dhs_eligible": 10,
+            "revives_received": 5, "start": time.time() - 3600, "acc_t": 0
         }
         
         if hasattr(self.overlay_win, "update_stats_display"):
@@ -2030,20 +2067,29 @@ class DiorClientGUI:
         if not self.overlay_win: return
         self.add_log("SYS: Testing Killfeed visuals...")
 
-        # Try to use existing method if available
-        if hasattr(self.overlay_win, "add_killfeed_event"):
-            # signature guess: victim, weapon, is_headshot, is_revive
-            try:
-                self.overlay_win.add_killfeed_event("TargetDummy", "NS-15M2", True)
-            except:
-                pass
+        # 1. Config & Style
+        kf_cfg = self.config.get("killfeed", {})
+        kf_font = kf_cfg.get("font_size", 19)
+        base_style = (
+            f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; "
+            "margin-bottom: 2px; text-align: right;"
+        )
+
+        hs_icon = kf_cfg.get("file", "headshot.png")
+        hs_size = kf_cfg.get("hs_icon_size", 19)
+        icon_html = f'<img src="{get_asset_path(hs_icon)}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;"> '
+
+        # 2. Test Cases
+        tests = [
+            f'<div style="{base_style}"><span style="color: #00ff00;">YOU </span>{icon_html}<span style="color: #ffffff;">TargetDummy</span></div>',
+            f'<div style="{base_style}"><span style="color: #ff0000;">DEATH </span><span style="color: #ffffff;">SweatyPro77</span></div>',
+            f'<div style="{base_style}"><span style="color: #ff8c00;">GUNNER </span>{icon_html}<span style="color: #ffffff;">Victim123</span></div>',
+            f'<div style="{base_style}"><span style="color: #00f2ff;">KILL </span><span style="color: #ffffff;">RandomPleb</span></div>'
+        ]
         
-        # Fallback / Force Show
-        if hasattr(self.overlay_win, "feed_label"):
-             current = self.overlay_win.feed_label.text()
-             self.overlay_win.feed_label.setText(current + "\n[TEST] You killed TargetDummy (Headshot)")
-             self.overlay_win.feed_label.show()
-             self.overlay_win.feed_label.adjustSize()
+        # Pick one
+        msg = random.choice(tests)
+        self.overlay_win.signals.killfeed_entry.emit(msg)
 
         # Positionen & Style live anwenden
         if self.overlay_win:
@@ -2251,6 +2297,14 @@ class DiorClientGUI:
         ui.combo_st_font.blockSignals(True)
         ui.combo_st_font.setCurrentText(str(int(st_conf.get("font_size", 22))))
         ui.combo_st_font.blockSignals(False)
+
+        # COLORS (Stats)
+        if hasattr(ui, 'btn_stats_label_color'):
+            l_col = st_conf.get("label_color", "#00f2ff")
+            self._update_color_button_style(ui.btn_stats_label_color, l_col)
+        if hasattr(ui, 'btn_stats_value_color'):
+            v_col = st_conf.get("value_color", "#ffffff")
+            self._update_color_button_style(ui.btn_stats_value_color, v_col)
 
         # New Toggles - Read from config, default True
         if hasattr(ui, "check_show_k"):
@@ -3727,7 +3781,7 @@ class DiorClientGUI:
 
         threading.Thread(target=press, daemon=True).start()
 
-    def test_stats_visuals(self):
+    def test_full_ui_scenarios(self):
         """Startet eine Vorschau (Anti-Ghosting Test mit neuem Layout) - PyQt6 Fixed"""
         if not self.overlay_win:
             self.add_log("WARN: Overlay System ist nicht aktiv! Bitte erst starten.")
@@ -3922,7 +3976,7 @@ class DiorClientGUI:
                 kf_cfg_raw = self.config.get("killfeed", {})
                 kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
                 kf_f = kf_cfg.get("font_size", 19)
-                base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+                base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; margin-bottom: 2px; text-align: right;"
 
                 # 3 Zeilen simulieren
                 line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'

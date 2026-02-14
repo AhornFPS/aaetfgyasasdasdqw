@@ -11,20 +11,20 @@ from overlay_server import OverlayServer
 
 IS_WINDOWS = sys.platform.startswith("win")
 
-# Aus QtCore kommen die Logik- und Animations-Klassen
+# Logic and animation classes come from QtCore
 from PyQt6.QtCore import (Qt, pyqtSignal, QObject, QTimer, QPoint,
                             QSize, QUrl, QRectF, QPropertyAnimation, QEasingCurve)
 
-# Aus QtWidgets kommen alle visuellen Komponenten und Effekte
+# All visual components and effects come from QtWidgets
 from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowEffect,
                                  QVBoxLayout, QHBoxLayout, QFrame, QTextBrowser,
-                                 QGraphicsOpacityEffect) # <--- Hier gehört er hin!
+                                 QGraphicsOpacityEffect)
 
-# Aus QtGui kommen die Grafik-Ressourcen
+# Graphics resources come from QtGui
 from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
                             QTransform, QMovie, QCursor, QTextCursor, QTextDocument, QRegion)
 
-# Sound Support (Optional, falls pygame fehlt)
+# Sound Support (Optional, if pygame is missing)
 try:
     import pygame
 
@@ -33,11 +33,11 @@ except ImportError:
     pass
 
 
-# Helper Funktion für Pfade
+# Helper function for paths
 def get_asset_path(filename):
     if not filename: return ""
 
-    # 1. Basis-Pfad ermitteln (Skript vs. EXE/_internal)
+    # 1. Determine base path (script vs. EXE/_internal)
     if hasattr(sys, '_MEIPASS'):
         base_dir = os.path.join(sys._MEIPASS, "assets")
     else:
@@ -45,13 +45,13 @@ def get_asset_path(filename):
 
     full_path = os.path.join(base_dir, filename)
 
-    # Debugging-Hilfe (wird im CMD Fenster angezeigt, falls console=True)
+    # Debugging help (displayed in CMD window if console=True)
     # print(f"DEBUG ASSET: {full_path} | Exists: {os.path.exists(full_path)}")
 
     return full_path
 
 
-# --- SIGNALE ---
+# --- SIGNALS ---
 class OverlaySignals(QObject):
     # img_path, sound_path, duration, x, y, scale, volume, is_hitmarker, play_duplicate, event_name
     show_image = pyqtSignal(str, str, int, int, int, float, float, bool, bool, str)
@@ -78,8 +78,8 @@ class DraggableChat(QWebEngineView):
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
-    # Diese Methode wird nicht mehr benötigt, da wir setHtml() im Widget nutzen.
-    # Wir lassen sie leer, damit Aufrufe nicht abstürzen.
+    # This method is no longer needed as we use setHtml() in the widget.
+    # We leave it empty so calls don't crash.
     def add_animated_message(self, html_msg):
         pass
 
@@ -102,8 +102,8 @@ class ChatMessageWidget(QWidget):
         self.browser.loadFinished.connect(self._prepare_height)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
-        # --- DER FIX: Base URL mitgeben ---
-        # Wir geben den Pfad des aktuellen Ordners als "Heimat" an.
+        # --- THE FIX: Provide Base URL ---
+        # We specify the path of the current folder as "home".
         base_url = QUrl.fromLocalFile(os.path.abspath("."))
         self.browser.setHtml(html, base_url)
 
@@ -112,8 +112,8 @@ class ChatMessageWidget(QWidget):
         self.setGraphicsEffect(self.opacity_effect)
 
     def _prepare_height(self):
-        """Ersatz für das alte adjust_height."""
-        # Wir fragen JavaScript nach der scrollHeight (tatsächliche Höhe des Inhalts)
+        """Replacement for the old adjust_height."""
+        # We ask JavaScript for the scrollHeight (actual height of the content)
         self.browser.page().runJavaScript(
             "document.documentElement.scrollHeight",
             self._apply_height_callback
@@ -122,16 +122,16 @@ class ChatMessageWidget(QWidget):
     def _apply_height_callback(self, height):
         """Wird aufgerufen, sobald JavaScript die Höhe berechnet hat."""
         if height:
-            new_h = int(height) + 10  # Kleiner Puffer
+            new_h = int(height) + 10  # Small buffer
             self.setFixedHeight(new_h)
             self.browser.setFixedHeight(new_h)
 
-            # Erst JETZT starten wir den Timer für das Verschwinden
+            # ONLY NOW we start the timer for disappearance
             if self.hold_time > 0:
                 QTimer.singleShot(self.hold_time * 1000, self.start_fade_out)
 
     def start_fade_out(self):
-        """Bleibt fast gleich, nutzt aber QPropertyAnimation auf den Container."""
+        """Remains almost the same, but uses QPropertyAnimation on the container."""
         self.anim = QPropertyAnimation(self.opacity_effect, b"opacity")
         self.anim.setDuration(2000)
         self.anim.setStartValue(1.0)
@@ -141,11 +141,11 @@ class ChatMessageWidget(QWidget):
         self.anim.start()
 
     def destroy_message(self):
-        """Bleibt genau gleich."""
+        """Remains exactly the same."""
         self.hide()
         self.deleteLater()
 
-# --- ZEICHEN-LAYER (Für Pfad-Aufnahme) ---
+# --- DRAWING LAYER (For path recording) ---
 class PathDrawingLayer(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -172,7 +172,7 @@ class PathDrawingLayer(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Klick-Fläche
+        # Click area
         painter.setBrush(QColor(0, 0, 0, 1))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRect(self.rect())
@@ -217,7 +217,7 @@ class PathDrawingLayer(QWidget):
             painter.drawEllipse(center, 5, 5)
 
 
-# --- HAUPT OVERLAY KLASSE ---
+# --- MAIN OVERLAY CLASS ---
 class QtOverlay(QWidget):
     def __init__(self, gui_ref=None):
         super().__init__()
@@ -227,23 +227,23 @@ class QtOverlay(QWidget):
         self.drag_offset = None
         self.knife_labels = []
         
-        # --- STATS CACHE (NEU gegen Flackern) ---
+        # --- STATS CACHE (NEW to avoid flickering) ---
         self._last_stats_html = ""
         self._last_stats_img = ""
 
-        # --- CACHE DICTIONARY (NEU) ---
-        # Hier speichern wir alle geladenen Bilder
+        # --- CACHE DICTIONARY (NEW) ---
+        # Here we store all loaded images
         self.pixmap_cache = {}
         self.movie_cache = {}
 
-        self.cache_usage_timestamps = {}  # NEU: Speichert {pfad: zeitstempel}
+        self.cache_usage_timestamps = {}  # NEW: Stores {path: timestamp}
 
-        # GC-Timer: Alle 2 Minuten prüfen wir auf "Müll"
+        # GC-Timer: Every 2 minutes we check for "garbage"
         self.gc_timer = QTimer(self)
         self.gc_timer.timeout.connect(self.run_garbage_collection)
         self.gc_timer.start(120000)  # 120.000 ms = 2 Minuten
 
-        # 1. FENSTER-KONFIGURATION
+        # 1. WINDOW CONFIGURATION
         # On Linux/Proton, ToolTip windows have the highest priority
         if IS_WINDOWS:
             self.setWindowFlags(
@@ -265,12 +265,12 @@ class QtOverlay(QWidget):
         screen = QApplication.primaryScreen().geometry()
         self.setGeometry(screen)
 
-        # Skalierung
+        # Scaling
         self.base_height = 1080.0
         self.ui_scale = screen.height() / self.base_height
         self.ui_scale = max(0.8, self.ui_scale)
 
-        # Zeichen-Ebene
+        # Drawing layer
         self.path_edit_active = False
         self.custom_path = []
         self.path_layer = PathDrawingLayer(self)
@@ -329,7 +329,7 @@ class QtOverlay(QWidget):
         self.img_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.img_label.hide()
 
-        # 3. SIGNALE VERBINDEN
+        # 3. CONNECT SIGNALS
         self.signals = OverlaySignals()
         self.signals.show_image.connect(self.add_event_to_queue)
         self.signals.killfeed_entry.connect(self.add_killfeed_row)
@@ -337,7 +337,7 @@ class QtOverlay(QWidget):
         self.signals.update_streak.connect(self.draw_streak_ui)
         self.signals.clear_feed.connect(self.clear_killfeed)
 
-        # Maus-Transparenz aktivieren
+        # Activate mouse passthrough
         self.set_mouse_passthrough(True)
 
         # Timers
@@ -357,7 +357,7 @@ class QtOverlay(QWidget):
         self.queue_timer.setSingleShot(True)
         self.queue_timer.timeout.connect(self.finish_current_event)
 
-        # Initiale Queue Einstellung (Fallback)
+        # Initial queue setting (fallback)
         self._target_pw_sink = None  # PipeWire sink name for audio routing
         self.queue_enabled = True
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
@@ -380,7 +380,7 @@ class QtOverlay(QWidget):
         self.twitch_browser = DraggableChat(self.chat_container)
         self.twitch_browser.hide()
 
-        # Initialen Inhalt setzen
+        # Set initial content
         self.chat_hold_time = 15
         self.update_twitch_browser_content()
 
@@ -388,7 +388,7 @@ class QtOverlay(QWidget):
         self.auto_hide_timer.setSingleShot(True)
         self.auto_hide_timer.timeout.connect(self.fade_out_chat)
 
-        # --- TWITCH DRAG COVER (Fix für WebEngine Click-Interferenz) ---
+        # --- TWITCH DRAG COVER (Fix for WebEngine click interference) ---
         self.twitch_drag_cover = QWidget(self)
         self.twitch_drag_cover.setObjectName("twitch_drag_cover")
         self.twitch_drag_cover.hide()
@@ -519,7 +519,7 @@ class QtOverlay(QWidget):
             return False
 
     def set_audio_device(self, device_name):
-        """Initialisiert den Mixer neu mit dem gewählten Gerät."""
+        """Re-initializes the mixer with the selected device."""
         if 'pygame' not in sys.modules:
             return
 
@@ -621,20 +621,20 @@ class QtOverlay(QWidget):
             except: pass
 
     def get_master_volume(self):
-        """Holt das Master-Volume aus der Config (0-100) und gibt float (0.0-1.0) zurück."""
+        """Gets the master volume from the config (0-100) and returns float (0.0-1.0)."""
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
-            # Standard ist 50%, falls noch nichts gespeichert wurde
+            # Default is 50% if nothing has been saved yet
             vol_percent = self.gui_ref.config.get("audio_volume", 50)
-            # Sicherstellen, dass es float ist und zwischen 0.0 und 1.0 liegt
+            # Ensure it is float and between 0.0 and 1.0
             return max(0.0, min(1.0, float(vol_percent) / 100.0))
         return 0.5  # Fallback
 
     def run_garbage_collection(self):
-        """Löscht Ressourcen, die länger als 20 Minuten nicht genutzt wurden."""
+        """Deletes resources that haven't been used for more than 20 minutes."""
         now = time.time()
-        max_idle_time = 20 * 60  # 20 Minuten in Sekunden
+        max_idle_time = 20 * 60  # 20 minutes in seconds
 
-        # Listen für zu löschende Pfade
+        # Lists for paths to be deleted
         to_remove = []
 
         for path, last_used in self.cache_usage_timestamps.items():
@@ -645,24 +645,24 @@ class QtOverlay(QWidget):
             return
 
         for path in to_remove:
-            # 1. Aus Movie-Cache entfernen (falls vorhanden)
+            # 1. Remove from movie cache (if present)
             if path in self.movie_cache:
                 movie = self.movie_cache.pop(path)
-                movie.stop()  # WICHTIG: Animation stoppen
-                movie.deleteLater()  # Ressourcen freigeben
+                movie.stop()  # IMPORTANT: Stop animation
+                movie.deleteLater()  # Release resources
 
-            # 2. Aus Pixmap-Cache entfernen
+            # 2. Remove from pixmap cache
             if path in self.pixmap_cache:
                 self.pixmap_cache.pop(path)
 
-            # 3. Zeitstempel-Eintrag löschen
+            # 3. Delete timestamp entry
             if path in self.cache_usage_timestamps:
                 del self.cache_usage_timestamps[path]
 
         self.gui_ref.add_log(f"GC: {len(to_remove)} ungenutzte Ressourcen aus RAM gelöscht.")
 
     def notify_chat_moved(self, x, y):
-        # Signal an Controller senden
+        # Send signal to controller
         self.signals.item_moved.emit("twitch", x, y)
 
     def update_twitch_style(self, x, y, w, h, opacity, font_size):
@@ -671,7 +671,7 @@ class QtOverlay(QWidget):
 
         alpha = int((opacity / 100) * 255)
 
-        # Hintergrund komplett auf transparent setzen
+        # Set background completely to transparent
         self.chat_container.setStyleSheet(f"""
             QWidget {{ 
                 background-color: rgba(0, 0, 0, {alpha}); 
@@ -689,7 +689,7 @@ class QtOverlay(QWidget):
             self.update_twitch_visibility(enabled)
 
     def update_twitch_browser_content(self):
-        """Initialisiert oder resettet den Browser-Inhalt."""
+        """Initializes or resets the browser content."""
         template = """
         <html>
         <head>
@@ -762,7 +762,7 @@ class QtOverlay(QWidget):
         self.twitch_browser.show()
 
     def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
-        # 1. Sichtbarkeit prüfen
+        # 1. Check visibility
         enabled = True
         always_on = False
         game_running = False
@@ -778,34 +778,34 @@ class QtOverlay(QWidget):
         if not self.twitch_browser.isVisible():
             self.twitch_browser.show()
 
-        # PFAD-FIX für WebEngine
+        # PATH FIX for WebEngine
         html_msg = html_msg.replace('src="emote://', 'src="file:///')
         html_msg = html_msg.replace('\\', '/')
 
         safe_color = self.get_readable_color(color)
         f_size = getattr(self, 'current_chat_font_size', 12)
 
-        # In JS injecten
+        # Inject into JS
         js = f"addMessage({json.dumps(user)}, {json.dumps(html_msg)}, {json.dumps(safe_color)}, {json.dumps(f_size)}, {json.dumps(self.chat_hold_time)})"
         self.twitch_browser.page().runJavaScript(js)
 
-        # Auto-Hide Timer resetten (für den ganzen Container)
+        # Reset Auto-Hide timer (for the entire container)
         if self.chat_hold_time > 0:
             self.auto_hide_timer.start((self.chat_hold_time + 2) * 1000)
 
     def get_readable_color(self, hex_color):
-        """Prüft die Helligkeit und hellt dunkle Farben auf."""
+        """Checks brightness and brightens dark colors."""
         hex_color = hex_color.lstrip('#')
-        # Von Hex zu RGB
+        # From Hex to RGB
         r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
 
-        # Perzeptive Helligkeit berechnen
+        # Calculate perceptive brightness
         luminance = (0.299 * r + 0.587 * g + 0.114 * b)
 
-        # Schwellenwert: Alles unter 120 (von 255) wird aufgehellt
+        # Threshold: Everything below 120 (of 255) is brightened
         if luminance < 120:
-            # Wir addieren einen festen Wert, um die Farbe "pastelliger"
-            # und leuchtender zu machen, ohne den Farbton zu verlieren
+            # We add a fixed value to make the color more "pastel-like"
+            # and vibrant without losing the hue
             r = min(255, r + 80)
             g = min(255, g + 80)
             b = min(255, b + 80)
@@ -814,30 +814,30 @@ class QtOverlay(QWidget):
         return f"#{hex_color}"
 
     def fade_out_chat(self):
-        """Versteckt den Chat oder leert ihn."""
-        # Variante 1: Einfach verstecken (empfohlen für Performance)
+        """Hides the chat or clears it."""
+        # Variant 1: Simply hide (recommended for performance)
         self.chat_container.hide()
-        # Variante 2: Chat leeren (falls du willst, dass er beim nächsten Mal leer startet)
+        # Variant 2: Clear chat (if you want it to start empty next time)
         # self.twitch_browser.clear()
 
     def set_chat_hold_time(self, seconds):
-        """Wird vom GUI aufgerufen, wenn der User den Wert ändert."""
+        """Called by the GUI when the user changes the value."""
         self.chat_hold_time = int(seconds)
         if self.chat_hold_time == 0:
             self.auto_hide_timer.stop()
             self.chat_container.show()
 
     def clear_twitch_chat(self):
-        """Leert den Browser-Inhalt."""
+        """Clears the browser content."""
         self.twitch_browser.clear()
         self.add_log("TWITCH: Chat cleared.")
 
-    # --- CACHE LOGIK ---
+    # --- CACHE LOGIC ---
     def get_cached_pixmap(self, path):
         if not path:
             return QPixmap()
 
-        # --- FIX: Selbstheilung für relative Pfade ---
+        # --- FIX: Self-healing for relative paths ---
         if not os.path.exists(path):
             resolved_path = get_asset_path(path)
             if os.path.exists(resolved_path):
@@ -846,7 +846,7 @@ class QtOverlay(QWidget):
                 return QPixmap()
 
         # --- MTIME CHECK (Hot-Reload fix) ---
-        # Wir prüfen, ob sich die Datei geändert hat
+        # We check if the file has changed
         try:
             current_mtime = os.path.getmtime(path)
         except OSError:
@@ -857,7 +857,7 @@ class QtOverlay(QWidget):
 
         cached_mtime = self.pixmap_mtimes.get(path, 0)
 
-        # Wenn nicht im Cache ODER Datei neuer als Cache -> Neu laden
+        # If not in cache OR file is newer than cache -> Load new
         if path not in self.pixmap_cache or current_mtime > cached_mtime:
             pm = QPixmap(path)
             if not pm.isNull():
@@ -872,10 +872,10 @@ class QtOverlay(QWidget):
 
 
     def clear_cache(self):
-        """Falls man Bilder im Betrieb austauscht (Reload)."""
+        """In case images are swapped during operation (Reload)."""
         self.pixmap_cache.clear()
 
-    # --- QUEUE & DISPLAY LOGIK ---
+    # --- QUEUE & DISPLAY LOGIC ---
     def _ensure_audio_routing(self):
         """After a sound plays, ensure PipeWire routes our stream to the correct sink.
         PipeWire's module-stream-restore remembers old routing, so new streams
@@ -899,7 +899,7 @@ class QtOverlay(QWidget):
         threading.Thread(target=_do_move, daemon=True).start()
 
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False, play_duplicate=True, event_name=""):
-        # --- FALL A: HITMARKER (Sofort & Parallel) ---
+        # --- CASE A: HITMARKER (Immediate & Parallel) ---
 
         master_vol = self.get_master_volume()
 
@@ -908,7 +908,7 @@ class QtOverlay(QWidget):
                 try:
                     if 'pygame' in sys.modules:
                         snd = pygame.mixer.Sound(sound_path)
-                        snd.set_volume(volume * master_vol) # <--- Volume setzen
+                        snd.set_volume(volume * master_vol) # <--- Set volume
                         snd.play()
                         self._ensure_audio_routing()
                 except:
@@ -918,18 +918,18 @@ class QtOverlay(QWidget):
                 self.show_hitmarker(img_path, duration, x, y, scale)
             return
 
-        # --- FALL B: NORMALE EVENTS (Queue) ---
+        # --- CASE B: NORMAL EVENTS (Queue) ---
         if not hasattr(self, 'queue_enabled'): self.queue_enabled = True
 
         if not self.queue_enabled:
-            # Queue aus: Alles abbrechen, sofort zeigen
+            # Queue off: Cancel everything, show immediately
             self.clear_queue_now()
 
             if sound_path:
                 try:
                     if 'pygame' in sys.modules:
                         snd = pygame.mixer.Sound(sound_path)
-                        snd.set_volume(volume * master_vol) # <--- Volume setzen
+                        snd.set_volume(volume * master_vol) # <--- Set volume
                         snd.play()
                         self._ensure_audio_routing()
                 except:
@@ -938,9 +938,9 @@ class QtOverlay(QWidget):
             self.display_image(img_path, duration, x, y, scale)
             return
 
-        # Queue AN: Volume mit speichern
+        # Queue ON: Save with volume
         
-        # --- PLAY DUPLICATE LOGIK ---
+        # --- PLAY DUPLICATE LOGIC ---
         if not play_duplicate:
             # Helper for robust comparison
             def is_same(p1, p2):
@@ -990,13 +990,13 @@ class QtOverlay(QWidget):
         if hasattr(self, 'hitmarker_timer') and self.hitmarker_timer.isActive():
             self.hitmarker_timer.stop()
 
-        # --- CACHE GENUTZT ---
+        # --- CACHE USED ---
         pixmap = self.get_cached_pixmap(img_path)
         if pixmap.isNull():
             self.hitmarker_label.hide()
             return
 
-        # Skalierung (nutzt das gecachte Bild als Basis)
+        # Scaling (uses the cached image as base)
         final_scale = self.ui_scale * scale
         if final_scale != 1.0:
             w = int(pixmap.width() * final_scale)
@@ -1029,7 +1029,7 @@ class QtOverlay(QWidget):
             return
 
         self.is_showing = True
-        # Volume aus dem Tupel entpacken
+        # Unpack volume from the tuple
         img_path, sound_path, duration, x, y, scale, event_vol, event_name = self.event_queue.pop(0)
         
         # Store key for duplicate checking (prefer name if set)
@@ -1043,19 +1043,19 @@ class QtOverlay(QWidget):
             self.server.broadcast("event", {
                 "filename": filename,
                 "duration": duration,
-                "x": int(x),  # Position senden
-                "y": int(y),  # Position senden
-                "scale": scale  # Scale senden
+                "x": int(x),  # Send position
+                "y": int(y),  # Send position
+                "scale": scale  # Send scale
             })
 
         if sound_path:
             try:
                 if 'pygame' in sys.modules:
-                    # Master Volume frisch holen (falls User während der Queue den Regler bewegt hat)
+                    # Get fresh master volume (in case user moved slider during queue)
                     master_vol = self.get_master_volume()
 
                     snd = pygame.mixer.Sound(sound_path)
-                    # HIER WIRD VERRECHNET
+                    # CALCULATION HAPPENS HERE
                     snd.set_volume(event_vol * master_vol)
                     snd.play()
                     self._ensure_audio_routing()
@@ -1086,8 +1086,8 @@ class QtOverlay(QWidget):
             return
 
         if img_path.lower().endswith(".gif"):
-            # GIFs cachen wir NICHT als Pixmap, da sie animiert sind (QMovie).
-            # Das ist okay, da GIFs selten sind im Vergleich zu Hitmarkern.
+            # We do NOT cache GIFs as Pixmaps since they are animated (QMovie).
+            # This is okay since GIFs are rare compared to hitmarkers.
             if img_path not in self.movie_cache:
                 m = QMovie(img_path)
                 m.setCacheMode(QMovie.CacheMode.CacheAll)
@@ -1096,11 +1096,11 @@ class QtOverlay(QWidget):
 
             movie = self.movie_cache[img_path]
             self.img_label.setMovie(movie)
-            # Wichtig: Das Movie muss für das neue Label ggf. neu gestartet/gezeigt werden
+            # Important: The movie may need to be restarted/shown for the new label
             movie.jumpToFrame(0)
             movie.start()
         else:
-            # --- CACHE GENUTZT (Statische Bilder) ---
+            # --- CACHE USED (Static images) ---
             pixmap = self.get_cached_pixmap(img_path)
             if pixmap.isNull(): return
 
@@ -1173,10 +1173,10 @@ class QtOverlay(QWidget):
 
     def set_mouse_passthrough(self, enabled=True, active_targets=None):
         """
-        Aktiviert oder deaktiviert die Klick-Durchlässigkeit.
-        WICHTIG: Erst Qt-Flags setzen, DANN show(), DANN ctypes Styles!
+        Activates or deactivates click-through transparency.
+        IMPORTANT: Set Qt flags first, THEN show(), THEN ctypes styles!
         """
-        # 1. Qt Flags setzen (Nur wenn geänderte Flags vorliegen, um Flackern zu vermeiden)
+        # 1. Set Qt flags (Only if flags have changed, to avoid flickering)
         if IS_WINDOWS:
             new_flags = (Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.WindowStaysOnTopHint |
@@ -1188,7 +1188,7 @@ class QtOverlay(QWidget):
                          Qt.WindowType.ToolTip)
         
         if enabled:
-            # 0. Erst Visuals säubern
+            # 0. Clean visuals first
             self.clear_edit_visuals()
             self.active_edit_targets = []
             self.edit_mode = False
@@ -1199,24 +1199,24 @@ class QtOverlay(QWidget):
             self.edit_mode = True
             self.active_edit_targets = active_targets if active_targets else []
 
-        # Nur umschalten, wenn sich die Flags wirklich ändern
+        # Only switch if the flags actually change
         if self.windowFlags() != new_flags:
             self.setWindowFlags(new_flags)
-            self.show()  # Nach setWindowFlags muss show() gerufen werden
+            self.show()  # show() must be called after setWindowFlags
 
-        # 2. Fenster (wieder) anzeigen, damit es ein gültiges Handle bekommt
+        # 2. Show (again) so it gets a valid handle
         self.show()
 
-        # Falls Edit-Modus: Fokus erzwingen, sonst landen Klicks im Spiel
+        # If edit mode: Force focus, otherwise clicks land in-game
         if not enabled:
             self.activateWindow()
             self.raise_()
-            # IMMER den echten Chat verstecken, wenn Edit Mode - beugt Blocking vor!
+            # ALWAYS hide real chat when in edit mode - prevents blocking!
             self.chat_container.hide()
         else:
             self.clearMask()
 
-        # 3. Windows API Styles anwenden (Auf das NEUE Handle!)
+        # 3. Apply Windows API styles (to the NEW handle!)
         if IS_WINDOWS:
             try:
                 hwnd = int(self.winId())
@@ -1224,19 +1224,19 @@ class QtOverlay(QWidget):
                 WS_EX_LAYERED = 0x80000
                 WS_EX_TRANSPARENT = 0x20
 
-                # Aktuellen Style holen
+                # Get current style
                 style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
 
                 if enabled:
-                    # Durchlässig machen (Layered + Transparent)
+                    # Make transparent (layered + transparent)
                     ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
                     if hasattr(self, 'event_preview_label'):
                         self.event_preview_label.hide()
                 else:
-                    # Greifbar machen (Transparent-Bit entfernen)
+                    # Make interactable (remove transparent bit)
                     ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED)
 
-                    # --- VISUALS FÜR EDIT MODE ---
+                    # --- VISUALS FOR EDIT MODE ---
                     hl_style = "border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 50);"
                     targets = active_targets if active_targets else []
 
@@ -1281,12 +1281,12 @@ class QtOverlay(QWidget):
                             self.event_preview_label.raise_()
 
                     if "twitch" in targets:
-                        # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
-                        # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
+                        # We do NOT show the real layout with WebEngines (click issues!),
+                        # but the drag-cover, which reliably passes clicks to QtOverlay.
                         self.twitch_drag_cover.setStyleSheet(hl_style)
                         self.twitch_drag_cover.show()
                         self.twitch_drag_cover.raise_()
-                        # Den echten Chat verstecken wir, damit er nicht stört
+                        # We hide the real chat so it doesn't interfere
                         self.chat_container.hide()
                     self.update_edit_mask(targets)
 
@@ -1337,19 +1337,19 @@ class QtOverlay(QWidget):
                     self.event_preview_label.raise_()
 
             if "twitch" in targets:
-                # Wir zeigen NICHT das echte Layout mit WebEngines (Click-Zicken!),
-                # sondern das Drag-Cover, das Klicks zuverlässig an QtOverlay weitergibt.
+                # We do NOT show the real layout with WebEngines (click issues!),
+                # but the drag-cover, which reliably passes clicks to QtOverlay.
                 self.twitch_drag_cover.setStyleSheet(hl_style)
                 self.twitch_drag_cover.show()
                 self.twitch_drag_cover.raise_()
-                # Den echten Chat verstecken wir, damit er nicht stört
+                # We hide the real chat so it doesn't interfere
                 self.chat_container.hide()
             self.update_edit_mask(targets)
         elif hasattr(self, 'event_preview_label'):
             self.event_preview_label.hide()
 
     def update_edit_mask(self, targets):
-        """Limitiert Klicks auf alle aktiven Elemente, der Rest wird klick-through."""
+        """Limits clicks to all active elements, the rest becomes click-through."""
         if not targets:
             self.clearMask()
             return
@@ -1380,7 +1380,7 @@ class QtOverlay(QWidget):
             self.clearMask()
 
     def clear_edit_visuals(self):
-        """Entfernt alle Edit-Rahmen und setzt Labels in den Normalzustand."""
+        """Removes all edit frames and resets labels to normal state."""
         # Stats
         if hasattr(self, 'stats_bg_label'):
             self.stats_bg_label.setStyleSheet("background: transparent;")
@@ -1409,7 +1409,7 @@ class QtOverlay(QWidget):
         # Killfeed
         if hasattr(self, 'feed_label'):
             self.feed_label.setStyleSheet("background: transparent;")
-            # Falls nur Dummy-Text drin war, leeren (optional, aber sauberer)
+            # If there was only dummy text, clear (optional, but cleaner)
             if "DRAG AREA" in self.feed_label.text():
                 self.feed_label.setText("")
         
@@ -1484,7 +1484,7 @@ class QtOverlay(QWidget):
                                cy + self.s(cfg.get("ty", 0)) - (self.streak_text_label.height() // 2))
         elif self.dragging_widget == "twitch":
             self.safe_move(self.twitch_drag_cover, new_pos.x(), new_pos.y())
-            # Das eigentliche Container-Objekt ziehen wir mit
+            # We drag the actual container object along
             self.chat_container.move(self.twitch_drag_cover.pos())
             # Update GUI Sliders via Signal
             self.notify_chat_moved(new_pos.x(), new_pos.y())
@@ -1552,12 +1552,12 @@ class QtOverlay(QWidget):
 
     # --- ELEMENT UPDATES ---
     def add_killfeed_row(self, html_msg):
-        # Wir speichern jetzt die UN-SKALIERTE Nachricht
+        # We now store the UN-SCALED message
         self.feed_messages.insert(0, html_msg)
         self.feed_messages = self.feed_messages[:6]
         self.update_killfeed_ui()
         
-        # Broadcast (unskaliert für Server)
+        # Broadcast (unscaled for server)
         kf_x, kf_y = 50, 200  # Defaults
         if self.gui_ref:
             conf = self.gui_ref.config.get("killfeed", {})
@@ -1571,10 +1571,10 @@ class QtOverlay(QWidget):
         })
 
     def update_killfeed_ui(self):
-        """Skaliert alle Nachrichten im Feed und setzt den Label-Text."""
+        """Scales all messages in the feed and sets label text."""
         scaled_msgs = []
         for msg in self.feed_messages:
-            # On-the-fly Skalierung via Regex
+            # On-the-fly scaling via regex
             # 1. Font-Größen (XXpx)
             scaled = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", msg)
             # 2. Bild-Dimensionen (width="XX" height="XX")
@@ -1658,16 +1658,21 @@ class QtOverlay(QWidget):
         parts = []
         f_size = int(cfg.get("font_size", 22))
         
-        # Base Style
-        style_base = f"font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; text-shadow: 1px 1px 2px #000; font-size: {f_size}px; white-space: nowrap;"
+        # Colors from Config
+        label_col = cfg.get("label_color", "#00f2ff")
+        val_col = cfg.get("value_color", "#ffffff")
         
-        def wrap(label, val, color="#fff"):
-            # Using a span with min-width logic via non-breaking spaces isn't great in QLabel, 
-            # so we'll rely on the table cells for structural stability.
+        # Base Style
+        style_base = f"font-family: 'Black Ops One', sans-serif; font-weight: bold; color: {label_col}; font-size: {f_size}px; white-space: nowrap;"
+        
+        def wrap(label, val, color=None):
+            # If no color is provided, use the value color from config
+            if color is None: color = val_col
             return f'{label}: <span style="color: {color};">{val}</span>'
 
         # KD
         if cfg.get("show_kd", True):
+            # Dynamic KD color based on performance
             kd_col = "#00ff00" if kd >= 2.0 else ("#ffff00" if kd >= 1.0 else "#ff4444")
             parts.append(wrap("KD", f"{kd:.2f}", kd_col))
 
@@ -1677,14 +1682,14 @@ class QtOverlay(QWidget):
         if cfg.get("show_d", True):
             parts.append(wrap("D", eff_deaths))
         if cfg.get("show_hsr", True):
-            parts.append(wrap("HSR", f"{hsr:.0f}%", "#ffcc00"))
+            parts.append(wrap("HSR", f"{hsr:.0f}%"))
         if cfg.get("show_kpm", True):
-            parts.append(wrap("KPM", f"{kpm:.1f}", "#ffcc00"))
+            parts.append(wrap("KPM", f"{kpm:.1f}"))
         if cfg.get("show_kph", True):
-            parts.append(wrap("KPH", f"{int(kph)}", "#ffcc00"))
+            parts.append(wrap("KPH", f"{int(kph)}"))
         if cfg.get("show_dhsr", True):
-            d_col = "#ff4444" if dhsr > 50 else "#ffcc00" 
-            parts.append(wrap("DHSR", f"{dhsr:.0f}%", d_col))
+            # DHSR color should ideally match standard values unless very high/problematic
+            parts.append(wrap("DHSR", f"{dhsr:.0f}%"))
         if cfg.get("show_time", True):
             parts.append(f'<span style="color: #aaa;">TIME: {time_str}</span>')
 
@@ -1706,7 +1711,7 @@ class QtOverlay(QWidget):
         self.set_stats_html(full_html, img_path)
 
     def set_stats_html(self, html, img_path):
-        # Change Detection: Nur updaten wenn nötig
+        # Change Detection: Only update when necessary
         scaled_html = re.sub(r'(\d+)px', lambda m: f"{int(int(m.group(1)) * self.ui_scale)}px", html)
         
         if scaled_html == self._last_stats_html and img_path == self._last_stats_img:
@@ -1715,7 +1720,7 @@ class QtOverlay(QWidget):
         self._last_stats_html = scaled_html
         self._last_stats_img = img_path
 
-        # 1. Bild / Hintergrund
+        # 1. Image / Background
         if os.path.exists(img_path) or self.edit_mode:
             if os.path.exists(img_path):
                 cfg = {}
@@ -1738,7 +1743,7 @@ class QtOverlay(QWidget):
         else:
             self.stats_bg_label.hide()
 
-        # 2. Text HTML setzen
+        # 2. Set text HTML
         self.stats_text_label.setText(scaled_html)
         self.stats_text_label.adjustSize()
         self.stats_text_label.show()
@@ -1748,7 +1753,7 @@ class QtOverlay(QWidget):
         if not self.stats_bg_label.pixmap() or self.stats_bg_label.pixmap().isNull():
             self.stats_bg_label.setFixedSize(int(600 * self.ui_scale), int(60 * self.ui_scale))
 
-        # Position holen & Anwenden
+        # Get position & Apply
         st_x, st_y = 50, 500
         tx_off, ty_off = 0, 0
         st_scale = 1.0
@@ -1760,11 +1765,11 @@ class QtOverlay(QWidget):
             ty_off = conf.get("ty", 0)
             st_scale = conf.get("scale", 1.0)
 
-        # Background positionieren (NUR wenn nicht gerade aktiv bewegt über MouseEvents)
+        # Position background (ONLY if not currently being moved via MouseEvents)
         if getattr(self, "dragging_widget", None) != "stats":
             self.safe_move(self.stats_bg_label, self.s(st_x), self.s(st_y))
 
-            # Text auf Hintergrund zentrieren (+ Offset)
+            # Center text on background (+ offset)
             bg_rect = self.stats_bg_label.geometry()
             txt_rect = self.stats_text_label.geometry()
             
@@ -1812,9 +1817,9 @@ class QtOverlay(QWidget):
                 skull_center = self.streak_bg_label.geometry().center()
                 path_data = cfg.get("custom_path", [])
 
-                # >>> KNIFE TOGGLE LOGIK START <<<
+                # >>> KNIFE TOGGLE LOGIC START <<<
                 if cfg.get("show_knives", True):
-                    # Zuerst Labels erstellen falls nötig
+                    # First create labels if necessary
                     while len(self.knife_labels) < len(factions):
                         l = QLabel(self);
                         l.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);
@@ -1838,7 +1843,7 @@ class QtOverlay(QWidget):
                             kfile = cfg.get(f"knife_{ftag.lower()}", f"knife_{ftag.lower()}.png")
                             kpath = get_asset_path(kfile)
 
-                            if not os.path.exists(kpath): lbl.hide(); continue  # Nur Pfad checken
+                            if not os.path.exists(kpath): lbl.hide(); continue  # Only check path
 
                             sidx = slot_map[i] if slot_map and i < len(slot_map) else i
                             ridx = sidx // k_per_ring
@@ -1879,21 +1884,32 @@ class QtOverlay(QWidget):
                             ky = skull_center.y() - self.s(20) + int((sy + (ridx * rad_step)) * math.sin(rad))
                             self._place_knife(lbl, kpath, kx, ky, angle + 90, is_new, skull_center)
 
-                    # Überschüssige Messer verstecken
+                    # Hide excess knives
                     for j in range(len(factions), len(self.knife_labels)): self.knife_labels[j].hide()
 
                 else:
-                    # FALLS AUSGESCHALTET: Alle Messer verstecken
+                    # IF TURNED OFF: Hide all knives
                     for l in self.knife_labels:
                         l.hide()
-                # >>> KNIFE TOGGLE LOGIK ENDE <<<
+                # >>> KNIFE TOGGLE LOGIC END <<<
 
-                # Text/Zahl wird IMMER gezeichnet (außerhalb des if-Blocks)
-                fc, fs, sh = cfg.get("color", "#fff"), cfg.get("size", 26), int(cfg.get("shadow_size", 0))
-                stl = [f"font-family: 'Black Ops One';", f"font-size: {int(fs * sc)}px;", f"color: {fc};"]
-                if sh > 0: stl.append(f"text-shadow: {int(sh * sc)}px {int(sh * sc)}px 0 #000;")
+                # Text/Number Styling - Modern Glow Effect
+                fc = cfg.get("color", "#fff")
+                fs = int(cfg.get("size", 26) * sc)
+                sh = int(cfg.get("shadow_size", 0) * sc)
+                
+                # Base Style with better readability
+                stl = [
+                    f"font-family: 'Black Ops One', sans-serif;",
+                    f"font-size: {fs}px;",
+                    f"color: {fc};"
+                ]
+                
+                # No text-shadow support in QLabel, removing to avoid console spam
+                pass
+
                 if cfg.get("bold"): stl.append("font-weight: bold;")
-                if cfg.get("underline"): stl.append("text-decoration: underline;")
+                
                 self.streak_text_label.setText(f'<div style="{" ".join(stl)}">{cnt}</div>')
                 self.streak_text_label.adjustSize()
                 tx = skull_center.x() + self.s(cfg.get("tx", 0))
@@ -1904,16 +1920,16 @@ class QtOverlay(QWidget):
                 self.streak_bg_label.raise_();
                 self.streak_text_label.raise_()
 
-                # Fix Z-Order: Wenn Path-Edit aktiv ist, muss der Path-Layer (Marker) über dem Bild liegen
+                # Fix Z-Order: If path-edit is active, the path-layer (marker) must be above the image
                 if getattr(self, "path_edit_active", False):
                     self.path_layer.raise_()
 
     def _place_knife(self, lbl, path, kx, ky, angle, is_new, center):
-        # --- CACHE GENUTZT (WICHTIG!) ---
+        # --- CACHE USED (IMPORTANT!) ---
         base_pix = self.get_cached_pixmap(path)
         if base_pix.isNull(): return
 
-        # Transformation vom RAM-Bild erstellen (Kopie)
+        # Create transformation from RAM image (copy)
         pix = base_pix.transformed(QTransform().rotate(angle), Qt.TransformationMode.SmoothTransformation)
         pix = pix.scaled(self.s(90), self.s(90), Qt.AspectRatioMode.KeepAspectRatio,
                          Qt.TransformationMode.SmoothTransformation)
@@ -1958,7 +1974,7 @@ class QtOverlay(QWidget):
             self.crosshair_label.hide();
             return
 
-        # --- CACHE GENUTZT ---
+        # --- CACHE USED ---
         pix = self.get_cached_pixmap(path)
         if not pix.isNull():
             pix = pix.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -1989,7 +2005,7 @@ class QtOverlay(QWidget):
             self.crosshair_label.show()
 
     def update_twitch_visibility(self, enabled):
-        """Entscheidet, ob der Chat-Container wirklich sichtbar sein darf."""
+        """Decides whether the chat container is allowed to be actually visible."""
         game_running = False
         always_on = False
 
@@ -1997,8 +2013,8 @@ class QtOverlay(QWidget):
             game_running = getattr(self.gui_ref, 'ps2_running', False)
             always_on = self.gui_ref.config.get("twitch", {}).get("always_on", False)
 
-        # Die goldene Regel:
-        # Sichtbar wenn (Aktiviert UND (Spiel läuft ODER Always-On)) ODER (Wir editieren gerade)
+        # The golden rule:
+        # Visible if (Activated AND (Game is running OR Always-On)) OR (We are editing)
         should_show = (enabled and (game_running or always_on)) or self.edit_mode
 
         if should_show:

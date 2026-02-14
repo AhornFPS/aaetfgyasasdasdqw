@@ -21,28 +21,32 @@ class OverlaySignals(QObject):
 # --- STYLESHEET ---
 OVERLAY_STYLE = """
 /* --- MAIN WINDOW & TABS --- */
-QWidget#Overlay { background-color: #1a1a1a; }
-QWidget#StreakContent { background-color: #1a1a1a; }
+QWidget#Overlay { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1a1a, stop:1 #121212); 
+}
+QWidget#StreakContent { background-color: transparent; }
 
 QTabWidget::pane { 
     border: 1px solid #333; 
-    background-color: #1a1a1a; 
+    background-color: rgba(26, 26, 26, 0.9); 
     top: -1px; 
+    border-radius: 5px;
 }
 
 QTabBar::tab { 
     background-color: #252525; 
     color: #888; 
-    padding: 12px; 
+    padding: 12px 20px; 
     min-width: 100px; 
     border: 1px solid #333; 
     border-bottom: none; 
-    border-top-left-radius: 4px; 
-    border-top-right-radius: 4px; 
+    border-top-left-radius: 6px; 
+    border-top-right-radius: 6px; 
+    margin-right: 2px;
 }
 
 QTabBar::tab:selected { 
-    background-color: #1a1a1a; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a2a, stop:1 #1a1a1a); 
     color: #00f2ff; 
     font-weight: bold; 
     border-bottom: 2px solid #00f2ff; 
@@ -55,129 +59,147 @@ QTabBar::tab:hover:!selected {
 
 /* --- CONTAINERS & GROUPS --- */
 QFrame#Group { 
-    background-color: #222; 
-    border: 1px solid #333; 
-    border-radius: 5px; 
+    background-color: rgba(34, 34, 34, 0.6); 
+    border: 1px solid #444; 
+    border-radius: 8px; 
     margin: 5px; 
-    padding: 5px; 
+    padding: 10px; 
 }
 
 QLabel#Header { 
     color: #00f2ff; 
     font-weight: bold; 
     font-size: 16px; 
-    margin-bottom: 10px; 
+    margin-bottom: 12px; 
+    text-transform: uppercase;
 }
 
 QLabel#SubText { 
-    color: #888; 
+    color: #aaa; 
     font-size: 11px; 
 }
 
 /* --- INPUT FIELDS --- */
-QLineEdit, QComboBox {
-    background-color: #111;
+QLineEdit, QComboBox, QSpinBox {
+    background-color: #0a0a0a;
     border: 1px solid #444;
     color: #eee;
-    padding: 6px;
-    border-radius: 3px;
+    padding: 8px;
+    border-radius: 4px;
 }
 
-QLineEdit:focus { 
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus { 
     border: 1px solid #00f2ff; 
     background-color: #000; 
 }
 
 /* --- BUTTONS BASICS --- */
 QPushButton {
-    background-color: #2a2a2a;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #333, stop:1 #222);
     border: 1px solid #444;
     color: #ddd;
-    padding: 8px 15px;      /* More padding */
-    border-radius: 4px;
+    padding: 8px 18px;
+    border-radius: 5px;
     font-weight: bold;
     font-size: 11px;
-    min-height: 20px;       /* Min height to look robust */
     outline: none;
 }
 
-QPushButton:focus {
-    border: 1px solid #444;
-}
-
 QPushButton:hover {
-    background-color: #3a3a3a;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #444, stop:1 #333);
     color: white;
     border: 1px solid #00f2ff;
 }
 
-/* --- SPECIAL BUTTONS (TARGETED BY ID) --- */
-
-/* MOVE UI / EDIT (Strong Blue) */
-QPushButton#EditBtn { 
-    background-color: #004080; 
-    color: white; 
-    border: 1px solid #0055aa; 
-    font-size: 12px;
+QPushButton:pressed {
+    background-color: #111;
 }
-QPushButton#EditBtn:focus { 
-    border: 1px solid #0055aa; 
-    background-color: #004080;
+
+/* --- SPECIAL BUTTONS --- */
+QPushButton#EditBtn { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0055aa, stop:1 #003366); 
+    color: white; 
+    border: 1px solid #00f2ff; 
 }
 QPushButton#EditBtn:hover { 
-    background-color: #0066cc; 
-    border: 1px solid #00f2ff;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0066cc, stop:1 #004488); 
+    border: 1px solid #ffffff;
 }
 
-/* TEST BUTTON (Dark Grey) */
 QPushButton#TestBtn { 
-    background-color: #333; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #444, stop:1 #222); 
     color: #eee; 
-    border: 1px solid #555; 
-    font-size: 12px;
-}
-QPushButton#TestBtn:focus {
-    border: 1px solid #555;
+    border: 1px solid #666; 
 }
 QPushButton#TestBtn:hover { 
-    background-color: #444; 
-    border: 1px solid #00f2ff;
-}
-
-/* SAVE BUTTON (Dark Green) */
-QPushButton#SaveBtn { 
-    background-color: #004400; 
-    color: #00ff00; 
-    border: 1px solid #006600; 
-    font-size: 12px;
-}
-QPushButton#SaveBtn:focus {
-    border: 1px solid #006600;
-}
-QPushButton#SaveBtn:hover { 
-    background-color: #006600; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #555, stop:1 #333); 
     color: white; 
-    border: 1px solid #00f2ff;
+    border: 1px solid #00f2ff; 
 }
 
-/* [MOVED TO INLINE STYLES] */
+QPushButton#SaveBtn { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #008800, stop:1 #004400); 
+    color: #00ff00; 
+    border: 1px solid #00ff00;
+}
+QPushButton#SaveBtn:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00aa00, stop:1 #005500); 
+}
 
-/* COLOR PICKER (Purple) */
-QPushButton#ColorBtn { 
+QPushButton#ColorBtn {
+    min-width: 60px;
+    border-radius: 3px;
     background-color: #440088; 
     color: white; 
     border: 1px solid #6600aa; 
-    border-radius: 3px;
-    font-size: 10px;
     padding: 4px 8px;
-    outline: none;
 }
-QPushButton#ColorBtn:focus {
-    border: 1px solid #6600aa;
-}
-QPushButton#ColorBtn:hover { 
-    background-color: #5500aa; 
+QPushButton#ColorBtn:hover {
+    background-color: #5500aa;
     border: 1px solid #00f2ff;
+}
+
+/* --- CHECKBOX & RADIO --- */
+QCheckBox {
+    spacing: 8px;
+    color: #eee;
+    font-size: 11px;
+}
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #111;
+    border: 1px solid #444;
+    border-radius: 4px;
+}
+QCheckBox::indicator:checked {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00f2ff, stop:1 #0088aa);
+    border: 1px solid #00f2ff;
+    image: url(assets/check.png); /* Fallback to text if missing */
+}
+QCheckBox::indicator:hover {
+    border: 1px solid #00f2ff;
+}
+
+/* --- SLIDERS --- */
+QSlider::groove:horizontal {
+    border: 1px solid #333;
+    height: 4px;
+    background: #111;
+    margin: 2px 0;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00f2ff, stop:1 #0088aa);
+    border: 1px solid #00f2ff;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+QSlider::handle:horizontal:hover {
+    background: #ffffff;
+    border: 1px solid #ffffff;
 }
 
 /* --- PREVIEW BOX --- */
@@ -1387,6 +1409,22 @@ class OverlayConfigWindow(QWidget):
         self.combo_st_font.addItems(["8", "10", "12", "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72", "100"])
         self.combo_st_font.setCurrentText("22")
         st_fs_layout.addWidget(self.combo_st_font)
+        
+        st_fs_layout.addSpacing(15)
+        
+        # COLORS (STATS)
+        st_fs_layout.addWidget(QLabel("Label Color:"))
+        self.btn_stats_label_color = QPushButton("PICK")
+        self.btn_stats_label_color.setObjectName("ColorBtn")
+        self.btn_stats_label_color.setToolTip("Color for the labels (e.g. 'KD', 'HSR')")
+        st_fs_layout.addWidget(self.btn_stats_label_color)
+
+        st_fs_layout.addWidget(QLabel("Value Color:"))
+        self.btn_stats_value_color = QPushButton("PICK")
+        self.btn_stats_value_color.setObjectName("ColorBtn")
+        self.btn_stats_value_color.setToolTip("Default color for values")
+        st_fs_layout.addWidget(self.btn_stats_value_color)
+        
         st_fs_layout.addStretch()
         st_layout.addLayout(st_fs_layout)
 

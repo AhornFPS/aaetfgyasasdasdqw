@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QTimer, QPointF, pyqtSignal, QObject
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPolygonF
 
-# --- 1. DESIGN & FARBEN ---
+# --- 1. DESIGN & COLORS ---
 STYLESHEET = """
 QWidget {
     background-color: #1a1a1a;
@@ -79,7 +79,7 @@ QComboBox QAbstractItemView {
 """
 
 
-# --- DATEN-SCHNITTSTELLE ---
+# --- DATA INTERFACE ---
 class DashboardSignals(QObject):
     update_population = pyqtSignal(int)
     update_factions = pyqtSignal(dict)
@@ -92,7 +92,7 @@ class DashboardController:
     def __init__(self, window):
         self.window = window
         self.signals = DashboardSignals()
-        # WICHTIG: Referenz speichern
+        # IMPORTANT: Save reference
         self.window.dash_ctl = self
 
         self.signals.update_population.connect(self.window.graph.update_history)
@@ -115,7 +115,7 @@ class DashboardController:
                 self.window.fac_boxes[name].update_table(f_players)
 
 
-# --- GUI KLASSEN ---
+# --- GUI CLASSES ---
 
 class TelemetryGraph(QWidget):
     def __init__(self):
@@ -127,7 +127,7 @@ class TelemetryGraph(QWidget):
             "NC": [0] * 100,
             "VS": [0] * 100
         }
-        # Standard-Modus: Nur Total anzeigen
+        # Default mode: Only show total
         self.show_factions = False
 
     def update_history(self, total, faction_data=None):
@@ -146,40 +146,40 @@ class TelemetryGraph(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
 
-        # 1. HINTERGRUND & RAHMEN
+        # 1. BACKGROUND & FRAME
         painter.fillRect(0, 0, w, h, QColor("#121212"))
         painter.setPen(QPen(QColor("#333"), 1))
         painter.drawRect(0, 0, w, h)
 
-        # 2. DATEN AUSWÄHLEN (Je nach Modus)
+        # 2. SELECT DATA (Depending on mode)
         if self.show_factions:
-            # Modus: FRACTIONS (Total + 3 Fraktionen)
+            # Mode: FACTIONS (Total + 3 factions)
 
-            # Wir nehmen ALLE Listen zusammen (inkl. Total), um das Maximum für die Skala zu finden
-            # Da 'Total' immer am höchsten ist, bestimmt es die Skala.
+            # We take ALL lists together (incl. Total) to find the maximum for the scale
+            # Since 'Total' is always the highest, it determines the scale.
             all_visible_data = self.pop_history + self.faction_history["TR"] + self.faction_history["NC"] + \
                                self.faction_history["VS"]
 
             data_sets = [
-                (self.pop_history, "#00f2ff"),  # Total (Cyan) - als Referenz
-                (self.faction_history["TR"], "#de0b0b"),  # Rot
-                (self.faction_history["NC"], "#007bff"),  # Blau
-                (self.faction_history["VS"], "#9d00ff")  # Lila
+                (self.pop_history, "#00f2ff"),  # Total (Cyan) - as reference
+                (self.faction_history["TR"], "#de0b0b"),  # Red
+                (self.faction_history["NC"], "#007bff"),  # Blue
+                (self.faction_history["VS"], "#9d00ff")  # Purple
             ]
         else:
-            # Modus: ONLY TOTAL
+            # Mode: ONLY TOTAL
             all_visible_data = self.pop_history
             data_sets = [
-                (self.pop_history, "#00f2ff")  # Nur Total (Cyan)
+                (self.pop_history, "#00f2ff")  # Only Total (Cyan)
             ]
 
         if not all_visible_data: return
 
-        # 3. DYNAMISCHE SKALA BERECHNEN
-        max_val = max(max(all_visible_data), 100)  # Mindestens 100
-        max_val = int(max_val * 1.1)  # +10% Puffer
+        # 3. CALCULATE DYNAMIC SCALE
+        max_val = max(max(all_visible_data), 100)  # Minimum 100
+        max_val = int(max_val * 1.1)  # +10% buffer
 
-        # 4. GRID & LABELS ZEICHNEN
+        # 4. DRAW GRID & LABELS
         grid_pen = QPen(QColor(40, 40, 40), 1, Qt.PenStyle.DashLine)
         text_pen = QPen(QColor(100, 100, 100))
         painter.setFont(self.font())
@@ -197,14 +197,14 @@ class TelemetryGraph(QWidget):
             painter.setPen(text_pen)
             painter.drawText(5, int(y_pos) - 2, str(val))
 
-        # 5. GRAPHEN ZEICHNEN (Hilfsfunktion)
+        # 5. DRAW GRAPHS (Helper function)
         def draw_layer(data, color_hex):
             if not data: return
 
             points = []
             step_x = w / (len(data) - 1) if len(data) > 1 else w
 
-            # Punkte berechnen
+            # Calculate points
             for i, val in enumerate(data):
                 x = i * step_x
                 normalized = val / max(1, max_val)
@@ -213,13 +213,13 @@ class TelemetryGraph(QWidget):
                 points.append(QPointF(x, y))
 
             if len(points) > 1:
-                # Linie
+                # Line
                 path_pen = QPen(QColor(color_hex), 2)
                 painter.setPen(path_pen)
                 painter.drawPolyline(points)
 
-                # Füllung (Alpha 30) - Optional, sieht bei vielen Graphen manchmal chaotisch aus,
-                # aber wir lassen es drin für den coolen Look.
+                # Filling (Alpha 30) - Optional, can look messy with many graphs,
+                # but we keep it for the cool look.
                 painter.setPen(Qt.PenStyle.NoPen)
                 fill_color = QColor(color_hex)
                 fill_color.setAlpha(30)
@@ -228,10 +228,10 @@ class TelemetryGraph(QWidget):
                 poly_points = [QPointF(0, h)] + points + [QPointF(w, h)]
                 painter.drawPolygon(QPolygonF(poly_points))
 
-        # Alle aktiven Sets zeichnen
-        # Wir zeichnen sie in der Reihenfolge der Liste.
-        # Tipp: Wenn man will, dass 'Total' im Hintergrund liegt, müsste man die Liste sortieren.
-        # Aber da 'Total' meist oben ist, passt es so.
+        # Draw all active sets
+        # We draw them in the order of the list.
+        # Tip: If you want 'Total' in the background, you'd need to sort the list.
+        # But since 'Total' is usually on top, this works.
         for d_list, col in data_sets:
             draw_layer(d_list, col)
 
@@ -244,7 +244,7 @@ class FactionBox(QFrame):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
-        # Header Labels
+        # Header labels
         self.lbl_name = QLabel(name)
         self.lbl_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_name.setStyleSheet(f"font-family: 'Arial'; font-size: 16px; font-weight: bold; color: {color};")
@@ -268,7 +268,7 @@ class FactionBox(QFrame):
 
         # --- TABLE SETUP ---
         self.table = QTableWidget(15, 7)
-        # Die Spalten-Namen festlegen
+        # Set column names
         self.header_names = ["PLAYER", "K", "KPM", "D", "A", "K/D", "KDA"]
         self.table.setHorizontalHeaderLabels(self.header_names)
 
@@ -278,14 +278,14 @@ class FactionBox(QFrame):
         self.table.setShowGrid(False)
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # Spaltenbreiten
+        # Column widths
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i in range(1, 7):
             h.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
             self.table.setColumnWidth(i, 35)
 
-        # Interaktion aktivieren
+        # Activate interaction
         h.setSectionsClickable(True)
         h.sectionClicked.connect(self.on_header_clicked)
 
@@ -297,7 +297,7 @@ class FactionBox(QFrame):
         self.current_sort_asc = False
         self.last_player_data = []
 
-        # Initiales Header-Update (damit "K" direkt blau ist)
+        # Initial header update (so "K" is blue right away)
         self.update_header_visuals()
 
     def update_counts(self, perc, count):
@@ -306,34 +306,34 @@ class FactionBox(QFrame):
         self.bar.setValue(int(perc * 10))
 
     def on_header_clicked(self, index):
-        """Umschalten der Sortierung bei Klick."""
+        """Toggle sorting on click."""
         if index == self.current_sort_col:
-            # Gleiche Spalte: Richtung umkehren
+            # Same column: reverse direction
             self.current_sort_asc = not self.current_sort_asc
         else:
-            # Neue Spalte: Aktivieren und Standard (High-to-Low) setzen
+            # New column: activate and set default (high-to-low) set
             self.current_sort_col = index
             self.current_sort_asc = False
 
-        # Tabelle neu laden (Visuals + Daten)
+        # Reload table (visuals + data)
         self.refresh_table_view()
 
     def update_header_visuals(self):
-        """Färbt nur den aktiven Header blau, Rest grau."""
+        """Colors only active header blue, others grey."""
         for i, name in enumerate(self.header_names):
             item = self.table.horizontalHeaderItem(i)
             if not item:
                 item = QTableWidgetItem(name)
                 self.table.setHorizontalHeaderItem(i, item)
 
-            # Text setzen (immer sauber ohne Pfeile)
+            # Set text (always clean without arrows)
             item.setText(name)
 
             if i == self.current_sort_col:
-                # AKTIVE SPALTE: Neon Blau (#00f2ff)
+                # ACTIVE COLUMN: Neon Blue (#00f2ff)
                 item.setForeground(QColor("#00f2ff"))
             else:
-                # INAKTIVE SPALTE: Grau (#888888)
+                # INACTIVE COLUMN: Grey (#888888)
                 item.setForeground(QColor("#888888"))
 
     def update_table(self, players):
@@ -341,12 +341,12 @@ class FactionBox(QFrame):
         self.refresh_table_view()
 
     def refresh_table_view(self):
-        # 1. Visuelles Feedback (Farbe) aktualisieren
+        # 1. Update visual feedback (color)
         self.update_header_visuals()
 
         self.table.clearContents()
 
-        # 2. Daten vorbereiten (Werte berechnen)
+        # 2. Prepare data (calculate values)
         enriched_data = []
         for p in self.last_player_data:
             k = p.get('k', 0)
@@ -362,7 +362,7 @@ class FactionBox(QFrame):
             })
             enriched_data.append(p_sort)
 
-        # 3. Sortieren
+        # 3. Sorting
         key_map = {
             0: lambda x: x.get('name', '').lower(),
             1: lambda x: x.get('k', 0),
@@ -380,7 +380,7 @@ class FactionBox(QFrame):
             reverse=not self.current_sort_asc
         )[:15]
 
-        # 4. Befüllen
+        # 4. Fill table
         for row, p in enumerate(sorted_players):
             k, d, a = p.get('k', 0), p.get('d', 0), p.get('a', 0)
             kpm, kd, kda = p.get('_kpm'), p.get('_kd'), p.get('_kda')
@@ -419,7 +419,7 @@ class DashboardWidget(QWidget):
         super().__init__()
         self.controller = controller
 
-        # Layout direkt auf self anwenden
+        # Apply layout directly to self
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
@@ -429,7 +429,7 @@ class DashboardWidget(QWidget):
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        # BUTTON LINKS: KD MODE
+        # LEFT BUTTON: KD MODE
         self.btn_toggle_kd = QPushButton("KD MODE: REVIVE")
         self.btn_toggle_kd.setFixedWidth(120)
         self.btn_toggle_kd.setStyleSheet("""
@@ -461,10 +461,10 @@ class DashboardWidget(QWidget):
         # --- GRAPH ---
         self.graph = TelemetryGraph()
 
-        # ÄNDERUNG: Zuerst den Graph hinzufügen...
+        # CHANGE: First add the graph...
         main_layout.addWidget(self.graph)
 
-        # ... dann den Controller-Bereich (Button) DARUNTER erstellen
+        # ... then create the controller area (button) BELOW it
         graph_ctrl_layout = QHBoxLayout()
         self.btn_toggle_graph = QPushButton("MODE: ALL PLAYERS")
         self.btn_toggle_graph.setFixedWidth(150)
@@ -477,8 +477,8 @@ class DashboardWidget(QWidget):
                 """)
         self.btn_toggle_graph.clicked.connect(self.toggle_graph_mode)
 
-        graph_ctrl_layout.addWidget(self.btn_toggle_graph)  # Button links
-        graph_ctrl_layout.addStretch()  # Rest auffüllen (Button bleibt links)
+        graph_ctrl_layout.addWidget(self.btn_toggle_graph)  # Button left
+        graph_ctrl_layout.addStretch()  # Fill rest (Button remains left)
 
         main_layout.addLayout(graph_ctrl_layout)
 
@@ -488,7 +488,7 @@ class DashboardWidget(QWidget):
         self.lbl_total.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.lbl_total)
 
-        # --- FRAKTIONEN ---
+        # --- FACTIONS ---
         fac_layout = QHBoxLayout()
         fac_layout.setSpacing(15)
 
@@ -511,12 +511,12 @@ class DashboardWidget(QWidget):
         self.lbl_db_count = QLabel("DB: 0", self)
         self.lbl_db_count.setStyleSheet("color: #666; font-family: 'Consolas'; font-size: 11px; font-weight: bold;")
         self.lbl_db_count.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self.lbl_db_count.show()  # Wichtig, da es nicht im Layout liegt
+        self.lbl_db_count.show()  # Important, as it's not in the layout
 
     def on_toggle_kd_clicked(self):
         if self.controller:
-            # Wir rufen direkt die Methode im MainClient auf,
-            # da dieser die Logik und den State (kd_mode_revive) besitzt.
+            # We call the method in MainClient directly,
+            # as it holds the logic and state (kd_mode_revive).
             if hasattr(self.controller, 'toggle_kd_mode'):
                 self.controller.toggle_kd_mode()
             else:
@@ -541,7 +541,7 @@ class DashboardWidget(QWidget):
         print(f"DEBUG: Server changed to {server_name} (ID: {world_id})")
 
     def resizeEvent(self, event):
-        # Positioniert das Label fest unten rechts (160px von rechts, 30px von unten)
+        # Positions the label fixed at bottom right (160px from right, 30px from bottom)
         if hasattr(self, 'lbl_db_count'):
             w = self.width()
             h = self.height()

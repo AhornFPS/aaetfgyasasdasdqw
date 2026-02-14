@@ -6,12 +6,12 @@ import os
 from time import sleep
 
 import websockets
-import requests  # Wichtig für den Faction-Check beim Login
+import requests  # Important for faction check during login
 
-# --- FIX: Import der zentralen Pfad-Logik ---
+# --- FIX: Import central path logic ---
 from dior_utils import get_asset_path
 
-# --- KONSTANTEN & MAPPINGS ---
+# --- CONSTANTS & MAPPINGS ---
 
 PS2_DETECTION = {
     "CATEGORIES": {"Knife": "Knife Kill", "Grenade": "Nade Kill"},
@@ -55,7 +55,6 @@ PS2_EXP_DETECTION = {
     "Revenge": ["11"],
     "Killstreak Stop": ["8"],
     "Bounty Kill": ["593"],
-    "Bounty Kill": ["593"],
     "Gunner Kill": ["373", "314", "146", "148", "149", "150", "154", "155", "515", "681"]
 }
 
@@ -76,7 +75,7 @@ class CensusWorker:
         self.recent_deaths_lock = threading.Lock()
         self.vehicle_gunner_kill_map, self.vehicle_destruction_map = self._load_vehicle_kill_maps()
 
-        # --- SUPPORT TRACKING (HIERHER VERSCHOBEN) ---
+        # --- SUPPORT TRACKING (MOVED HERE) ---
         self.support_streaks = {
             "Heal": 0,
             "Revive Given": 0,
@@ -158,45 +157,44 @@ class CensusWorker:
         if not triggered_specific:
             self.c.trigger_overlay_event(parent_event)
 
-    # --- HELPER: ZENTRALE TRACKING LOGIK ---
+    # --- HELPER: CENTRAL TRACKING LOGIC ---
     def _process_stat_event(self, category, is_revive_taken=False):
         """
-        Zählt Support-Events hoch und resettet bei Respawn.
-        Triggert Basis-Event (z.B. 'Heal') UND Meilenstein (z.B. 'Heal 100').
+        Increments support events and resets on respawn.
+        Triggers base event (e.g., 'Heal') AND milestone (e.g., 'Heal 100').
         """
         
 
-        # 2. Zählen (falls Kategorie existiert)
+        # 2. Count (if category exists)
         if category in self.support_streaks:
             self.support_streaks[category] += 1
             count = self.support_streaks[category]
 
-            # 3. Events feuern
-            # A) Basis Event (damit z.B. bei jedem Revive Sound kommt, falls eingestellt)
+            # 3. Fire events
+            # A) Base Event (so e.g. every revive triggers a sound if configured)
             self.c.trigger_overlay_event(category)
 
-            # B) Meilenstein Event (z.B. "Heal 100")
-            # Wir feuern es einfach ab. Das Overlay ignoriert es, wenn nichts in der Config steht.
+            # B) Milestone Event (e.g., "Heal 100")
+            # We just fire it. The overlay ignores it if nothing is in the config.
             milestone_event = f"{category} {count}"
             self.c.trigger_overlay_event(milestone_event)
 
-            # Kleines Log für Debugging bei Runden Zahlen
             if count > 0 and (count % 10 == 0 or count in [25, 50, 100, 250]):
                 self.c.add_log(f"STREAK: {milestone_event}")
         else:
-            # Für Events ohne Counter (z.B. Base Capture) einfach nur triggern
+            # For events without counter (e.g., Base Capture) just trigger
             self.c.trigger_overlay_event(category)
 
     def _get_stat_obj(self, cid, tid, world_id):
-        # 1. Ermittle die Fraktion des AKTUELLEN Events
+        # 1. Determine the faction of the CURRENT event
         current_faction_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
 
         if cid not in self.c.session_stats:
-            # NEUER EINTRAG
+            # NEW ENTRY
             self.c.session_stats[cid] = {
                 "id": cid,
                 "name": self.c.name_cache.get(cid, "Searching..."),
-                "faction": current_faction_name,  # Setze Fraktion basierend auf Event
+                "faction": current_faction_name,  # Set faction based on event
                 "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
                 "dhs": 0, "dhs_eligible": 0, # Death Headshot Tracking
                 "revives_received": 0,
@@ -206,14 +204,13 @@ class CensusWorker:
                 "world_id": str(world_id)
             }
         else:
-            # BESTEHENDER EINTRAG
+            # EXISTING ENTRY
             obj = self.c.session_stats[cid]
             # Resume if paused
             if obj.get("start", 0) == 0:
                 obj["start"] = time.time()
                 self.c.add_log(f"TIMER: Session resumed for {obj.get('name')}")
 
-            # Check: Ist der Spieler als "NSO" gespeichert...
             if obj["faction"] == "NSO" and current_faction_name != "NSO":
                 obj["faction"] = current_faction_name
 
@@ -279,7 +276,7 @@ class CensusWorker:
                         continue
                     self.event_cache.add(uid)
                     self.event_history.append(uid)
-                    if len(self.event_history) > 1000:  # Erhöht auf 1000 für mehr Sicherheit
+                    if len(self.event_history) > 1000:  # Increased to 1000 for better safety
                         self.event_cache.discard(self.event_history.pop(0))
 
                     # Local helper for stat objects (adapted to use method)
@@ -326,7 +323,7 @@ class CensusWorker:
                                             f_id = r["character_list"][0].get("faction_id", "0")
                                         f_tag = {"1": "VS", "2": "NC", "3": "TR"}.get(str(f_id), "NSO")
                                         self.c.trigger_overlay_event(f"Login {f_tag}")
-                                        self.c.add_log(f"AUTO-TRACK: {name} eingeloggt ({f_tag}).")
+                                        self.c.add_log(f"AUTO-TRACK: {name} logged in ({f_tag}).")
                                     except: pass
                                 threading.Thread(target=trigger_login_event, args=(c_id,), daemon=True).start()
                                 break
@@ -347,7 +344,7 @@ class CensusWorker:
                                     self.c.add_log(f"TIMER: Session paused. Accumulated: {int(s_obj['acc_t'])}s")
                             
                             self.c.current_character_id = ""
-                            self.c.add_log("AUTO-TRACK: Ausgeloggt.")
+                            self.c.add_log("AUTO-TRACK: Logged out.")
 
                     # 2. SERVER FILTER / PLAYER TRACKING (only track XP events and only the active side, other can be ignored)
                     track_id = p.get("character_id")   # or p.get("attacker_character_id")
@@ -399,14 +396,13 @@ class CensusWorker:
         is_hs = (p.get("is_headshot") == "1")
         weapon_id = p.get("attacker_weapon_id")
 
-        # Helper: Ist es ein Teamkill? (Suicide zählt nicht als TK hier)
+        # Helper: Is it a teamkill? (Suicide does not count as TK here)
         is_tk = (p.get("attacker_team_id") == p.get("team_id")) and (killer_id != victim_id)
 
         # -------------------------------------------------
         # 1. GLOBAL STATS (Dashboard)
         # -------------------------------------------------
-        # NUR zählen, wenn es KEIN Teamkill ist!
-        # NUR zählen, wenn es KEIN Teamkill ist!
+        # ONLY count if it is NOT a teamkill!
         if not is_tk:
             w_info = self.c.item_db.get(weapon_id, {})
             cat = w_info.get("type", "Unknown")
@@ -425,36 +421,35 @@ class CensusWorker:
                 v_obj = get_stat_obj(victim_id, p.get("team_id"))
                 v_obj["d"] += 1
                 if is_hs_weapon:
-                    v_obj["dhs_eligible"] += 1
                     if is_hs: v_obj["dhs"] += 1
 
         # -------------------------------------------------
         # 2. MY EVENTS (Overlay)
         # -------------------------------------------------
         if my_id:
-            # Icon Vorbereitung
+            # Icon preparation
             icon_html = ""
             if is_hs:
                 hs_icon = self.c.config.get("killfeed", {}).get("hs_icon", "Headshot.png")
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
-                    # NEU: HS Icon Size aus Config
+                    # NEW: HS Icon Size from Config
                     hs_size = self.c.config.get("killfeed", {}).get("hs_icon_size", 19)
                     icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
 
             w_info = self.c.item_db.get(weapon_id, {})
             category = w_info.get("type", "Unknown")
             
-            # NEU: Font Size aus Config (Robust)
+            # NEW: Font Size from Config (Robust)
             kf_cfg_raw = self.c.config.get("killfeed", {})
             kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
             kf_font = kf_cfg.get("font_size", 19)
-            base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+            base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; margin-bottom: 2px; text-align: right;"
 
-            # === A) ICH HABE GETÖTET ===
+            # === A) I KILLED ===
             if killer_id == my_id and victim_id != my_id:
                 curr_time = time.time()
-                # Spam-Schutz (Manchmal sendet API doppelt)
+                # Spam protection (Sometimes API sends twice)
                 if getattr(self.c, "last_victim_id", None) == victim_id and (
                         curr_time - getattr(self.c, "last_victim_time", 0)) < 0.5:
                     return
@@ -465,12 +460,12 @@ class CensusWorker:
                 raw_tag = getattr(self.c, "outfit_cache", {}).get(victim_id, "")
                 v_tag = f"[{raw_tag}] " if raw_tag else ""
 
-                # --- FALL 1: TEAMKILL (Ich töte Teammate) ---
+                # --- CASE 1: TEAMKILL (I kill teammate) ---
                 if is_tk:
                     self.c.trigger_auto_voice("tk")
                     self.c.trigger_overlay_event("Team Kill")
 
-                    # Spezieller Feed Eintrag
+                    # Special feed entry
                     msg = f"""<div style="{base_style}">
                             <span style="color: #ffaa00;">⚠️ TEAMKILL </span>
                             <span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
@@ -479,16 +474,16 @@ class CensusWorker:
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
-                    # WICHTIG: Hier abbrechen, damit keine Streak/Multi-Kill Logik läuft!
+                    # IMPORTANT: Return here so no streak/multi-kill logic runs!
                     return
 
-                    # --- FALL 2: NORMALER KILL (Gegner) ---
+                    # --- CASE 2: NORMAL KILL (Enemy) ---
                 else:
                     # Streak Logic
                     if self.c.config.get("streak", {}).get("active", True):
-                        # --- NEU: RESPAWN CHECK ---
-                        # Wenn wir tot waren und NICHT revived wurden -> Respawn -> Reset!
-                        # AUSNAHME: Teamkills (is_tk_death)
+                        # --- NEW: RESPAWN CHECK ---
+                        # If we were dead and NOT revived -> Respawn -> Reset!
+                        # EXCEPTION: Teamkills (is_tk_death)
                         if self.c.is_dead and not self.c.was_revived and not getattr(self.c, "is_tk_death", False):
                             self.c.add_log("STREAK: Respawn detected (New Kill). Resetting.")
                             self.c.killstreak_count = 0
@@ -498,7 +493,7 @@ class CensusWorker:
                             for k in self.support_streaks:
                                 self.support_streaks[k] = 0
                         
-                        # TK Flag löschen, wir haben ja gerade erfolgreich getötet (wieder lebendig)
+                        # Clear TK flag, we just successfully killed (back alive)
                         self.c.is_tk_death = False
 
                         if self.c.killstreak_count == 0:
@@ -523,7 +518,7 @@ class CensusWorker:
                         self.c.kill_counter = 1
                     self.c.last_kill_time = curr_time
 
-                    # EVENT ERMITTLUNG (QUEUE LOGIC START)
+                    # EVENT DETERMINATION (QUEUE LOGIC START)
                     base_events = []
                     weapon_name = w_info.get("name", "Unknown")
 
@@ -557,7 +552,7 @@ class CensusWorker:
                         if self.c.kill_counter in multi_map:
                             multi_event = multi_map[self.c.kill_counter]
 
-                    # QUEUE AN ODER AUS?
+                    # QUEUE ON OR OFF?
                     is_queue_active = self.c.config.get("event_queue_active", True)
 
                     # Trigger hitmarker first
@@ -579,10 +574,10 @@ class CensusWorker:
 
 
 
-                    # Killfeed Message bauen (Normal)
+                    # Build Killfeed message (Normal)
                     s_vic = self.c.session_stats.get(victim_id, {})
                     try:
-                        # Echte KD berechnen (unter Beachtung von Revive Mode)
+                        # Calculate real KD (respecting Revive Mode)
                         raw_d = s_vic.get('d', 1)
                         if self.c.kd_mode_revive:
                             raw_d = max(0, raw_d - s_vic.get('revives_received', 0))
@@ -629,14 +624,14 @@ class CensusWorker:
                     elif is_hs:
                         self.c.trigger_auto_voice("kill_hs")
 
-            # === B) ICH WURDE GETÖTET (VICTIM) ===
+            # === B) I WAS KILLED (VICTIM) ===
             elif victim_id == my_id:
-                # --- UPDATE: DEAD STATE SETZEN ---
+                # --- UPDATE: SET DEAD STATE ---
                 self.is_dead_state = True
 
                 # --- 1. CHECK DOUBLE DEATH (FIX FOR PERSISTENT STREAK) ---
-                # Wenn wir schon als "tot" markiert sind (also nicht revived wurden) 
-                # und erneut sterben, war es ein Respawn ohne Kill/XP -> Streak ist WEG.
+                # If we are already marked as "dead" (i.e., not revived)
+                # and die again, it was a respawn without kill/XP -> Streak is GONE.
                 if self.c.is_dead and not self.c.was_revived:
                      self.c.add_log("STREAK: Double Death recognized (No Revive in between) -> Force Reset.")
                      self.c.killstreak_count = 0
@@ -646,7 +641,7 @@ class CensusWorker:
                      for k in self.support_streaks:
                          self.support_streaks[k] = 0
 
-                # --- 2. STATUS SICHERN (BACKUP) ---
+                # --- 2. SAVE STATUS (BACKUP) ---
                 if self.c.killstreak_count > 0:
                     self.c.saved_streak = self.c.killstreak_count
                     self.c.saved_factions = getattr(self.c, 'streak_factions', [])
@@ -656,19 +651,19 @@ class CensusWorker:
                     self.c.saved_factions = []
                     self.c.saved_slots = []
 
-                # --- 3. RESET ENTSCHEIDUNG ---
+                # --- 3. RESET DECISION ---
                 if is_tk:
-                    # FALL A: TEAMKILL -> KEIN RESET!
-                    self.c.add_log("STREAK: Teamkill erkannt - Streak behalten!")
+                    # CASE A: TEAMKILL -> NO RESET!
+                    self.c.add_log("STREAK: Teamkill recognized - keep streak!")
                     self.c.is_tk_death = True
-                    # Wir setzen den Zähler NICHT auf 0.
-                    # Wir leeren die Listen NICHT.
-                    # Der Streak bleibt im Overlay sichtbar.
+                    # We do NOT set the counter to 0.
+                    # We do NOT empty the lists.
+                    # The streak remains visible in the overlay.
                     
                     self.c.trigger_overlay_event("Team Kill Victim")
 
                 else:
-                    # FALL B: NORMALER TOD / SUICIDE
+                    # CASE B: NORMAL DEATH / SUICIDE
                     self.c.is_tk_death = False
                     self.c.add_log("DEBUG: Handling Death -> Hiding Streak.")
                     self.c.hide_streak_display()
@@ -682,7 +677,7 @@ class CensusWorker:
                         else:
                             self.c.trigger_overlay_event("Death")
 
-                # --- 3. STATUS UPDATEN ---
+                # --- 3. UPDATE STATUS ---
                 self.c.is_dead = True
                 self.c.was_revived = False
                 self.c.add_log(f"DEBUG: Death State Set. Streak Count: {self.c.killstreak_count}")
@@ -694,7 +689,7 @@ class CensusWorker:
                     raw_tag = getattr(self.c, "outfit_cache", {}).get(killer_id, "")
                     k_tag = f"[{raw_tag}] " if raw_tag else ""
 
-                    # KD des Killers holen
+                    # Get killer's KD
                     k_vic = self.c.session_stats.get(killer_id, {})
                     try:
                         raw_k_d = k_vic.get('d', 1)
@@ -764,12 +759,12 @@ class CensusWorker:
                             self.c.add_log(f"TIMER: Resumed session for {name} (Late Join)")
 
                     self.c.trigger_overlay_event(f"Login {f_tag}")
-                    self.c.add_log(f"AUTO-TRACK: {name} aktiv erkannt ({f_tag} - Late Join).")
+                    self.c.add_log(f"AUTO-TRACK: {name} recognized as active ({f_tag} - Late Join).")
                     break
 
         my_id = self.c.current_character_id
 
-        # --- AB HIER: NORMALE XP LOGIK ---
+        # --- FROM HERE: NORMAL XP LOGIC ---
         if exp_id in ["2", "3", "371", "372"]:
             a_obj = get_stat_obj(char_id, p.get("team_id"))
             a_obj["a"] += 1
@@ -777,13 +772,13 @@ class CensusWorker:
                 self.c.trigger_overlay_event("Assist")
         if exp_id in ["7", "53"]:
             r_obj = get_stat_obj(other_id, p.get("team_id"))
-            # STATT Deaths abzuziehen, zählen wir Revives hoch
+            # INSTEAD of subtracting deaths, we increment revives
             # if r_obj["d"] > 0: r_obj["d"] -= 1
             r_obj["revives_received"] = r_obj.get("revives_received", 0) + 1
 
 
 
-        # A) EVENTS DIE MIR PASSIEREN
+        # A) EVENTS THAT HAPPEN TO ME
         if my_id and other_id == my_id:
             if exp_id == "26":
                 self.c.trigger_overlay_event("Get RoadKilled")
@@ -794,8 +789,8 @@ class CensusWorker:
                 self.is_dead_state = False
                 self.c.is_tk_death = False  # Wiederbelebt -> Kein TK-Status mehr nötig
                 
-                # Streak NICHT wiederherstellen (da wir ihn beim Tod nicht mehr löschen!)
-                # Wir updaten nur das Display, falls es ausgeblendet war.
+                # Do NOT restore streak (as we no longer delete it on death!)
+                # We only update the display if it was hidden.
                 self.c.update_streak_display()
 
                 self.c.trigger_overlay_event("Revive Taken")
@@ -804,18 +799,18 @@ class CensusWorker:
                 if self.c.config.get("killfeed", {}).get("show_revives", True):
                     m_name = self.c.name_cache.get(char_id, "Medic")
 
-                    # NEU: Font Size aus Config (Robust)
+                    # NEW: Font Size from Config (Robust)
                     kf_cfg_raw = self.c.config.get("killfeed", {})
                     kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
                     kf_font = kf_cfg.get("font_size", 19)
-                    base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
+                    base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; margin-bottom: 2px; text-align: right;"
 
                     msg = f'<div style="{base_style}"><span style="color: #00ff00;">✚ REVIVED BY </span>{m_name}</div>'
 
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
-        # B) EVENTS DIE ICH MACHE
+        # B) EVENTS THAT I DO
         if my_id and char_id == my_id:
             try:
                 self.c.myTeamId = int(p.get("team_id", 0))
@@ -836,8 +831,8 @@ class CensusWorker:
             except:
                 pass
 
-            # --- NEUE ZÄHL-LOGIK ---
-            # Anstatt direkt zu feuern, leiten wir es an _process_stat_event weiter.
+            # --- NEW COUNTING LOGIC ---
+            # Instead of firing directly, we forward it to _process_stat_event.
 
             # 1. GUNNER KILLS (Gunner Seat)
             if exp_id in self.vehicle_gunner_kill_map:
@@ -852,10 +847,10 @@ class CensusWorker:
                 self._emit_vehicle_killfeed(v_name)
 
             if exp_id in ["7", "53"]:
-                # Revive Given zählen & triggern
+                # Increment & trigger Revive Given
                 self._process_stat_event("Revive Given")
             else:
-                # Alle anderen Support-Events (Heal, Resupply, etc.) aus der Liste prüfen
+                # Check all other support events (Heal, Resupply, etc.) from the list
                 for event_name, id_list in PS2_EXP_DETECTION.items():
                     if exp_id in id_list:
                         self._process_stat_event(event_name)
@@ -865,26 +860,26 @@ class CensusWorker:
 
     def _try_add_gunner_killfeed(self, gunner_id, exp_ts, retries=0):
         """
-        Versucht rekursiv, den Gunner-Kill zu finden.
+        Recursively tries to find the gunner kill.
         """
         if not gunner_id or gunner_id == "0":
             return
 
         match_entry = None
 
-        # 1. VERSUCH: Suche in den vorhandenen Toden
+        # 1. ATTEMPT: Search in existing deaths
         with self.recent_deaths_lock:
             for entry in self.recent_deaths:
                 d_p = entry["payload"]
 
-                # Bereits verarbeitete ignorieren
+                # Ignore already processed
                 if entry.get("gunner_matched"):
                     continue
 
                 # LOGIK: Der Angreifer (Attacker) im Death-Event muss unser Gunner sein
                 if d_p.get("attacker_character_id") == gunner_id:
-                    # Optional: Zeit-Check (Kill sollte zeitnah zum XP Event sein, +/- 10 sek)
-                    # Hier meist nicht nötig, da recent_deaths eh kurz ist.
+                    # Optional: Time check (Kill should be close to the XP event, +/- 10 sec)
+                    # Often not necessary here, as recent_deaths is short anyway.
 
                     entry["gunner_matched"] = True
                     match_entry = entry
@@ -892,23 +887,23 @@ class CensusWorker:
 
         # 2. ERFOLG
         if match_entry:
-            self.c.add_log(f"DEBUG: Gunner Kill gefunden! (Retries left: {retries})")
+            self.c.add_log(f"DEBUG: Gunner kill found! (Retries left: {retries})")
             self._emit_gunner_killfeed(match_entry["payload"])
             return
 
-        # 3. MISSERFOLG -> RETRY ODER ABBRUCH
+        # 3. FAILURE -> RETRY OR ABORT
         if retries > 0:
-            # Noch nicht da? Warte 0.5 Sekunden und versuche es erneut (Rekursion)
-            # Wir nutzen threading.Timer, um den Main-Loop nicht zu blockieren
+            # Not there yet? Wait 0.5 seconds and try again (recursion)
+            # We use threading.Timer to avoid blocking the main loop
             threading.Timer(
                 0.5,
                 self._try_add_gunner_killfeed,
                 args=(gunner_id, exp_ts, retries - 1)
             ).start()
         else:
-            # Nach 5 Sekunden (10 * 0.5) immer noch kein passender Tod gefunden
-            # Das passiert, wenn der Gunner z.B. nur ein Fahrzeug zerstört hat (kein Death Event für Insassen)
-            # oder das Death Event verloren ging.
+            # Still no matching death after 5 seconds (10 * 0.5)
+            # This happens if the gunner e.g. only destroyed a vehicle (no death event for occupants)
+            # or the death event was lost.
             self.c.add_log(f"DEBUG: Gunner Kill Time-Out. ID: {gunner_id}")
             pass
 
