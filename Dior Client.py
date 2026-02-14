@@ -153,9 +153,28 @@ class DiorMainHub(QMainWindow):
         self.nav_list.addItems(["DASHBOARD", "LAUNCHER", "CHARACTERS", "OVERLAY", "SETTINGS"])
 
         self.nav_list.setStyleSheet("""
-            QListWidget { background-color: #1a1a1a; border: none; outline: none; }
-            QListWidget::item { padding: 25px; color: #4a6a7a; font-family: 'Consolas'; font-weight: bold; }
-            QListWidget::item:selected { background-color: #252525; color: #00f2ff; border-left: 4px solid #00f2ff; }
+            QListWidget { 
+                background-color: #111; 
+                border-right: 1px solid #333; 
+                outline: none; 
+            }
+            QListWidget::item { 
+                padding: 20px; 
+                color: #888; 
+                font-family: 'Black Ops One', sans-serif; 
+                font-size: 13px;
+                text-transform: uppercase;
+                border-bottom: 1px solid #1a1a1a;
+            }
+            QListWidget::item:hover {
+                background-color: #1a1a1a;
+                color: #bbb;
+            }
+            QListWidget::item:selected { 
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1a1a1a, stop:1 #252525); 
+                color: #00f2ff; 
+                border-left: 4px solid #00f2ff; 
+            }
         """)
 
         # --- CONTENT BEREICH (Stacked Widget) ---

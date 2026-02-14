@@ -11,66 +11,83 @@ from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPolygonF
 # --- 1. DESIGN & COLORS ---
 STYLESHEET = """
 QWidget {
-    background-color: #1a1a1a;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1a1a, stop:1 #121212);
     color: #ffffff;
     font-family: 'Consolas', 'Segoe UI', sans-serif;
 }
 
 QLabel#TotalPlayers {
-    font-size: 22px;
+    font-family: 'Black Ops One', sans-serif;
+    font-size: 26px;
     font-weight: bold;
     color: #00f2ff;
-    padding: 10px;
+    padding: 15px;
+    text-transform: uppercase;
 }
 
 QTableWidget {
-    background-color: #1a1a1a;
+    background-color: transparent;
     border: none;
-    gridline-color: #333333;
-    font-size: 11px;
+    gridline-color: #222222;
+    font-size: 12px;
     selection-background-color: #00f2ff;
     selection-color: black;
 }
 
-QTableWidget::item { padding: 4px; }
+QTableWidget::item { 
+    padding: 6px; 
+}
 
 QHeaderView::section {
-    background-color: #141414;
-    color: #888888;   /* <--- ÄNDERUNG: Standard ist Grau (damit Blau leuchtet) */
-    padding: 5px;
-    border: 1px solid #252525;
+    background-color: #0a0a0a;
+    color: #00f2ff;  
+    padding: 10px;
+    border: 1px solid #1a1a1a;
     font-weight: bold;
-    font-size: 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-family: 'Black Ops One', sans-serif;
 }
 
 QProgressBar {
-    background-color: #333333;
-    border: none;
-    border-radius: 4px;
-    height: 8px;
+    background-color: #0a0a0a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    height: 10px;
     text-align: center;
 }
 
-QProgressBar::chunk { border-radius: 4px; }
+QProgressBar::chunk { 
+    border-radius: 5px; 
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005577, stop:1 #00f2ff);
+}
 
 QComboBox {
-    background-color: #2b2b2b;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    padding: 5px 10px;
+    background-color: #0a0a0a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 15px;
     color: #00f2ff;
     font-weight: bold;
-    min-width: 180px;
+    font-family: 'Black Ops One', sans-serif;
+    min-width: 200px;
+    text-transform: uppercase;
 }
-QComboBox:hover { border: 1px solid #00f2ff; }
+
+QComboBox:hover { 
+    border: 1px solid #00f2ff; 
+    background-color: #111;
+}
+
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 25px;
-    border-left: 1px solid #333333;
+    width: 30px;
+    border-left: 1px solid #444;
 }
+
 QComboBox QAbstractItemView {
-    background-color: #1a1a1a;
+    background-color: #0a0a0a;
     color: #ffffff;
     border: 1px solid #00f2ff;
     selection-background-color: #00f2ff;

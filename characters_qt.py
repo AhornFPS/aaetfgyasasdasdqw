@@ -17,29 +17,113 @@ class CharacterSignals(QObject):
 
 # --- STYLESHEET ---
 CHAR_STYLE = """
-QWidget#Characters { background-color: #1a1a1a; }
-QTabWidget::pane { border: 1px solid #333; background: #121212; top: -1px; }
-QTabBar::tab { background: #1a1a1a; color: #888; padding: 10px 20px; border: 1px solid #333; border-bottom: none; }
-QTabBar::tab:selected { background: #121212; color: #00f2ff; font-weight: bold; border-bottom: 2px solid #00f2ff; }
-QFrame#StatCard { background-color: #1a1a1a; border: 1px solid #333; border-radius: 5px; }
-QLabel#GroupTitle { color: #00f2ff; font-weight: bold; font-size: 13px; margin-bottom: 5px; }
-QLabel#StatLabel { color: #4a6a7a; font-size: 11px; }
-QLabel#StatValue { color: white; font-weight: bold; font-size: 14px; }
-QTableWidget { background-color: #121212; border: none; color: white; gridline-color: #1a1a1a; }
-QHeaderView::section { background-color: #1a1a1a; color: #00f2ff; padding: 5px; border: none; font-weight: bold; }
-QTextEdit#LogArea { background-color: #020508; color: #00f2ff; font-family: 'Consolas'; font-size: 10px; border: 1px solid #333; }
-QLineEdit { background-color: #222; color: white; border: 1px solid #444; padding: 5px; }
-QPushButton#ActionBtn {
-    background-color: #2a2a2a;
-    color: #00f2ff;
-    border: 1px solid #444;
-    padding: 6px 14px;
-    font-weight: bold;
-    border-radius: 4px;
+QWidget#Characters { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1a1a, stop:1 #121212); 
+}
+
+QTabWidget::pane { 
+    border: 1px solid #333; 
+    background-color: rgba(20, 20, 20, 0.8); 
+    top: -1px; 
+    border-radius: 8px;
+}
+
+QTabBar::tab { 
+    background-color: #252525; 
+    color: #888; 
+    padding: 12px 25px; 
+    border: 1px solid #333; 
+    border-bottom: none; 
+    border-top-left-radius: 6px; 
+    border-top-right-radius: 6px; 
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a2a, stop:1 #1a1a1a); 
+    color: #00f2ff; 
+    font-weight: bold; 
+    border-bottom: 2px solid #00f2ff; 
+}
+
+QFrame#StatCard { 
+    background-color: rgba(30, 30, 30, 0.6); 
+    border: 1px solid #333; 
+    border-radius: 10px; 
+    padding: 10px;
+}
+
+QLabel#GroupTitle { 
+    color: #00f2ff; 
+    font-weight: bold; 
+    font-size: 15px; 
+    margin-bottom: 10px; 
+    text-transform: uppercase;
+}
+
+QLabel#StatLabel { 
+    color: #888; 
+    font-size: 12px; 
+}
+
+QLabel#StatValue { 
+    color: white; 
+    font-weight: bold; 
+    font-size: 16px; 
+}
+
+QTableWidget { 
+    background-color: transparent; 
+    border: none; 
+    color: white; 
+    gridline-color: #333; 
     font-size: 12px;
 }
+
+QHeaderView::section { 
+    background-color: #1a1a1a; 
+    color: #00f2ff; 
+    padding: 8px; 
+    border: none; 
+    font-weight: bold; 
+    text-transform: uppercase;
+    font-size: 11px;
+}
+
+QTextEdit#LogArea { 
+    background-color: #050505; 
+    color: #00f2ff; 
+    font-family: 'Consolas', monospace; 
+    font-size: 11px; 
+    border: 1px solid #333; 
+    border-radius: 5px;
+}
+
+QLineEdit { 
+    background-color: #0a0a0a; 
+    color: white; 
+    border: 1px solid #444; 
+    padding: 10px; 
+    border-radius: 5px;
+}
+
+QLineEdit:focus {
+    border: 1px solid #00f2ff;
+}
+
+QPushButton#ActionBtn {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #333, stop:1 #222);
+    color: #eee;
+    border: 1px solid #444;
+    padding: 10px 20px;
+    font-weight: bold;
+    border-radius: 5px;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
 QPushButton#ActionBtn:hover {
-    background-color: #3a3a3a;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #444, stop:1 #333);
     border-color: #00f2ff;
     color: white;
 }

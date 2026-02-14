@@ -5,59 +5,102 @@ from PyQt6.QtCore import Qt, pyqtSignal, QObject
 
 # --- STYLING ---
 SETTING_STYLE = """
-QWidget#Settings { background-color: #1a1a1a; }
+QWidget#Settings { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1a1a, stop:1 #121212); 
+}
 
 QFrame#Group { 
-    background-color: #252525; 
+    background-color: rgba(35, 35, 35, 0.7); 
     border: 1px solid #333; 
-    border-radius: 8px; 
-    margin-top: 10px;
+    border-radius: 12px; 
+    margin-top: 15px;
+    padding: 10px;
 }
+
+QFrame#Group:hover {
+    border: 1px solid #444;
+    background-color: rgba(45, 45, 45, 0.8);
+}
+
 QLabel#GroupTitle { 
     color: #00f2ff; 
     font-weight: bold; 
-    font-size: 14px; 
-    font-family: 'Consolas';
-    padding-bottom: 5px;
+    font-size: 16px; 
+    font-family: 'Black Ops One', sans-serif;
+    padding-bottom: 8px;
+    text-transform: uppercase;
 }
-QLabel#InfoText { color: #888; font-size: 11px; }
+
+QLabel#InfoText { 
+    color: #888; 
+    font-size: 12px; 
+    margin-bottom: 5px;
+}
+
 QLabel#PathLabel { 
     color: #ffffff; 
-    background-color: #111; 
-    border: 1px solid #444; 
-    padding: 8px; 
-    border-radius: 4px;
-    font-family: 'Consolas';
+    background-color: #050505; 
+    border: 1px solid #333; 
+    padding: 12px; 
+    border-radius: 6px;
+    font-family: 'Consolas', monospace;
 }
 
 QPushButton#ActionBtn { 
-    background-color: #2a2a2a; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #333, stop:1 #222);
     color: #00f2ff; 
     border: 1px solid #444; 
-    padding: 8px 15px; 
+    padding: 10px 20px; 
     font-weight: bold; 
-    border-radius: 4px; 
-    font-size: 12px;
+    border-radius: 6px; 
+    font-size: 13px;
+    text-transform: uppercase;
 }
+
 QPushButton#ActionBtn:hover { 
-    background-color: #3a3a3a; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #444, stop:1 #333);
     border-color: #00f2ff; 
     color: white;
 }
 
 QPushButton#SaveBtn {
-    background-color: #004400;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #006600, stop:1 #003300);
     color: #00ff00;
     font-weight: bold;
-    border-radius: 4px;
-    padding: 10px 15px;
-    font-size: 12px;
-    border: 1px solid #006600;
+    border-radius: 6px;
+    padding: 15px 25px;
+    font-size: 14px;
+    border: 1px solid #00ff00;
+    text-transform: uppercase;
 }
+
 QPushButton#SaveBtn:hover { 
-    background-color: #006600; 
-    border-color: #00ff00; 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00aa00, stop:1 #005500); 
+    border-color: #ffffff; 
     color: white;
+}
+
+/* Custom Slider Styling */
+QSlider::groove:horizontal {
+    border: 1px solid #333;
+    height: 6px;
+    background: #111;
+    margin: 2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00f2ff, stop:1 #006666);
+    border: 1px solid #00f2ff;
+    width: 18px;
+    height: 18px;
+    margin: -7px 0;
+    border-radius: 9px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #ffffff;
+    border: 1px solid #00f2ff;
 }
 """
 

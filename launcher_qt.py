@@ -14,43 +14,53 @@ class LauncherSignals(QObject):
 # --- STYLESHEET ---
 LAUNCHER_STYLE = """
 QWidget#Launcher {
-    background-color: #1a1a1a;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1a1a, stop:1 #121212);
 }
+
 QFrame#ProfileCard {
-    background-color: #252525;
-    border: 2px solid #333;
-    border-radius: 12px;
+    background-color: rgba(30, 30, 30, 0.7);
+    border: 1px solid #333;
+    border-radius: 15px;
 }
+
 QFrame#ProfileCard:hover {
-    border: 2px solid #00f2ff;
+    border: 1px solid #00f2ff;
+    background-color: rgba(40, 40, 40, 0.8);
 }
+
 QLabel#Header {
-    font-family: 'Arial';
-    font-size: 26px;
+    font-family: 'Black Ops One', sans-serif;
+    font-size: 32px;
     font-weight: bold;
     color: #00f2ff;
+    text-transform: uppercase;
 }
+
 QLabel#ProfileTitle {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: bold;
-    font-family: 'Consolas';
+    color: #ffffff;
 }
+
 QLabel#Description {
-    color: #888;
-    font-size: 11px;
-    line-height: 15px;
+    color: #aaaaaa;
+    font-size: 13px;
 }
+
 QPushButton#LaunchBtn {
-    border-radius: 6px;
-    font-weight: bold;
-    font-family: 'Consolas';
-    font-size: 14px;
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #333, stop:1 #222);
+    border: 1px solid #444;
+    color: #ddd;
     padding: 15px;
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    text-transform: uppercase;
 }
+
 QPushButton#LaunchBtn:hover {
-    border: 1px solid white;
+    color: white;
+    border: 1px solid #ffffff;
 }
 """
 
@@ -87,9 +97,20 @@ class ProfileCard(QFrame):
         # Action Button
         btn = QPushButton(f"INITIALIZE: {title}")
         btn.setObjectName("LaunchBtn")
-        btn.setStyleSheet(f"background-color: {color};")
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(self.on_click)
+        
+        # Dynamic Gradient based on color
+        btn.setStyleSheet(f"""
+            QPushButton {{ 
+                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {color}, stop:1 #000000); 
+                border: 1px solid {color};
+            }}
+            QPushButton:hover {{
+                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {color}, stop:1 #222222);
+                border: 1px solid #ffffff;
+            }}
+        """)
         layout.addWidget(btn)
 
     def on_click(self):
