@@ -349,10 +349,10 @@ class CensusWorker:
                             self.c.current_character_id = ""
                             self.c.add_log("AUTO-TRACK: Ausgeloggt.")
 
-                    # 2. SERVER FILTER / PLAYER TRACKING
-                    track_id = p.get("character_id") or p.get("attacker_character_id")
-                    if track_id and track_id != "0":
-                        tid = p.get("team_id") or p.get("attacker_team_id")
+                    # 2. SERVER FILTER / PLAYER TRACKING (only track XP events and only the active side, other can be ignored)
+                    track_id = p.get("character_id")   # or p.get("attacker_character_id")
+                    if track_id and track_id != "0" and e_name == "GainExperience":
+                        tid = p.get("team_id") # or p.get("attacker_team_id")
                         f_name = {"1": "VS", "2": "NC", "3": "TR"}.get(str(tid), "NSO")
                         w_id = str(p.get("world_id", "0"))
                         self.c.active_players[track_id] = (time.time(), f_name, w_id)
