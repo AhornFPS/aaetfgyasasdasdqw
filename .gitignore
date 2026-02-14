@@ -10,7 +10,7 @@ __pycache__/
 *$py.class
 dist/
 build/
-appdir/
+AppDir/
 
 
 # Lokale Daten & Datenbanken (Deine Liste)

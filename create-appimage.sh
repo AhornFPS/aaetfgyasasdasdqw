@@ -11,11 +11,10 @@ OUTPUT_NAME="Better_Planetside-x86_64.AppImage"
 
 echo "=== Creating AppImage for $APP_NAME ==="
 
-# 1. Build the application if not already built
-if [ ! -d "$BUILD_DIR" ]; then
-    echo "Build directory not found. Running build-linux.sh..."
-    bash build-linux.sh
-fi
+# 1. Always build the application to ensure latest changes
+echo "Cleaning previous distribution and rebuilding..."
+rm -rf "$BUILD_DIR"
+bash build-linux.sh
 
 # 2. Prepare AppDir structure
 echo "Setting up AppDir structure..."

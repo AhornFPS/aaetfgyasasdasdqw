@@ -70,7 +70,7 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
+from dior_utils import BASE_DIR, ASSETS_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 import sys
@@ -396,9 +396,8 @@ class DiorClientGUI:
         if not self.ovl_config_win:
             return
 
-        # Use get_asset_path logic to find the assets directory
-        # We can construct it via BASE_DIR and 'assets'
-        assets_dir = os.path.join(self.BASE_DIR, "assets")
+        # Use ASSETS_DIR from dior_utils
+        assets_dir = ASSETS_DIR
 
         if not os.path.exists(assets_dir):
             self.add_log(f"WARN: Assets dir not found: {assets_dir}")
@@ -2904,11 +2903,7 @@ class DiorClientGUI:
         3. Default values (If all else fails)
         """
         # 1. Define paths
-        if hasattr(sys, '_MEIPASS'):
-            base_dir_exe = os.path.dirname(sys.executable)
-            user_config_path = os.path.join(base_dir_exe, "config.json")
-        else:
-            user_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        user_config_path = os.path.join(self.BASE_DIR, "config.json")
 
         # Path to backup file
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
@@ -3180,7 +3175,7 @@ class DiorClientGUI:
         """
         try:
             # 1. Get path
-            target_path = getattr(self, 'config_path', os.path.join(os.path.abspath("."), "config.json"))
+            target_path = getattr(self, 'config_path', os.path.join(self.BASE_DIR, "config.json"))
             backup_path = target_path.replace("config.json", "config_backup.json")
 
             # 2. Clean data (Only serializable data)
@@ -4826,7 +4821,12 @@ if __name__ == "__main__":
         sys.exit(app.exec())
     except Exception as e:
         import traceback
-
-        with open("error_log.txt", "w") as f:
-            f.write(traceback.format_exc())
+        from dior_utils import BASE_DIR
+        
+        error_file = os.path.join(BASE_DIR, "error_log.txt")
+        try:
+            with open(error_file, "w") as f:
+                f.write(traceback.format_exc())
+        except:
+            pass
         print(traceback.format_exc())
