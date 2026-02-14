@@ -244,8 +244,9 @@ class AspectRatioLabel(QLabel):
 
 
 class TabStreaming(QWidget):
-    def __init__(self):
+    def __init__(self, parent_config=None):
         super().__init__()
+        self.parent_config = parent_config
 
         # Layout
         layout = QVBoxLayout(self)
@@ -259,6 +260,46 @@ class TabStreaming(QWidget):
         head.setObjectName("Header")
         head.setStyleSheet("font-size: 22px; margin-bottom: 10px;")
         layout.addWidget(head)
+
+        # --- SERVICE STATUS & PORT ---
+        status_group = QFrame(objectName="Group")
+        status_group.setStyleSheet("#Group { background-color: #222; border: 1px solid #333; border-radius: 5px; padding: 10px; }")
+        status_layout = QVBoxLayout(status_group)
+        status_layout.setSpacing(10)
+
+        # Service Toggle
+        self.btn_toggle_service = QPushButton("OBS SERVICE: OFF")
+        self.btn_toggle_service.setCheckable(True)
+        self.btn_toggle_service.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_toggle_service.setFixedHeight(45)
+        self.btn_toggle_service.setStyleSheet("""
+            QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 5px; border: 1px solid #660000; outline: none; font-size: 14px; }
+            QPushButton:checked { background-color: #004400; border-color: #00ff00; color: white; }
+            QPushButton:hover { border: 1px solid #00f2ff; }
+        """)
+        self.btn_toggle_service.toggled.connect(self.on_service_toggled)
+        status_layout.addWidget(self.btn_toggle_service)
+
+        # Port Configuration
+        port_row = QHBoxLayout()
+        port_row.addWidget(QLabel("HTTP Port:", styleSheet="color: #bbb; border: none;"))
+        self.ent_port = QLineEdit("8000")
+        self.ent_port.setFixedWidth(80)
+        self.ent_port.setStyleSheet("background-color: #111; color: #fff; border: 1px solid #444; padding: 5px; border-radius: 3px;")
+        self.ent_port.textChanged.connect(self.on_port_changed)
+        port_row.addWidget(self.ent_port)
+        
+        port_row.addWidget(QLabel("  WS Port:", styleSheet="color: #bbb; border: none;"))
+        self.ent_ws_port = QLineEdit("6789")
+        self.ent_ws_port.setFixedWidth(80)
+        self.ent_ws_port.setStyleSheet("background-color: #111; color: #fff; border: 1px solid #444; padding: 5px; border-radius: 3px;")
+        self.ent_ws_port.textChanged.connect(self.on_port_changed)
+        port_row.addWidget(self.ent_ws_port)
+        
+        port_row.addStretch()
+        status_layout.addLayout(port_row)
+
+        layout.addWidget(status_group)
 
         # --- INFO GROUP ---
         info_group = QFrame(objectName="Group")
@@ -312,7 +353,8 @@ class TabStreaming(QWidget):
             "4. Paste the URL above into the URL field.",
             "5. Set Width to <b>1920</b> and Height to <b>1080</b>.",
             "6. Check 'Refresh browser when scene becomes active'.",
-            "7. Click OK."
+            "7. Click OK.",
+            "<i>Note: If localhost doesn't work, try <b>127.0.0.1</b> instead.</i>"
         ]
 
         for step in steps:
@@ -323,6 +365,23 @@ class TabStreaming(QWidget):
         layout.addWidget(step_group)
 
 
+
+    def on_service_toggled(self, checked):
+        text = "OBS SERVICE: ON" if checked else "OBS SERVICE: OFF"
+        self.btn_toggle_service.setText(text)
+        if self.parent_config:
+            self.parent_config.signals.setting_changed.emit("obs_service_toggle", checked)
+
+    def on_port_changed(self, text):
+        h_port = self.ent_port.text()
+        self.lbl_url.setText(f"http://localhost:{h_port}/")
+        if self.parent_config:
+            # We pass both ports
+            ports = {
+                "port": int(h_port) if h_port.isdigit() else 8000,
+                "ws_port": int(self.ent_ws_port.text()) if self.ent_ws_port.text().isdigit() else 6789
+            }
+            self.parent_config.signals.setting_changed.emit("obs_service_ports", ports)
 
     def copy_to_clipboard(self):
         clipboard = QApplication.clipboard()
@@ -401,7 +460,7 @@ class OverlayConfigWindow(QWidget):
 
         # --- [NEU] TAB 8: STREAMING / OBS ---
         # Hier nutzen wir die neue Klasse statt einer setup_Methode
-        self.tab_streaming = TabStreaming()
+        self.tab_streaming = TabStreaming(self)
         self.tabs.addTab(self.tab_streaming, " OBS / STREAM ")
 
 

@@ -167,8 +167,9 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            # Sicherer String-Replace für den Port
-            html = HTML_TEMPLATE.replace("__WS_PORT__", str(WS_PORT))
+            # Der Port wird jetzt dynamisch vom Server-Objekt geholt
+            ws_port = getattr(self.server, 'ws_port', 6789)
+            html = HTML_TEMPLATE.replace("__WS_PORT__", str(ws_port))
             self.wfile.write(html.encode('utf-8'))
             return
 
@@ -185,7 +186,7 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
             self.path = '/' + filename
             return super().do_GET()
 
-        # 3. Favicon ignorieren (verhindert 404 Spam in der Konsole)
+        # 3. Favicon ignorieren
         if self.path == '/favicon.ico':
             self.send_response(204)
             self.end_headers()
@@ -195,36 +196,70 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
 
 
 class OverlayServer:
-    def __init__(self):
+    def __init__(self, http_port=8000, ws_port=6789):
+        self.http_port = http_port
+        self.ws_port = ws_port
         self.ws_clients = set()
         self.ws_loop = None
+        self.httpd = None
+        
+        self.http_thread = None
+        self.ws_thread = None
+        self.is_running = False
 
-        # Threads starten
+    def start(self):
+        if self.is_running:
+            return
+        self.is_running = True
+        
         self.http_thread = threading.Thread(target=self._run_http, daemon=True)
         self.http_thread.start()
 
         self.ws_thread = threading.Thread(target=self._run_ws, daemon=True)
         self.ws_thread.start()
 
+    def stop(self):
+        self.is_running = False
+        if self.httpd:
+            self.httpd.shutdown()
+            self.httpd.server_close()
+            self.httpd = None
+        
+        if self.ws_loop:
+            self.ws_loop.call_soon_threadsafe(self.ws_loop.stop)
+            self.ws_loop = None
+
     def _run_http(self):
         HTTPServer.allow_reuse_address = True
         try:
-            httpd = HTTPServer(('0.0.0.0', HTTP_PORT), AssetHTTPHandler)
-            print(f"WEB: Overlay bereit unter http://localhost:{HTTP_PORT}")
-            httpd.serve_forever()
+            self.httpd = HTTPServer(('0.0.0.0', self.http_port), AssetHTTPHandler)
+            # WICHTIG: Port an das Server-Objekt binden, damit Handler ihn findet
+            self.httpd.ws_port = self.ws_port
+            print(f"WEB: Overlay bereit unter http://localhost:{self.http_port}")
+            self.httpd.serve_forever()
         except OSError:
-            print(f"WARNUNG: Port {HTTP_PORT} ist belegt. Web-Overlay evtl. nicht erreichbar.")
+            print(f"WARNUNG: Port {self.http_port} ist belegt.")
+        except Exception as e:
+            print(f"HTTP Server Error: {e}")
 
     def _run_ws(self):
         self.ws_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.ws_loop)
 
-        async def start():
-            async with websockets.serve(self._ws_handler, "0.0.0.0", WS_PORT):
-                await asyncio.Future()
+        async def start_ws():
+            try:
+                async with websockets.serve(self._ws_handler, "0.0.0.0", self.ws_port):
+                    await asyncio.Future()  # run forever
+            except Exception as e:
+                print(f"WS Server Error: {e}")
 
-        print(f"WEB: WebSocket listening on port {WS_PORT}")
-        self.ws_loop.run_until_complete(start())
+        print(f"WS: WebSocket listening on port {self.ws_port}")
+        try:
+            self.ws_loop.run_until_complete(start_ws())
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"WS Loop Error: {e}")
 
     async def _ws_handler(self, websocket):
         self.ws_clients.add(websocket)
@@ -234,7 +269,7 @@ class OverlayServer:
             self.ws_clients.remove(websocket)
 
     def broadcast(self, category, data):
-        if not self.ws_loop or not self.ws_clients:
+        if not self.is_running or not self.ws_loop or not self.ws_clients:
             return
 
         payload = json.dumps({"category": category, "data": data})

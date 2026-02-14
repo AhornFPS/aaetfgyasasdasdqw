@@ -1088,13 +1088,7 @@ class DiorClientGUI:
         # 3. OVERLAY TAB: EVENTS
         # ---------------------------------------------------------
         # Event Auswahl im Grid
-        try:
-            ui.signals.setting_changed.disconnect()
-        except:
-            pass
-        ui.signals.setting_changed.connect(
-            lambda key, val: self.on_event_selected_in_qt(val) if key == "event_selection" else None
-        )
+        ui.signals.setting_changed.connect(self.handle_overlay_setting_changes)
         if hasattr(ui, 'ent_global_duration'):
             ui.ent_global_duration.editingFinished.connect(self.save_global_event_duration)
 
@@ -1330,6 +1324,35 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_save_twitch.clicked, self.save_twitch_config)
 
         print("SYS: All signals routed successfully.")
+
+    def handle_overlay_setting_changes(self, key, val):
+        """Dispatches dynamic setting changes from the Overlay Config Window."""
+        if key == "event_selection":
+            self.on_event_selected_in_qt(val)
+        
+        elif key == "obs_service_toggle":
+            obs_cfg = self.config.get("obs_service", {})
+            obs_cfg["enabled"] = val
+            self.config["obs_service"] = obs_cfg
+            self.save_config()
+            
+            if val:
+                self.overlay_win.start_server()
+            else:
+                self.overlay_win.stop_server()
+            self.add_log(f"SYS: OBS Service {'enabled' if val else 'disabled'}.")
+            
+        elif key == "obs_service_ports":
+            obs_cfg = self.config.get("obs_service", {})
+            obs_cfg.update(val)
+            self.config["obs_service"] = obs_cfg
+            self.save_config()
+            
+            # Restart if running
+            if obs_cfg.get("enabled", False):
+                self.add_log("SYS: Restarting OBS Service with new ports...")
+                self.overlay_win.start_server()
+            self.add_log(f"SYS: OBS Ports updated: Http:{val['port']} WS:{val['ws_port']}.")
 
     def on_overlay_item_moved(self, item_name, x, y):
         """Wird aufgerufen, wenn im Overlay etwas mit der Maus verschoben wurde."""
@@ -2545,6 +2568,25 @@ class DiorClientGUI:
             # bevor wir den Thread für den Twitch-Chat starten.
             QTimer.singleShot(1000, self.start_twitch_connection)
             self.add_log(f"TWITCH: Auto-connecting to #{twitch_conf.get('channel')}...")
+
+        # 10. OBS / STREAMING SERVICE
+        obs_conf = self.config.get("obs_service", {"enabled": False, "port": 8000, "ws_port": 6789})
+        if hasattr(ui, 'tab_streaming'):
+            s_tab = ui.tab_streaming
+            s_tab.btn_toggle_service.blockSignals(True)
+            s_tab.btn_toggle_service.setChecked(obs_conf.get("enabled", False))
+            s_tab.btn_toggle_service.setText("OBS SERVICE: ON" if obs_conf.get("enabled", False) else "OBS SERVICE: OFF")
+            s_tab.btn_toggle_service.blockSignals(False)
+            
+            s_tab.ent_port.blockSignals(True)
+            s_tab.ent_port.setText(str(obs_conf.get("port", 8000)))
+            s_tab.ent_port.blockSignals(False)
+
+            s_tab.ent_ws_port.blockSignals(True)
+            s_tab.ent_ws_port.setText(str(obs_conf.get("ws_port", 6789)))
+            s_tab.ent_ws_port.blockSignals(False)
+            
+            s_tab.lbl_url.setText(f"http://localhost:{obs_conf.get('port', 8000)}/")
 
         self.add_log("SYS: Overlay configuration synchronized.")
 

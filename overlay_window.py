@@ -394,7 +394,13 @@ class QtOverlay(QWidget):
         self.twitch_drag_cover.hide()
         # WICHTIG: Kein WA_TransparentForMouseEvents hier, damit es Klicks fängt!
 
-        self.server = OverlayServer()
+        self.server = None
+        # Start server if enabled in config
+        if self.gui_ref and hasattr(self.gui_ref, 'config'):
+            obs_cfg = self.gui_ref.config.get("obs_service", {})
+            if obs_cfg.get("enabled", False):
+                self.start_server()
+
         self.active_edit_targets = []
 
     @staticmethod
@@ -2021,3 +2027,31 @@ class QtOverlay(QWidget):
             self.chat_container.show()
         else:
             self.chat_container.hide()
+    # --- SERVER MANAGEMENT ---
+    def start_server(self):
+        """Starts the local web server for OBS integration."""
+        if self.server and self.server.is_running:
+            self.stop_server()
+
+        if self.gui_ref:
+            obs_cfg = self.gui_ref.config.get("obs_service", {
+                "enabled": True,
+                "port": 8000,
+                "ws_port": 6789
+            })
+            h_port = obs_cfg.get("port", 8000)
+            w_port = obs_cfg.get("ws_port", 6789)
+            
+            try:
+                self.server = OverlayServer(http_port=h_port, ws_port=w_port)
+                self.server.start()
+                print(f"OBS SERVICE: Started on port {h_port} (WS: {w_port})")
+            except Exception as e:
+                print(f"OBS SERVICE ERROR: Could not start server: {e}")
+
+    def stop_server(self):
+        """Stops the local web server."""
+        if self.server:
+            self.server.stop()
+            self.server = None
+            print("OBS SERVICE: Stopped.")
