@@ -3,27 +3,27 @@ import os
 import sys
 import ctypes
 
-# 1. DPI Awareness (Muss als ALLERERSTES passieren)
+# 1. DPI Awareness (Must happen FIRST)
 try:
     if sys.platform.startswith("win"):
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
 
-# 2. Die Pfad-Logik für PyInstaller 6+ (_internal Support)
+# 2. Path logic for PyInstaller 6+ (_internal Support)
 def resource_path(relative_path):
     """
-    Findet Ressourcen, egal ob im Skript oder in der EXE (_internal).
+    Finds resources, whether in script or EXE (_internal).
     """
     if hasattr(sys, '_MEIPASS'):
-        # In der EXE ist _MEIPASS der Pfad zum '_internal' Ordner
+        # In EXE, _MEIPASS is the path to the '_internal' folder
         base_path = sys._MEIPASS
     else:
         base_path = os.path.dirname(os.path.abspath(__file__))
 
     return os.path.join(base_path, relative_path)
 
-# 3. Umgebungsvariablen
+# 3. Environment Variables
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
@@ -33,18 +33,18 @@ os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 if not sys.platform.startswith("win"):
     os.environ["QT_QPA_PLATFORM"] = "xcb"
 
-# WICHTIG: Falls WebEngine Grafikfehler macht (schwarze Felder), dies entkommentieren:
+# IMPORTANT: If WebEngine has graphics glitches (black bars), uncomment this:
 # os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
 
 from PyQt6.QtCore import QCoreApplication
 
-# 4. Plugin-Pfad setzen (Der wichtigste Fix für fehlende Bilder!)
-# Qt muss wissen, dass die DLLs jetzt in '_internal' liegen.
-# sys._MEIPASS zeigt genau auf diesen '_internal' Ordner.
+# 4. Set plugin path (Most important fix for missing images!)
+# Qt must know that the DLLs are now in '_internal'.
+# sys._MEIPASS points directly to this '_internal' folder.
 if hasattr(sys, '_MEIPASS'):
     QCoreApplication.addLibraryPath(sys._MEIPASS)
 
-# Qt-Skalierung fixen
+# Fix Qt Scaling
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 
@@ -63,7 +63,7 @@ except Exception:
 
 XDO_TOOL = shutil.which("xdotool") if not sys.platform.startswith("win") else None
 import sqlite3
-import dashboard_qt  # Die neue Datei muss im gleichen Ordner liegen!
+import dashboard_qt  # New file must be in the same folder!
 import launcher_qt
 import characters_qt
 import settings_qt
@@ -103,10 +103,10 @@ from PyQt6.QtCore import (
 )
 
 
-# Pfad zum aktuellen Verzeichnis ermitteln
+# Determine path to the current directory
 basedir = os.path.dirname(os.path.abspath(__file__))
 
-# Qt anweisen, im Unterordner nach Plugins zu suchen
+# Instruct Qt to look in the subfolder for plugins
 QCoreApplication.addLibraryPath(os.path.join(basedir, 'imageformats'))
 
 DUMMY_STATS_TEMPLATE = """
@@ -123,11 +123,11 @@ DUMMY_STATS_TEMPLATE = """
 
 
 class WorkerSignals(QObject):
-    # Signal: Erfolg (True/False), Name, Fehlernachricht
+    # Signal: Success (True/False), Name, Error Message
     add_char_finished = pyqtSignal(bool, str, str)
-    # NEUES SIGNAL für den Monitor
+    # NEW SIGNAL for the Monitor
     game_status_changed = pyqtSignal(bool)  # True = Start, False = Stop
-    # SIGNAL für Server Switch (Thread-Safe)
+    # SIGNAL for Server Switch (Thread-Safe)
     request_server_switch = pyqtSignal(str, str)
 
 
@@ -138,18 +138,18 @@ class DiorMainHub(QMainWindow):
         self.setWindowTitle("DIOR CLIENT - PS2 MASTER")
         self.resize(1400, 900)
 
-        # Zentrales Widget
+        # Central Widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # --- SEITENLEISTE (Navigation) ---
+        # --- SIDEBAR (Navigation) ---
         self.nav_list = QListWidget()
         self.nav_list.setFixedWidth(200)
         self.nav_list.setObjectName("NavBar")
-        # WICHTIG: Die Reihenfolge muss mit dem Stack übereinstimmen!
+        # IMPORTANT: Order must match the stack!
         self.nav_list.addItems(["DASHBOARD", "LAUNCHER", "CHARACTERS", "OVERLAY", "SETTINGS"])
 
         self.nav_list.setStyleSheet("""
@@ -177,10 +177,10 @@ class DiorMainHub(QMainWindow):
             }
         """)
 
-        # --- CONTENT BEREICH (Stacked Widget) ---
+        # --- CONTENT AREA (Stacked Widget) ---
         self.stack = QStackedWidget()
 
-        # Wir holen uns die Fenster aus dem Controller (DiorClientGUI)
+        # Load windows from controller (DiorClientGUI)
         self.stack.addWidget(self.controller.dash_window)  # Index 0
         self.stack.addWidget(self.controller.launcher_win)  # Index 1
         self.stack.addWidget(self.controller.char_win)  # Index 2
@@ -190,10 +190,10 @@ class DiorMainHub(QMainWindow):
         main_layout.addWidget(self.nav_list)
         main_layout.addWidget(self.stack)
 
-        # Interne Verbindung: Klick auf Liste -> Stack wechselt
+        # Internal connection: Click on list -> Stack changes
         self.nav_list.currentRowChanged.connect(self.stack.setCurrentIndex)
 
-        # Startseite setzen
+        # Set start page
         self.nav_list.setCurrentRow(0)
 
 try:
@@ -203,32 +203,32 @@ try:
     HAS_SOUND = True
 except ImportError:
     HAS_SOUND = False
-    print("ACHTUNG: 'pygame' fehlt. Sounds werden nicht abgespielt.")
+    print("WARNING: 'pygame' missing. Sounds will not be played.")
 
 def get_short_name(path):
-    """Gibt nur den Dateinamen ohne den kompletten Pfad zurück"""
+    """Returns only the filename without the full path"""
     return os.path.basename(path) if path else "No file selected"
 
 sys.excepthook = log_exception
 
-# Globale Konstanten
+# Global Constants
 CONFIG_FILE = "config.json"
 
 class DiorClientGUI:
     def __init__(self):
-        # 1. BASIS & DB INITIALISIERUNG
-        self.BASE_DIR = BASE_DIR  # Kommt jetzt aus dem Import 'dior_utils'
-        self.db = DatabaseHandler()  # Kommt aus 'dior_db'
+        # 1. BASE & DB INITIALIZATION
+        self.BASE_DIR = BASE_DIR  # Now comes from 'dior_utils' import
+        self.db = DatabaseHandler()  # Comes from 'dior_db'
         self.s_id = os.getenv("CENSUS_S_ID", "s:example")
 
-        # 2. DATEN LADEN
+        # 2. LOAD DATA
         self.config = self.load_config()
         self.char_data = self.db.load_my_chars()
 
-        # Cache laden (Gibt jetzt 2 Dictionaries zurück: Namen und Outfits)
+        # Load cache (Returns 2 dictionaries: Names and Outfits)
         self.name_cache, self.outfit_cache = self.db.load_player_cache()
 
-        # 2. LOGIK-VARIABLEN
+        # 2. LOGIC VARIABLES
         self.ps2_dir = self.config.get("ps2_path", "")
         self.current_world_id = self.config.get("world_id", "10")
         self.current_character_id = ""
@@ -241,7 +241,7 @@ class DiorClientGUI:
             "SolTech (Asia)": "40", "Jaeger (Events)": "19"
         }
 
-        # Signale für Worker
+        # Signals for Worker
         self.worker_signals = WorkerSignals()
         self.worker_signals.add_char_finished.connect(self.finalize_add_char_slot)
         self.worker_signals.game_status_changed.connect(self.handle_game_status_change)
@@ -275,7 +275,7 @@ class DiorClientGUI:
         self.last_killer_id = "0"
         self.last_evidence_url = ""
         self.item_db = {}
-        self.id_queue = Queue()  # WICHTIG: Hier initialisieren für Cache Worker
+        self.id_queue = Queue()  # IMPORTANT: Initialize here for Cache Worker
         self.websocket = None
         self.loop = None
 
@@ -283,30 +283,30 @@ class DiorClientGUI:
         # True = Revive KD (Deaths - Revives), False = Real KD (Total Deaths)
         self.kd_mode_revive = True
 
-        # Pfade
+        # Paths
         self.source_high = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_high.ini"))
         self.source_low = get_asset_path(os.path.join("Planetside 2 ini", "UserOptions_low.ini"))
 
-        # 3. QT APP & FENSTER INITIALISIEREN
+        # 3. QT APP & WINDOW INITIALIZATION
         self.qt_app = QApplication.instance() or QApplication(sys.argv)
         self.qt_app.setStyle("Fusion")
 
-        # Unter-Fenster erstellen
+        # Create sub-windows
         self.dash_window = dashboard_qt.DashboardWidget(self)
         self.dash_controller = dashboard_qt.DashboardController(self.dash_window)
 
-        # --- FIX START: Dropdown mit Config synchronisieren ---
-        # Wir suchen den Namen zur geladenen ID (z.B. "10" -> "Wainwright (EU)")
+        # --- FIX START: Sync dropdown with config ---
+        # Search for name of the loaded ID (e.g. "10" -> "Wainwright (EU)")
         init_server_name = self.get_server_name_by_id(self.current_world_id)
 
-        # Wir setzen das Dropdown auf diesen Namen, ohne das Signal zu feuern (blockSignals)
+        # Set dropdown to this name without firing the signal (blockSignals)
         if hasattr(self.dash_window, 'server_combo'):
             self.dash_window.server_combo.blockSignals(True)
             idx = self.dash_window.server_combo.findText(init_server_name)
             if idx >= 0:
                 self.dash_window.server_combo.setCurrentIndex(idx)
             self.dash_window.server_combo.blockSignals(False)
-        # --- FIX ENDE ---
+        # --- FIX END ---
 
         self.launcher_win = launcher_qt.LauncherWidget(self)
         self.char_win = characters_qt.CharacterWidget(self)
@@ -314,47 +314,48 @@ class DiorClientGUI:
         self.populate_overlay_assets()
         self.settings_win = settings_qt.SettingsWidget(self)
 
-        # Overlay erstellen
+        # Create overlay
         self.overlay_win = QtOverlay(self)
 
-        # 4. MAIN HUB (Die Hülle)
+        # 4. MAIN HUB (The Shell)
         self.main_hub = DiorMainHub(self)
 
-        # 5. SIGNALE VERBINDEN
+        # 5. CONNECT SIGNALS
         self.connect_all_qt_signals()
 
         self.refresh_char_list_ui()
 
-        # 6. DATEN IN DIE FENSTER LADEN
-        # WICHTIG: Das hier lädt die Checkboxen UND erzwingt die Config-Werte
-        self.load_overlay_config_to_qt()
+        # 6. LOAD DATA TO WINDOWS
+        # IMPORTANT: This loads the checkboxes AND forces config values
+        self.load_settings_to_ui()
         self.settings_win.load_config(self.config, self.ps2_dir)
+        
 
-        # Positionen initialisieren
+        # Initialize positions
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
 
-        # --- CONFIG STATUS MELDUNG ---
+        # --- CONFIG STATUS MESSAGE ---
         if hasattr(self, '_startup_config_status'):
             status = self._startup_config_status
             if status == "BACKUP":
-                self.add_log("WARNUNG: Haupt-Config war defekt. Backup wurde geladen!")
-                # Zeige Popup Warnung
-                QMessageBox.warning(self.main_hub, "Config Wiederhergestellt",
-                                          "Deine Konfigurationsdatei war beschädigt.\nEs wurde erfolgreich ein Backup geladen.")
+                self.add_log("WARNING: Main Config was corrupt. Backup loaded!")
+                # Show popup warning
+                QMessageBox.warning(self.main_hub, "Config Restored",
+                                          "Your configuration file was corrupt.\nA backup was successfully loaded.")
             elif status == "RESET":
-                self.add_log("FEHLER: Config defekt & kein Backup. Einstellungen zurückgesetzt.")
+                self.add_log("ERROR: Config corrupt & no backup. Settings reset.")
                 QMessageBox.critical(self.main_hub, "Config Reset",
-                                        "Deine Konfiguration war unlesbar und kein Backup vorhanden.\nEinstellungen wurden zurückgesetzt.")
+                                        "Your configuration was unreadable and no backup present.\nSettings were reset.")
             else:
-                self.add_log("SYS: Konfiguration erfolgreich geladen.")
+                self.add_log("SYS: Configuration successfully loaded.")
 
-        # 7. ANZEIGEN
+        # 7. SHOW
         self.main_hub.show()
 
-        # 8. HINTERGRUND-THREADS
+        # 8. BACKGROUND THREADS
         threading.Thread(target=self.cache_worker, daemon=True).start()
-        print("SYS: Cache Worker Thread gestartet.")
+        print("SYS: Cache Worker Thread started.")
 
         self.census = CensusWorker(self, self.s_id)
         self.census.start()
@@ -371,7 +372,7 @@ class DiorClientGUI:
         self.stats_timer.timeout.connect(self.update_live_graph)
         self.stats_timer.start(1000)
 
-        # Session Startzeit
+        # Session starting time
         self.session_start_time = time.time()
         self.last_graph_point_time = time.time()
 
@@ -383,7 +384,7 @@ class DiorClientGUI:
         self.twitch_thread = None
 
         # 9. CHECK VOICE MACRO PERMISSIONS (LINUX)
-        # Wenn Voice Macros aktiv sind, triggern wir einmal 'xdotool', damit der Permission Popup kommt.
+        # If Voice Macros are active, trigger 'xdotool' once for the Permission Popup.
         if not sys.platform.startswith("win"):
             v_active = self.config.get("auto_voice", {}).get("active", True)
             if v_active and XDO_TOOL:
@@ -438,7 +439,7 @@ class DiorClientGUI:
         self.add_log(f"SYS: Assets loaded (Images: {len(images)}, Sounds: {len(sounds)})")
 
     def _linux_permission_check(self):
-        """Simuliert einen harmlosen Keypress, um Permissions anzufordern."""
+        """Simulates a harmless keypress to request permissions."""
         try:
             # Shift key press/release (harmless)
             subprocess.run([XDO_TOOL, "key", "Shift_L"], check=False)
@@ -446,7 +447,7 @@ class DiorClientGUI:
             print(f"Permission Check Fail: {e}")
 
     def save_global_event_duration(self):
-        """Speichert die globale Event-Dauer."""
+        """Saves the global event duration."""
         try:
             val = int(self.ovl_config_win.ent_global_duration.text())
         except ValueError:
@@ -455,13 +456,13 @@ class DiorClientGUI:
 
         self.config["event_global_duration"] = val
         self.save_config()
-        self.add_log(f"SYS: Globale Event-Dauer auf {val}ms gesetzt.")
+        self.add_log(f"SYS: Global event duration set to {val}ms.")
 
     def toggle_killfeed_visibility(self):
-        """Schaltet den Killfeed an/aus."""
+        """Toggles the killfeed on/off."""
         ui = self.ovl_config_win
 
-        # 1. Config holen & toggeln
+        # 1. Get config & toggle
         if "killfeed" not in self.config: self.config["killfeed"] = {}
         current_state = self.config["killfeed"].get("active", True)
         new_state = not current_state
@@ -469,7 +470,7 @@ class DiorClientGUI:
         self.config["killfeed"]["active"] = new_state
         self.save_config()
 
-        # 2. Button Optik
+        # 2. Button Visuals
         if new_state:
             ui.btn_toggle_feed.setText("KILLFEED: ON")
             ui.btn_toggle_feed.setStyleSheet(
@@ -485,7 +486,7 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
 
-            # Sofort leeren/verstecken wenn ausgeschaltet
+            # Clear/Hide immediately when turned off
             if self.overlay_win:
                 self.overlay_win.feed_label.hide()
                 self.overlay_win.feed_label.clear()
@@ -494,7 +495,7 @@ class DiorClientGUI:
         self.add_log(f"UI: Killfeed {state_str}")
 
     def toggle_voice_macros(self, checked):
-        """Schaltet Voice Macros global an/aus."""
+        """Toggles Voice Macros globally on/off."""
         ui = self.ovl_config_win
 
         if "auto_voice" not in self.config: self.config["auto_voice"] = {}
@@ -518,7 +519,7 @@ class DiorClientGUI:
 
 
     def toggle_stats_visibility(self):
-        """Schaltet das Stats-Widget an/aus."""
+        """Toggles the Stats widget on/off."""
         ui = self.ovl_config_win
 
         if "stats_widget" not in self.config: self.config["stats_widget"] = {}
@@ -527,7 +528,7 @@ class DiorClientGUI:
         self.config["stats_widget"]["active"] = new_state
         self.save_config()
 
-        # Button Optik
+        # Button Visuals
         if new_state:
             ui.btn_toggle_stats.setText("STATS WIDGET: ON")
             ui.btn_toggle_stats.setStyleSheet(
@@ -543,12 +544,12 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
 
-        # Sofort Refresh
+        # Immediate Refresh
         self.refresh_ingame_overlay()
 
 
     def update_db_count_cache(self):
-        """Liest die Anzahl der einzigartigen Spieler aus der DB."""
+        """Reads the number of unique players from the DB."""
         try:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
@@ -559,28 +560,28 @@ class DiorClientGUI:
             print(f"DB Count Error: {e}")
 
     def update_stats_position_safe(self):
-        """Berechnet die Position des Stats-Widgets sicher und konsistent."""
+        """Calculates the position of the Stats widget safely and consistently."""
         if not self.overlay_win: return
         
-        # Guard: Wenn wir gerade ziehen, darf der Loop die Position NICHT überschreiben!
+        # Guard: If we are currently dragging, the loop MUST NOT overwrite the position!
         if getattr(self.overlay_win, "dragging_widget", None) == "stats":
             return
 
-        # 1. Config laden
+        # 1. Load config
         cfg = self.config.get("stats_widget", {})
 
-        # Gespeicherte Koordinaten (Linke obere Ecke des Hintergrunds)
+        # Saved coordinates (Top left corner of the background)
         x_conf = cfg.get("x", 50)
         y_conf = cfg.get("y", 500)
 
-        # Umrechnen auf aktuelle Bildschirm-Skalierung
+        # Recalculate to current screen scaling
         bg_x = self.overlay_win.s(x_conf)
         bg_y = self.overlay_win.s(y_conf)
 
-        # 2. Hintergrund bewegen
+        # 2. Move background
         self.overlay_win.safe_move(self.overlay_win.stats_bg_label, bg_x, bg_y)
 
-        # 3. Text Position relativ dazu berechnen
+        # 3. Calculate text position relative to it
 
         # Größen erzwingen (Wichtig!)
         self.overlay_win.stats_bg_label.adjustSize()
@@ -589,46 +590,46 @@ class DiorClientGUI:
         bg_w = self.overlay_win.stats_bg_label.width()
         bg_h = self.overlay_win.stats_bg_label.height()
 
-        # Fallback Größen (falls Bild noch lädt oder fehlt)
-        # Dies ist wichtig für den "leeren" Edit-Modus
+        # Fallback sizes (if image is still loading or missing)
+        # This is important for "empty" Edit Mode
         if bg_w < 10: bg_w = int(450 * self.overlay_win.ui_scale)
         if bg_h < 10: bg_h = int(60 * self.overlay_win.ui_scale)
 
         txt_w = self.overlay_win.stats_text_label.width()
         txt_h = self.overlay_win.stats_text_label.height()
 
-        # Offsets aus Config (Slider)
+        # Offsets from Config (Sliders)
         tx_offset = self.overlay_win.s(cfg.get("tx", 0))
         ty_offset = self.overlay_win.s(cfg.get("ty", 0))
 
         # --- MATHE FIX ---
 
-        # 1. Mitte des Hintergrunds finden (Absolute Bildschirmkoordinaten)
+        # 1. Find center of background (Absolute screen coordinates)
         center_bg_x = bg_x + (bg_w / 2)
         center_bg_y = bg_y + (bg_h / 2)
 
-        # 2. Text-Startpunkt berechnen:
-        # Mitte - halbe Textbreite + Benutzer-Offset
+        # 2. Calculate text start point:
+        # Center - half text width + user offset
         final_text_x = center_bg_x - (txt_w / 2) + tx_offset
         final_text_y = center_bg_y - (txt_h / 2) + ty_offset
 
         self.overlay_win.safe_move(self.overlay_win.stats_text_label, int(final_text_x), int(final_text_y))
 
-        # Damit das Text-Label immer VOR dem Hintergrund liegt
+        # Ensure text label is always IN FRONT of the background
         self.overlay_win.stats_text_label.raise_()
 
     def update_main_config_from_settings(self, data):
-        """Empfängt die bereinigten Daten aus settings_qt."""
+        """Receives cleaned data from settings_qt."""
 
-        # Audio Volume speichern
+        # Save Audio Volume
         if "audio_volume" in data:
             vol = data["audio_volume"]
             self.config["audio_volume"] = vol
 
-            # OPTIONAL: Live-Update an Overlay senden (falls Sound gerade spielt)
-            # Das ist aber meist nicht nötig, da das Overlay sich den Wert eh holt.
+            # OPTIONAL: Send live update to overlay (if sound is currently playing)
+            # This is usually not necessary as the overlay gets the value anyway.
 
-        # Audio Device speichern
+        # Save Audio Device
         if "audio_device" in data:
             dev = data["audio_device"]
             self.config["audio_device"] = dev
@@ -638,20 +639,20 @@ class DiorClientGUI:
                 if hasattr(self.overlay_win, 'set_audio_device'):
                     self.overlay_win.set_audio_device(dev)
 
-        # Speichern auf die Festplatte
+        # Save to disk
         self.save_config()
-        self.add_log(f"SYS: Globale Einstellungen gespeichert (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')})")
+        self.add_log(f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')})")
 
     def clean_path(self, path_str):
-        """Entfernt 'No file selected' und leere Pfade."""
+        """Removes 'No file selected' and empty paths."""
         if not path_str or "No file selected" in path_str:
             return ""
-        return os.path.basename(path_str)  # Nur Dateiname speichern
+        return os.path.basename(path_str)  # Save only filename
 
     def handle_game_status_change(self, is_running):
-        """Dieser Slot läuft garantiert im Main-Thread!"""
-        # Wir setzen den Status sofort hier im Main-Thread,
-        # damit alle UI-Funktionen (wie refresh_ingame_overlay) denselben Stand haben.
+        """This slot is guaranteed to run in the Main thread!"""
+        # We set the status immediately here in the Main thread,
+        # so that all UI functions (like refresh_ingame_overlay) have the same state.
         self.ps2_running = is_running
 
         if is_running:
@@ -659,29 +660,29 @@ class DiorClientGUI:
         else:
             self.on_game_stopped()
 
-    # --- HILFSMETHODE FÜR DEN CONTROLLER ---
+    # --- HELPER METHOD FOR THE CONTROLLER ---
     def switch_to_tab(self, index):
-        """Wechselt den Tab und aktualisiert die Seitenleiste visuell."""
+        """Changes the tab and updates the sidebar visually."""
         self.nav_list.setCurrentRow(index)
 
     def on_game_started(self):
-        """Wird aufgerufen, wenn PS2 gestartet wurde (läuft im Main-Thread)."""
-        self.add_log("MONITOR: PlanetSide 2 erkannt. Prüfe Einstellungen...")
+        """Called when PS2 was started (runs in the Main thread)."""
+        self.add_log("MONITOR: PlanetSide 2 detected. Checking settings...")
 
         master_active = self.config.get("overlay_master_active", True)
 
         if master_active:
-            self.add_log("MONITOR: Master-Switch ist AN -> Starte Overlay.")
+            self.add_log("MONITOR: Master Switch is ON -> Starting Overlay.")
 
             if self.overlay_win:
-                # Fenster zeigen
+                # Show window
                 self.overlay_win.showFullScreen()
                 self.overlay_win.raise_()
 
                 # Crosshair
                 self.update_crosshair_from_qt()
 
-                # Killfeed (leeren)
+                # Killfeed (clear)
                 if hasattr(self.overlay_win, 'feed_label'):
                     self.overlay_win.feed_label.show()
                     self.overlay_win.feed_label.setText("")
@@ -706,20 +707,20 @@ class DiorClientGUI:
         self.stop_overlay_logic()
 
         if self.overlay_win:
-            # Nur verstecken, wenn wir nicht gerade editieren
+            # Only hide if we are not currently editing
             if not getattr(self, "is_hud_editing", False):
-                # 1. Crosshair weg
+                # 1. Crosshair gone
                 self.overlay_win.crosshair_label.hide()
 
-                # 2. Stats weg (NEU)
+                # 2. Stats gone (NEW)
                 self.overlay_win.stats_bg_label.hide()
                 self.overlay_win.stats_text_label.hide()
 
-                # 3. Killfeed weg (NEU)
+                # 3. Killfeed gone (NEW)
                 self.overlay_win.feed_label.hide()
                 self.overlay_win.feed_label.clear()
 
-                # 4. Streak weg
+                # 4. Streak gone
                 self.overlay_win.streak_bg_label.hide()
                 self.overlay_win.streak_text_label.hide()
                 for k in self.overlay_win.knife_labels:
@@ -728,30 +729,30 @@ class DiorClientGUI:
                 active = self.config.get("twitch", {}).get("active", True)
                 self.overlay_win.update_twitch_visibility(active)
 
-                # Optional: Overlay ganz ausblenden (spart Ressourcen)
+                # Optional: Hide overlay completely (saves resources)
                 # self.overlay_win.hide()
 
     def is_game_focused(self):
-        """Prüft, ob das aktive Fenster PlanetSide 2 ist (robust gegen Schreibweisen)."""
+        """Checks if the active window is PlanetSide 2 (robust against variants)."""
         if IS_WINDOWS:
             try:
-                # 1. Handle des aktuellen Vordergrund-Fensters holen
+                # 1. Get handle of current foreground window
                 hwnd = ctypes.windll.user32.GetForegroundWindow()
 
-                # 2. Länge des Titels ermitteln
+                # 2. Determine title length
                 length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
                 if length == 0:
                     return False
 
-                # 3. Puffer erstellen und Titel auslesen
+                # 3. Create buffer and read title
                 buff = ctypes.create_unicode_buffer(length + 1)
                 ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
 
-                # 4. Titel normalisieren (alles kleinschreiben)
+                # 4. Normalize title (lowercase everything)
                 window_title = buff.value.lower()
 
-                # Wir suchen nach "planetside", das deckt:
-                # "PlanetSide 2", "Planetside2", "Planetside 2 Test" ab.
+                # We search for "planetside", this covers:
+                # "PlanetSide 2", "Planetside2", "PlanetSide 2 Test".
                 if "planetside2" in window_title:
                     return True
 
@@ -816,7 +817,7 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
 
-        # Sofortige Aktualisierung im Overlay
+        # Immediate update in overlay
         if self.overlay_win:
             active = self.config["twitch"].get("active", True)
             self.overlay_win.update_twitch_visibility(active)
@@ -842,53 +843,53 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
 
-        # Sofort an den Worker weitergeben
+        # Pass to worker immediately
         if hasattr(self, 'twitch_worker') and self.twitch_worker:
             self.twitch_worker.ignore_special = checked
 
     # --- CROSSHAIR LOGIK (NEU) ---
     def browse_crosshair_qt(self):
-        """Datei auswählen, kopieren und Textfeld setzen."""
+        """Select file, copy and set text field."""
         from PyQt6.QtWidgets import QFileDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self.main_hub, "Wähle Crosshair Bild", self.BASE_DIR, "Images (*.png *.jpg *.jpeg)"
+            self.main_hub, "Select Crosshair Image", self.BASE_DIR, "Images (*.png *.jpg *.jpeg)"
         )
 
         if file_path:
             filename = os.path.basename(file_path)
             target_path = get_asset_path(filename)
 
-            # In Assets kopieren, falls nötig
+            # Copy to Assets if necessary
             if os.path.abspath(file_path) != os.path.abspath(target_path):
                 try:
                     shutil.copy2(file_path, target_path)
                 except Exception as e:
                     print(f"Copy Error: {e}")
 
-            # WICHTIG: Signale kurz blockieren, damit update_crosshair_from_qt
-            # nicht doppelt aufgerufen wird (einmal durch setText, einmal manuell)
+            # IMPORTANT: Block signals briefly, so update_crosshair_from_qt
+            # is not called twice (once by setText, once manually)
             self.ovl_config_win.cross_path.blockSignals(True)
             self.ovl_config_win.cross_path.setText(filename)
             self.ovl_config_win.cross_path.blockSignals(False)
 
-            # Jetzt einmal sauber speichern
+            # Now save properly once
             self.update_crosshair_from_qt()
 
     def update_crosshair_from_qt(self):
-        """Liest UI-Werte, bereinigt den Pfad und speichert."""
+        """Reads UI values, cleans the path and saves."""
         ui = self.ovl_config_win
 
-        # 1. Rohdaten aus UI
+        # 1. Raw data from UI
         is_active = ui.check_cross.isChecked()
         raw_text = ui.cross_path.text().strip()
         shadow_enabled = ui.btn_toggle_cross_shadow.isChecked()
 
-        # 2. Bereinigen: Wir wollen nur den Dateinamen speichern!
-        # Falls der User einen vollen Pfad reinkopiert hat, schneiden wir ihn ab.
+        # 2. Cleaning: We only want to save the filename!
+        # If the user copied a full path, we cut it off.
         filename = os.path.basename(raw_text)
 
-        # Leerer Pfad -> Standard
+        # Empty path -> Standard
         if not filename:
             filename = "crosshair.png"
 
@@ -897,15 +898,15 @@ class DiorClientGUI:
             self.config["crosshair"] = {}
 
         self.config["crosshair"]["active"] = is_active
-        self.config["crosshair"]["file"] = filename  # Nur der Name!
+        self.config["crosshair"]["file"] = filename  # Only the name!
         self.config["crosshair"]["shadow"] = shadow_enabled
         self.update_crosshair_shadow_button(shadow_enabled)
 
-        # Speichern
+        # Save
         self.save_config()
         # print(f"DEBUG: Crosshair saved -> Active: {is_active}, File: {filename}")
 
-        # 4. Live Update (Hier brauchen wir den vollen Pfad für Qt)
+        # 4. Live Update (Here we need the full path for Qt)
         if self.overlay_win:
             full_path = get_asset_path(filename)
 
@@ -932,34 +933,34 @@ class DiorClientGUI:
             )
 
     def center_crosshair_qt(self):
-        """Zentriert das Crosshair neu auf dem aktuellen Bildschirm."""
-        # 1. Logik ausführen
-        self.center_crosshair()  # Diese Methode existiert bereits in Teil 3 deines Codes
+        """Re-centers the crosshair on the current screen."""
+        # 1. Execute logic
+        self.center_crosshair()  # This method already exists in part 3 of your code
 
         # 2. Feedback
-        self.add_log("CROSSHAIR: Auf Bildschirmmitte zurückgesetzt.")
+        self.add_log("CROSSHAIR: Reset to screen center.")
 
     def apply_event_layout_to_all(self):
-        """Kopiert Position & Größe des aktuellen Events auf ALLE anderen."""
+        """Copies Position & Size of current Event to ALL others."""
         from PyQt6.QtWidgets import QMessageBox
 
-        # Welches Event ist gerade offen?
+        # Which event is currently open?
         ui = self.ovl_config_win
         source_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
 
         if source_name == "NONE" or not source_name:
             return
 
-        # Sicherheitsabfrage
-        reply = QMessageBox.question(ui, "Layout übertragen?",
-                                     f"Soll das Layout von '{source_name}' (Position & Größe) auf ALLE anderen Events übertragen werden?",
+        # Security prompt
+        reply = QMessageBox.question(ui, "Apply Layout?",
+                                     f"Should the layout of '{source_name}' (Position & Size) be applied to ALL other events?",
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
 
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Werte ermitteln
-        # Entweder vom Overlay (falls Edit Mode an) oder aus Config
+        # Determine values
+        # Either from overlay (if Edit Mode is on) or from config
         if self.overlay_win and self.overlay_win.event_preview_label.isVisible():
             pos = self.overlay_win.event_preview_label.pos()
             new_x = int(pos.x() / self.overlay_win.ui_scale)
@@ -971,7 +972,7 @@ class DiorClientGUI:
 
         new_scale = ui.slider_evt_scale.value() / 100.0
 
-        # Auf alle anwenden
+        # Apply to all
         count = 0
         if "events" not in self.config: self.config["events"] = {}
 
@@ -979,15 +980,15 @@ class DiorClientGUI:
             if evt_key == source_name: continue
             if evt_key.lower() == "hitmarker": continue
 
-            # Nur Layout ändern, Bilder/Sounds behalten!
+            # Only change layout, keep images/sounds!
             self.config["events"][evt_key]["x"] = new_x
             self.config["events"][evt_key]["y"] = new_y
             self.config["events"][evt_key]["scale"] = new_scale
             count += 1
 
         self.save_config()
-        self.add_log(f"SYS: Layout auf {count} Events übertragen.")
-        QMessageBox.information(ui, "Erfolg", f"Layout erfolgreich übertragen!")
+        self.add_log(f"SYS: Layout applied to {count} Events.")
+        QMessageBox.information(ui, "Success", f"Layout successfully applied!")
 
     def process_search_results_qt(self, stats, weapons):
         """Wird im Haupt-Thread aufgerufen, wenn der Worker fertig ist."""
@@ -1003,14 +1004,14 @@ class DiorClientGUI:
             self.add_log(f"RENDER ERROR: {e}")
 
     def toggle_master_switch_qt(self, checked):
-        """Speichert den Master-Switch Status."""
+        """Saves the Master Switch status."""
         self.config["overlay_master_active"] = checked
         self.save_config()
 
-        state = "AKTIVIERT" if checked else "DEAKTIVIERT"
-        self.add_log(f"SYS: Master-Switch {state}")
+        state = "ENABLED" if checked else "DISABLED"
+        self.add_log(f"SYS: Master Switch {state}")
 
-        # Sofort reagieren, falls Spiel schon läuft
+        # React immediately if game is already running
         if getattr(self, 'ps2_running', False):
             if checked:
                 self.on_game_started()
@@ -1043,7 +1044,7 @@ class DiorClientGUI:
         self.refresh_ingame_overlay()
 
     def connect_all_qt_signals(self):
-        """Zentrales Management aller PyQt6 Signale (Strukturiert & Clean)."""
+        """Central management of all PyQt6 signals (Structured & Clean)."""
         print("SYS: Connecting GUI signals...")
 
         # Shortcuts
@@ -1052,7 +1053,7 @@ class DiorClientGUI:
         dash = self.dash_controller
 
         # ---------------------------------------------------------
-        # 1. NAVIGATION & HAUPTFENSTER
+        # 1. NAVIGATION & MAIN WINDOW
         # ---------------------------------------------------------
         if hasattr(dash, 'btn_play'):
             self.safe_connect(dash.btn_play.clicked, lambda: hub.switch_to_tab(1))
@@ -1087,12 +1088,12 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         # 3. OVERLAY TAB: EVENTS
         # ---------------------------------------------------------
-        # Event Auswahl im Grid
+        # Event Selection in Grid
         ui.signals.setting_changed.connect(self.handle_overlay_setting_changes)
         if hasattr(ui, 'ent_global_duration'):
             ui.ent_global_duration.editingFinished.connect(self.save_global_event_duration)
 
-        # Live-Preview bei Texteingabe
+        # Live preview on text input
         ui.combo_evt_img.currentTextChanged.connect(lambda text: ui.update_preview_image(get_asset_path(text)))
 
         # Browse Buttons
@@ -1121,23 +1122,23 @@ class DiorClientGUI:
         if hasattr(ui, 'btn_queue_toggle'):
             self.safe_connect(ui.btn_queue_toggle.clicked, lambda: self.toggle_event_queue_qt())
 
-        # NEU: Play Duplicate Checkbox soll speichern
+        # NEW: Play Duplicate Checkbox should save
         if hasattr(ui, 'check_play_duplicate'):
-             # Wir nutzen 'clicked' statt toggled, um sicherzugehen oder toggled. 
-             # Da save_event_config_from_qt alle Daten liest, reicht das.
+             # We use 'clicked' instead of toggled to be safe, or toggled. 
+             # Since save_event_config_from_qt reads all data, that's enough.
              self.safe_connect(ui.check_play_duplicate.toggled, self.save_event_config_from_qt)
 
         # ---------------------------------------------------------
         # 4. OVERLAY TAB: KILLSTREAK
         # ---------------------------------------------------------
-        # Hauptbild Browse
+        # Main Image Browse
         try:
             ui.btn_browse_streak_img.clicked.disconnect()
         except:
             pass
         ui.btn_browse_streak_img.clicked.connect(lambda: self.browse_file_qt(ui.ent_streak_img, "png"))
 
-        # Messer Icons Browse (Dynamisch)
+        # Knife Icons Browse (Dynamic)
         for faction, btn in ui.knife_browse_btns.items():
             target_field = ui.knife_inputs[faction]
             try:
@@ -1146,14 +1147,14 @@ class DiorClientGUI:
                 pass
             btn.clicked.connect(lambda _, tf=target_field: self.browse_file_qt(tf, "png"))
 
-        # Auto-Save bei Checkboxen & Slidern
+        # Auto-Save for Checkboxes & Sliders
         self.safe_connect(ui.check_streak_master.toggled, self.save_streak_settings_from_qt)
         self.safe_connect(ui.check_streak_anim.toggled, self.save_streak_settings_from_qt)
 
         for slider in [ui.slider_tx, ui.slider_ty, ui.slider_scale]:
             self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
 
-        # Design (Farbe/Größe)
+        # Design (Color/Size)
         self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
         self.safe_connect(ui.slider_font_size.valueChanged, self.save_streak_settings_from_qt)
 
@@ -1172,7 +1173,7 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         # 5. OVERLAY TAB: CROSSHAIR
         # ---------------------------------------------------------
-        # Checkbox & Textfeld Änderung -> Sofort speichern
+        # Checkbox & TextField change -> Save immediately
         self.safe_connect(ui.check_cross.toggled, self.update_crosshair_from_qt)
         self.safe_connect(ui.cross_path.textChanged, self.update_crosshair_from_qt)
         self.safe_connect(ui.btn_toggle_cross_shadow.toggled, self.update_crosshair_from_qt)
@@ -1201,7 +1202,7 @@ class DiorClientGUI:
         if hasattr(ui, 'btn_stats_value_color'):
             self.safe_connect(ui.btn_stats_value_color.clicked, lambda: self.pick_stats_color("values"))
 
-        # Browse Buttons für Stats
+        # Browse Buttons for Stats
         try:
             ui.btn_browse_stats_bg.clicked.disconnect()
         except:
@@ -1274,7 +1275,7 @@ class DiorClientGUI:
             self.safe_connect(combo.currentIndexChanged, self.save_voice_config_from_qt)
 
         # ---------------------------------------------------------
-        # 8. SUB-FENSTER (CHARACTERS, LAUNCHER, SETTINGS)
+        # 8. SUB-WINDOWS (CHARACTERS, LAUNCHER, SETTINGS)
         # ---------------------------------------------------------
         # Character Search
         self.safe_connect(self.char_win.signals.search_requested, self.run_search)
@@ -1283,17 +1284,17 @@ class DiorClientGUI:
         # Launcher
         self.safe_connect(self.launcher_win.signals.launch_requested, self.execute_launch)
 
-        # Settings (HIER WAREN DIE ÄNDERUNGEN)
+        # Settings (CHANGES WERE HERE)
         self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
         self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
 
-        # WICHTIG: Das Save-Signal verbinden!
+        # IMPORTANT: Connect the save signal!
         self.safe_connect(self.settings_win.signals.save_requested, self.update_main_config_from_settings)
 
         # ---------------------------------------------------------
         # 9. Twitch chat
         # ---------------------------------------------------------
-        # Button Toggle (AN/AUS)
+        # Button Toggle (ON/OFF)
         self.safe_connect(ui.btn_toggle_twitch.toggled, self.toggle_twitch_active)
 
         # Button Connect
@@ -1314,7 +1315,7 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_twitch_ignore_special.toggled, self.toggle_twitch_ignore_special)
 
         # MOVE UI Button
-        # Wir machen daraus einen Toggle: Einmal klicken = Sichtbar machen, nochmal = Normal
+        # We make this a toggle: One click = make visible, another = normal
         self.safe_connect(ui.btn_edit_twitch.clicked, self.toggle_hud_edit_mode)
         if self.overlay_win:
             self.overlay_win.signals.item_moved.connect(self.on_overlay_item_moved)
@@ -1328,7 +1329,7 @@ class DiorClientGUI:
     def handle_overlay_setting_changes(self, key, val):
         """Dispatches dynamic setting changes from the Overlay Config Window."""
         if key == "event_selection":
-            self.on_event_selected_in_qt(val)
+            self.on_event_clicked(val)
         
         elif key == "obs_service_toggle":
             obs_cfg = self.config.get("obs_service", {})
@@ -1355,17 +1356,17 @@ class DiorClientGUI:
             self.add_log(f"SYS: OBS Ports updated: Http:{val['port']} WS:{val['ws_port']}.")
 
     def on_overlay_item_moved(self, item_name, x, y):
-        """Wird aufgerufen, wenn im Overlay etwas mit der Maus verschoben wurde."""
+        """Called when an item in the overlay was moved with the mouse."""
         if item_name == "twitch":
-            # Slider aktualisieren, ohne das Overlay erneut zu updaten (Loop verhindern)
+            # Update slider without updating the overlay again (prevent loop)
             ui = self.ovl_config_win
             ui.slider_twitch_x.blockSignals(True)
             ui.slider_twitch_y.blockSignals(True)
 
-            # Rückrechnung der Skalierung (falls du s() benutzt hast)
-            # Da wir im Overlay absolute Pixel bewegen, setzen wir hier die Rohwerte
-            # Achtung: Wenn dein Overlay skaliert ist, musst du hier durch den Faktor teilen!
-            # Nehmen wir an 1:1 Mapping für jetzt:
+            # Back-calculation of scaling (if you used s())
+            # Since we move absolute pixels in the overlay, we set raw values here.
+            # Caution: If your overlay is scaled, you must divide by the factor here!
+            # Let's assume 1:1 mapping for now:
             ui.slider_twitch_x.setValue(x)
             ui.slider_twitch_y.setValue(y)
 
@@ -1378,12 +1379,12 @@ class DiorClientGUI:
             self.add_log("ERR: Overlay not active.")
             return
 
-        # Wir nutzen direkt die add_twitch_message Methode des Overlays.
-        # Das stellt sicher, dass Timer, Sichtbarkeit und Styling identisch sind.
+        # We directly use the overlay's add_twitch_message method.
+        # This ensures that timer, visibility, and styling are identical.
         test_user = "SystemTest"
         test_msg = "This is a test message to adjust the chat position, size, and font settings."
 
-        # Aufruf der bestehenden Methode im Overlay
+        # Calling the existing method in the overlay
         self.overlay_win.add_twitch_message(test_user, test_msg, color="#ffaa00", is_test=True)
 
         self.add_log("TWITCH: Standard test message sent to overlay.")
@@ -1407,7 +1408,7 @@ class DiorClientGUI:
             )
             if self.overlay_win: self.overlay_win.chat_container.hide()
 
-        # Optional: Config speichern
+        # Optional: Save Config
         if "twitch" not in self.config: self.config["twitch"] = {}
         self.config["twitch"]["active"] = active
         self.save_config()
@@ -1416,40 +1417,40 @@ class DiorClientGUI:
         ui = self.ovl_config_win
         channel = ui.ent_twitch_channel.text().strip()
 
-        # --- IGNORE LISTE VORBEREITEN ---
-        # Wir lesen das Feld aus und machen eine saubere Liste daraus
+        # --- PREPARE IGNORE LIST ---
+        # We read the field and make a clean list out of it
         raw_ignore = ui.ent_twitch_ignore.text().strip().lower()
         ignore_list = [n.strip() for n in raw_ignore.split(",") if n.strip()]
 
         if not channel:
-            self.add_log("TWITCH: Kein Kanal angegeben.")
+            self.add_log("TWITCH: No channel specified.")
             return
 
-        # 1. Alten Worker sauber stoppen
+        # 1. Gracefully stop old worker
         if hasattr(self, 'twitch_worker') and self.twitch_worker:
             self.twitch_worker.stop()
 
-        self.add_log(f"TWITCH: Verbinde zu {channel}...")
+        self.add_log(f"TWITCH: Connecting to {channel}...")
         ui.btn_connect_twitch.setEnabled(False)
 
-        # 2. Den NEUEN Worker erstellen
-        # WICHTIG: Die ignore_list wird hier als Argument übergeben!
+        # 2. Create the NEW worker
+        # IMPORTANT: The ignore_list is passed as an argument here!
         self.twitch_worker = TwitchWorker(channel, ignore_list=ignore_list, ignore_special=ui.btn_twitch_ignore_special.isChecked())
 
-        # 3. Signale verbinden (Im Haupt-Thread!)
-        # Wir nutzen die Methode on_new_twitch_msg, die wir vorhin korrigiert haben
+        # 3. Connect signals (In Main thread!)
+        # We use the on_new_twitch_msg method we corrected earlier
         self.twitch_worker.new_message.connect(
             self.on_new_twitch_msg,
             Qt.ConnectionType.QueuedConnection
         )
 
-        # Status-Updates (on_twitch_status kümmert sich um Logs und Button-Reset)
+        # Status updates (on_twitch_status takes care of logs and button reset)
         self.twitch_worker.status_changed.connect(
             self.on_twitch_status,
             Qt.ConnectionType.QueuedConnection
         )
 
-        # 4. Den Python-Thread starten
+        # 4. Start the Python thread
         self.twitch_thread = threading.Thread(
             target=self.twitch_worker.run,
             daemon=True
@@ -1466,7 +1467,7 @@ class DiorClientGUI:
             self.ovl_config_win.btn_connect_twitch.setEnabled(True)
 
     def update_twitch_visuals(self):
-        """Sendet die Slider-Werte an das Overlay"""
+        """Sends the slider values to the overlay"""
         if not self.overlay_win: return
         ui = self.ovl_config_win
 
@@ -1477,7 +1478,7 @@ class DiorClientGUI:
         op = ui.slider_twitch_opacity.value()
         fs = int(ui.combo_twitch_font.currentText())
 
-        # Skalierung beachten!
+        # Note scaling!
         x_scaled = self.overlay_win.s(x)
         y_scaled = self.overlay_win.s(y)
         w_scaled = self.overlay_win.s(w)
@@ -1488,12 +1489,12 @@ class DiorClientGUI:
     def save_twitch_config(self):
         ui = self.ovl_config_win
 
-        # Daten aus dem UI sammeln
+        # Collect data from UI
         data = {
             "active": ui.btn_toggle_twitch.isChecked(),
             "channel": ui.ent_twitch_channel.text().strip(),
             "ignore_list": ui.ent_twitch_ignore.text().strip(),
-            "ignore_special": ui.btn_twitch_ignore_special.isChecked(), # NEU
+            "ignore_special": ui.btn_twitch_ignore_special.isChecked(), # NEW
             "always_on": ui.btn_twitch_always.isChecked(),
             "x": ui.slider_twitch_x.value(),
             "y": ui.slider_twitch_y.value(),
@@ -1501,55 +1502,55 @@ class DiorClientGUI:
             "h": ui.slider_twitch_h.value(),
             "opacity": ui.slider_twitch_opacity.value(),
             "font_size": int(ui.combo_twitch_font.currentText()),
-            "hold_time": ui.spin_twitch_hold.value()  # NEU: Hold Time speichern
+            "hold_time": ui.spin_twitch_hold.value()  # NEW: Save Hold Time
         }
 
-        # In der globalen Config speichern
+        # Save in global config
         self.config["twitch"] = data
         self.save_config()
 
-        # --- SOFORTIGE AKTUALISIERUNG ---
-        # 1. Hold Time im Overlay setzen
+        # --- IMMEDIATE UPDATE ---
+        # 1. Set Hold Time in overlay
         if hasattr(self.overlay_win, 'set_chat_hold_time'):
             self.overlay_win.set_chat_hold_time(data["hold_time"])
             
-        # 2. Falls ein Worker läuft, diesen sofort updaten
+        # 2. If a worker is running, update it immediately
         if hasattr(self, 'twitch_worker') and self.twitch_worker:
             self.twitch_worker.ignore_special = data["ignore_special"]
 
-        # 3. Visuelle Darstellung (Position, Opacity, Font) aktualisieren
-        # Das triggert die neue update_twitch_style Methode im Overlay
+        # 3. Update visual representation (Position, Opacity, Font)
+        # This triggers the new update_twitch_style method in the overlay
         self.update_twitch_visuals()
         self.add_log("TWITCH: Settings saved.")
 
     def browse_ps2_folder(self):
-        """Wählt den PS2 Ordner und speichert ihn sofort permanent."""
-        path = QFileDialog.getExistingDirectory(self.main_hub, "PlanetSide 2 Installationsordner wählen")
+        """Selects the PS2 folder and saves it immediately permanently."""
+        path = QFileDialog.getExistingDirectory(self.main_hub, "Select PlanetSide 2 Installation Folder")
         if path:
             self.ps2_dir = path
 
-            # WICHTIG: In das Config-Dictionary schreiben!
+            # IMPORTANT: Write into the Config dictionary!
             self.config["ps2_path"] = path
 
-            # Update im Settings-Fenster (visuelles Feedback)
+            # Update in Settings window (visual feedback)
             if hasattr(self, 'settings_win'):
                 self.settings_win.lbl_ps2_path.setText(path)
 
-            self.save_config()  # Korrekte Speicher-Funktion aufrufen
+            self.save_config()  # Call correct save function
             self.add_log(f"SYS: PS2 Path set and saved to {path}")
 
     def add_char_qt(self):
-        """Startet den Thread."""
+        """Starts the thread."""
         ui = self.ovl_config_win
         name = ui.char_input.text().strip()
 
         if not name:
-            self.add_log("INFO: Bitte einen Namen eingeben.")
+            self.add_log("INFO: Please enter a name.")
             return
 
-        self.add_log(f"SYS: Suche '{name}' in API...")
+        self.add_log(f"SYS: Searching '{name}' in API...")
 
-        # UI sperren
+        # Lock UI
         ui.btn_add_char.setEnabled(False)
         ui.btn_add_char.setText("...")
         ui.char_input.setEnabled(False)
@@ -1558,7 +1559,7 @@ class DiorClientGUI:
         threading.Thread(target=self._add_char_worker, args=(name,), daemon=True).start()
 
     def _add_char_worker(self, name):
-        """Hintergrund-Thread: Sucht Charakter und speichert ihn via DB-Handler."""
+        """Background thread: Searches for character and saves it via DB-Handler."""
         success = False
         real_name = ""
         error_msg = ""
@@ -1574,53 +1575,53 @@ class DiorClientGUI:
                 real_name = c_list['name']['first']
                 world_id = c_list.get('world_id', '0')
 
-                # --- DB OPERATION (NEU & SAUBER) ---
-                # Wir nutzen die Methode aus dior_db.py
+                # --- DB OPERATION (NEW & CLEAN) ---
+                # We use the method from dior_db.py
                 self.db.save_char_to_db(cid, real_name, world_id)
 
                 # Dictionary Update (RAM)
                 self.char_data[real_name] = cid
                 success = True
             else:
-                error_msg = f"Charakter '{name}' nicht gefunden."
+                error_msg = f"Character '{name}' not found."
 
         except Exception as e:
-            error_msg = f"API Fehler: {e}"
+            error_msg = f"API Error: {e}"
 
         # Signal senden
         self.worker_signals.add_char_finished.emit(success, real_name, error_msg)
 
     def finalize_add_char_slot(self, success, real_name, error_msg):
         """
-        Dieser Slot wird AUTOMATISCH im Haupt-Thread ausgeführt,
-        wenn das Signal empfangen wird.
+        This slot is AUTOMATICALLY executed in the Main thread
+        when the signal is received.
         """
         ui = self.ovl_config_win
 
-        # UI entsperren
+        # Unlock UI
         ui.btn_add_char.setEnabled(True)
         ui.btn_add_char.setText("ADD")
         ui.char_input.setEnabled(True)
         ui.char_input.setFocus()
 
         if success:
-            self.add_log(f"SYS: '{real_name}' hinzugefügt.")
+            self.add_log(f"SYS: '{real_name}' added.")
             ui.char_input.clear()
 
-            # Jetzt muss das Update funktionieren
+            # Now update must work
             self.refresh_char_list_ui(select_name=real_name)
         else:
             self.add_log(f"ERR: {error_msg}")
             ui.char_input.selectAll()
 
     def delete_char_qt(self):
-        """Löscht den aktuell ausgewählten Charakter."""
+        """Deletes the currently selected character."""
         ui = self.ovl_config_win
         name = ui.char_combo.currentText()
 
         if name in self.char_data:
             try:
-                # --- DB OPERATION (NEU) ---
+                # --- DB OPERATION (NEW) ---
                 self.db.remove_my_char(name)
 
                 del self.char_data[name]
@@ -1633,10 +1634,10 @@ class DiorClientGUI:
                 self.add_log(f"ERR: Delete failed: {e}")
 
     def update_active_char(self, name):
-        """Setzt die interne ID basierend auf dem Namen."""
+        """Sets the internal ID based on the name."""
         if not name: return
 
-        # ID aus Dictionary holen
+        # Get ID from dictionary
         cid = self.char_data.get(name, "")
         
         # RESET logic if character actually changed
@@ -1647,9 +1648,9 @@ class DiorClientGUI:
         self.last_tracked_id = cid
         self.current_selected_char_name = name
 
-        self.add_log(f"SYS: Tracking aktiv für: {name}")
+        self.add_log(f"SYS: Tracking active for: {name}")
 
-        # --- OPTIONAL: Server-Switch Logik (falls vorhanden) ---
+        # --- OPTIONAL: Server-Switch logic (if present) ---
         try:
             conn = sqlite3.connect(DB_PATH)
             res = conn.execute("SELECT world_id FROM player_cache WHERE character_id=?", (cid,)).fetchone()
@@ -1657,24 +1658,24 @@ class DiorClientGUI:
 
             if res and res[0]:
                 new_world_id = str(res[0])
-                # Nur wechseln, wenn unterschiedlich
+                # Only switch if different
                 if new_world_id != str(self.current_world_id):
                     s_name = self.get_server_name_by_id(new_world_id)
-                    # Sicherer Aufruf (Server Logik)
+                    # Safe call (Server Logic)
                     self.switch_server(s_name, new_world_id)
         except Exception as e:
             print(f"Server Auto-Switch Error: {e}")
 
     def refresh_char_list_ui(self, select_name=None):
-        """Aktualisiert das Dropdown und setzt den aktiven Charakter."""
+        """Updates the dropdown and sets the active character."""
         if not hasattr(self, 'ovl_config_win'): return
         ui = self.ovl_config_win
 
-        # 1. Signale blockieren
+        # 1. Block signals
         ui.char_combo.blockSignals(True)
         ui.char_combo.clear()
 
-        # 2. Liste neu aufbauen
+        # 2. Rebuild list
         names = sorted(list(self.char_data.keys()))
 
         if not names:
@@ -1700,35 +1701,35 @@ class DiorClientGUI:
             ui.char_combo.setCurrentText(target)
             self.update_active_char(target)
 
-        # 4. Signale wieder freigeben
+        # 4. Release signals again
         ui.char_combo.blockSignals(False)
 
     def pick_streak_color_qt(self):
-        """Öffnet einen Qt-Farbwähler für die Killstreak-Zahl."""
-        # Aktuelle Farbe aus Config holen (als Startwert)
+        """Opens a Qt color picker for the killstreak number."""
+        # Get current color from config (as start value)
         current_hex = self.config.get("streak", {}).get("color", "#ffffff")
         initial = QColor(current_hex)
 
-        # Dialog öffnen
-        color = QColorDialog.getColor(initial, self.main_hub, "Wähle HUD Farbe")
+        # Open dialog
+        color = QColorDialog.getColor(initial, self.main_hub, "Select HUD Color")
 
         if color.isValid():
-            hex_color = color.name()  # Gibt z.B. "#ff0000" zurück
+            hex_color = color.name()  # Returns e.g. "#ff0000"
 
-            # 1. In Config schreiben
+            # 1. Write to config
             if "streak" not in self.config: self.config["streak"] = {}
             self.config["streak"]["color"] = hex_color
 
-            # 2. Button-Farbe im UI aktualisieren (visuelles Feedback)
-            # Wir setzen den Hintergrund des Buttons auf die gewählte Farbe
-            # Und die Textfarbe auf Schwarz oder Weiß je nach Helligkeit
+            # 2. Update button color in UI (visual feedback)
+            # We set the background of the button to the chosen color
+            # and the text color to black or white depending on lightness
             self._update_color_button_style(self.ovl_config_win.btn_pick_color, hex_color)
 
-            # 3. Speichern und Overlay updaten
+            # 3. Save and update overlay
             self.save_streak_settings_from_qt()
 
     def pick_stats_color(self, type_):
-        """Öffnet einen Farbwähler für Stats (Label oder Value)."""
+        """Opens a color picker for stats (Label or Value)."""
         st_conf = self.config.get("stats_widget", {})
         conf_key = "label_color" if type_ == "labels" else "value_color"
         default_hex = "#00f2ff" if type_ == "labels" else "#ffffff"
@@ -1736,7 +1737,7 @@ class DiorClientGUI:
         current_hex = st_conf.get(conf_key, default_hex)
         initial = QColor(current_hex)
         
-        color = QColorDialog.getColor(initial, self.main_hub, f"Wähle {type_.capitalize()} Farbe")
+        color = QColorDialog.getColor(initial, self.main_hub, f"Select {type_.capitalize()} Color")
         
         if color.isValid():
             hex_color = color.name()
@@ -1744,15 +1745,15 @@ class DiorClientGUI:
             if "stats_widget" not in self.config: self.config["stats_widget"] = {}
             self.config["stats_widget"][conf_key] = hex_color
             
-            # Button stylen
+            # Style button
             btn = self.ovl_config_win.btn_stats_label_color if type_ == "labels" else self.ovl_config_win.btn_stats_value_color
             self._update_color_button_style(btn, hex_color)
             
-            # Speichern & Update
+            # Save & Update
             self.save_stats_config_from_qt()
 
     def _update_color_button_style(self, btn, hex_color):
-        """Hilfsmethode zum Stylen der Farb-Buttons."""
+        """Helper method for styling the color buttons."""
         color = QColor(hex_color)
         text_col = "black" if color.lightness() > 128 else "white"
         btn.setStyleSheet(
@@ -1762,25 +1763,25 @@ class DiorClientGUI:
         )
 
     def safe_connect(self, signal, slot):
-        """Trennt eine Verbindung sicherheitshalber, bevor sie neu gesetzt wird."""
+        """Disconnects a signal safely before setting it again."""
         try:
             signal.disconnect(slot)
         except TypeError:
-            pass  # War noch nicht verbunden, alles gut
+            pass  # Was not connected yet, all good
         signal.connect(slot)
 
-    def on_event_selected_in_qt(self, event_name):
-        """Wird gerufen, wenn man im Grid auf ein Event klickt."""
+    def on_event_clicked(self, event_name):
+        """Called when an event is clicked in the grid."""
         ui = self.ovl_config_win
-        # Daten aus der Config holen (Sektion 'events')
+        # Get data from config (section 'events')
         ev_conf = self.config.get("events", {})
         data = ev_conf.get(event_name, {})
 
-        # 1. Label aktualisieren
+        # 1. Update label
         ui.lbl_editing.setText(f"EDITING: {event_name}")
         ui.current_event = event_name
 
-        # 2. Felder befüllen (mit Fallback-Werten, falls leer)
+        # 2. Fill fields (with fallback values if empty)
         
         # IMAGE
         img_val = data.get("img", "")
@@ -1800,7 +1801,7 @@ class DiorClientGUI:
         
         ui.combo_evt_img.blockSignals(False)
         
-        # Manuelles Update der Image-Preview
+        # Manual update of image preview
         current_img_text = ui.combo_evt_img.currentText()
         if hasattr(ui, 'update_preview_image'):
              ui.update_preview_image(get_asset_path(current_img_text))
@@ -1823,7 +1824,7 @@ class DiorClientGUI:
             
         ui.combo_evt_snd.blockSignals(False)
 
-        # Scale Slider (Config Wert * 100 für den Slider-Bereich)
+        # Scale Slider (Config value * 100 for slider range)
         scale_val = int(data.get("scale", 1.0) * 100)
         ui.slider_evt_scale.setValue(scale_val)
 
@@ -1842,13 +1843,13 @@ class DiorClientGUI:
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
 
     def save_event_config_from_qt(self):
-        """Speichert die aktuell editierten Event-Daten in die Config."""
+        """Saves currently edited event data to config."""
         ui = self.ovl_config_win
         event_name = getattr(ui, "current_event", None)
         if not event_name:
             return
 
-        # Daten aus UI lesen
+        # Read data from UI
         # Daten aus UI lesen (NEW COMBOBOX LOGIC)
         # 1. Image Data
         img_items = []
@@ -1876,7 +1877,7 @@ class DiorClientGUI:
         dur = int(ui.ent_evt_duration.text()) if ui.ent_evt_duration.text() else 0
         play_dup = ui.check_play_duplicate.isChecked()
 
-        # Config updaten
+        # Update Config
         if "events" not in self.config: self.config["events"] = {}
         if event_name not in self.config["events"]: self.config["events"][event_name] = {}
 
@@ -1896,7 +1897,7 @@ class DiorClientGUI:
         # self.trigger_overlay_event(event_name)
         
     def toggle_knife_visibility(self):
-        """Schaltet die Messer-Icons an/aus und aktualisiert das UI."""
+        """Toggles the knife icons on/off and updates the UI."""
         ui = self.ovl_config_win
         is_on = ui.btn_toggle_knives.isChecked()
 
@@ -1934,12 +1935,12 @@ class DiorClientGUI:
                 return ""
             return os.path.basename(text.strip())
 
-        # --- A) DATEN AUS DEM LIVE-OVERLAY HOLEN ---
+        # --- A) GET DATA FROM LIVE OVERLAY ---
         final_path_data = current_conf.get("custom_path", [])
         if self.overlay_win and hasattr(self.overlay_win, 'custom_path'):
             final_path_data = self.overlay_win.custom_path
 
-        # --- B) DATEN AUS DER GUI LESEN ---
+        # --- B) READ DATA FROM GUI ---
         is_active = s_ui.check_streak_master.isChecked()
         anim_active = s_ui.check_streak_anim.isChecked()
         show_knives = s_ui.btn_toggle_knives.isChecked()
@@ -1962,14 +1963,14 @@ class DiorClientGUI:
         knife_nc = clean_path(s_ui.knife_inputs["NC"].text())
         knife_vs = clean_path(s_ui.knife_inputs["VS"].text())
 
-        # --- C) FARBE (SPECIAL CASE) ---
-        # Die Farbe wird vom Color-Picker direkt in die Config geschrieben.
-        # Wir laden sie hier also neu, damit sie beim Speichern nicht mit einem alten Wert überschrieben wird.
+        # --- C) COLOR (SPECIAL CASE) ---
+        # The color is written directly to the config by the color picker.
+        # So we reload it here so it's not overwritten with an old value when saving.
         current_color = current_conf.get("color", "#ffffff")
 
-        # --- D) LEGACY WERTE BEWAHREN (NICHT IN GUI VORHANDEN) ---
-        # Diese Werte gibt es in der Qt-GUI nicht mehr (keine Checkboxen dafür),
-        # daher dürfen wir sie nicht nullen/löschen, sondern behalten die alten bei.
+        # --- D) PRESERVE LEGACY VALUES (NOT PRESENT IN GUI) ---
+        # These values no longer exist in the Qt-GUI (no checkboxes for them),
+        # so we must not null/delete them, but keep the old ones.
         keep_shadow = current_conf.get("shadow_size", 0)
         keep_bold = current_conf.get("bold", False)
         keep_underline = current_conf.get("underline", False)
@@ -1986,30 +1987,30 @@ class DiorClientGUI:
             "scale": scale,
             "size": size_val,
 
-            # Die aktuelle Farbe (vom Picker gesetzt)
+            # The current color (set by picker)
             "color": current_color,
 
-            # Die bewahrten Legacy-Werte
+            # The preserved legacy values
             "shadow_size": keep_shadow,
             "bold": keep_bold,
             "underline": keep_underline,
 
-            # Pfade
+            # Paths
             "knife_tr": knife_tr,
             "knife_nc": knife_nc,
             "knife_vs": knife_vs,
 
-            # Pfad-Daten
+            # Path Data
             "custom_path": final_path_data
         })
 
         self.save_config()
         self.update_streak_display()
 
-        self.add_log("SYS: Killstreak-Einstellungen gespeichert.")
+        self.add_log("SYS: Killstreak settings saved.")
 
     def save_stats_config_from_qt(self):
-        """Liest NUR Stats Settings aus Qt und speichert sie."""
+        """Reads ONLY Stats settings from Qt and saves them."""
         s_ui = self.ovl_config_win
         
         current_st_conf = self.config.get("stats_widget", {})
@@ -2028,7 +2029,7 @@ class DiorClientGUI:
 
             "font_size": int(s_ui.combo_st_font.currentText()),
             
-            # NEU: Farben separat speichern (falls sie in der config_backup fehlen)
+            # NEW: Save colors separately (in case they are missing in config_backup)
             "label_color": current_st_conf.get("label_color", "#00f2ff"),
             "value_color": current_st_conf.get("value_color", "#ffffff"),
 
@@ -2054,7 +2055,7 @@ class DiorClientGUI:
         self.update_session_time()
 
     def save_feed_config_from_qt(self):
-        """Liest NUR Feed Settings aus Qt und speichert sie."""
+        """Reads ONLY Feed settings from Qt and saves them."""
         s_ui = self.ovl_config_win
         
         current_kf_conf = self.config.get("killfeed", {})
@@ -2067,7 +2068,7 @@ class DiorClientGUI:
             "show_gunner": s_ui.check_show_gunner.isChecked() if hasattr(s_ui, "check_show_gunner") else True,
             "show_vehicle": s_ui.check_show_vehicle.isChecked() if hasattr(s_ui, "check_show_vehicle") else True,
             
-            # Position behalten
+            # Keep position
             "x": current_kf_conf.get("x", 50),
             "y": current_kf_conf.get("y", 200),
 
@@ -2085,27 +2086,10 @@ class DiorClientGUI:
             
         self.add_log("SYS: Killfeed configuration updated.")
 
-    def test_stats_visuals(self):
-        """Sendet Dummy-Daten an das Stats-Widget zum Testen."""
-        if not self.overlay_win: return
-        self.add_log("SYS: Testing Stats Widget visuals...")
-        
-        # Test Data
-        dummy = {
-            "k": 42, "d": 1, "hs": 21, "hsrkill": 40, "dhs": 3, "dhs_eligible": 10,
-            "revives_received": 5, "start": time.time() - 3600, "acc_t": 0
-        }
-        
-        if hasattr(self.overlay_win, "update_stats_display"):
-             self.overlay_win.update_stats_display(dummy)
-             
-             # Force visibility for test
-             if hasattr(self.overlay_win, "stats_bg_label"):
-                 self.overlay_win.stats_bg_label.show()
-                 self.overlay_win.stats_text_label.show()
+    # (Duplicate removed - see line 3832)
 
     def test_killfeed_visuals(self):
-        """Fügt einen Test-Eintrag in den Killfeed ein."""
+        """Inserts a test entry into the killfeed."""
         if not self.overlay_win: return
         self.add_log("SYS: Testing Killfeed visuals...")
 
@@ -2133,15 +2117,15 @@ class DiorClientGUI:
         msg = random.choice(tests)
         self.overlay_win.signals.killfeed_entry.emit(msg)
 
-        # Positionen & Style live anwenden
+        # Apply positions & style live
         if self.overlay_win:
             self.overlay_win.update_killfeed_pos()
-            self.overlay_win.update_killfeed_ui()  # <--- NEU: Sofortige Skalierung bei Font-Wechsel
+            self.overlay_win.update_killfeed_ui()  # <--- NEW: Immediate scaling on font change
             self.refresh_ingame_overlay()
 
     def save_voice_config_from_qt(self):
-        """Liest Voice Macros aus Qt und speichert sie."""
-        # Active Status beibehalten
+        """Reads voice macros from Qt and saves them."""
+        # Keep active status
         current_active = self.config.get("auto_voice", {}).get("active", True)
 
         new_v = {"active": current_active}
@@ -2152,10 +2136,10 @@ class DiorClientGUI:
         self.save_config()
         self.add_log("SYS: Auto-Voice Macros saved.")
 
-    def load_overlay_config_to_qt(self):
-        """Überträgt ALLE Config-Werte in die Qt-Oberfläche (Safe Loading)"""
+    def load_settings_to_ui(self):
+        """Transfers ALL config values to the Qt interface (Safe Loading)"""
 
-        # 1. REFERENZEN HOLEN
+        # 1. GET REFERENCES
         ui = self.ovl_config_win
 
         s_conf = self.config.get("streak", {})
@@ -2168,7 +2152,7 @@ class DiorClientGUI:
         # --- QUEUE BUTTON ---
         queue_active = self.config.get("event_queue_active", True)
 
-        # Globalen Timer laden (Standard 3000ms)
+        # Load global timer (Default 3000ms)
         g_dur = self.config.get("event_global_duration", 3000)
         ui.ent_global_duration.setText(str(g_dur))
 
@@ -2221,7 +2205,7 @@ class DiorClientGUI:
         ui.combo_evt_snd.clear()
 
         # --- TAB 3: KILLSTREAK ---
-        # A) TEXTFELDER
+        # A) TEXT FIELDS
         saved_img = s_conf.get("img", "")
         ui.ent_streak_img.setText(saved_img if saved_img else "KS_Counter.png")
         ui.ent_streak_speed.setText(str(s_conf.get("speed", 50)))
@@ -2232,7 +2216,7 @@ class DiorClientGUI:
                 saved_val = s_conf.get(config_key, "")
                 ui.knife_inputs[fac].setText(saved_val)
 
-        # B) ELEMENTE MIT SIGNALEN
+        # B) ELEMENTS WITH SIGNALS
         ui.slider_tx.blockSignals(True)
         ui.slider_ty.blockSignals(True)
         ui.slider_scale.blockSignals(True)
@@ -2252,9 +2236,9 @@ class DiorClientGUI:
         ui.check_streak_master.blockSignals(False)
         ui.check_streak_anim.blockSignals(False)
 
-        # >>> NEU: KNIFE BUTTON STATUS LADEN (Teil C) <<<
+        # >>> NEW: LOAD KNIFE BUTTON STATUS (Part C) <<<
         knives_active = s_conf.get("show_knives", True)
-        # Signale kurz blockieren, falls nötig (hier meist nicht kritisch, aber sicher ist sicher)
+        # Block signals briefly if necessary (usually not critical here, but safe is safe)
         ui.btn_toggle_knives.blockSignals(True)
         ui.btn_toggle_knives.setChecked(knives_active)
 
@@ -2273,7 +2257,7 @@ class DiorClientGUI:
                 "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
             )
         ui.btn_toggle_knives.blockSignals(False)
-        # >>> ENDE NEU <<<
+        # >>> END NEW <<<
 
         ui.slider_font_size.blockSignals(True)
         current_size = int(s_conf.get("size", 26))
@@ -2324,7 +2308,7 @@ class DiorClientGUI:
         ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
         ui.ent_stats_img.blockSignals(False)
 
-        # Sliders (wie gehabt)
+        # Sliders (as before)
         ui.slider_st_tx.blockSignals(True)
         ui.slider_st_tx.setValue(st_conf.get("tx", 0))
         ui.slider_st_tx.blockSignals(False)
@@ -2452,14 +2436,14 @@ class DiorClientGUI:
 
         # --- OVERLAY INIT ---
         if self.overlay_win:
-            # 1. Crosshair initialisieren
+            # 1. Initialize crosshair
             ch_active = c_conf.get("active", True)
             ch_file = c_conf.get("file", "crosshair.png")
             if not ch_file: ch_file = "crosshair.png"
             full_path = get_asset_path(ch_file)
             current_size = c_conf.get("size", 32)
 
-            # Crosshair Logik
+            # Crosshair logic
             game_running = getattr(self, 'ps2_running', False)
             edit_mode = getattr(self, "is_hud_editing", False)
             should_show = (ch_active and game_running) or edit_mode
@@ -2472,47 +2456,47 @@ class DiorClientGUI:
             if hasattr(self.overlay_win, 'update_killfeed_pos'):
                 self.overlay_win.update_killfeed_pos()
 
-            # 4. LOOP STARTEN (Verzögert)
-            # Wir machen hier KEINE manuelle Positionierung mehr.
-            # Der Loop (refresh_ingame_overlay) kümmert sich um alles.
+            # 4. START LOOP (Delayed)
+            # We NO LONGER do manual positioning here.
+            # The loop (refresh_ingame_overlay) takes care of everything.
             QTimer.singleShot(500, self.refresh_ingame_overlay)
 
         # --- TWITCH LOAD ---
         twitch_conf = self.config.get("twitch", {})
 
-        # 1. Textfelder & Toggle
+        # 1. Text Fields & Toggle
         ui.ent_twitch_channel.setText(twitch_conf.get("channel", ""))
         active = twitch_conf.get("active", False)
         ui.btn_toggle_twitch.setChecked(active)
-        self.toggle_twitch_active(active)  # Direkt UI & Overlay updaten
+        self.toggle_twitch_active(active)  # Update UI & Overlay immediately
 
         # 2. Widgets (Sliders & SpinBox)
-        # Blockiere Signale kurz, damit nicht bei jedem SetValue ein Update gefeuert wird
+        # Block signals briefly to avoid firing an update on every SetValue
         ui.slider_twitch_opacity.blockSignals(True)
         ui.slider_twitch_x.blockSignals(True)
         ui.slider_twitch_y.blockSignals(True)
         ui.slider_twitch_w.blockSignals(True)
         ui.slider_twitch_h.blockSignals(True)
-        ui.spin_twitch_hold.blockSignals(True)  # NEU: Hold Time Signale blockieren
+        ui.spin_twitch_hold.blockSignals(True)  # NEW: Block Hold Time signals
 
         ui.slider_twitch_opacity.setValue(twitch_conf.get("opacity", 30))
         ui.slider_twitch_x.setValue(twitch_conf.get("x", 50))
         ui.slider_twitch_y.setValue(twitch_conf.get("y", 300))
         ui.slider_twitch_w.setValue(twitch_conf.get("w", 350))
         ui.slider_twitch_h.setValue(twitch_conf.get("h", 400))
-        ui.spin_twitch_hold.setValue(twitch_conf.get("hold_time", 15))  # NEU
+        ui.spin_twitch_hold.setValue(twitch_conf.get("hold_time", 15))  # NEW
 
         ui.slider_twitch_opacity.blockSignals(False)
         ui.slider_twitch_x.blockSignals(False)
         ui.slider_twitch_y.blockSignals(False)
         ui.slider_twitch_w.blockSignals(False)
         ui.slider_twitch_h.blockSignals(False)
-        ui.spin_twitch_hold.blockSignals(False)  # NEU
+        ui.spin_twitch_hold.blockSignals(False)  # NEW
 
         is_always = twitch_conf.get("always_on", False)
         ui.btn_twitch_always.setChecked(is_always)
 
-        # UI-Optik an den geladenen Zustand anpassen
+        # Adjust UI visuals to the loaded state
         if is_always:
             ui.btn_twitch_always.setText("ALWAYS ON")
             ui.btn_twitch_always.setStyleSheet(
@@ -2555,17 +2539,17 @@ class DiorClientGUI:
         # Ignore List
         ui.ent_twitch_ignore.setText(twitch_conf.get("ignore_list", ""))
 
-        # 4. Sofortige Übernahme ins Overlay (Sync)
+        # 4. Immediate application to overlay (Sync)
         self.overlay_win.set_chat_hold_time(twitch_conf.get("hold_time", 15))
         self.update_twitch_visuals()
 
         if self.overlay_win:
             active = twitch_conf.get("active", False)
-            # Prüft jetzt (Game-Running ODER Always-On)
+            # Check now (Game-Running OR Always-On)
             self.overlay_win.update_twitch_visibility(active)
         if active and twitch_conf.get("channel"):
-            # Wir geben dem System eine Sekunde Zeit, um stabil zu laden,
-            # bevor wir den Thread für den Twitch-Chat starten.
+            # We give the system a second to load stably
+            # before starting the thread for Twitch chat.
             QTimer.singleShot(1000, self.start_twitch_connection)
             self.add_log(f"TWITCH: Auto-connecting to #{twitch_conf.get('channel')}...")
 
@@ -2591,7 +2575,7 @@ class DiorClientGUI:
         self.add_log("SYS: Overlay configuration synchronized.")
 
     def prepare_stats_for_qt(self, char_data):
-        """Formatiert die API-Daten für das characters_qt Fenster."""
+        """Formats API data for the characters_qt window."""
         c = char_data.get('custom_stats', {})
         return {
             'name': c.get('name', '-'),
@@ -2628,18 +2612,18 @@ class DiorClientGUI:
         # This function just updates the visual filter ID.
 
     def ps2_process_monitor(self):
-        """Überwacht den Prozess und nutzt Signale."""
+        """Monitors process and uses signals."""
         self.ps2_running = None
         import subprocess
         import time
 
-        print("MONITOR: Thread wartet auf GUI...")
+        print("MONITOR: Thread waiting for GUI...")
         time.sleep(2.0)
-        print("MONITOR: Thread gestartet.")
+        print("MONITOR: Thread started.")
 
         while True:
             try:
-                # Tasklist Abfrage (Windows) vs pgrep (Linux)
+                # Tasklist query (Windows) vs pgrep (Linux)
                 if IS_WINDOWS:
                     output = subprocess.check_output('TASKLIST /FI "IMAGENAME eq PlanetSide2_x64.exe"', shell=True).decode(
                         "cp1252", errors="ignore")
@@ -2656,12 +2640,12 @@ class DiorClientGUI:
                     self.ps2_running = is_now_running
 
                     if is_now_running:
-                        print("MONITOR: Spiel erkannt -> Sende Signal START")
+                        print("MONITOR: Game detected -> Sending START signal")
                         # STATT QTIMER: Signal senden!
                         self.worker_signals.game_status_changed.emit(True)
                     else:
                         if self.ps2_running is not None:
-                            print("MONITOR: Spiel weg -> Sende Signal STOP")
+                            print("MONITOR: Game gone -> Sending STOP signal")
                         # STATT QTIMER: Signal senden!
                         self.worker_signals.game_status_changed.emit(False)
 
@@ -2671,15 +2655,15 @@ class DiorClientGUI:
             time.sleep(4)
 
     def start_path_edit(self):
-        """Aktiviert den Klick-Modus für die Messer-Linie"""
+        """Enables click mode for the knife line"""
         if self.overlay_win:
-            # 1. Path-Modus im Overlay einschalten
+            # 1. Turn on path mode in overlay
             self.overlay_win.path_edit_active = True
-            # 2. Maus-Durchlässigkeit ausschalten, damit Klicks registriert werden
+            # 2. Disable mouse passthrough so clicks are registered
             self.overlay_win.set_mouse_passthrough(False)
-            # 3. Alten Pfad für neue Aufnahme leeren
+            # 3. Clear old path for new recording
             self.overlay_win.custom_path = []
-            self.add_log("PATH-EDIT: Klicke jetzt um den Schädel. Beende mit 'SAVE STREAK'.")
+            self.add_log("PATH-EDIT: Click now around the skull. Finish with 'SAVE STREAK'.")
 
     def start_path_record(self):
         if not self.overlay_win: return
@@ -2693,7 +2677,7 @@ class DiorClientGUI:
             self.overlay_win.set_mouse_passthrough(False)
             self.overlay_win.custom_path = []
 
-            # Layer aktivieren & Fokus holen
+            # Activate layer & get focus
             self.overlay_win.path_layer.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             self.overlay_win.path_layer.setGeometry(self.overlay_win.rect())
             self.overlay_win.path_layer.show()
@@ -2702,7 +2686,7 @@ class DiorClientGUI:
             self.overlay_win.setFocus()
 
             # --- CLICK-THROUGH FIX ---
-            # Wir machen die Bilder "unsichtbar" für die Maus, damit der Klick auf dem Path-Layer landet
+            # We make images "invisible" to mouse so click lands on path layer
             if hasattr(self.overlay_win, 'streak_bg_label'):
                 self.overlay_win.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             if hasattr(self.overlay_win, 'streak_text_label'):
@@ -2716,7 +2700,7 @@ class DiorClientGUI:
             ui.btn_path_record.style().polish(ui.btn_path_record)
             ui.btn_path_record.update()
 
-            # Dummy Streak anzeigen
+            # Show dummy streak
             self.temp_streak_backup = getattr(self, 'killstreak_count', 0)
             self.killstreak_count = 10
             self.streak_factions = (["TR", "NC", "VS"] * 4)[:10]
@@ -2730,7 +2714,7 @@ class DiorClientGUI:
             self.overlay_win.path_layer.hide()
 
             # --- CLICK-THROUGH RESTORE ---
-            # Wieder klickbar machen für Move UI
+            # Make clickable again for Move UI
             if hasattr(self.overlay_win, 'streak_bg_label'):
                 self.overlay_win.streak_bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             if hasattr(self.overlay_win, 'streak_text_label'):
@@ -2743,7 +2727,7 @@ class DiorClientGUI:
             ui.btn_path_record.style().polish(ui.btn_path_record)
             ui.btn_path_record.update()
 
-            # Pfad speichern (übernimmt custom_path automatisch aus Overlay)
+            # Save path (takes custom_path automatically from overlay)
             self.save_streak_settings_from_qt()
             self.add_log("PATH: Recording stopped and saved.")
 
@@ -2753,68 +2737,56 @@ class DiorClientGUI:
             if self.overlay_win: self.overlay_win.custom_path = []
             self.save_config()
             self.update_streak_display()
-            self.add_log("PATH: Pfad gelöscht.")
+            self.add_log("PATH: Path deleted.")
 
 
 
-    def center_crosshair_qt(self):
-        """Zentriert das Crosshair basierend auf der aktuellen Overlay-Größe."""
-        if not self.overlay_win:
-            self.add_log("ERR: Overlay nicht gestartet. Bitte PS2 starten oder Overlay aktivieren.")
+    def center_crosshair(self):
+        """Centers global crosshair based on current overlay size."""
+        if not self.overlay_win: 
             return
 
-        # 1. Tatsächliche Bildschirmgröße vom Overlay holen
-        screen_w = self.overlay_win.width()
-        screen_h = self.overlay_win.height()
-        current_ui_scale = self.overlay_win.ui_scale
-
-        # 2. Die Mitte berechnen
-        mid_x = screen_w // 2
-        mid_y = screen_h // 2
-
-        # 3. WICHTIG: Rückrechnung auf die Config-Koordinaten (1080p Basis)
-        # Da update_crosshair() später wieder 'self.s()' (Skalierung) anwendet,
-        # müssen wir hier durch die Skalierung teilen.
-        config_x = int(mid_x / current_ui_scale)
-        config_y = int(mid_y / current_ui_scale)
-
-        # 4. In Config schreiben
-        if "crosshair" not in self.config: self.config["crosshair"] = {}
-        self.config["crosshair"]["x"] = config_x
-        self.config["crosshair"]["y"] = config_y
-
-        # Aktivieren, damit man es sieht
-        self.ovl_config_win.check_cross.setChecked(True)
-
-        # 5. Speichern und Anzeigen
-        self.save_crosshair_settings_qt()
-        self.add_log(f"CROSSHAIR: Zentriert auf {config_x}x{config_y} (Screen: {screen_w}x{screen_h})")
+        # Use overlay method if available
+        if hasattr(self.overlay_win, "center_crosshair"):
+            self.overlay_win.center_crosshair()
+            
+        # Update config to match
+        if hasattr(self.overlay_win, "crosshair_label"):
+            pos = self.overlay_win.crosshair_label.pos()
+            # Convert back to unscaled logic coordinates
+            logic_x = int(pos.x() / self.overlay_win.ui_scale)
+            logic_y = int(pos.y() / self.overlay_win.ui_scale)
+            
+            if "crosshair" not in self.config: self.config["crosshair"] = {}
+            self.config["crosshair"]["x"] = logic_x
+            self.config["crosshair"]["y"] = logic_y
+            self.save_config()
 
     def apply_crosshair_settings(self):
         try:
-            # 1. Pfad auslesen
+            # 1. Read path
             new_file = self.ent_cross_path.get()
 
-            # 2. Aktiv-Status auslesen (Checkbox)
+            # 2. Read active status (Checkbox)
             if hasattr(self, 'crosshair_active_var'):
                 is_active = self.crosshair_active_var.get()
             else:
                 is_active = True
 
-            # 3. Config updaten
+            # 3. Update config
             if "crosshair" not in self.config:
                 self.config["crosshair"] = {}
 
-            # Wir speichern den WUNSCH des Users (Checkbox-Status)
+            # Save user preference (Checkbox status)
             self.config["crosshair"]["file"] = new_file
             self.config["crosshair"]["active"] = is_active
 
             current_size = self.config["crosshair"].get("size", 32)
             self.config["crosshair"]["size"] = current_size
 
-            # Permanent speichern
+            # Permanently save
             self.save_config()
-            self.add_log(f"SYSTEM: Crosshair-Konfiguration aktualisiert.")
+            self.add_log(f"SYSTEM: Crosshair configuration updated.")
 
             # --- LOGIK-FIX: Sichtbarkeit ---
             # Wir zeigen es nur an, wenn der User es will (is_active) UND das Spiel läuft.
@@ -2832,42 +2804,42 @@ class DiorClientGUI:
             traceback.print_exc()
 
     def save_crosshair_settings_qt(self):
-        """Liest UI-Werte aus dem Crosshair-Tab, speichert in Config und updatet Overlay."""
+        """Reads UI values from crosshair tab, saves to config and updates overlay."""
         ui = self.ovl_config_win
 
-        # 1. Werte aus der GUI lesen
+        # 1. Read values from GUI
         is_active = ui.check_cross.isChecked()
         file_path = ui.cross_path.text().strip()
 
-        # 2. Config Dictionary vorbereiten, falls nicht existent
+        # 2. Prepare config dictionary if not existent
         if "crosshair" not in self.config:
             self.config["crosshair"] = {}
 
-        # 3. Werte aktualisieren
+        # 3. Update values
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = file_path
 
-        # Fallback für Größe, falls noch nicht gesetzt
+        # Fallback for size if not set
         if "size" not in self.config["crosshair"]:
             self.config["crosshair"]["size"] = 32
 
-        # NEU: Size Slider auslesen (WICHTIG: Wiederhergestellt)
+        # NEW: Read size slider (IMPORTANT: Restored)
         size_val = self.config["crosshair"]["size"]
         if hasattr(ui, 'slider_cross_size'):
             size_val = ui.slider_cross_size.value()
             self.config["crosshair"]["size"] = size_val
 
-        # 4. In datei speichern
+        # 4. Save to file
         self.save_config()
 
-        # 5. Overlay live aktualisieren
+        # 5. Update overlay live
         if self.overlay_win:
             full_path = get_asset_path(file_path)
             game_running = getattr(self, 'ps2_running', False)
             edit_mode = getattr(self, 'is_hud_editing', False)
             should_show = is_active and (game_running or edit_mode)
 
-            # Update Befehl an Overlay senden
+            # Send update command to overlay
             self.overlay_win.update_crosshair(full_path, size_val, should_show)
 
     def get_time_diff_str(self, past_date_str, mode="login"):
@@ -2875,18 +2847,18 @@ class DiorClientGUI:
             return "Unknown"
         try:
             from datetime import datetime
-            # Die API gibt Daten wie "2026-01-15 07:14:15" zurück
-            # Wir versuchen das Standard-Format zu parsen
+            # API returns dates like "2026-01-15 07:14:15"
+            # Try to parse standard format
             try:
                 past_date = datetime.strptime(past_date_str, '%Y-%m-%d %H:%M:%S')
             except:
-                # Fallback falls Millisekunden dabei sind
+                # Fallback if milliseconds are present
                 past_date = datetime.strptime(past_date_str.split(".")[0], '%Y-%m-%d %H:%M:%S')
 
             now = datetime.now()
             diff = now - past_date
 
-            # 12h Format mit AM/PM
+            # 12h format with AM/PM
             pretty_date = past_date.strftime('%Y-%m-%d %I:%M%p MEZ')
 
             if mode == "login":
@@ -2898,15 +2870,15 @@ class DiorClientGUI:
                 months = (diff.days % 365) // 30
                 return f"{pretty_date} ({years}Y {months}M)"
         except Exception as e:
-            print(f"Zeitfehler: {e}")
+            print(f"Time error: {e}")
             return past_date_str
 
     def load_item_db(self, filepath):
-        """Lädt die Waffen-Datenbank aus dem assets-Ordner"""
+        """Loads the weapon database from assets folder"""
         self.item_db = {}
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                next(f)  # Überspringt: Item ID, Item Category, Is Vehicle Weapon...
+                next(f)  # Skip: Item ID, Item Category, Is Vehicle Weapon...
                 for line in f:
                     parts = line.strip().split(",")
                     if len(parts) >= 6:
@@ -2914,37 +2886,37 @@ class DiorClientGUI:
                         item_name = parts[3]
                         weapon_class = parts[1]  # 'none', 'max', 'infantry', 'vehicle'
 
-                        # Wir speichern es so, dass du später leicht darauf zugreifen kannst
+                        # Save so you can easily access it later
                         self.item_db[item_id] = {
                             "name": item_name,
                             "type": weapon_class
                         }
-            print(f"Datenbank geladen: {len(self.item_db)} Items gefunden.")
+            print(f"Database loaded: {len(self.item_db)} items found.")
         except Exception as e:
-            print(f"Fehler beim Laden der Item-DB: {e}")
+            print(f"Error loading item DB: {e}")
 
     def load_config(self):
         """
-        Lädt die Konfiguration mit intelligenter Backup-Strategie.
-        Reihenfolge:
-        1. config.json (Hauptdatei)
-        2. config_backup.json (Falls Hauptdatei korrupt/leer)
-        3. Standardwerte (Falls alles fehlschlägt)
+        Loads configuration with intelligent backup strategy.
+        Order:
+        1. config.json (Main file)
+        2. config_backup.json (If main file corrupt/empty)
+        3. Default values (If all else fails)
         """
-        # 1. Pfade definieren
+        # 1. Define paths
         if hasattr(sys, '_MEIPASS'):
             base_dir_exe = os.path.dirname(sys.executable)
             user_config_path = os.path.join(base_dir_exe, "config.json")
         else:
             user_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
-        # Pfad zur Backup-Datei
+        # Path to backup file
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
 
-        # Template Pfad (in der EXE)
+        # Template path (inside EXE)
         template_path = resource_path("config.json")
 
-        # 2. Standard-Werte (Fallback)
+        # 2. Standard values (Fallback)
         default_conf = {
             "ps2_path": "",
             "overlay_master_active": True,
@@ -2955,57 +2927,57 @@ class DiorClientGUI:
             "killfeed": {"active": True}
         }
 
-        # 3. ERST-START LOGIK: Template extrahieren
+        # 3. FIRST-START LOGIC: Extract template
         if not os.path.exists(user_config_path) and not os.path.exists(backup_config_path) and os.path.exists(
                 template_path):
             try:
                 shutil.copy2(template_path, user_config_path)
-                print("SYS: Standard-Konfiguration erstellt.")
+                print("SYS: Default configuration created.")
             except Exception as e:
                 print(f"Config Template Copy Error: {e}")
 
-        # 4. LADEN MIT FEHLERBEHANDLUNG
+        # 4. LOADING WITH ERROR HANDLING
         loaded_conf = {}
         load_source = "DEFAULT"
 
-        # Versuch 1: Hauptdatei
+        # Attempt 1: Main file
         if os.path.exists(user_config_path):
             try:
                 with open(user_config_path, "r", encoding="utf-8") as f:
                     content = f.read().strip()
                     if not content:
-                        raise ValueError("Datei ist leer")
+                        raise ValueError("File is empty")
                     loaded_conf = json.loads(content)
                     load_source = "MAIN"
             except (json.JSONDecodeError, ValueError, Exception) as e:
-                print(f"WARNUNG: config.json ist defekt ({e}). Versuche Backup...")
+                print(f"WARNING: config.json is corrupt ({e}). Trying backup...")
 
-                # Versuch 2: Backup Datei
+                # Attempt 2: Backup file
                 if os.path.exists(backup_config_path):
                     try:
                         with open(backup_config_path, "r", encoding="utf-8") as f:
                             loaded_conf = json.load(f)
-                        print("ERFOLG: Konfiguration aus Backup wiederhergestellt!")
+                        print("SUCCESS: Configuration restored from backup!")
                         load_source = "BACKUP"
 
-                        # Wir reparieren sofort die kaputte Hauptdatei
+                        # Immediately repair broken main file
                         try:
                             shutil.copy2(backup_config_path, user_config_path)
-                            print("SYS: Haupt-Config wurde durch Backup repariert.")
+                            print("SYS: Main config repaired by backup.")
                         except:
                             pass
 
                     except Exception as e2:
-                        print(f"FEHLER: Auch Backup ist defekt: {e2}. Nutze Standards.")
+                        print(f"ERROR: Backup also corrupt: {e2}. Using defaults.")
                         load_source = "RESET"
                 else:
-                    print("FEHLER: Kein Backup gefunden. Nutze Standards.")
+                    print("ERROR: No backup found. Using defaults.")
                     load_source = "RESET"
 
-        # 5. MERGEN (Standards mit Geladenem mischen)
+        # 5. MERGING (Mix defaults with loaded)
         default_conf.update(loaded_conf)
 
-        # Pfad speichern für save_config
+        # Save path for save_config
         self.config_path = user_config_path
 
         # Status speichern, um ihn später im Log anzuzeigen (da add_log hier evtl. noch nicht geht)
@@ -3015,39 +2987,39 @@ class DiorClientGUI:
 
 
     def save_overlay_config(self):
-        """Wrapper, damit alte Aufrufe im Code weiterhin funktionieren"""
+        """Wrapper so old calls still work in code"""
         self.save_config()
-        self.add_log("Einstellungen in config.json gesichert.")
+        self.add_log("Settings saved in config.json.")
 
 
 
     # --- UI & NAVIGATION ---
 
     def show_dashboard(self):
-        """Wechselt in der Qt-Oberfläche zum Dashboard-Tab"""
+        """Switches to the Dashboard tab in the Qt interface"""
         self.current_tab = "Dashboard"
-        # Falls dein MainHub ein QStackedWidget für Tabs nutzt:
+        # If your MainHub uses a QStackedWidget for tabs:
         if hasattr(self.main_hub, 'stacked_widget'):
-            # Index 0 ist meist das Dashboard
+            # Index 0 is usually dashboard
             self.main_hub.stacked_widget.setCurrentIndex(0)
 
         self.add_log("DASHBOARD: View active.")
-        # Initialer Trigger für Daten-Update
+        # Initial trigger for data update
         self.update_live_graph()
 
 
     def toggle_kd_mode(self):
-        """Wechselt zwischen 'Real KD' und 'Revive KD'."""
+        """Switches between 'Real KD' and 'Revive KD'."""
         self.kd_mode_revive = not self.kd_mode_revive
 
         mode_str = "REVIVE KD" if self.kd_mode_revive else "REAL KD"
         self.add_log(f"MODE: Switched to {mode_str}")
 
-        # Dashboard-Button Text updaten (via Signal oder direkt)
+        # Update dashboard button text (via signal or directly)
         if hasattr(self, 'dash_window') and hasattr(self.dash_window, 'btn_toggle_kd'):
             txt = "KD MODE: REVIVE" if self.kd_mode_revive else "KD MODE: REAL"
             self.dash_window.btn_toggle_kd.setText(txt)
-            # Farbe anpassen
+            # Adjust color
             col = "#00ff00" if self.kd_mode_revive else "#ff0000"
             self.dash_window.btn_toggle_kd.setStyleSheet(f"""
                 QPushButton {{ 
@@ -3057,48 +3029,48 @@ class DiorClientGUI:
                 QPushButton:hover {{ border: 1px solid {col}; }}
             """)
         
-        # Sofort alle Daten neu berechnen und senden
+        # Calculate and send all data immediately
         self.update_dashboard_elements()
 
     def update_dashboard_elements(self):
-        """Sendet echte Live-Daten an das neue PyQt6 Dashboard via Signale."""
+        """Sends real live data to new PyQt6 dashboard via signals."""
         if not hasattr(self, 'dash_window') or not hasattr(self, 'dash_controller'):
             return
 
-        # Aktuell ausgewählte Server-ID holen (Standard: 10/EU)
+        # Get currently selected server ID (Default: 10/EU)
         current_wid = str(getattr(self, 'current_world_id', '10'))
 
-        # 1. DATEN VORBEREITEN
-        # Total inkl. NSO/Unknown
+        # 1. PREPARE DATA
+        # Total incl. NSO/Unknown
         total_players = self.live_stats.get("Total", 0)
 
-        # Fraktionen (TR, NC, VS) - NSO bewusst weggelassen für Balance-Anzeige
+        # Factions (TR, NC, VS) - NSO deliberately left out for balance display
         faction_data = {
             "TR": self.live_stats.get("TR", 0),
             "NC": self.live_stats.get("NC", 0),
             "VS": self.live_stats.get("VS", 0)
         }
 
-        # 2. UPDATES SENDEN
+        # 2. SEND UPDATES
         # A) Update Text-Label (Total Players)
         self.dash_controller.signals.update_population.emit(total_players)
 
-        # B) Update Fraktions-Balken
+        # B) Update Faction Bars
         self.dash_controller.signals.update_factions.emit(faction_data)
 
-        # C) Update Graph (NEU: Total UND Fraktionsdaten übergeben)
-        # Wir greifen direkt auf das Graph-Objekt zu, da es die effizienteste Methode
-        # ist, komplexe Daten (Dicts + Ints) gleichzeitig zu übergeben ohne Signal-Änderung.
+        # C) Update Graph (NEW: Transfer Total AND Faction data)
+        # We access the graph object directly as it is the most efficient way
+        # to transfer complex data (Dicts + Ints) without signal modification.
         if hasattr(self.dash_window, 'graph'):
             self.dash_window.graph.update_history(total_players, faction_data)
 
-        # 3. PLAYER LISTE VORBEREITEN
+        # 3. PREPARE PLAYER LIST
         active_ids = self.active_players.keys()
         now = time.time()
         prepared_players = []
 
         for p_id, p in self.session_stats.items():
-            # Nur Spieler berücksichtigen, die noch als 'aktiv' markiert sind
+            # Only consider players still marked as 'active'
             if not isinstance(p, dict) or p_id not in active_ids:
                 continue
 
@@ -3106,12 +3078,12 @@ class DiorClientGUI:
             if str(p.get("world_id", "0")) != current_wid:
                 continue
 
-            # --- NAMEN-FIX ---
+            # --- NAME FIX ---
             p_name = p.get("name")
             if p_name in ["Unknown", "Searching...", None]:
                 p_name = self.name_cache.get(p_id, f"ID: {p_id[-4:]}")
 
-            # --- KPM LOGIK ---
+            # --- KPM LOGIC ---
             p_start = p.get("start", now)
             active_min = max((now - p_start) / 60, 0.5)
 
@@ -3120,25 +3092,25 @@ class DiorClientGUI:
             revives = p.get("revives_received", 0)
 
             if self.kd_mode_revive:
-                # Revive Mode: Deaths werden durch Revives reduziert (min 0)
+                # Revive Mode: Deaths reduced by revives (min 0)
                 eff_deaths = max(0, raw_deaths - revives)
             else:
-                # Real Mode: Alle Deaths zählen
+                # Real Mode: All deaths count
                 eff_deaths = raw_deaths
 
-            # Paket schnüren
-            # WICHTIG: Wir senden 'eff_deaths' als 'd', damit das Dashboard (Tabelle + Graph)
-            # automatisch die richtigen Werte anzeigt, ohne dass wir dort Logik ändern müssen.
+            # Assemble package
+            # IMPORTANT: We send 'eff_deaths' as 'd' so dashboard (table + graph)
+            # automatically shows correct values without needing logic changes there.
             prepared_players.append({
                 "name": p_name,
-                "fac": p.get("faction", "NSO"),  # Hier ist NSO ok, damit man sieht wer es ist
+                "fac": p.get("faction", "NSO"),  # NSO is okay here so you see who it is
                 "k": p.get("k", 0),
                 "d": eff_deaths,
                 "a": p.get("a", 0),
                 "active_min": active_min
             })
 
-        # 4. SORTIEREN & SENDEN
+        # 4. SORT & SEND
         prepared_players.sort(key=lambda x: x['k'], reverse=True)
 
         self.dash_controller.signals.update_top_list.emit(prepared_players)
@@ -3146,7 +3118,7 @@ class DiorClientGUI:
 
 
     def switch_server(self, name, new_id):
-        """Wechselt die Anzeige-ID und löscht lokale Stats (Thread-Safe)"""
+        """Switches display ID and clears local stats (Thread-Safe)"""
         # THREAD-SAFETY CHECK
         if QThread.currentThread() != QApplication.instance().thread():
             self.worker_signals.request_server_switch.emit(name, str(new_id))
@@ -3155,17 +3127,17 @@ class DiorClientGUI:
         if str(new_id) == str(self.current_world_id) and getattr(self, "needs_reconnect", False) == False:
             return
 
-        self.add_log(f"SYSTEM: Dashboard-Filter auf {name} (ID: {new_id}) gesetzt.")
+        self.add_log(f"SYSTEM: Dashboard filter set to {name} (ID: {new_id}).")
 
-        # 1. Variablen updaten
+        # 1. Update variables
         self.current_server_name = name
         self.current_world_id = str(new_id)
 
-        # 2. Config speichern
+        # 2. Save config
         self.config["world_id"] = self.current_world_id
         self.save_config()
 
-        # 3. Label aktualisieren
+        # 3. Update label
         if hasattr(self, 'lbl_server_title'):
              # Tkinter .config() removed, using setText for PyQt
              try:
@@ -3173,7 +3145,7 @@ class DiorClientGUI:
              except AttributeError:
                  pass # Might be wrong type or already deleted
 
-        # 4. DATEN RESET (Damit der neue Server bei 0 anfängt)
+        # 4. DATA RESET (So new server starts at 0)
         self.pop_history = [0] * 100
         self.session_stats = {}
         self.active_players = {}
@@ -3182,7 +3154,7 @@ class DiorClientGUI:
         if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
             self.update_dashboard_elements()
 
-        # 5. UI SYNC (Jetzt sicher im Main Thread)
+        # 5. UI SYNC (Now safe in Main Thread)
         if hasattr(self, 'dash_window') and hasattr(self.dash_window, 'server_combo'):
             cb = self.dash_window.server_combo
             cb.blockSignals(True)
@@ -3195,7 +3167,7 @@ class DiorClientGUI:
             cb.blockSignals(False)
 
     def get_server_name_by_id(self, world_id):
-        """Sucht den Anzeigenamen zum Server anhand der World-ID"""
+        """Searches for the display name of the server based on the World ID"""
         world_id = str(world_id)
         for name, wid in self.server_map.items():
             if str(wid) == world_id:
@@ -3204,34 +3176,34 @@ class DiorClientGUI:
 
     def save_config(self):
         """
-        Speichert die Konfiguration in config.json UND config_backup.json.
+        Saves the configuration to config.json AND config_backup.json.
         """
         try:
-            # 1. Pfad holen
+            # 1. Get path
             target_path = getattr(self, 'config_path', os.path.join(os.path.abspath("."), "config.json"))
             backup_path = target_path.replace("config.json", "config_backup.json")
 
-            # 2. Daten bereinigen (Nur serialisierbare Daten)
+            # 2. Clean data (Only serializable data)
             clean_config = {}
             for k, v in self.config.items():
                 if isinstance(v, (str, int, float, bool, dict, list, type(None))):
                     clean_config[k] = v
 
-            # 3. Hauptdatei speichern
+            # 3. Save main file
             with open(target_path, "w", encoding="utf-8") as f:
                 json.dump(clean_config, f, indent=4)
 
-            # 4. Backup Datei speichern (Sicherheitskopie)
+            # 4. Save backup file (Security copy)
             try:
                 with open(backup_path, "w", encoding="utf-8") as f:
                     json.dump(clean_config, f, indent=4)
             except Exception as e:
-                print(f"ERR: Backup konnte nicht geschrieben werden: {e}")
+                print(f"ERR: Backup could not be written: {e}")
 
-            # Optional: Log nur schreiben, wenn GUI schon läuft
+            # Optional: Only log if GUI is already running
             if hasattr(self, 'log_area'):
-                # Nur "System"-Logs, nicht bei jedem Slider-Move spammen
-                # self.add_log(f"SYS: Config & Backup gesichert.")
+                # Only "System" logs, don't spam on every slider move
+                # self.add_log(f"SYS: Config & Backup saved.")
                 pass
 
         except Exception as e:
@@ -3244,7 +3216,7 @@ class DiorClientGUI:
         if self.overlay_win:
             self.overlay_win.hide()
         self.overlay_running = False
-        self.add_log("Overlay: deaktiviert.")
+        self.add_log("Overlay: disabled.")
 
     def create_overlay_window(self):
         if self.overlay_win:
@@ -3252,18 +3224,18 @@ class DiorClientGUI:
             self.overlay_win.raise_()
             self.overlay_running = True
             self.overlay_enabled = True
-            self.add_log("Overlay: aktiviert.")
+            self.add_log("Overlay: activated.")
 
 
     def trigger_overlay_event(self, event_type):
         """
-        Triggert Bild/Sound im Overlay.
-        Wird jetzt vom CensusWorker fix und fertig aufgerufen (inkl. Meilensteinen).
+        Triggers image/sound in the overlay.
+        Now called finished and ready by CensusWorker (including milestones).
         """
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
-        # 1. CONFIG-DATEN SUCHEN
+        # 1. SEARCH CONFIG DATA
         events_dict = self.config.get("events", {})
         event_data = events_dict.get(event_type)
 
@@ -3277,7 +3249,7 @@ class DiorClientGUI:
         if not event_data:
             return
 
-        # 2. PARAMETER LADEN
+        # 2. LOAD PARAMETERS
         try:
             abs_x = int(event_data.get("x", 0))
             abs_y = int(event_data.get("y", 0))
@@ -3286,7 +3258,7 @@ class DiorClientGUI:
         except (ValueError, TypeError):
             abs_x, abs_y, scale, volume = 0, 0, 1.0, 1.0
 
-        # 3. DAUER-LOGIK
+        # 3. DURATION LOGIC
         queue_active = self.config.get("event_queue_active", True)
         global_dur = int(self.config.get("event_global_duration", 3000))
         specific_dur = int(event_data.get("duration", 0))
@@ -3299,11 +3271,11 @@ class DiorClientGUI:
         if event_type.lower() == "hitmarker":
             dur = specific_dur
 
-        # 4. PFADE ERMITTELN
+        # 4. DETERMINE PATHS
         img_path = ""
         img_name = event_data.get("img")
         
-        # Falls Liste -> Random Pick
+        # If list -> Random Pick
         if isinstance(img_name, list) and len(img_name) > 0:
             img_name = random.choice(img_name)
         elif isinstance(img_name, list) and len(img_name) == 0:
@@ -3320,7 +3292,7 @@ class DiorClientGUI:
         if globals().get("HAS_SOUND", True):
             snd_name = event_data.get("snd")
             
-            # Falls Liste -> Random Pick
+            # If list -> Random Pick
             if isinstance(snd_name, list) and len(snd_name) > 0:
                 snd_name = random.choice(snd_name)
             elif isinstance(snd_name, list) and len(snd_name) == 0:
@@ -3343,41 +3315,41 @@ class DiorClientGUI:
             )
 
     def start_fade_out(self, tag):
-        """Lässt ein Canvas-Objekt nach einer Verzögerung verschwinden (ohne Bewegung)"""
+        """Makes a canvas object disappear after a delay (without movement)"""
         if not hasattr(self, 'ovl_canvas'): return
 
-        # Prüfen, ob das Item existiert
+        # Check if item exists
         items = self.ovl_canvas.find_withtag(tag)
         if not items: return
 
-        # Wir machen das Item erst unsichtbar (Zustand 'hidden')
-        # Das ist performanter als sofortiges Löschen, falls noch Prozesse darauf zugreifen
+        # We first make the item invisible (state 'hidden')
+        # This is more performant than immediate deletion if processes are still accessing it
         self.ovl_canvas.itemconfig(tag, state='hidden')
 
-        # Nach einer kurzen Sicherheits-Verzögerung löschen wir es endgültig aus dem Speicher
+        # After a short safety delay we delete it finally from memory
         self.root.after(100, lambda: self.cleanup_item(tag))
 
     def cleanup_item(self, tag):
-        """Endgültiges Löschen aus Canvas und Speicher"""
+        """Final deletion from Canvas and memory"""
         self.ovl_canvas.delete(tag)
-        # Referenz aus dem Dictionary löschen, damit der RAM nicht voll läuft
+        # Delete reference from dictionary so RAM doesn't fill up
         if hasattr(self, 'active_event_photos') and tag in self.active_event_photos:
             del self.active_event_photos[tag]
 
     def toggle_event_queue_qt(self):
-        """Schaltet das Queue-System an oder aus (PyQt6 Portierung)."""
-        # 1. Aktuellen Status aus der Config holen (Source of Truth)
+        """Toggles the queue system on or off (PyQt6 port)."""
+        # 1. Get current status from config (Source of Truth)
         current_state = self.config.get("event_queue_active", True)
         new_state = not current_state
 
-        # 2. Speichern
+        # 2. Save
         self.config["event_queue_active"] = new_state
         self.save_config()
 
-        # 3. GUI aktualisieren (Zugriff auf das Overlay-Config Fenster)
+        # 3. Update GUI (Access to Overlay-Config window)
         ui = self.ovl_config_win
 
-        # Button Status synchronisieren
+        # Sync button status
         ui.btn_queue_toggle.setChecked(new_state)
 
         if new_state:
@@ -3397,57 +3369,57 @@ class DiorClientGUI:
             )
             self.add_log("SYS: Event Queue DISABLED (Instant Overwrite)")
 
-        # 4. Overlay informieren (WICHTIG!)
+        # 4. Inform overlay (IMPORTANT!)
         if self.overlay_win:
-            # Variable im Overlay setzen
+            # Set variable in overlay
             self.overlay_win.queue_enabled = new_state
 
-            # Wenn ausgeschaltet, Warteschlange sofort leeren
+            # If turned off, clear queue immediately
             if not new_state:
                 if hasattr(self.overlay_win, 'clear_queue_now'):
                     self.overlay_win.clear_queue_now()
                 else:
-                    # Fallback, falls die Methode im QtOverlay anders heißt
-                    # (Löscht die interne Liste von Events)
+                    # Fallback if the method in QtOverlay has a different name
+                    # (Deletes the internal list of events)
                     if hasattr(self.overlay_win, 'event_queue'):
                         self.overlay_win.event_queue.clear()
 
     def browse_file_qt(self, widget, type_):
-        # HIER HABE ICH *.gif HINZUGEFÜGT:
+        # ADDED *.gif HERE:
         ft = "Images (*.png *.jpg *.jpeg *.gif)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
         
         from PyQt6.QtWidgets import QFileDialog, QComboBox
-        # self.main_hub als Parent nutzen, damit das Fenster zentriert ist
-        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Datei auswählen", self.BASE_DIR, ft)
+        # Use self.main_hub as parent so the window is centered
+        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Select File", self.BASE_DIR, ft)
 
         if file_path:
             filename = os.path.basename(file_path)
             target_path = get_asset_path(filename)
 
             try:
-                # Datei in assets kopieren, falls sie woanders herkommt
+                # Copy file to assets if it comes from somewhere else
                 if os.path.abspath(file_path) != os.path.abspath(target_path):
                     shutil.copy2(file_path, target_path)
             except Exception as e:
-                self.add_log(f"ERR: Kopier-Fehler: {e}")
+                self.add_log(f"ERR: Copy Error: {e}")
 
-            # Textfeld oder ComboBox setzen
+            # Set text field or ComboBox
             if isinstance(widget, QComboBox):
-                # Prüfen ob schon drin? Egal, wir adden es (User will vllt Gewichtung erhöhen?)
-                # Oder besser: wir erlauben Duplikate, ist einfacher.
+                # Check if already in? Doesn't matter, we add it (User might want to increase weighting?)
+                # Or better: we allow duplicates, it's easier.
                 widget.addItem(filename)
                 widget.setCurrentIndex(widget.count() - 1)
             else:
                 widget.setText(filename)
 
     def load_event_ui_data(self, event_type):
-        """Lädt Config-Daten eines Events in die Qt-UI Felder"""
+        """Loads config data of an event into the Qt-UI fields"""
         if not event_type: return
 
         data = self.config.get("events", {}).get(event_type, {})
         ui = self.ovl_config_win
 
-        # Felder füllen
+        # Fill fields
         ui.combo_evt_img.clear()
         img_data = data.get("img", "")
         if isinstance(img_data, list):
@@ -3473,18 +3445,18 @@ class DiorClientGUI:
                 ui.combo_evt_snd.setCurrentIndex(0)
         ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
 
-        # Slider setzen
+        # Set Sliders
         raw_scale = data.get("scale", 1.0)
         ui.slider_evt_scale.setValue(int(raw_scale * 100))
 
         raw_vol = data.get("volume", 1.0)
         ui.slider_evt_vol.setValue(int(raw_vol * 100))
 
-        # Label aktualisieren
+        # Update label
         ui.lbl_editing.setText(f"EDITING: {event_type}")
 
-        # --- FIX: VORSCHAU IM CONFIG-FENSTER AKTUALISIEREN ---
-        # Wir bauen den vollen Pfad, damit das Label das Bild findet
+        # --- FIX: UPDATE PREVIEW IN CONFIG WINDOW ---
+        # We build the full path so the label finds the image
         current_img = ui.combo_evt_img.currentText().strip()
         if current_img:
             full_path = get_asset_path(current_img)
@@ -3492,17 +3464,17 @@ class DiorClientGUI:
         else:
             ui.update_preview_image(None)
 
-        # Falls wir im Edit-Modus sind: Preview im Overlay verschieben
+        # If we are in edit mode: Move preview in overlay
         if getattr(self, "is_hud_editing", False) and self.overlay_win:
             ax = int(data.get("x", 100) * self.overlay_win.ui_scale)
             ay = int(data.get("y", 200) * self.overlay_win.ui_scale)
             self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
 
     def save_event_ui_data(self):
-        """Speichert das Event, auch wenn Felder leer sind (Reset)."""
+        """Saves the event, even if fields are empty (Reset)."""
         ui = self.ovl_config_win
 
-        # Welches Event bearbeiten wir gerade?
+        # Which event are we editing right now?
         etype = ui.lbl_editing.text().replace("EDITING: ", "").strip()
         if etype == "NONE" or not etype:
             return
@@ -3510,7 +3482,7 @@ class DiorClientGUI:
         if "events" not in self.config: self.config["events"] = {}
         existing_data = self.config["events"].get(etype, {})
 
-        # Koordinaten behalten (vom Overlay oder Config)
+        # Keep coordinates (from overlay or config)
         if self.overlay_win and getattr(self.overlay_win, 'event_preview_label',
                                         None) and self.overlay_win.event_preview_label.isVisible():
             pos = self.overlay_win.event_preview_label.pos()
@@ -3520,7 +3492,7 @@ class DiorClientGUI:
             save_x = existing_data.get("x", 100)
             save_y = existing_data.get("y", 100)
 
-        # Daten auslesen (mit .strip() um Leerzeichen zu killen)
+        # Read data (with .strip() to kill spaces)
         # 1. Image Data
         img_items = []
         # Add all items from list
@@ -3554,13 +3526,13 @@ class DiorClientGUI:
         elif len(snd_items) == 1: snd_val = snd_items[0]
         else: snd_val = snd_items
 
-        # Dauer sicherstellen
+        # Ensure duration
         try:
             dur_val = int(ui.ent_evt_duration.text())
         except ValueError:
             dur_val = 3000
 
-        # Update (Wir überschreiben alles, auch wenn es leer ist -> so kann man löschen)
+        # Update (We overwrite everything, even if empty -> this is how you delete)
         self.config["events"][etype] = {
             "img": img_val,
             "snd": snd_val,
@@ -3573,14 +3545,14 @@ class DiorClientGUI:
         }
 
         self.save_config()
-        self.add_log(f"UI: Event '{etype}' gespeichert (Img: '{img_val}').")
+        self.add_log(f"UI: Event '{etype}' saved (Img: '{img_val}').")
 
 
 
 
 
     def hide_overlay_temporary(self):
-        """Versteckt alle Overlay-Elemente ohne Daten zu löschen (z.B. für Alt-Tab)"""
+        """Hides all overlay elements without deleting data (e.g. for Alt-Tab)"""
         if not self.overlay_win: return
 
         # 1. Stats Widget
@@ -3606,30 +3578,30 @@ class DiorClientGUI:
             self.overlay_win.crosshair_label.hide()
 
     def stop_overlay_logic(self):
-        """Versteckt alle Overlay-Elemente und RESETTET alle Daten/Zähler (z.B. bei Spiel-Ende)"""
+        """Hides all overlay elements and RESETS all data/counters (e.g. at game exit)"""
 
-        # Erst alles verstecken
+        # Hide everything first
         self.hide_overlay_temporary()
 
-        # Dann Killfeed-Text leeren (harter Reset)
+        # Then clear killfeed text (hard reset)
         if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
             self.overlay_win.feed_label.setText("")
 
-        # Zähler resetten
+        # Reset counters
         self.killstreak_count = 0
         self.kill_counter = 0
         self.streak_factions = []
         self.streak_slot_map = []
 
-        # Messer-Status im Overlay resetten
+        # Reset knife status in overlay
         if self.overlay_win and hasattr(self.overlay_win, 'knife_labels'):
             for l in self.overlay_win.knife_labels:
                 l._is_active = False
 
-        # WICHTIG: Das Overlay über den neuen Stand (0) informieren
+        # IMPORTANT: Inform the overlay about the new state (0)
         self.update_streak_display()
 
-        # 4. Status im GUI updaten
+        # 4. Update status in GUI
         if hasattr(self, 'ovl_status_label'):
             try:
                 self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
@@ -3637,37 +3609,37 @@ class DiorClientGUI:
                 pass
 
     def refresh_ingame_overlay(self):
-        """Der Herzschlag des Overlays: Steuert Sichtbarkeit mit Priorität für Test/Edit."""
+        """The heartbeat of the overlay: controls visibility with priority for test/edit."""
         if not self.overlay_win: return
 
-        # Loop am Leben halten
+        # Keep loop alive
         QTimer.singleShot(500, self.refresh_ingame_overlay)
 
-        # 1. Status-Variablen
+        # 1. Status variables
         master_switch = self.config.get("overlay_master_active", True)
         game_running = getattr(self, 'ps2_running', False)
 
-        # --- FIX: TEST-MODI TRENNEN ---
-        stats_test_active = getattr(self, 'is_stats_test', False)  # Testet Stats, Crosshair, Feed
-        streak_test_active = getattr(self, 'is_streak_test', False)  # Testet NUR Streak
+        # --- FIX: SEPARATE TEST MODES ---
+        stats_test_active = getattr(self, 'is_stats_test', False)  # Tests Stats, Crosshair, Feed
+        streak_test_active = getattr(self, 'is_streak_test', False)  # Tests ONLY Streak
 
         edit_active = getattr(self, 'is_hud_editing', False)
         game_focused = self.is_game_focused()
 
-        # --- NEU: Fokus-Wechsel erkennen für automatisches Refresh ---
+        # --- NEW: Detect focus change for automatic refresh ---
         was_focused = getattr(self, "_last_focus_state", True)
         self._last_focus_state = game_focused
         focus_regained = game_focused and not was_focused
         focus_lost = not game_focused and was_focused
 
         # ---------------------------------------------------------
-        # ENTSCHEIDUNG: Master-Sichtbarkeit (Prioritäten-Kette)
+        # DECISION: Master Visibility (Priority Chain)
         # ---------------------------------------------------------
         path_recording = bool(self.overlay_win and getattr(self.overlay_win, "path_edit_active", False))
         should_render = False
-        mode_gameplay = False  # Trennung zwischen "Darf rendern" und "Spiel läuft wirklich"
+        mode_gameplay = False  # Separation between "Allowed to render" and "Game is actually running"
 
-        # Rendern, wenn irgendein Test oder Edit läuft
+        # Render if any test or edit is running
         if edit_active or stats_test_active or streak_test_active or path_recording:
             should_render = True
         elif getattr(self, "debug_overlay_active", False):
@@ -3681,20 +3653,19 @@ class DiorClientGUI:
         if should_render and not IS_WINDOWS and self.overlay_win:
             self.overlay_win.raise_()
 
-        # ---------------------------------------------------------
-        # ELEMENT-STEUERUNG
+        # ELEMENT CONTROL
         # ---------------------------------------------------------
         if should_render:
-            # Wenn wir gerade wieder Fokus bekommen haben: Positionen auffrischen
+            # If we just regained focus: Refresh positions
             if focus_regained:
                 if self.overlay_win:
-                    # FIX: Wenn wir im Spiel sind, müssen die Edit-Rahmen weg!
+                    # FIX: If we are in game, edit boxes must go!
                     if edit_active:
                         self.overlay_win.set_mouse_passthrough(True)
                     self.overlay_win.update_killfeed_pos()
                 self.update_streak_display()
 
-            # Wenn wir im Edit-Modus sind und den Fokus VERLIEREN (zum Client zurück), Edit wieder an
+            # If we are in edit mode and LOSE focus (back to client), turn edit back on
             if focus_lost and edit_active:
                 if self.overlay_win:
                     self.overlay_win.set_mouse_passthrough(False, active_targets=getattr(self, "current_edit_targets", []))
@@ -3703,10 +3674,10 @@ class DiorClientGUI:
             stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
             stats_editing = edit_active and ("stats" in getattr(self, "current_edit_targets", []))
 
-            # Zeigen bei: (Gameplay & Aktiv) ODER (Editieren) ODER (Stats Test)
-            # WICHTIG: streak_test_active fehlt hier absichtlich!
+            # Show on: (Gameplay & Active) OR (Editing) OR (Stats Test)
+            # IMPORTANT: streak_test_active is missing here intentionally!
             if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active:
-                # THROTTLE LOGIC: Nur 1x pro Sekunde updaten, außer im Edit/Test Modus
+                # THROTTLE LOGIC: Only update once per second, except in Edit/Test mode
                 now = time.time()
                 should_update_stats = True
                 
@@ -3716,11 +3687,11 @@ class DiorClientGUI:
                 
                 if should_update_stats:
                     self.stats_last_refresh_time = now
-                    # Echte Stats-Berechnung
+                    # Actual stats calculation
                     my_id = self.current_character_id
                     s = self.session_stats.get(my_id, {}) if my_id else {}
                     
-                    # NUTZE ZENTRALE LOGIK im Overlay-Fenster (Fixes Flickering & Toggles)
+                    # USE CENTRAL LOGIC in overlay window (Fixes Flickering & Toggles)
                     is_preview = stats_test_active or (stats_editing and not game_running)
                     self.overlay_win.update_stats_display(s, is_dummy=is_preview)
                     
@@ -3735,7 +3706,7 @@ class DiorClientGUI:
             cross_conf = self.config.get("crosshair", {})
             cross_editing = edit_active and ("crosshair" in getattr(self, "current_edit_targets", []))
 
-            # Crosshair nur bei Gameplay/Edit oder Stats-Test (nicht bei Streak-Test)
+            # Crosshair only during gameplay/edit or stats-test (not during streak-test)
             if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active:
                 self.overlay_win.crosshair_label.show()
             else:
@@ -3745,7 +3716,7 @@ class DiorClientGUI:
             feed_conf = self.config.get("killfeed", {})
             feed_editing = edit_active and ("feed" in getattr(self, "current_edit_targets", []))
 
-            # Feed nur bei Gameplay/Edit oder Stats-Test
+            # Feed only during gameplay/edit or stats-test
             if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or stats_test_active:
                 self.overlay_win.feed_label.show()
             else:
@@ -3755,13 +3726,13 @@ class DiorClientGUI:
             streak_conf = self.config.get("streak", {})
             streak_editing = edit_active and ("streak" in getattr(self, "current_edit_targets", []))
 
-            # HIER kommt streak_test_active dazu!
+            # HERE streak_test_active is added!
             if (streak_conf.get("active",
                                 True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active or path_recording:
                 
-                # FIX: Nur anzeigen, wenn wir leben! (is_dead Check hinzugefügt)
-                # Ausnahme: Edit-Modus oder Streak-Test
-                # FIX: Nur zeigen wenn wir leben UND eingeloggt sind!
+                # FIX: Only show if we are alive! (is_dead check added)
+                # Exception: Edit mode or streak test
+                # FIX: Only show if we are alive AND logged in!
                 show_condition = (self.killstreak_count > 0 and not getattr(self, "is_dead", False) and self.current_character_id)
                 
                 if show_condition or streak_editing or streak_test_active or path_recording:
@@ -3780,11 +3751,11 @@ class DiorClientGUI:
                 for k in self.overlay_win.knife_labels: k.hide()
 
         else:
-            # ALLES VERSTECKEN (Spiel aus / kein Fokus / kein Test)
+            # HIDE ALL (Game off / no focus / no test)
             if not game_running or not master_switch:
                 self.stop_overlay_logic()
             else:
-                # Nur temporär verstecken (z.B. Alt-Tab), aber Daten behalten
+                # Only hide temporarily (e.g. Alt-Tab), but keep data
                 self.hide_overlay_temporary()
 
 
@@ -3792,10 +3763,10 @@ class DiorClientGUI:
 
 
     def trigger_auto_voice(self, trigger_key):
-        """Drückt V + Zahl basierend auf der Config"""
+        """Presses V + number based on config"""
         if not self.is_game_focused():
             return
-        # 1. Config prüfen
+        # 1. Check config
         cfg = self.config.get("auto_voice", {})
         
         # Master Switch Check
@@ -3806,25 +3777,25 @@ class DiorClientGUI:
 
         if val == "OFF": return
 
-        # 2. Cooldown prüfen (damit er nicht spammt, z.B. bei Multi-Kills)
+        # 2. Check cooldown (so it doesn't spam, e.g. on multi-kills)
         now = time.time()
         last = getattr(self, "last_voice_time", 0)
-        if now - last < 2.5:  # 2.5 Sekunden Pause zwischen Callouts
+        if now - last < 2.5:  # 2.5 seconds pause between callouts
             return
 
         self.last_voice_time = now
 
-        # 3. Tastendruck simulieren (Thread damit Mainloop nicht hängt)
+        # 3. Simulate key press (Thread so mainloop doesn't hang)
         def press():
             try:
                 if IS_WINDOWS:
                     if not pydirectinput:
                         print("Voice Error: pydirectinput is unavailable on this platform.")
                         return
-                    # V drücken
+                    # Press V
                     pydirectinput.press('v')
-                    time.sleep(0.05)  # Kurze Pause für das Menü
-                    # Zahl drücken
+                    time.sleep(0.05)  # Short pause for the menu
+                    # Press number
                     pydirectinput.press(val)
                 else:
                     if not XDO_TOOL:
@@ -3835,26 +3806,26 @@ class DiorClientGUI:
                     time.sleep(0.05)
                     subprocess.run([XDO_TOOL, "key", str(val)], check=False)
 
-                # Loggen für Debug
+                # Log for debug
                 print(f"DEBUG: Auto-Voice V-{val} triggered by {trigger_key}")
             except Exception as e:
                 print(f"Voice Error: {e}")
 
         threading.Thread(target=press, daemon=True).start()
 
-    def test_full_ui_scenarios(self):
-        """Startet eine Vorschau (Anti-Ghosting Test mit neuem Layout) - PyQt6 Fixed"""
+    def test_stats_visuals(self):
+        """Starts a preview (Anti-Ghosting Test with new layout) - PyQt6 Fixed"""
         if not self.overlay_win:
-            self.add_log("WARN: Overlay System ist nicht aktiv! Bitte erst starten.")
+            self.add_log("WARN: Overlay system is not active! Please start first.")
             return
 
-        self.add_log("UI: Starte visuellen Test (Layout-Check)...")
+        self.add_log("UI: Starting visual test (Layout Check)...")
         self.is_stats_test = True
 
-        # Sofortiges Update des Stats-Balkens (KD, KPM etc.) erzwingen
+        # Force immediate update of stats bar (KD, KPM etc.)
         self.refresh_ingame_overlay()
 
-        # Test-Szenarien (Typ, Name, Tag, IsHS, KD)
+        # Test scenarios (Type, Name, Tag, IsHS, KD)
         test_scenarios = [
             ("kill", "SweatyHeavy", "B0SS", True, 3.5),
             ("kill", "RandomBlueberry", "", False, 0.8),
@@ -3867,27 +3838,27 @@ class DiorClientGUI:
         ]
 
         def send_fake_feed(t_type, name, tag, is_hs, kd_val):
-            # Basis-Style für den Text
+            # Base style for text
             # Killfeed Font Size (Robust)
             kf_cfg_raw = self.config.get("killfeed", {})
             kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
             kf_f = kf_cfg.get("font_size", 19)
             base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
 
-            # Tag Formatierung
+            # Tag formatting
             tag_display = f"[{tag}]" if tag else ""
 
-            # Icon Logik
+            # Icon logic
             icon_html = ""
             if is_hs:
                 hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
                 hs_path = get_asset_path(hs_icon).replace("\\", "/")
                 if os.path.exists(hs_path):
-                    # Icon ganz links
+                    # Icon far left
                     hs_size = kf_cfg.get("hs_icon_size", 19)
                     icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
 
-            # HTML zusammenbauen
+            # Assemble HTML
             if t_type == "kill":
                 msg = f"""<div style="{base_style}">
                         {icon_html}<span style="color: #888;">{tag_display} </span>
@@ -3906,33 +3877,33 @@ class DiorClientGUI:
                         <span style="color: white;">{name}</span>
                         </div>"""
 
-            # Signal senden
+            # Send signal
             if self.overlay_win:
                 self.overlay_win.signals.killfeed_entry.emit(msg)
 
-        # Die Test-Events nacheinander abfeuern (PyQt6 QTimer statt root.after)
+        # Fire test events sequentially (PyQt6 QTimer instead of root.after)
         for i, (t, n, tag, hs, kd) in enumerate(test_scenarios):
-            # QTimer.singleShot(Verzögerung_ms, Funktion)
+            # QTimer.singleShot(Delay_ms, Function)
             QTimer.singleShot(i * 500, lambda t=t, n=n, tag=tag, hs=hs, kd=kd: send_fake_feed(t, n, tag, hs, kd))
 
-        # --- AUTO-CLEAR UND AUFRÄUMEN ---
+        # --- AUTO-CLEAR AND CLEANUP ---
         def end_test():
             self.is_stats_test = False
             if self.overlay_win:
                 self.overlay_win.signals.clear_feed.emit()
-                # Stats wieder auf echte Werte (oder 0) setzen
+                # Set stats back to real values (or 0)
                 self.refresh_ingame_overlay()
-            self.add_log("UI: Test beendet & Feed bereinigt.")
+            self.add_log("UI: Test finished & feed cleaned.")
 
-        # Nach 6 Sekunden aufräumen
+        # Cleanup after 6 seconds
         QTimer.singleShot(6000, end_test)
 
     def get_current_tab_targets(self):
-        """Ermittelt sicher, welcher Tab gerade offen ist."""
+        """Safely determines which tab is currently open."""
         try:
             ui = self.ovl_config_win
             idx = ui.tabs.currentIndex()
-            # .strip() entfernt Leerzeichen am Anfang/Ende
+            # .strip() removes spaces at beginning/end
             tab_text = ui.tabs.tabText(idx).strip().upper()
 
             print(f"DEBUG: Current Tab Index: {idx}, Text: '{tab_text}'")  # Debug Log
@@ -3957,17 +3928,17 @@ class DiorClientGUI:
 
     def toggle_hud_edit_mode(self):
         """
-        Startet den Edit-Modus, zeigt Rahmen an, füllt Dummy-Daten ein
-        und ermöglicht Drag & Drop.
+        Starts edit mode, shows borders, fills dummy data
+        and enables Drag & Drop.
         """
         if not self.overlay_win:
-            self.add_log("ERR: Overlay läuft nicht! Bitte erst Overlay starten.")
-            # Versuch es zu starten, falls Master-Switch an ist
+            self.add_log("ERR: Overlay is not running! Please start overlay first.")
+            # Try to start it if master switch is on
             if self.config.get("overlay_master_active", True):
                 self.create_overlay_window()
             if not self.overlay_win: return
 
-        # Status umschalten
+        # Toggle status
         self.is_hud_editing = not getattr(self, "is_hud_editing", False)
         is_editing = self.is_hud_editing
 
@@ -3976,40 +3947,40 @@ class DiorClientGUI:
         self.current_edit_targets = targets # Store targets for visibility logic
 
         if not targets:
-            self.add_log("INFO: Bitte erst einen Tab auswählen.")
+            self.add_log("INFO: Please select a tab first.")
             self.is_hud_editing = False
             return
 
-        # Buttons zum Färben
+        # Buttons for coloring
         btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats, ui.btn_edit_hud_feed, ui.btn_edit_twitch]
 
         if is_editing:
-            # --- START EDIT (An) ---
+            # --- START EDIT (On) ---
 
-            # 1. Overlay klickbar machen
+            # 1. Make overlay clickable
             self.overlay_win.set_mouse_passthrough(False, active_targets=targets)
 
-            # ZWINGE das Config-Fenster nach oben, damit man den "Stop Edit" Button immer klicken kann!
-            # Wir machen das NACHDEM das Overlay handle neu erstellt wurde
+            # FORCE config window to top so "Stop Edit" button can always be clicked!
+            # We do this AFTER overlay handle was recreated
             self.ovl_config_win.raise_()
             self.ovl_config_win.activateWindow()
 
-            # 2. Buttons rot färben
+            # 2. Color buttons red
             for btn in btn_list:
                 btn.setText("STOP EDIT (SAVE)")
                 btn.setStyleSheet(
                     "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;")
 
-            # 3. DUMMY DATEN LADEN (Damit man was sieht!)
+            # 3. LOAD DUMMY DATA (So you see something!)
 
-            # A) STATS WIDGET (KD Anzeige)
+            # A) STATS WIDGET (KD display)
             if "stats" in targets:
                 cfg = self.config.get("stats_widget", {})
                 img_name = clean_path(cfg.get("img", ""))
                 img_path = get_asset_path(img_name) if img_name else ""
 
-                # Zwinge sofortiges Update mit dem konstanten Dummy
-                # Damit ist es sofort da und sieht bunt aus
+                # Force immediate update with constant dummy
+                # This makes it immediately visible and colorful
                 stats_cfg_raw = self.config.get("stats_widget", {})
                 stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
                 f_size = stats_cfg.get("font_size", 22)
@@ -4017,21 +3988,21 @@ class DiorClientGUI:
 
                 self.overlay_win.stats_bg_label.show()
 
-                # Größe erzwingen für Rahmen (falls Bild fehlt)
+                # Force size for frame (if image is missing)
                 if not img_path or not os.path.exists(img_path):
-                    w = int(600 * self.overlay_win.ui_scale)  # Etwas breiter machen für den langen Text
+                    w = int(600 * self.overlay_win.ui_scale)  # Make slightly wider for long text
                     h = int(60 * self.overlay_win.ui_scale)
                     self.overlay_win.stats_bg_label.setFixedSize(w, h)
                 else:
                     self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
                     self.overlay_win.stats_bg_label.adjustSize()
 
-                # Loop anwerfen (der nutzt jetzt auch DUMMY_STATS_HTML, also kein Springen!)
+                # Start loop (uses DUMMY_STATS_HTML now, so no jumping!)
                 self.refresh_ingame_overlay()
 
-            # B) KILLFEED (Text einfügen, damit er Größe bekommt und greifbar wird)
+            # B) KILLFEED (Insert text to give it size and make it grabbable)
             if "feed" in targets:
-                # Wir füllen den Feed mit Fake-Zeilen, damit die Box groß genug zum Klicken ist
+                # Fill feed with fake lines so box is large enough to click
                 fake_feed = []
                 # Killfeed Font Size (Robust)
                 kf_cfg_raw = self.config.get("killfeed", {})
@@ -4039,7 +4010,7 @@ class DiorClientGUI:
                 kf_f = kf_cfg.get("font_size", 19)
                 base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; margin-bottom: 2px; text-align: right;"
 
-                # 3 Zeilen simulieren
+                # Simulate 3 lines
                 line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'
                 line2 = f'<div style="{base_style}"><span style="color:#00ff00;">ALLY</span> <span style="color:white;">[HS]</span> <span style="color:#ff0000;">TARGET</span></div>'
                 line3 = f'<div style="{base_style}"><span style="color:#888;">[SKL]</span> <span style="color:#ff4444;">SWEATY</span> (4.2)</div>'
@@ -4048,12 +4019,12 @@ class DiorClientGUI:
                 self.overlay_win.feed_label.adjustSize()
                 self.overlay_win.feed_label.show()
 
-            # C) EVENTS (Preview Bild)
+            # C) EVENTS (Preview image)
             if "event" in targets:
                 # NEW COMBOBOX LOGIC
                 img_name = clean_path(ui.combo_evt_img.currentText())
                 
-                # Falls nichts ausgewählt ist, nimm das erste Item
+                # If nothing selected, take first item
                 if not img_name and ui.combo_evt_img.count() > 0:
                     img_name = clean_path(ui.combo_evt_img.itemText(0))
                     
@@ -4072,7 +4043,7 @@ class DiorClientGUI:
                         self.overlay_win.event_preview_label.setPixmap(pix)
                         self.overlay_win.event_preview_label.resize(w, h)
 
-                        # Position setzen
+                        # Set position
                         evt_name = ui.lbl_editing.text().replace("EDITING: ", "").strip()
                         data = self.config.get("events", {}).get(evt_name, {})
                         ex = int(data.get("x", 100) * self.overlay_win.ui_scale)
@@ -4082,13 +4053,13 @@ class DiorClientGUI:
                         self.overlay_win.event_preview_label.show()
                         self.overlay_win.event_preview_label.raise_()
 
-            # D) KILLSTREAK (Dummy Daten füllen)
+            # D) KILLSTREAK (Fill dummy data)
             if "streak" in targets:
                 streak_cfg = self.config.get("streak", {})
                 img_name = clean_path(streak_cfg.get("img", "KS_Counter.png"))
                 img_path = get_asset_path(img_name)
 
-                # Wir simulieren einen aktiven Streak
+                # Simulate active streak
                 self.overlay_win.draw_streak_ui(
                     img_path,
                     10,  # Dummy Count
@@ -4097,9 +4068,9 @@ class DiorClientGUI:
                     [0, 1, 2] # Dummy Slots
                 )
 
-            # E) CROSSHAIR (Sofort anzeigen)
+            # E) CROSSHAIR (Show immediately)
             if "crosshair" in targets:
-                # Sicherstellen, dass die aktuellen Settings geladen sind
+                # Ensure current settings are loaded
                 self.update_crosshair_from_qt()
                 if hasattr(self.overlay_win, 'crosshair_label'):
                     self.overlay_win.crosshair_label.show()
@@ -4107,25 +4078,25 @@ class DiorClientGUI:
 
             # Refresh mask one last time after all dummy data is set
             self.overlay_win.update_edit_mask(targets)
-            self.add_log(f"UI: Edit-Modus aktiviert für {targets}")
+            self.add_log(f"UI: Edit mode activated for {targets}")
 
         else:
-            # --- STOP EDIT (Aus) ---
+            # --- STOP EDIT (Off) ---
 
-            # ZWINGE das Config-Fenster zurück (OnTop aus)
+            # FORCE config window back (OnTop off)
             self.ovl_config_win.setWindowFlags(self.ovl_config_win.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint)
             self.ovl_config_win.show()
 
-            # 1. Overlay wieder durchlässig machen
+            # 1. Make overlay passthrough again
             self.overlay_win.set_mouse_passthrough(True)
 
-            # 2. Buttons zurücksetzen
+            # 2. Reset buttons
             for btn in btn_list:
                 btn.setText("MOVE UI")
                 btn.setStyleSheet("")
 
-                # 3. Dummy Daten aufräumen (Leeren)
-            # 4. Speichern
+                # 3. Cleanup dummy data (Empty)
+            # 4. Save
             if "event" in targets:
                 self.save_event_ui_data()
             elif "streak" in targets:
@@ -4137,56 +4108,56 @@ class DiorClientGUI:
             elif "crosshair" in targets:
                 self.update_crosshair_from_qt()
 
-            # --- CLEANUP (Globale Bereinigung) ---
-            # Wenn das Spiel NICHT läuft, verstecken wir ALLES, um hängende Elemente zu vermeiden.
+            # --- CLEANUP (Global Cleanup) ---
+            # If game is NOT running, hide EVERYTHING to avoid hanging elements.
             if not getattr(self, 'ps2_running', False):
                 self.stop_overlay_logic()
 
-                # Event Preview muss extra behandelt werden (gehört nicht zur Standard-Logik)
+                # Event Preview needs extra handling (not part of standard logic)
                 if hasattr(self.overlay_win, 'event_preview_label'):
                     self.overlay_win.event_preview_label.hide()
 
-            self.add_log("UI: Positionen gespeichert & Edit beendet.")
+            self.add_log("UI: Positions saved & edit finished.")
 
 
-    def on_overlay_tab_change(self, event):
-        """Wenn Tab gewechselt wird während Edit an ist -> Edit Bereich anpassen"""
+    def on_tab_changed(self):
+        """If tab is changed while Edit is on -> adjust Edit area"""
         if getattr(self, "is_hud_editing", False):
-            # Wir beenden kurz den Edit Mode und starten ihn neu für den neuen Tab
-            self.toggle_hud_edit_mode()  # Aus
-            self.root.after(200, self.toggle_hud_edit_mode)  # An (im neuen Tab)
+            # We briefly end Edit mode and restart it for the new tab
+            self.toggle_hud_edit_mode()  # Off
+            self.root.after(200, self.toggle_hud_edit_mode)  # On (in new tab)
 
     def update_stats_widget_position(self):
-        # Wird vom Loop erledigt, dient nur als Dummy oder Trigger für sofortigen Refresh
+        # Handled by loop, serves only as dummy or trigger for immediate refresh
         self.refresh_ingame_overlay()
 
 
 
     def _get_random_slot(self):
         import random
-        # Falls die Liste noch nicht existiert
+        # If list doesn't exist yet
         if not hasattr(self, 'streak_slot_map'): self.streak_slot_map = []
 
         knives_per_ring = 50
         current_ring = len(self.streak_slot_map) // knives_per_ring
 
-        # Welche Plätze in diesem Ring sind schon belegt?
+        # Which slots in this ring are already occupied?
         used_in_ring = [s % knives_per_ring for s in self.streak_slot_map if s // knives_per_ring == current_ring]
 
-        # Alle freien Plätze finden (0 bis 49)
+        # Find all free slots (0 to 49)
         available = [x for x in range(knives_per_ring) if x not in used_in_ring]
 
         if not available:
-            return len(self.streak_slot_map)  # Fallback (sollte nie passieren)
+            return len(self.streak_slot_map)  # Fallback (should never happen)
 
-        # Zufälligen freien Platz wählen
+        # Choose random free slot
         chosen = random.choice(available)
 
-        # Rückgabe: Ring-Offset + Zufallsplatz
+        # Return: Ring-Offset + Random slot
         return (current_ring * knives_per_ring) + chosen
 
     def update_streak_display(self):
-        """Sendet Streak-Daten sicher per Signal an das Overlay-Fenster"""
+        """Sends streak data safely via signal to the overlay window"""
         if not self.overlay_win: return
 
         streak_cfg = self.config.get("streak", {})
@@ -4205,7 +4176,7 @@ class DiorClientGUI:
         raw_slots = getattr(self, 'streak_slot_map', [])
         slot_map = list(raw_slots) if isinstance(raw_slots, list) else []
 
-        # WICHTIG: Nutze das Signal-System, um Thread-Fehler zu vermeiden
+        # IMPORTANT: Use signal system to avoid thread errors
         self.overlay_win.signals.update_streak.emit(
             img_path,
             current_streak,
@@ -4215,7 +4186,7 @@ class DiorClientGUI:
         )
 
     def hide_streak_display(self):
-        """Versteckt die Streak-Anzeige, ohne den Zähler zurückzusetzen."""
+        """Hides the streak display without resetting the counter."""
         if not self.overlay_win: return
         self.overlay_win.signals.update_streak.emit("", 0, [], {}, [])
 
@@ -4227,19 +4198,19 @@ class DiorClientGUI:
         self.was_revived = False
         self.is_tk_death = False
         self.last_kill_time = 0
-        self.add_log("STREAK: Status zurückgesetzt (Neuer Charakter/Session).")
+        self.add_log("STREAK: Status reset (New character/session).")
 
     def test_streak_visuals(self):
         """
-        Startet eine Vorschau mit 20 Messern (PyQt6 kompatibel).
+        Starts a preview with 20 knives (PyQt6 compatible).
         """
         self.is_streak_test = True
-        # 1. Vorherige Timer abbrechen
+        # 1. Cancel previous timers
         if self._streak_test_timer:
             self._streak_test_timer.stop()
             self._streak_test_timer = None
 
-        # 2. Backup erstellen (nur wenn nicht schon im Test-Modus)
+        # 2. Create backup (only if not already in test mode)
         if self._streak_backup is None:
             self._streak_backup = {
                 'count': getattr(self, 'killstreak_count', 0),
@@ -4247,23 +4218,23 @@ class DiorClientGUI:
                 'slots': getattr(self, 'streak_slot_map', [])
             }
 
-        self.add_log("UI: Teste Killstreak-Visuals (20 Messer)...")
+        self.add_log("UI: Testing Killstreak visuals (20 knives)...")
 
-        # 3. Testwerte setzen
+        # 3. Set test values
         self.killstreak_count = 20
-        # Erzeuge eine bunte Mischung aus Fraktionen
+        # Create a colorful mix of factions
         self.streak_factions = (["TR", "NC", "VS"] * 7)[:20]
 
         import random
-        # Slots zufällig verteilen
+        # Distribute slots randomly
         slots = list(range(20))
         random.shuffle(slots)
         self.streak_slot_map = slots
 
-        # 4. Update an Overlay senden
+        # 4. Send update to overlay
         self.update_streak_display()
 
-        # 5. Reset-Funktion definieren
+        # 5. Define reset function
         def reset_action():
             try:
                 if self._streak_backup:
@@ -4271,40 +4242,40 @@ class DiorClientGUI:
                     self.streak_factions = self._streak_backup['factions']
                     self.streak_slot_map = self._streak_backup['slots']
 
-                    # Overlay zurücksetzen
+                    # Reset overlay
                     self.update_streak_display()
 
-                    self._streak_backup = None  # Backup löschen
+                    self._streak_backup = None  # Delete backup
             except Exception as e:
                 self.add_log(f"ERR: Streak Test Reset failed: {e}")
             finally:
                 self._streak_test_timer = None
                 self.is_streak_test = False
-                self.add_log("UI: Test beendet.")
+                self.add_log("UI: Test finished.")
 
-        # 6. Timer starten (PyQt6 Weg)
+        # 6. Start timer (PyQt6 way)
         self._streak_test_timer = QTimer()
         self._streak_test_timer.setSingleShot(True)
         self._streak_test_timer.timeout.connect(reset_action)
-        self._streak_test_timer.start(4000)  # 4 Sekunden (wie in deinem Kommentar gewünscht, Code hatte 2000)
+        self._streak_test_timer.start(4000)  # 4 seconds
 
     def fade_out(self, tag, alpha=255):
         if alpha > 0:
-            alpha -= 15  # Geschwindigkeit des Ausblendens (höher = schneller)
+            alpha -= 15  # Fade speed (higher = faster)
 
-            # Alle Items mit diesem Tag finden
+            # Find all items with this tag
             items = self.ovl_canvas.find_withtag(tag)
             for item in items:
-                # Bei Texten können wir einfach die Farbe ändern (Graustufen)
+                # For text, we can simply change the color (grayscale)
                 if self.ovl_canvas.type(item) == "text":
-                    # Von Weiß zu Schwarz/Transparent
+                    # From white to black/transparent
                     color_val = max(0, alpha)
                     hex_color = f'#{color_val:02x}{color_val:02x}{color_val:02x}'
                     self.ovl_canvas.itemconfig(item, fill=hex_color)
 
-                # Bei Bildern ist es komplexer (erfordert PIL Re-Rendering)
-                # Einfachere Lösung: Wir verschieben es leicht oder ändern die Position
-                # Für echtes Bild-Alpha müssten wir die PIL-Instanz speichern:
+                # For images it's more complex (requires PIL re-rendering)
+                # Simpler solution: We move it slightly or change the position
+                # For real image alpha we would need to save the PIL instance:
 
             if alpha <= 0:
                 self.ovl_canvas.delete(tag)
@@ -4320,13 +4291,13 @@ class DiorClientGUI:
         return "white"
 
     def animate_fade_in(self, step=0):
-        # Liste von Farbstufen für den "Glow"-Effekt
+        # List of color levels for the "glow" effect
         colors = ["#050a0f", "#0a141d", "#0f1e2b", "#142839", "#00f2ff"]
         if step < len(colors):
             current_color = colors[step]
-            # Rahmenfarbe animieren
+            # Animate border color
             self.sub_menu_frame.config(highlightbackground=current_color)
-            # Textfarbe der Buttons animieren
+            # Animate text color of buttons
             for btn in self.sub_buttons:
                 btn.config(fg=current_color if step < len(colors) - 1 else "#00f2ff")
 
@@ -4334,40 +4305,40 @@ class DiorClientGUI:
 
     def handle_sub_click(self, item):
         self.add_log(f"NAV: Switching to {item}...")
-        self.current_sub_tab = item  # Setzt den Namen (z.B. "Weapon stats" oder "Overview")
-        self.show_characters()  # Baut die Seite neu auf
+        self.current_sub_tab = item  # Sets name (e.g. "Weapon stats" or "Overview")
+        self.show_characters()  # Rebuilds the page
         if hasattr(self, 'sub_menu_frame'):
             self.sub_menu_frame.place_forget()
 
     def show_sub_menu(self, event):
-        # Menü positionieren
+        # Position menu
         self.sub_menu_frame.place(x=50, y=140, relwidth=0.88)
-        # Animation starten
+        # Start animation
         self.animate_fade_in()
 
-    # DATEI: Dior Client.py
+    # FILE: Dior Client.py
 
     def update_live_graph(self):
-        """Berechnet jede Sekunde die aktuellen Stats und triggert das Dashboard-Update."""
+        """Calculates current stats every second and triggers dashboard update."""
         try:
             now = time.time()
 
-            # Aktuell ausgewählte Server-ID holen (Standard auf 10/EU)
+            # Get currently selected server ID (Default to 10/EU)
             current_wid = str(getattr(self, 'current_world_id', '10'))
 
-            # 1. Fraktions-Zahlen berechnen (MIT CLEANUP)
+            # 1. Calculate faction numbers (WITH CLEANUP)
             counts = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0}
             total_pop = 0
 
             # Cleanup Time: Players inactive for > 10 Minutes are removed
             cutoff = now - 600
             
-            # WICHTIG: list(...) erstellen für Thread-Safety, da Worker parallel schreibt
+            # IMPORTANT: create list(...) for thread safety, as worker writes in parallel
             snapshot = list(self.active_players.items())
             to_remove = []
 
             for pid, val in snapshot:
-                # Standardwerte
+                # Default values
                 t = 0
                 fac = "NSO"
                 p_wid = current_wid 
@@ -4383,25 +4354,25 @@ class DiorClientGUI:
                     to_remove.append(pid)
                     continue
 
-                # B) FILTER: Nur zählen, wenn Server ID passt!
+                # B) FILTER: Only count if server ID matches!
                 if str(p_wid) != current_wid:
                     continue
 
-                # C) Zählen
+                # C) Count
                 if fac in counts:
                     counts[fac] += 1
                     total_pop += 1
             
             # Remove old entries
             for pid in to_remove:
-                # Safety check (könnte schon weg sein)
+                # Safety check (might be already gone)
                 if pid in self.active_players:
                     del self.active_players[pid]
 
             self.live_stats.update(counts)
             self.live_stats["Total"] = total_pop
 
-            # 2. Graph-Daten füttern
+            # 2. Feed graph data
             elapsed = now - getattr(self, 'session_start_time', now)
             graph_interval = 1.0 if elapsed < 60 else 30.0
 
@@ -4423,17 +4394,17 @@ class DiorClientGUI:
             print(f"Stats-Update Error: {e}")
 
     def update_session_time(self):
-        """Aktualisiert die angezeigte Session-Zeit im Overlay (unabhängig von Kills)."""
+        """Updates displayed session time in overlay (independent of kills)."""
         if not self.current_character_id: return
         
-        # Wir brauchen das Session-Objekt
+        # We need the session object
         s_obj = self.session_stats.get(self.current_character_id)
         if not s_obj: return
 
-        # Wenn das Overlay läuft, updaten wir die Anzeige
+        # If overlay is running, update display
         if self.overlay_win and hasattr(self.overlay_win, "update_stats_display"):
-            # FIX: Nur updaten, wenn das Widget auch gerade sichtbar sein soll!
-            # (Verhindert das "Aufblitzen" alle 10 Sek wenn man getabbt ist)
+            # FIX: Only update if widget should be visible!
+            # (Prevents "flashing" every 10s when alt-tabbed)
             is_test = getattr(self, "is_stats_test", False) or getattr(self, "debug_overlay_active", False)
             is_editing = self.is_hud_editing and ("stats" in getattr(self, "current_edit_targets", []))
             
@@ -4450,41 +4421,41 @@ class DiorClientGUI:
             self.sub_menu_frame.place_forget()
 
     def clear_content(self):
-        """Löscht alle Inhalte vom Canvas und zerstört die dazugehörigen Widgets"""
+        """Deletes all content from Canvas and destroys associated widgets"""
         for item_id in self.content_ids:
             try:
-                # Wir holen uns den Namen des Widgets, das in diesem Canvas-Fenster steckt
+                # Get name of widget inside this canvas window
                 widget_path = self.canvas.itemcget(item_id, "window")
                 if widget_path:
-                    # Wir suchen das echte Widget-Objekt anhand des Namens und zerstören es
+                    # Search real widget object by name and destroy it
                     widget = self.root.nametowidget(widget_path)
                     widget.destroy()
             except Exception:
-                # Falls das Widget bereits zerstört wurde oder kein Fenster war
+                # If the widget was already destroyed or was not a window
                 pass
 
-            # Jetzt löschen wir das Element endgültig vom Canvas
+            # Now we delete the element permanently from the Canvas
             self.canvas.delete(item_id)
 
         self.content_ids.clear()
 
     def show_dashboard(self):
-        """Zeigt das neue Qt-Fenster und leert den Tkinter-Bereich."""
+        """Shows the new Qt window and clears the Tkinter area."""
         self.clear_content()
         self.current_tab = "Dashboard"
 
-        # Zeige das neue Fenster
+        # Show the new window
         if hasattr(self, 'dash_window'):
             self.dash_window.show()
-            self.dash_window.raise_()  # In den Vordergrund
+            self.dash_window.raise_()  # To the foreground
 
-        # Info im Hauptfenster (da es jetzt leer ist)
+        # Info in main window (since it is now empty)
         # Removed tk.Label usage
 
 
     def animate_api_light(self, canvas, light_id, color_type, step=0):
         import math
-        # Pulsieren berechnen (Sinus-Welle)
+        # Calculate pulse (Sine wave)
         brightness = (math.sin(step) + 1) / 4 + 0.5
         if color_type == "green":
             r, g, b = 0, int(255 * brightness), 0
@@ -4496,15 +4467,15 @@ class DiorClientGUI:
             canvas.itemconfig(light_id, fill=color_hex, outline="#333")
             self.root.after(50, lambda: self.animate_api_light(canvas, light_id, color_type, step + 0.1))
         except:
-            pass  # Stoppt, wenn Tab gewechselt wird
+            pass  # Stops when tab is changed
 
     def show_launcher(self):
         self.clear_content()
         self.current_tab = "launcher"
 
-        # Überprüfen, ob das Objekt existiert (Sicherheitscheck)
+        # Check if object exists (Safety check)
         if hasattr(self, 'launcher_win'):
-            # Optional: Pfad-Info im Footer aktualisieren
+            # Optional: Update path info in footer
             path_info = f"TARGET_PATH: {self.ps2_dir if self.ps2_dir else 'NOT_FOUND'}"
             self.launcher_win.lbl_info.setText(f"STATUS: SYSTEM_READY | {path_info}")
 
@@ -4520,7 +4491,7 @@ class DiorClientGUI:
         self.clear_content()
         self.current_tab = "settings"
 
-        # Aktuelle Daten in das Qt Fenster laden
+        # Load current data into the Qt window
         self.settings_win.load_config(self.config, self.ps2_dir)
 
         self.settings_win.show()
@@ -4540,7 +4511,7 @@ class DiorClientGUI:
         while True:
             ids = []
             try:
-                # Sammle IDs aus der Warteschlange (wartet max 5 Sekunden auf neue IDs)
+                # Collect IDs from queue (waits max 5 seconds for new IDs)
                 while len(ids) < 30:
                     ids.append(self.id_queue.get(timeout=5))
             except Empty:
@@ -4548,13 +4519,13 @@ class DiorClientGUI:
 
             if ids:
                 try:
-                    # Abfrage an Census mit allen Details (inklusive Outfit!)
+                    # Query Census with all details (including outfit!)
                     url = (f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/"
                            f"?character_id={','.join(ids)}"
                            f"&c:show=character_id,name.first,faction_id,battle_rank"
                            f"&c:resolve=outfit")
 
-                    # Erst prüfen, ob die Antwort gültig ist
+                    # First check if response is valid
                     response = requests.get(url, timeout=5)
                     if response.status_code == 200:
                         try:
@@ -4563,7 +4534,7 @@ class DiorClientGUI:
                                 conn = sqlite3.connect(DB_PATH)
                                 cursor = conn.cursor()
 
-                                # Sicherstellen, dass der RAM-Cache existiert
+                                # Ensure RAM cache exists
                                 if not hasattr(self, 'outfit_cache'):
                                     self.outfit_cache = {}
 
@@ -4573,24 +4544,24 @@ class DiorClientGUI:
                                     fid = char.get('faction_id', 0)
                                     rank = char.get('battle_rank', {}).get('value', 0)
 
-                                    # Hier holen wir den Outfit-Tag (Alias)
+                                    # Get outfit tag (alias)
                                     tag = char.get('outfit', {}).get('alias', "")
 
-                                    # 1. In Datenbank speichern (Permanent)
+                                    # 1. Save in database (Permanent)
                                     cursor.execute('''INSERT OR REPLACE INTO player_cache 
                                                       (character_id, name, faction_id, battle_rank, outfit_tag) 
                                                       VALUES (?, ?, ?, ?, ?)''',
                                                    (cid, name, fid, rank, tag))
 
-                                    # 2. WICHTIG: Im Arbeitsspeicher (RAM) aktualisieren
-                                    # Damit der Census-Listener den Tag SOFORT findet
+                                    # 2. IMPORTANT: Update in RAM
+                                    # So Census listener finds the tag IMMEDIATELY
                                     self.name_cache[cid] = name
                                     self.outfit_cache[cid] = tag
 
                                 conn.commit()
                                 conn.close()
 
-                                # GUI-Zähler aktualisieren
+                                # Update GUI counter
                                 if hasattr(self, 'cache_label') and self.cache_label.winfo_exists():
                                     try:
                                         conn = sqlite3.connect(DB_PATH)
@@ -4617,22 +4588,22 @@ class DiorClientGUI:
         print(f"LOG: {text}")  # Backup in der Konsole
         # Removed Tkinter Log logic as log_area doesn't exist
 
-        # NEU: Auch an das Qt-Fenster senden
+        # NEW: Also send to Qt window
         if hasattr(self, 'char_win'):
-            # Thread-Safe Update via InvokeMethod
+            # Thread-safe update via InvokeMethod
             QMetaObject.invokeMethod(self.char_win, "add_log",
                                      Qt.ConnectionType.QueuedConnection,
                                      Q_ARG(str, text))
 
     def apply_main_background(self, path):
-        """Setzt das Hintergrundbild via Stylesheet für das Hauptfenster."""
+        """Sets the background image via stylesheet for the main window."""
         if not path or not os.path.exists(path):
             return
 
-        # Windows-Pfade müssen für CSS in Slashes umgewandelt werden
+        # Windows paths must be converted to slashes for CSS
         clean_path = path.replace("\\", "/")
 
-        # Stylesheet setzen: border-image skaliert das Bild auf Fenstergröße
+        # Set stylesheet: border-image scales the image to window size
         style = f"""
         QMainWindow {{
             border-image: url("{clean_path}") 0 0 0 0 stretch stretch;
@@ -4641,47 +4612,47 @@ class DiorClientGUI:
         self.main_hub.setStyleSheet(style)
 
     def change_background_file(self):
-        """Öffnet den File-Dialog und speichert den Hintergrund (PyQt6 Version)."""
+        """Opens the file dialog and saves the background (PyQt6 version)."""
         from PyQt6.QtWidgets import QFileDialog
 
-        # 1. Datei auswählen (PyQt Dialog statt Tkinter)
+        # 1. Select file (PyQt dialog instead of Tkinter)
         file_path, _ = QFileDialog.getOpenFileName(
             self.main_hub,
-            "Hintergrundbild wählen",
+            "Choose background image",
             "",
             "Images (*.png *.jpg *.jpeg)"
         )
 
         if file_path:
-            # 2. Config speichern
+            # 2. Save config
             self.config["main_background_path"] = file_path
             self.save_config()
 
-            # 3. Hintergrund sofort anwenden
+            # 3. Apply background immediately
             self.apply_main_background(file_path)
 
-            self.add_log(f"SYS: Hintergrund geändert auf {os.path.basename(file_path)}")
+            self.add_log(f"SYS: Background changed to {os.path.basename(file_path)}")
 
     def execute_launch(self, mode):
-        # 1. Verzeichnis-Check
+        # 1. Directory Check
         if not self.ps2_dir or not os.path.exists(self.ps2_dir):
             msg = "ERR: PS2 Directory not found! Check Settings."
             self.add_log(msg)
             self.launcher_win.lbl_info.setText(msg)
             return
 
-        # Pfade definieren
+        # Define paths
         src = self.source_high if mode == "high" else self.source_low
         dest = os.path.join(self.ps2_dir, "UserOptions.ini")
         exe = os.path.join(self.ps2_dir, "LaunchPad.exe")
 
         if os.path.exists(src):
             try:
-                # Datei kopieren
+                # Copy file
                 shutil.copy2(src, dest)
                 self.add_log(f"SYS: Applied {mode} configuration.")
 
-                # Spiel starten
+                # Start game
                 if os.path.exists(exe):
                     subprocess.Popen([exe])
                     self.add_log("SYS: LaunchPad triggered.")
@@ -4695,7 +4666,7 @@ class DiorClientGUI:
                     self.add_log("ERR: LaunchPad.exe not found.")
                     self.launcher_win.lbl_info.setText("ERR: LaunchPad.exe missing!")
             except Exception as e:
-                # Hier stand vorher der Fehler-Log, weil 'e' oft den root-Crash enthielt
+                # Error log was here previously because 'e' often contained root crash
                 self.add_log(f"ERR: Launch interaction failed: {e}")
                 self.launcher_win.lbl_info.setText(f"ERR: {e}")
         else:
@@ -4713,15 +4684,15 @@ class DiorClientGUI:
         def worker():
             try:
                 # 1. ERSTE API ABFRAGE (Basis-Daten & History)
-                # WICHTIG: Kein 'weapon_stat_by_faction' hier, da es das Limit sprengt!
+                # IMPORTANT: No 'weapon_stat_by_faction' here as it exceeds limit!
                 url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}&c:resolve=world,outfit,stat_history"
                 r = requests.get(url, timeout=30).json()
 
                 if not r.get('character_list'):
-                    self.add_log(f"DEBUG: Character {name} nicht gefunden.")
+                    self.add_log(f"DEBUG: Character {name} not found.")
                     # UI FEEDBACK: "Character doesnt exist"
                     QTimer.singleShot(0, lambda: self.char_win.search_input.setText("Character doesnt exist."))
-                    # Button Text zurücksetzen!
+                    # Reset button text!
                     QTimer.singleShot(0, lambda: self.char_win.btn_search.setText("SEARCH"))
                     QTimer.singleShot(0, lambda: self.char_win.btn_search.setEnabled(True))
                     return
@@ -4730,7 +4701,7 @@ class DiorClientGUI:
                 char_id = char_data['character_id']
                 all_stats_container = char_data.get('stats', {})
 
-                # --- SCHRITT 2: STATS EXTRAKTION ---
+                # --- STEP 2: STATS EXTRACTION ---
                 stats_history = all_stats_container.get('stat_history', [])
 
                 def get_robust_stat(s_name):
@@ -4751,7 +4722,7 @@ class DiorClientGUI:
                 def safe_div(a, b, r=2):
                     return round(a / max(1, b), r)
 
-                # WICHTIG: Keys exakt so benennen, wie dein UI sie erwartet!
+                # IMPORTANT: Name keys exactly as your UI expects them!
                 custom_stats = {
                     'name': char_data.get('name', {}).get('first', '-'),
                     'fac_short': {"1": "VS", "2": "NC", "3": "TR"}.get(str(char_data.get('faction_id')), "NSO"),
@@ -4772,9 +4743,9 @@ class DiorClientGUI:
                     'm30_score': f"{int(m30_score / 1000)}k"
                 }
 
-                # --- SCHRITT 3: ZWEITE API ABFRAGE (WAFFEN) ---
-                # Wir holen NUR die Waffen-Stats, aber dafür bis zu 5000 Einträge
-                # Das umgeht das Standard-Limit von resolve
+                # --- STEP 3: SECOND API QUERY (WEAPONS) ---
+                # We get ONLY weapon stats, but up to 5000 entries
+                # This bypasses the default resolve limit
                 url_wep = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/characters_weapon_stat_by_faction?character_id={char_id}&c:limit=5000"
                 r_wep = requests.get(url_wep, timeout=30).json()
                 
@@ -4814,21 +4785,21 @@ class DiorClientGUI:
                     elif s_name == 'weapon_play_time':
                         temp_w[i_id]['time'] += total_val
 
-                # Nur Waffen mit mindestens 1 Kill ODER 1 Death anzeigen (optional)
+                # Only show weapons with at least 1 kill OR 1 death (optional)
                 weapon_list = sorted([w for w in temp_w.values() if w['kills'] > 0 or w['deaths'] > 0],
                                      key=lambda x: x['kills'], reverse=True)
 
                 self.add_log(f"DEBUG: Processing complete. Found {len(weapon_list)} weapons (API Limit Bypass).")
 
-                # --- DER SICHERE TRANSFER VIA SIGNAL ---
+                # --- SAFE TRANSFER VIA SIGNAL ---
                 self.char_win.signals.search_finished.emit(custom_stats, weapon_list)
 
             except Exception as e:
                 self.add_log(f"WORKER FATAL: {e}")
-                # Falls es kracht, Button trotzdem wieder freigeben (via Signal oder direkt)
+                # If it crashes, still release button (via signal or direct)
                 QTimer.singleShot(0, lambda: self.char_win.btn_search.setEnabled(True))
 
-                # Thread starten
+                # Start thread
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -4836,9 +4807,9 @@ if __name__ == "__main__":
     try:
 
         app = QApplication(sys.argv)
-        app.setStyle("Fusion")  # Sorgt für ein einheitliches Dark-Design
+        app.setStyle("Fusion")  # Ensures uniform dark design
 
-        # Font "Black Ops One" laden
+        # Load "Black Ops One" font
         font_path = resource_path(os.path.join("assets", "BlackOpsOne-Regular.ttf"))
         if os.path.exists(font_path):
             font_id = QFontDatabase.addApplicationFont(font_path)
@@ -4850,7 +4821,7 @@ if __name__ == "__main__":
         else:
             print(f"Warning: Font file not found at {font_path}")
 
-        # Deine Logik-Klasse initialisieren (sie erstellt intern den MainHub)
+        # Initialize your logic class (creates MainHub internally)
         client = DiorClientGUI()
         sys.exit(app.exec())
     except Exception as e:

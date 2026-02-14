@@ -6,11 +6,11 @@ import asyncio
 import websockets
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-# --- KONFIGURATION ---
+# --- CONFIGURATION ---
 HTTP_PORT = 8000
 WS_PORT = 6789
 
-# HTML TEMPLATE MIT AUTO-RECONNECT
+# HTML TEMPLATE WITH AUTO-RECONNECT
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -20,14 +20,14 @@ HTML_TEMPLATE = """
     <style>
         body { margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: transparent; }
 
-        /* Basis-Klassen */
+        /* Base Classes */
         .overlay-element {
             position: absolute;
             transform-origin: top left;
             transition: opacity 0.3s, transform 0.3s;
         }
 
-        /* Status Indikator (Debug) */
+        /* Status Indicator (Debug) */
         #status-dot {
             position: absolute; top: 10px; left: 10px;
             width: 10px; height: 10px; border-radius: 50%;
@@ -59,18 +59,18 @@ HTML_TEMPLATE = """
     <script>
         const WS_PORT = __WS_PORT__;
         let ws;
-        let retryInterval = 3000; // Alle 3 Sekunden neu versuchen
+        let retryInterval = 3000; // Retry every 3 seconds
 
         function connect() {
             const dot = document.getElementById("status-dot");
 
-            console.log("Versuche Verbindung zu WebSocket...");
+            console.log("Attempting to connect to WebSocket...");
             ws = new WebSocket("ws://localhost:" + WS_PORT);
 
             ws.onopen = () => { 
-                console.log("Verbunden!"); 
+                console.log("Connected!"); 
                 dot.style.backgroundColor = "#00ff00"; // Grün
-                // Nach 1 Sekunde ausblenden, wenn alles ok ist
+                // Hide after 1 second if everything is okay
                 setTimeout(() => { dot.style.opacity = 0; }, 1000);
             };
 
@@ -88,7 +88,7 @@ HTML_TEMPLATE = """
             };
 
             ws.onclose = (e) => {
-                console.log("Verbindung getrennt. Neustart in " + retryInterval + "ms", e.reason);
+                console.log("Connection lost. Restarting in " + retryInterval + "ms", e.reason);
                 dot.style.backgroundColor = "red";
                 dot.style.opacity = 1;
                 // Auto-Reconnect
@@ -96,12 +96,12 @@ HTML_TEMPLATE = """
             };
 
             ws.onerror = (err) => {
-                console.error("Socket Fehler:", err);
-                ws.close(); // Erzwingt onclose und damit den Reconnect
+                console.error("Socket Error:", err);
+                ws.close(); // Forces onclose and thus the reconnect
             };
         }
 
-        // Starten
+        // Initialize
         connect();
 
         // --- VISUAL FUNCTIONS ---
@@ -133,7 +133,6 @@ HTML_TEMPLATE = """
             const imgs = div.getElementsByTagName("img");
             for (let img of imgs) {
                 let src = img.getAttribute("src");
-                if (!src.startsWith("http") && !src.startsWith("/assets/")) {
                     let filename = src.split(/[\\\\/]/).pop(); 
                     img.src = "/assets/" + filename;
                 }
@@ -162,7 +161,7 @@ HTML_TEMPLATE = """
 
 class AssetHTTPHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
-        # 1. Hauptseite
+        # 1. Main page
         if self.path == '/':
             self.send_response(200)
             self.send_header("Content-type", "text/html")
@@ -176,7 +175,7 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
         # 2. Assets (Bilder)
         if self.path.startswith('/assets/'):
             filename = self.path.replace('/assets/', '')
-            # Pfad zum echten Assets-Ordner ermitteln
+            # Determine path to the actual assets folder
             if hasattr(sys, '_MEIPASS'):
                 base_dir = os.path.join(sys._MEIPASS, "assets")
             else:
@@ -186,7 +185,7 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
             self.path = '/' + filename
             return super().do_GET()
 
-        # 3. Favicon ignorieren
+        # 3. Ignore favicon (prevents 404 spam in console)
         if self.path == '/favicon.ico':
             self.send_response(204)
             self.end_headers()
@@ -235,7 +234,7 @@ class OverlayServer:
             self.httpd = HTTPServer(('0.0.0.0', self.http_port), AssetHTTPHandler)
             # WICHTIG: Port an das Server-Objekt binden, damit Handler ihn findet
             self.httpd.ws_port = self.ws_port
-            print(f"WEB: Overlay bereit unter http://localhost:{self.http_port}")
+            print(f"WEB: Overlay ready at http://localhost:{self.http_port}")
             self.httpd.serve_forever()
         except OSError:
             print(f"WARNUNG: Port {self.http_port} ist belegt.")
