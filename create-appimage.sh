@@ -7,14 +7,21 @@ APP_NAME_SLUG="better-planetside"
 ICON_SOURCE="assets/christiandior.png" # Assuming this is the logo
 BUILD_DIR="dist/Better Planetside"
 APPDIR="AppDir"
-OUTPUT_NAME="Better_Planetside-x86_64.AppImage"
 
 echo "=== Creating AppImage for $APP_NAME ==="
 
 # 1. Always build the application to ensure latest changes
+# (build-linux.sh handles version bump interactively)
 echo "Cleaning previous distribution and rebuilding..."
 rm -rf "$BUILD_DIR"
 bash build-linux.sh
+
+# Read version after build (build-linux.sh may have incremented it)
+VERSION=$(grep -oP 'VERSION = "\K[0-9]+\.[0-9]+\.[0-9]+' version.py)
+OUTPUT_NAME="Better_Planetside-v${VERSION}-x86_64.AppImage"
+
+echo ""
+echo "Packaging version $VERSION as AppImage..."
 
 # 2. Prepare AppDir structure
 echo "Setting up AppDir structure..."
@@ -48,6 +55,7 @@ Icon=$APP_NAME_SLUG
 Categories=Game;Utility;
 Terminal=false
 StartupNotify=true
+X-AppImage-Version=$VERSION
 EOF
 
 # 6. Create AppRun script
@@ -71,6 +79,12 @@ echo "Building AppImage..."
 # Use --appimage-extract-and-run to avoid FUSE issues in some environments
 ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run "$APPDIR" "$OUTPUT_NAME"
 
+# 9. Cleanup
+rm -rf "$APPDIR"
+
 echo ""
 echo "=== AppImage Created Successfully! ==="
-echo "Output: $OUTPUT_NAME"
+echo "Version:  $VERSION"
+echo "Output:   $OUTPUT_NAME"
+echo "Size:     $(du -h "$OUTPUT_NAME" | cut -f1)"
+echo ""

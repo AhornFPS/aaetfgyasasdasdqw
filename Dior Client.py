@@ -2,6 +2,7 @@
 import os
 import sys
 import ctypes
+from version import VERSION
 
 
 # 2. Path logic for PyInstaller 6+ (_internal Support)
@@ -129,7 +130,7 @@ class DiorMainHub(QMainWindow):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.setWindowTitle("DIOR CLIENT - PS2 MASTER")
+        self.setWindowTitle(f"DIOR CLIENT - PS2 MASTER  v{VERSION}")
         self.resize(1600, 900)
 
         # Central Widget
