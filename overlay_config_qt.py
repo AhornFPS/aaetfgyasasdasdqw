@@ -614,6 +614,35 @@ class OverlayConfigWindow(QWidget):
         )
         slot_bar.addWidget(self.btn_slot_delete)
 
+        # Visual separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFixedHeight(24)
+        sep.setStyleSheet("color: #444;")
+        slot_bar.addWidget(sep)
+
+        self.btn_slot_export = QPushButton("⬆ EXPORT")
+        self.btn_slot_export.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_export.setFixedHeight(32)
+        self.btn_slot_export.setStyleSheet(
+            "QPushButton { background-color: #1a1a33; color: #aa88ff; font-weight: bold; padding: 4px 12px; border: 1px solid #4433aa; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #2a2a55; border: 1px solid #aa88ff; color: white; }"
+            "QPushButton:focus { border: 1px solid #4433aa; }"
+        )
+        self.btn_slot_export.setToolTip("Export current preset as a .zip (settings + images + sounds)")
+        slot_bar.addWidget(self.btn_slot_export)
+
+        self.btn_slot_import = QPushButton("⬇ IMPORT")
+        self.btn_slot_import.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_import.setFixedHeight(32)
+        self.btn_slot_import.setStyleSheet(
+            "QPushButton { background-color: #0a1a2a; color: #55aaff; font-weight: bold; padding: 4px 12px; border: 1px solid #224488; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #1a2a44; border: 1px solid #55aaff; color: white; }"
+            "QPushButton:focus { border: 1px solid #224488; }"
+        )
+        self.btn_slot_import.setToolTip("Import a preset .zip file")
+        slot_bar.addWidget(self.btn_slot_import)
+
         slot_bar.addStretch()
         layout.addLayout(slot_bar)
 
