@@ -1,13 +1,15 @@
 import sys
 import os
+import ctypes
 import configparser
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QTabWidget, QScrollArea, QFrame, QLineEdit, QComboBox, 
     QCheckBox, QPushButton, QFileDialog, QMessageBox, QDialog,
-    QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QSlider
+    QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox, QSlider,
+    QGridLayout
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QEvent
 from PyQt6.QtGui import QFont, QColor
 
 # --- STYLESHEET (Matches Dior Client Aesthetic) ---
@@ -53,8 +55,9 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     background-color: #222;
     border: 1px solid #444;
     color: #fff;
-    padding: 5px;
-    border-radius: 3px;
+    padding: 2px;
+    border-radius: 2px;
+    min-height: 18px;
 }
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
     border: 1px solid #00f2ff;
@@ -96,9 +99,63 @@ QWidget#ScrollContent {
 }
 """
 
+# --- RESOLUTION HELPER ---
+class DEVMODE(ctypes.Structure):
+    _fields_ = [
+        ("dmDeviceName", ctypes.c_wchar * 32),
+        ("dmSpecVersion", ctypes.c_ushort),
+        ("dmDriverVersion", ctypes.c_ushort),
+        ("dmSize", ctypes.c_ushort),
+        ("dmDriverExtra", ctypes.c_ushort),
+        ("dmFields", ctypes.c_ulong),
+        ("dmPositionX", ctypes.c_long),
+        ("dmPositionY", ctypes.c_long),
+        ("dmDisplayOrientation", ctypes.c_ulong),
+        ("dmDisplayFixedOutput", ctypes.c_ulong),
+        ("dmColor", ctypes.c_short),
+        ("dmDuplex", ctypes.c_short),
+        ("dmYResolution", ctypes.c_short),
+        ("dmTTOption", ctypes.c_short),
+        ("dmCollate", ctypes.c_short),
+        ("dmFormName", ctypes.c_wchar * 32),
+        ("dmLogPixels", ctypes.c_ushort),
+        ("dmBitsPerPel", ctypes.c_ulong),
+        ("dmPelsWidth", ctypes.c_ulong),
+        ("dmPelsHeight", ctypes.c_ulong),
+        ("dmDisplayFlags", ctypes.c_ulong),
+        ("dmDisplayFrequency", ctypes.c_ulong),
+    ]
+
+def get_supported_resolutions():
+    resolutions = set()
+    devmode = DEVMODE()
+    devmode.dmSize = ctypes.sizeof(DEVMODE)
+    
+    i = 0
+    # Create user32 interface
+    user32 = ctypes.windll.user32
+    
+    while user32.EnumDisplaySettingsW(None, i, ctypes.byref(devmode)):
+        i += 1
+        # Filter for typical color depth to assume game-ready modes (usually 32-bit)
+        if devmode.dmBitsPerPel == 32:
+            resolutions.add((devmode.dmPelsWidth, devmode.dmPelsHeight))
+            
+    # Sort: Width desc, then Height desc
+    return sorted(list(resolutions), key=lambda x: (x[0], x[1]), reverse=True)
+
+# ----------------------------
+
+class WheelBlocker(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Wheel:
+            return True
+        return False
+
 class PS2SettingsEditor(QMainWindow):
     def __init__(self, parent=None, base_path=None):
         super().__init__(parent)
+        self.wheel_blocker = WheelBlocker()
         self.setWindowTitle("Planetside 2 Settings Editor (Enhanced)")
         self.resize(1000, 800)
         self.setStyleSheet(EDITOR_STYLE)
@@ -124,16 +181,7 @@ class PS2SettingsEditor(QMainWindow):
         main_layout.addWidget(self.tabs)
         
         self.tab_graphics = QWidget()
-        self.tab_audio = QWidget()
-        self.tab_interface = QWidget()
-        self.tab_controls = QWidget()
-        self.tab_general = QWidget()
-        
         self.tabs.addTab(self.tab_graphics, "GRAPHICS")
-        self.tabs.addTab(self.tab_audio, "AUDIO")
-        self.tabs.addTab(self.tab_interface, "INTERFACE")
-        self.tabs.addTab(self.tab_controls, "CONTROLS")
-        self.tabs.addTab(self.tab_general, "GENERAL")
         
         # Footer Actions
         footer_layout = QHBoxLayout()
@@ -163,7 +211,11 @@ class PS2SettingsEditor(QMainWindow):
         Helper to create a group box with form layout for specific INI section.
         """
         group = QGroupBox(title)
-        layout = QFormLayout()
+        # Use GridLayout to pack everything left
+        layout = QGridLayout()
+        layout.setColumnStretch(2, 1) # Push everything to the left
+        layout.setVerticalSpacing(4)  # Tighter vertical spacing
+        layout.setHorizontalSpacing(10) # Reasonable gap between label and field
         
         if not self.config.has_section(section_name):
             self.config.add_section(section_name)
@@ -189,6 +241,7 @@ class PS2SettingsEditor(QMainWindow):
             
             if widget_type == 'slider_percent':
                 container = QWidget()
+                container.setMinimumWidth(200)
                 h_layout = QHBoxLayout(container)
                 h_layout.setContentsMargins(0,0,0,0)
                 
@@ -209,6 +262,8 @@ class PS2SettingsEditor(QMainWindow):
                 slider.setValue(current_percent)
                 label_val.setText(f"{current_percent}%")
                 
+                slider.installEventFilter(self.wheel_blocker)
+
                 # Logic capturing local variables for safe execution
                 def on_slide(v, k=ini_key, l_v=label_val, l_w=label_warn):
                     l_v.setText(f"{v}%")
@@ -233,6 +288,7 @@ class PS2SettingsEditor(QMainWindow):
 
             elif widget_type == 'slider_distance':
                 container = QWidget()
+                container.setMinimumWidth(250)
                 h_layout = QHBoxLayout(container)
                 h_layout.setContentsMargins(0,0,0,0)
                 
@@ -254,6 +310,9 @@ class PS2SettingsEditor(QMainWindow):
                     
                 slider.setValue(current_val)
                 spin.setValue(current_val)
+                
+                slider.installEventFilter(self.wheel_blocker)
+                spin.installEventFilter(self.wheel_blocker)
                 
                 # Logic capturing local variables for safe execution
                 def on_slide_dist(v, k=ini_key, s=spin):
@@ -294,15 +353,144 @@ class PS2SettingsEditor(QMainWindow):
                     if "-1" in val_to_index: 
                         widget.setCurrentIndex(val_to_index["-1"])
 
-                # FIX: Capture 'widget' as default argument 'w' to lock it
+            # FIX: Capture 'widget' as default argument 'w' to lock it
                 def on_combo_change(idx, w=widget, k=ini_key):
                     data_val = w.itemData(idx)
                     self.config.set(section_name, k, str(data_val))
                     
                 widget.currentIndexChanged.connect(on_combo_change)
+
+            elif widget_type == 'slider_float':
+                container = QWidget()
+                container.setMinimumWidth(200) # Ensure it doesn't collapse
+                h_layout = QHBoxLayout(container)
+                h_layout.setContentsMargins(0,0,0,0)
+
+                # Slider 0-100 mapped to 0.0-1.0
+                slider = QSlider(Qt.Orientation.Horizontal)
+                min_f = min_val if min_val is not None else 0.0
+                max_f = max_val if max_val is not None else 1.0
+                
+                # We'll map float range [min_f, max_f] to int [0, 100]
+                slider.setRange(0, 100)
+
+                # Spinbox
+                spin = QDoubleSpinBox()
+                spin.setRange(min_f, max_f)
+                spin.setSingleStep(0.01)
+                spin.setDecimals(2)
+                spin.setFixedWidth(70)
+                spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+                spin.setStyleSheet("background-color: #222; color: #fff; border: 1px solid #444; border-radius: 3px;")
+
+                try:
+                    current_val = float(val)
+                except:
+                    current_val = min_f
+
+                # Clamp initial value
+                if current_val < min_f: current_val = min_f
+                if current_val > max_f: current_val = max_f
+
+                spin.setValue(current_val)
+                
+                # Convert float val to slider int (0-100)
+                # ratio = (val - min) / (max - min)
+                if max_f > min_f:
+                    ratio = (current_val - min_f) / (max_f - min_f)
+                    slider_val = int(ratio * 100)
+                else:
+                    slider_val = 0
+                slider.setValue(slider_val)
+
+                slider.installEventFilter(self.wheel_blocker)
+                spin.installEventFilter(self.wheel_blocker)
+
+                # Logic capturing local variables
+                def on_slider_float(v, k=ini_key, s=spin, mn=min_f, mx=max_f):
+                    # v is 0-100
+                    ratio = v / 100.0
+                    float_val = mn + (ratio * (mx - mn))
+                    
+                    if abs(s.value() - float_val) > 0.005:
+                        s.blockSignals(True)
+                        s.setValue(float_val)
+                        s.blockSignals(False)
+                    
+                    self.config.set(section_name, k, f"{float_val:.6f}")
+
+                def on_spin_float(v, k=ini_key, sl=slider, mn=min_f, mx=max_f):
+                    # v is float
+                    if mx > mn:
+                        ratio = (v - mn) / (mx - mn)
+                        slider_v = int(ratio * 100)
+                    else:
+                        slider_v = 0
+                        
+                    if sl.value() != slider_v:
+                        sl.blockSignals(True)
+                        sl.setValue(slider_v)
+                        sl.blockSignals(False)
+                        
+                    self.config.set(section_name, k, f"{v:.6f}")
+
+                slider.valueChanged.connect(on_slider_float)
+                spin.valueChanged.connect(on_spin_float)
+
+                h_layout.addWidget(slider)
+                h_layout.addWidget(spin)
+                
+                widget = container
+                
+            elif widget_type == 'resolution_selector':
+                # Special widget: "Resolution" dropdown that controls FullscreenWidth/Height
+                widget = QComboBox()
+                widget.setMinimumWidth(150)
+                widget.installEventFilter(self.wheel_blocker)
+                
+                # Get available resolutions
+                try:
+                    resolutions = get_supported_resolutions()
+                except:
+                    # Fallback if ctypes fails
+                    resolutions = [(1920, 1080), (1280, 720)]
+                
+                # Read current
+                cur_w = self.config.get(section_name, "FullscreenWidth", fallback="1920")
+                cur_h = self.config.get(section_name, "FullscreenHeight", fallback="1080")
+                try:
+                    cur_res = (int(cur_w), int(cur_h))
+                except:
+                    cur_res = (1920, 1080)
+                
+                # Add current if missing (top of list logic or simple append)
+                if cur_res not in resolutions:
+                    resolutions.insert(0, cur_res)
+                    
+                # Populate
+                idx_to_select = 0
+                for i, (w, h) in enumerate(resolutions):
+                    widget.addItem(f"{w}x{h}", (w, h))
+                    if (w, h) == cur_res:
+                        idx_to_select = i
+                        
+                widget.setCurrentIndex(idx_to_select)
+                
+                # Connect
+                def on_res_change(idx, w=widget, s=section_name):
+                    data = w.itemData(idx)
+                    if data:
+                        wd, ht = data
+                        self.config.set(s, "FullscreenWidth", str(wd))
+                        self.config.set(s, "FullscreenHeight", str(ht))
+                        
+                widget.currentIndexChanged.connect(on_res_change)
                 
             elif widget_type == 'int':
                 widget = QSpinBox()
+                widget.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+                widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 mn = min_val if min_val is not None else -1
                 mx = max_val if max_val is not None else 999999
                 widget.setRange(mn, mx)
@@ -311,6 +499,8 @@ class PS2SettingsEditor(QMainWindow):
                 
             elif widget_type == 'float':
                 widget = QDoubleSpinBox()
+                widget.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+                widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 mn = min_val if min_val is not None else 0.0
                 mx = max_val if max_val is not None else 10000.0
                 widget.setRange(mn, mx)
@@ -348,14 +538,37 @@ class PS2SettingsEditor(QMainWindow):
                 elif isinstance(widget, QLineEdit):
                     widget.textChanged.connect(lambda v, s=section_name, o=ini_key: self.config.set(s, o, v))
                 
-            layout.addRow(display_label, widget)
+            
+            # Form Layout used to handle this, now we do it manually in the block below
+            # layout.addRow(display_label, widget)
+            
+            # Constrain widths for "smaller" look
+            if isinstance(widget, (QSpinBox, QDoubleSpinBox, QComboBox, QSlider)):
+                widget.installEventFilter(self.wheel_blocker)
+
+            if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                widget.setFixedWidth(70)
+            elif isinstance(widget, QComboBox):
+                widget.setMinimumWidth(100)
+                widget.setMaximumWidth(200)
+            elif isinstance(widget, QLineEdit):
+                widget.setMaximumWidth(200)
+
+            # Add to Grid: Row i, Label (0), Widget (1)
+            row = layout.rowCount()
+            
+            lbl_widget = QLabel(display_label)
+            lbl_widget.setStyleSheet("color: #ccc; font-size: 11px;") # Slightly smaller font
+            
+            layout.addWidget(lbl_widget, row, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            layout.addWidget(widget, row, 1, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             
         group.setLayout(layout)
         return group
 
     def setup_tabs(self):
         # Clear existing
-        for tab in [self.tab_graphics, self.tab_audio, self.tab_interface, self.tab_controls, self.tab_general]:
+        for tab in [self.tab_graphics]:
             if tab.layout():
                 QWidget().setLayout(tab.layout()) # Garbage collect old layout
             
@@ -369,14 +582,10 @@ class PS2SettingsEditor(QMainWindow):
         
         # Display Section
         vbox_gfx.addWidget(self.create_form_group("Display", "Display", [
-            ("Mode", ["Windowed", "Fullscreen", "WindowedFullscreen"]),
-            ("FullscreenMode", ["Windowed", "Fullscreen", "WindowedFullscreen"]),
-            ("FullscreenWidth", "int"),
-            ("FullscreenHeight", "int"),
-            ("WindowedWidth", "int"),
-            ("WindowedHeight", "int"),
-            ("Maximized", "bool"),
-            (("Gamma", "Brightness"), "float", 0.0, 1.0), # Renamed Gamma to Brightness
+            ("Mode", ["BorderlessFullscreen", "Windowed"]),
+            ("FullscreenMode", ["BorderlessFullscreen", "Windowed"]),
+            ("Resolution", "resolution_selector"),
+            (("Gamma", "Brightness"), "slider_float", 0.0, 1.0),
             ("VerticalFOV", "int", 50, 170),
         ]))
         
@@ -469,158 +678,21 @@ class PS2SettingsEditor(QMainWindow):
             ("InfantryRenderDistance", "slider_distance"),
             ("GroundVehicleRenderDistance", "slider_distance"),
             ("AirVehicleRenderDistance", "slider_distance"),
-            ("FogShadowsEnable", "bool"),
-            ("MotionBlur", "bool"),
             ("VSync", "bool"),
-            ("AO", "bool"),
+            ("FogShadowsEnable", "bool"),
+            ("AmbientOcclusion", "bool"),
             ("BloomEnabled", "bool"),
             ("Smoothing", "bool"),
             ("Smoothingmaxframerate", "int"),
             ("Smoothingminframerate", "int"),
-            ("UseLod0a", "bool"),
         ]))
         vbox_gfx.addStretch()
         scroll_gfx.setWidget(content_gfx)
         layout_gfx.addWidget(scroll_gfx)
 
-        # --- AUDIO TAB ---
-        layout_aud = QVBoxLayout(self.tab_audio)
-        scroll_aud = QScrollArea()
-        scroll_aud.setWidgetResizable(True)
-        content_aud = QWidget()
-        content_aud.setObjectName("ScrollContent")
-        vbox_aud = QVBoxLayout(content_aud)
-        
-        vbox_aud.addWidget(self.create_form_group("Sound Volumes", "Sound", [
-            ("Master", "float", 0.0, 1.0),
-            ("Music", "float", 0.0, 1.0),
-            ("Game", "float", 0.0, 1.0),
-            ("Dialog", "float", 0.0, 1.0),
-            ("UI", "float", 0.0, 1.0),
-        ]))
-        vbox_aud.addWidget(self.create_form_group("Sound Options", "Sound", [
-            ("HitIndicator", "bool"),
-            ("LowAmmoIndicator", "bool"),
-            ("VehicleChatter", "bool"),
-            ("IdleMusic", "bool"),
-            ("UseFloat32Output", "bool"),
-            ("ExclusiveMode", "bool"),
-        ]))
-        vbox_aud.addWidget(self.create_form_group("Voice Chat Options", "Voice", [
-            ("Enable", "bool"),
-            ("Ducking", "float"),
-            ("EchoEnabled", "bool"),
-        ]))
-        vbox_aud.addWidget(self.create_form_group("Voice Chat Volumes", "Voice", [
-            ("ReceiveVolume", "float", 0.0, 100.0),
-            ("MicrophoneVolume", "float", 0.0, 100.0),
-            ("ProximityVolume", "float", 0.0, 100.0),
-            ("SquadVolume", "float", 0.0, 100.0),
-            ("OutfitVolume", "float", 0.0, 100.0),
-            ("RaidVolume", "float", 0.0, 100.0),
-        ]))
-        vbox_aud.addStretch()
-        scroll_aud.setWidget(content_aud)
-        layout_aud.addWidget(scroll_aud)
-
-        # --- INTERFACE TAB ---
-        layout_int = QVBoxLayout(self.tab_interface)
-        scroll_int = QScrollArea()
-        scroll_int.setWidgetResizable(True)
-        content_int = QWidget()
-        content_int.setObjectName("ScrollContent")
-        vbox_int = QVBoxLayout(content_int)
-        
-        vbox_int.addWidget(self.create_form_group("HUD Options", "UI", [
-            ("DrawHud", "bool"), # Generally in [General] or [UI], putting here for clarity
-            ("HudMode", "int"),
-            ("CentralizedHudMode", "bool"),
-            ("ShowReticleIFF", "bool"),
-            ("HudShowHealth", "bool"),
-            ("DrawMission", "bool"),
-            ("DrawKillSpam", "bool"),
-            ("DrawLootDrop", "bool"),
-            ("ShowGroupNotifications", "bool"),
-            ("ShowOutfitNotifications", "bool"),
-            ("HudShowTopCompass", "bool"),
-        ]))
-        
-        vbox_int.addWidget(self.create_form_group("HUD Customization", "UI", [
-             ("HudTiltAngle", "int"),
-             ("MiniMapZoomLevel", "float"),
-             ("MapZoomLevel", "int"),
-             ("MapStatisticsView", "bool"),
-             ("OrbitalStrikeAlpha", "float"),
-        ]))
-        
-        vbox_int.addWidget(self.create_form_group("Color Blind", "Rendering", [
-             ("ColorBlindFilterType", "int"),
-             ("ColorBlindFilterAmount", "float"),
-             ("ColorBlindFilterStrength", "float"),
-        ]))
-        vbox_int.addStretch()
-        scroll_int.setWidget(content_int)
-        layout_int.addWidget(scroll_int)
-
-        # --- CONTROLS TAB ---
-        layout_ctrl = QVBoxLayout(self.tab_controls)
-        scroll_ctrl = QScrollArea()
-        scroll_ctrl.setWidgetResizable(True)
-        content_ctrl = QWidget()
-        content_ctrl.setObjectName("ScrollContent")
-        vbox_ctrl = QVBoxLayout(content_ctrl)
-        
-        vbox_ctrl.addWidget(self.create_form_group("Mouse Sensitivity", "General", [
-            ("MouseSensitivity", "float", 0.0, 1.0),
-            ("ScopedMouseSensitivity", "float", 0.0, 1.0),
-            ("ADSMouseSensitivity", "float", 0.0, 1.0),
-            ("VehicleMouseSensitivity", "float", 0.0, 1.0),
-            ("VehicleGunnerMouseSensitivity", "float", 0.0, 1.0),
-            ("FlightMouseSensitivity", "float", 0.0, 1.0),
-            ("JoystickSensitivity", "float", 0.0, 100.0),
-        ]))
-        vbox_ctrl.addWidget(self.create_form_group("Input Options", "General", [
-            ("InvertVerticalLook", "bool"),
-            ("InvertVerticalFly", "bool"),
-            ("InvertTankSteering", "bool"),
-            ("MouseRawInput", "bool"),
-            ("MouseSmoothing", "bool"),
-            ("JoystickDeadzone", "float"),
-            ("JoystickEnable", "bool"),
-        ]))
-        vbox_ctrl.addStretch()
-        scroll_ctrl.setWidget(content_ctrl)
-        layout_ctrl.addWidget(scroll_ctrl)
-
-        # --- GENERAL TAB ---
-        layout_gen = QVBoxLayout(self.tab_general)
-        scroll_gen = QScrollArea()
-        scroll_gen.setWidgetResizable(True)
-        content_gen = QWidget()
-        content_gen.setObjectName("ScrollContent")
-        vbox_gen = QVBoxLayout(content_gen)
-        
-        vbox_gen.addWidget(self.create_form_group("Gameplay", "General", [
-            ("AutoDetectPerformanceSettings", "int"),
-            ("ReduceInputLag", "bool"),
-            ("SprintToggle", "bool"),
-            ("ToggleCrouch", "bool"),
-            ("ZoomToggle", "bool"),
-            ("DecloakOnFire", "bool"),
-            ("EnableAutoWield", "bool"),
-            ("AbilityQueueSeconds", "float"),
-        ]))
-        vbox_gen.addWidget(self.create_form_group("Auto Refuse", "AutoRefuse", [
-            ("FriendInvitation", "bool"),
-            ("DuelInvitation", "bool"),
-            ("GuildInvitation", "bool"),
-            ("GroupInvitation", "bool"),
-            ("TradeRequest", "bool"),
-            ("Whispers", "bool"),
-        ]))
-        vbox_gen.addStretch()
-        scroll_gen.setWidget(content_gen)
-        layout_gen.addWidget(scroll_gen)
+        vbox_gfx.addStretch()
+        scroll_gfx.setWidget(content_gfx)
+        layout_gfx.addWidget(scroll_gfx)
 
     def load_ini_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open UserOptions.ini", self.base_path, "INI Files (*.ini);;All Files (*)")
