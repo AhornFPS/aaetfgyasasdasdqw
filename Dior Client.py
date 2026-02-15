@@ -85,7 +85,8 @@ from PyQt6.QtGui import (
     QBrush,
     QTransform,
     QMovie,
-    QFontDatabase
+    QFontDatabase,
+    QIcon
 )
 from PyQt6.QtCore import (
     Qt,
@@ -130,7 +131,8 @@ class DiorMainHub(QMainWindow):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.setWindowTitle(f"DIOR CLIENT - PS2 MASTER  v{VERSION}")
+        self.setWindowTitle(f"Better Planetside v{VERSION}")
+        self.setWindowIcon(QIcon(get_asset_path("BetterPlannetsideIcon.png")))
         self.resize(1600, 900)
 
         # Central Widget

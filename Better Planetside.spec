@@ -46,8 +46,8 @@ exe = EXE(
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
-    entitlements=None
-    # icon='assets/icon.ico' # Hier den Namen deines Icons anpassen!
+    entitlements=None,
+    icon='assets/Images/BetterPlannetsideIcon.png' # Hier den Namen deines Icons anpassen!
 )
 
 coll = COLLECT(
