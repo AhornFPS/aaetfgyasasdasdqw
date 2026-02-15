@@ -3274,7 +3274,7 @@ class DiorClientGUI:
         else:
             dur = specific_dur if specific_dur > 0 else global_dur
 
-        if event_type.lower() == "hitmarker":
+        if event_type.lower() in ["hitmarker", "headshot hitmarker"]:
             dur = specific_dur
 
         # 4. DETERMINE PATHS

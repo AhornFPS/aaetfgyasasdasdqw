@@ -922,13 +922,7 @@ class QtOverlay(QWidget):
 
             if img_path and os.path.exists(img_path):
                 self.show_hitmarker(img_path, duration, x, y, scale)
-            
-            # Subclass Logic: Headshot Hitmarker also gets pushed to the front of the queue
-            if event_name == "Headshot Hitmarker":
-                # Insert at position 0 to jump ahead of everything else (Priority)
-                self.event_queue.insert(0, (img_path, sound_path, duration, x, y, scale, volume, event_name))
-                if not self.is_showing:
-                    self.process_next_event()
+
             return
 
         # --- CASE B: NORMAL EVENTS (Queue) ---
