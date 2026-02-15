@@ -1069,6 +1069,11 @@ class QtOverlay(QWidget):
     def clear_crosshair_web(self):
         self._broadcast_overlay("crosshair", {"enabled": False, "x": 0, "y": 0})
 
+    def clear_streak_web(self):
+        """Specifically hides the streak on the web HUD."""
+        self._last_streak_payload = None
+        self._broadcast_overlay("streak", {"visible": False})
+
     def _broadcast_streak_position_px(self, x_px, y_px):
         if not self._last_streak_payload:
             return
@@ -1951,8 +1956,10 @@ class QtOverlay(QWidget):
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if (not cfg.get("active", True) and not self.edit_mode) or (count <= 0 and not self.edit_mode):
-            self._last_streak_payload = None
-            self._broadcast_overlay("streak", {"visible": False})
+            # Throttle: Only broadcast 'hidden' once.
+            if self._last_streak_payload is not None:
+                self._last_streak_payload = None
+                self._broadcast_overlay("streak", {"visible": False})
             return
 
         if not img_path or not os.path.exists(img_path):

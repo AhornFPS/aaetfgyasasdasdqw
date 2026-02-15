@@ -2,6 +2,7 @@
 import os
 import sys
 import ctypes
+import copy
 from version import VERSION
 
 
@@ -2454,7 +2455,6 @@ class DiorClientGUI:
     def import_event_slot(self):
         """Import an event preset from a .zip file."""
         import zipfile
-        import copy
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
         ui = self.ovl_config_win
@@ -2560,46 +2560,83 @@ class DiorClientGUI:
                     self.add_log(f"SECURITY: Blocked {len(skipped)} suspicious file(s) during import.")
 
                 # 4. Apply
-                if create_new:
-                    # Find a unique name
-                    final_name = imported_name
-                    counter = 2
-                    while final_name in self.config.get("event_slots", {}):
-                        final_name = f"{imported_name} ({counter})"
-                        counter += 1
+                # BLOCK signals to prevent auto-save triggering during batch update
+                ui.combo_evt_img.blockSignals(True)
+                ui.combo_evt_snd.blockSignals(True)
+                ui.slider_evt_scale.blockSignals(True)
+                ui.slider_evt_vol.blockSignals(True)
+                ui.ent_evt_duration.blockSignals(True)
+                ui.check_play_duplicate.blockSignals(True)
+                ui.check_evt_impact.blockSignals(True)
 
-                    # Create new slot
-                    self.config["event_slots"][final_name] = copy.deepcopy(imported_events)
+                try:
+                    if create_new:
+                        # Find a unique name
+                        final_name = imported_name
+                        counter = 2
+                        while final_name in self.config.get("event_slots", {}):
+                            final_name = f"{imported_name} ({counter})"
+                            counter += 1
 
-                    # Add to combo and switch to it
-                    ui.combo_event_slot.blockSignals(True)
-                    ui.combo_event_slot.addItem(final_name)
-                    ui.combo_event_slot.blockSignals(False)
+                        # Create new slot
+                        self.config["event_slots"][final_name] = copy.deepcopy(imported_events)
 
-                    idx = ui.combo_event_slot.findText(final_name)
-                    ui.combo_event_slot.setCurrentIndex(idx)  # triggers switch_event_slot
+                        # Add to combo and switch to it
+                        ui.combo_event_slot.blockSignals(True)
+                        ui.combo_event_slot.addItem(final_name)
+                        ui.combo_event_slot.blockSignals(False)
 
-                    msg = f"Imported as new preset '{final_name}'!"
-                else:
-                    # Merge into current slot
-                    current_slot = self.config.get("active_event_slot", "Default")
-                    for evt_name, evt_data in imported_events.items():
-                        self.config["events"][evt_name] = copy.deepcopy(evt_data)
+                        idx = ui.combo_event_slot.findText(final_name)
+                        ui.combo_event_slot.setCurrentIndex(idx)  # triggers switch_event_slot
 
-                    # Sync to slot
-                    self.config["event_slots"][current_slot] = copy.deepcopy(self.config["events"])
+                        msg = f"Imported as new preset '{final_name}'!"
+                    else:
+                        # Merge into current slot
+                        current_slot = self.config.get("active_event_slot", "Default")
+                        new_count = 0
+                        skip_count = 0
+                        known_events = set(ui.event_buttons.keys())
 
-                    # Reset editing UI
-                    ui.lbl_editing.setText("EDITING: NONE")
-                    final_name = current_slot
-                    msg = f"Merged {len(imported_events)} events into '{current_slot}'!"
+                        for evt_name, evt_data in imported_events.items():
+                            # 1. Skip unknown event types
+                            if evt_name not in known_events:
+                                skip_count += 1
+                                continue
+
+                            # 2. Skip if already exists (as requested: "instead of being discarded")
+                            # If the user has "Kill", we don't overwrite it with the one from the zip.
+                            if evt_name in self.config["events"]:
+                                skip_count += 1
+                                continue
+
+                            # 3. Apply
+                            self.config["events"][evt_name] = copy.deepcopy(evt_data)
+                            new_count += 1
+
+                        # Sync to slot storage
+                        self.config["event_slots"][current_slot] = copy.deepcopy(self.config["events"])
+
+                        # Selection Reset
+                        ui.current_event = None
+                        ui.lbl_editing.setText("EDITING: NONE")
+                        final_name = current_slot
+                        msg = f"Merged into '{current_slot}':\n• {new_count} new events added\n• {skip_count} existing/unknown events skipped"
+                finally:
+                    # UNBLOCK signals
+                    ui.combo_evt_img.blockSignals(False)
+                    ui.combo_evt_snd.blockSignals(False)
+                    ui.slider_evt_scale.blockSignals(False)
+                    ui.slider_evt_vol.blockSignals(False)
+                    ui.ent_evt_duration.blockSignals(False)
+                    ui.check_play_duplicate.blockSignals(False)
+                    ui.check_evt_impact.blockSignals(False)
 
                 self.save_config()
 
                 # Refresh asset dropdowns (new files may have been added)
                 self.populate_overlay_assets()
 
-                msg += f"\n\n• {len(imported_events)} events\n• {asset_count} asset files"
+                msg += f"\n\n• {len(imported_events)} total events in file\n• {asset_count} asset files"
                 QMessageBox.information(self.main_hub, "Import Complete", msg)
                 self.add_log(f"EVENT: Imported preset from {os.path.basename(zip_path)} → '{final_name}'")
 
@@ -4353,6 +4390,8 @@ class DiorClientGUI:
             self.overlay_win.streak_bg_label.hide()
         if hasattr(self.overlay_win, 'streak_text_label'):
             self.overlay_win.streak_text_label.hide()
+        if hasattr(self.overlay_win, 'clear_streak_web'):
+            self.overlay_win.clear_streak_web()
         if hasattr(self.overlay_win, 'knife_labels'):
             for l in self.overlay_win.knife_labels:
                 l.hide()
@@ -4552,10 +4591,12 @@ class DiorClientGUI:
                     self.overlay_win.streak_bg_label.hide()
                     self.overlay_win.streak_text_label.hide()
                     for k in self.overlay_win.knife_labels: k.hide()
+                    self.hide_streak_display()
             else:
                 self.overlay_win.streak_bg_label.hide()
                 self.overlay_win.streak_text_label.hide()
                 for k in self.overlay_win.knife_labels: k.hide()
+                self.hide_streak_display()
 
         else:
             # HIDE ALL (Game off / no focus / no test)

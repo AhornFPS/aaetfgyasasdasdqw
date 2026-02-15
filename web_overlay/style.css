@@ -141,7 +141,7 @@ body {
   position: absolute;
   object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(0, 242, 255, 0.9));
-  animation: eventIn 120ms ease-out;
+  animation: eventIn 60ms ease-out;
   will-change: opacity;
 }
 
@@ -155,41 +155,99 @@ body.hud-impact #hud-root {
 }
 
 @keyframes feedIn {
-  from { opacity: 0; transform: translateX(22px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes eventIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes knifePop {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes streakPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes breathe {
-  0% { filter: brightness(0.95); }
-  50% { filter: brightness(1.12); }
-  100% { filter: brightness(0.95); }
+  0% {
+    filter: brightness(0.95);
+  }
+
+  50% {
+    filter: brightness(1.12);
+  }
+
+  100% {
+    filter: brightness(0.95);
+  }
 }
 
 @keyframes hudGlitch {
-  0% { transform: translateX(0); filter: hue-rotate(0deg); }
-  20% { transform: translateX(2px); filter: hue-rotate(8deg); }
-  40% { transform: translateX(-3px); filter: hue-rotate(-8deg); }
-  60% { transform: translateX(1px); filter: hue-rotate(5deg); }
-  100% { transform: translateX(0); filter: hue-rotate(0deg); }
+  0% {
+    transform: translateX(0);
+    filter: hue-rotate(0deg);
+  }
+
+  20% {
+    transform: translateX(2px);
+    filter: hue-rotate(8deg);
+  }
+
+  40% {
+    transform: translateX(-3px);
+    filter: hue-rotate(-8deg);
+  }
+
+  60% {
+    transform: translateX(1px);
+    filter: hue-rotate(5deg);
+  }
+
+  100% {
+    transform: translateX(0);
+    filter: hue-rotate(0deg);
+  }
 }

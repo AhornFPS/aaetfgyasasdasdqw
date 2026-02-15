@@ -587,7 +587,7 @@ class CensusWorker:
 
                     msg = f"""<div style="{base_style}">
                             {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span> 
-                            <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+                            <span style="color: #aaaaaa; font-size: 0.85em;"> ({kd_str})</span></div>"""
 
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
@@ -711,7 +711,7 @@ class CensusWorker:
                     else:
                         msg = f"""<div style="{base_style}">
                                             {icon_html}<span style="color: #888;">{k_tag}</span><span style="color: #ff4444;">{k_name}</span>
-                                            <span style="color: #aaa; font-size: 16px;"> ({k_kd})</span></div>"""
+                                            <span style="color: #aaa; font-size: 0.85em;"> ({k_kd})</span></div>"""
 
                     if self.c.config.get("killfeed", {}).get("active", True):
                         if self.c.overlay_win: self.c.overlay_win.signals.killfeed_entry.emit(msg)
@@ -953,7 +953,7 @@ class CensusWorker:
         msg = f"""<div style="{base_style}">
                 <span style="color: #ff8c00;">GUNNER </span>
                 {icon_html}<span style="color: #888;">{v_tag}</span><span style="color: #ffffff;">{v_name}</span>
-                <span style="color: #aaaaaa; font-size: 16px;"> ({kd_str})</span></div>"""
+                <span style="color: #aaaaaa; font-size: 0.85em;"> ({kd_str})</span></div>"""
 
         self.c.overlay_win.signals.killfeed_entry.emit(msg)
 
