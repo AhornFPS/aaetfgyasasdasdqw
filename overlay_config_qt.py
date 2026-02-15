@@ -351,7 +351,7 @@ class TabStreaming(QWidget):
             "2. Add a new Source: <span style='color:#00f2ff;'>Browser</span>.",
             "3. Uncheck 'Local file'.",
             "4. Paste the URL above into the URL field.",
-            "5. Set Width to <b>1920</b> and Height to <b>1080</b>.",
+            "5. Set Width and Height to your screen resolution.",
             "6. Check 'Refresh browser when scene becomes active'.",
             "7. Click OK.",
             "<i>Note: If localhost doesn't work, try <b>127.0.0.1</b> instead.</i>"

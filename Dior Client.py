@@ -4197,9 +4197,16 @@ class DiorClientGUI:
         # ADDED *.gif HERE:
         ft = "Images (*.png *.jpg *.jpeg *.gif)" if type_ == "png" else "Audio (*.mp3 *.wav *.ogg)"
         
+        # Decide start directory based on type
+        start_dir = IMAGES_DIR if type_ == "png" else SOUNDS_DIR
+        
+        # Fallback to BASE_DIR if directory doesn't exist
+        if not os.path.exists(start_dir):
+            start_dir = self.BASE_DIR
+
         from PyQt6.QtWidgets import QFileDialog, QComboBox
         # Use self.main_hub as parent so the window is centered
-        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Select File", self.BASE_DIR, ft)
+        file_path, _ = QFileDialog.getOpenFileName(self.main_hub, "Select File", start_dir, ft)
 
         if file_path:
             filename = os.path.basename(file_path)
