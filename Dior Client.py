@@ -3312,7 +3312,7 @@ class DiorClientGUI:
                     sound_path = snd_name
 
         # 5. TRIGGER
-        is_hitmarker = (event_type.lower() == "hitmarker")
+        is_hitmarker = (event_type.lower() in ["hitmarker", "headshot hitmarker"])
         play_duplicate = event_data.get("play_duplicate", True)
 
         if img_path or sound_path:

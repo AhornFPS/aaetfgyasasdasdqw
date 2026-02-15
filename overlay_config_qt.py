@@ -609,6 +609,9 @@ class OverlayConfigWindow(QWidget):
                 "Gunner Kill Mosquito", "Gunner Kill Liberator", "Gunner Kill Galaxy", "Gunner Kill Valkyrie",
                 "Gunner Kill Harasser", "Gunner Kill Ant", "Gunner Kill Colossus", "Gunner Kill Javelin",
                 "Gunner Kill Dervish", "Gunner Kill Chimera", "Gunner Kill Corsair"
+            ],
+            "Hitmarker": [
+                "Headshot Hitmarker"
             ]
         }
 
