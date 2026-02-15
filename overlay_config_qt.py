@@ -654,17 +654,17 @@ class OverlayConfigWindow(QWidget):
             ],
             "Revive Given": [
                 # WICHTIG: Die Namen müssen mit "Revive Given" anfangen!
-                "Revive Given 2", "Revive Given 10", "Revive Given 25", "Revive Given 50",
-                "Revive Given 100", "Revive Given 200"
+                "Revive Given 5", "Revive Given 10", "Revive Given 25", "Revive Given 50",
+                "Revive Given 100", "Revive Given 500"
             ],
             "Revive Taken": [
-                "Revive Taken 2", "Revive Taken 5", "Revive Taken 10"
+                "Revive Taken 5", "Revive Taken 10", "Revive Taken 25"
             ],
             "Resupply": [
-                "Resupply 2", "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000"
+                "Resupply 50", "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000"
             ],
             "Repair": [
-                "Repair 2", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000"
+                "Repair 50", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000"
             ],
             # NEU: Kill Subset
             "Kill": [
@@ -756,8 +756,8 @@ class OverlayConfigWindow(QWidget):
             "SPECIAL": ["Bounty Kill", "Domination", "Revenge", "Killstreak Stop", "Nade Kill",
                         "Knife Kill", "RoadKill", "Spitfire Kill"],
             "SUPPORT": ["Revive Given", "Revive Taken", "Heal", "Resupply", "Repair", "Break Construction",
-                        "Mine Kill", "Squad Spawn", "Transport Assist"],
-            "OBJECTIVES": ["Point Control", "Sunderer Spawn", "Base Capture", "Alert End",
+                        "Mine Kill", "Squad Spawn", "Transport Assist","Sunderer Spawn"],
+            "OBJECTIVES": ["Point Control", "Base Capture", "Alert End",
                            "Alert Win"],
             "SYSTEM": ["Login TR", "Login NC", "Login VS", "Login NSO"]
         }
