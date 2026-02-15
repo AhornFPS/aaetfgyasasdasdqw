@@ -2,6 +2,7 @@ import sys
 import os
 import ctypes
 import configparser
+import json
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QTabWidget, QScrollArea, QFrame, QLineEdit, QComboBox, 
@@ -700,15 +701,37 @@ class PS2SettingsEditor(QMainWindow):
             self.load_ini(path)
 
     def load_default_ini(self):
-        # Try finding low ini first
-        low_path = os.path.join(self.base_path, "assets", "Planetside 2 ini", "UserOptions_low.ini")
-        if os.path.exists(low_path):
-            self.load_ini(low_path)
-            self.lbl_status.setText(f"Loaded Default: {os.path.basename(low_path)}")
+        # 1. Try to find path in config.json (Dior Client config)
+        config_json_path = os.path.join(self.base_path, "config.json")
+        game_ini_path = None
+        
+        if os.path.exists(config_json_path):
+            try:
+                with open(config_json_path, 'r') as f:
+                    data = json.load(f)
+                    ps2_path = data.get("ps2_path", "")
+                    if ps2_path and os.path.exists(ps2_path):
+                        candidate = os.path.join(ps2_path, "UserOptions.ini")
+                        if os.path.exists(candidate):
+                            game_ini_path = candidate
+            except Exception as e:
+                print(f"Error reading config.json: {e}")
+
+        # 2. Decision Logic
+        if game_ini_path:
+            self.load_ini(game_ini_path)
+            # Make sure we know we are editing the LIVE config
+            self.lbl_status.setText(f"Loaded LIVE Config: {game_ini_path}")
         else:
-            self.lbl_status.setText("No default INI found. Please load manually.")
-            # Still setup tabs with empty/default config
-            self.setup_tabs()
+            # Fallback to assets/UserOptions_low.ini
+            low_path = os.path.join(self.base_path, "assets", "Planetside 2 ini", "UserOptions_low.ini")
+            if os.path.exists(low_path):
+                self.load_ini(low_path)
+                self.lbl_status.setText(f"Loaded Default: {os.path.basename(low_path)}")
+            else:
+                self.lbl_status.setText("No default INI found. Please load manually.")
+                # Still setup tabs with empty/default config
+                self.setup_tabs()
 
     def load_ini(self, path):
         try:

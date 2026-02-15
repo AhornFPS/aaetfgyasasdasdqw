@@ -138,7 +138,7 @@ class LauncherWidget(QWidget):
         main_layout.setSpacing(30)
 
         # Header
-        header = QLabel("> GAME_START_DASHBOARD")
+        header = QLabel("")
         header.setObjectName("Header")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(header)
@@ -199,6 +199,10 @@ class LauncherWidget(QWidget):
             # Pass base_path if possible, otherwise it defaults to cwd
             base_path = os.path.dirname(os.path.abspath(__file__))
             self.settings_editor_window = PS2SettingsEditor(base_path=base_path)
+            
+        # FORCE RELOAD from Game Dir every time it opens!
+        # This ensures we don't show stale state from previous opens
+        self.settings_editor_window.load_default_ini()
         
         self.settings_editor_window.show()
         self.settings_editor_window.raise_()

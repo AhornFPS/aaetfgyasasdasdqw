@@ -190,11 +190,35 @@ class DiorMainHub(QMainWindow):
         main_layout.addWidget(self.nav_list)
         main_layout.addWidget(self.stack)
 
-        # Internal connection: Click on list -> Stack changes
-        self.nav_list.currentRowChanged.connect(self.stack.setCurrentIndex)
+        # Internal connection: Click on list -> Check logic -> Stack changes
+        self.nav_list.currentRowChanged.connect(self.on_nav_change)
 
         # Set start page
         self.nav_list.setCurrentRow(0)
+        
+    def on_nav_change(self, index):
+        # Index 1 = LAUNCHER
+        if index == 1:
+            # Check if path is valid
+            path = self.controller.ps2_dir
+            if not path or not os.path.exists(path):
+                QMessageBox.warning(self, "Missing Path", 
+                                    "To use the Launcher feature, you must set the Planetside 2 path in Settings.")
+                
+                # Revert selection (block signals to avoid recursion)
+                self.nav_list.blockSignals(True)
+                current_stack_idx = self.stack.currentIndex()
+                # If we were already on Launcher (shouldn't happen but safety), go to Dashboard (0)
+                if current_stack_idx == 1: 
+                    self.nav_list.setCurrentRow(0)
+                    self.stack.setCurrentIndex(0)
+                else:
+                    self.nav_list.setCurrentRow(current_stack_idx)
+                self.nav_list.blockSignals(False)
+                return
+
+        # If allowed, switch stack
+        self.stack.setCurrentIndex(index)
 
 try:
     import pygame
