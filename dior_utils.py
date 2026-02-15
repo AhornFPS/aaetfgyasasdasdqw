@@ -52,6 +52,19 @@ if hasattr(sys, '_MEIPASS'):
 else:
     ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
+IMAGES_DIR = os.path.join(ASSETS_DIR, "Images")
+SOUNDS_DIR = os.path.join(ASSETS_DIR, "Sounds")
+CROSSHAIR_DIR = os.path.join(ASSETS_DIR, "Crosshair")
+
+# Ensure subfolders exist (if writable)
+try:
+    if not IS_PACKAGED:
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        os.makedirs(SOUNDS_DIR, exist_ok=True)
+        os.makedirs(CROSSHAIR_DIR, exist_ok=True)
+except Exception:
+    pass
+
 
 # ---------------------------------------------------------
 # 3. ASSET PATH: Hier liegen Bilder und Sounds
@@ -59,12 +72,28 @@ else:
 def get_asset_path(filename):
     """
     Findet Ressourcen zuverlässig, egal ob Development oder PyInstaller EXE.
+    Intelligent routing to 'Images' or 'Sounds' subfolders.
     """
     if not filename:
         return ""
 
-    # Pfadbereinigung (falls User "assets/bild.png" statt "bild.png" schreibt)
+    # Pfadbereinigung
     filename = filename.replace("assets/", "").replace("assets\\", "")
+    filename = filename.replace("Images/", "").replace("Images\\", "")
+    filename = filename.replace("Sounds/", "").replace("Sounds\\", "")
+    filename = filename.replace("Crosshair/", "").replace("Crosshair\\", "")
+
+    lower_f = filename.lower()
+
+    # 1. SPECIAL CASE: Crosshairs
+    if lower_f.startswith("ch_") or "crosshair" in lower_f:
+        return os.path.join(CROSSHAIR_DIR, filename)
+
+    # 2. Images
+    if lower_f.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+        return os.path.join(IMAGES_DIR, filename)
+    elif lower_f.endswith(('.mp3', '.ogg', '.wav')):
+        return os.path.join(SOUNDS_DIR, filename)
 
     return os.path.join(ASSETS_DIR, filename)
 

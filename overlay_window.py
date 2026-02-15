@@ -8,6 +8,8 @@ import json
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from overlay_server import OverlayServer
+from dior_utils import get_asset_path
+
 
 IS_WINDOWS = sys.platform.startswith("win")
 
@@ -33,22 +35,6 @@ except ImportError:
     pass
 
 
-# Helper function for paths
-def get_asset_path(filename):
-    if not filename: return ""
-
-    # 1. Determine base path (script vs. EXE/_internal)
-    if hasattr(sys, '_MEIPASS'):
-        base_dir = os.path.join(sys._MEIPASS, "assets")
-    else:
-        base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-
-    full_path = os.path.join(base_dir, filename)
-
-    # Debugging help (displayed in CMD window if console=True)
-    # print(f"DEBUG ASSET: {full_path} | Exists: {os.path.exists(full_path)}")
-
-    return full_path
 
 
 # --- SIGNALS ---

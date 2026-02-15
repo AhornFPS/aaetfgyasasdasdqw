@@ -64,7 +64,7 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, ASSETS_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
+from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 import sys
@@ -130,7 +130,7 @@ class DiorMainHub(QMainWindow):
         super().__init__()
         self.controller = controller
         self.setWindowTitle("DIOR CLIENT - PS2 MASTER")
-        self.resize(1400, 900)
+        self.resize(1600, 900)
 
         # Central Widget
         central_widget = QWidget()
@@ -330,6 +330,7 @@ class DiorClientGUI:
         self.char_win = characters_qt.CharacterWidget(self)
         self.ovl_config_win = overlay_config_qt.OverlayConfigWindow(self)
         self.populate_overlay_assets()
+        self.init_event_slots()
         self.settings_win = settings_qt.SettingsWidget(self)
 
         # Create overlay
@@ -422,26 +423,57 @@ class DiorClientGUI:
         if not self.ovl_config_win:
             return
 
-        # Use ASSETS_DIR from dior_utils
-        assets_dir = ASSETS_DIR
-
-        if not os.path.exists(assets_dir):
-            self.add_log(f"WARN: Assets dir not found: {assets_dir}")
-            return
-
         images = []
         sounds = []
 
+        # 1. SCAN IMAGES SUBFOLDER
+        if os.path.exists(IMAGES_DIR):
+            try:
+                for f in os.listdir(IMAGES_DIR):
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        images.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Images subfolder: {e}")
+
+        # 2. SCAN SOUNDS SUBFOLDER
+        if os.path.exists(SOUNDS_DIR):
+            try:
+                for f in os.listdir(SOUNDS_DIR):
+                    if f.lower().endswith(('.mp3', '.ogg', '.wav')):
+                        sounds.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Sounds subfolder: {e}")
+
+        # 3. SCAN CROSSHAIR SUBFOLDER
+        if os.path.exists(CROSSHAIR_DIR):
+            try:
+                for f in os.listdir(CROSSHAIR_DIR):
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        # Add to images if wanted, or just scan
+                        if f not in images: images.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Crosshair subfolder: {e}")
+
+        # 4. SCAN ROOT ASSETS FOLDER (Legacy / Other files)
         try:
-            for f in os.listdir(assets_dir):
+            for f in os.listdir(ASSETS_DIR):
                 lower_f = f.lower()
+                # Skip subdirectories
+                if os.path.isdir(os.path.join(ASSETS_DIR, f)):
+                    continue
+                
                 if lower_f.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    images.append(f)
+                    if f not in images: images.append(f)
                 elif lower_f.endswith(('.mp3', '.ogg', '.wav')):
-                    sounds.append(f)
+                    if f not in sounds: sounds.append(f)
         except Exception as e:
-            self.add_log(f"ERROR: Failed to scan assets dir: {e}")
-            return
+            self.add_log(f"ERROR: Failed to scan root assets dir: {e}")
+
+        # Fill UI
+        self.ovl_config_win.combo_evt_img.clear()
+        self.ovl_config_win.combo_evt_img.addItems(sorted(images))
+        self.ovl_config_win.combo_evt_snd.clear()
+        self.ovl_config_win.combo_evt_snd.addItems(sorted(sounds))
 
         # Store base assets for later use
         self.base_images = sorted(images)
@@ -893,14 +925,14 @@ class DiorClientGUI:
         from PyQt6.QtWidgets import QFileDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self.main_hub, "Select Crosshair Image", self.BASE_DIR, "Images (*.png *.jpg *.jpeg)"
+            self.main_hub, "Select Crosshair Image", CROSSHAIR_DIR, "Images (*.png *.jpg *.jpeg)"
         )
 
         if file_path:
             filename = os.path.basename(file_path)
             target_path = get_asset_path(filename)
 
-            # Copy to Assets if necessary
+            # Copy to Assets/Crosshair if necessary
             if os.path.abspath(file_path) != os.path.abspath(target_path):
                 try:
                     shutil.copy2(file_path, target_path)
@@ -1027,6 +1059,13 @@ class DiorClientGUI:
             count += 1
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"SYS: Layout applied to {count} Events.")
         QMessageBox.information(ui, "Success", f"Layout successfully applied!")
 
@@ -1119,6 +1158,14 @@ class DiorClientGUI:
         ui.combo_evt_img.editTextChanged.connect(self.save_event_config_from_qt)
         ui.combo_evt_snd.editTextChanged.connect(self.save_event_config_from_qt)
         ui.check_play_duplicate.toggled.connect(self.save_event_config_from_qt)
+
+        # --- EVENT SLOT SIGNALS ---
+        ui.combo_event_slot.currentIndexChanged.connect(self.switch_event_slot)
+        ui.btn_slot_new.clicked.connect(self.create_event_slot)
+        ui.btn_slot_rename.clicked.connect(self.rename_event_slot)
+        ui.btn_slot_delete.clicked.connect(self.delete_event_slot)
+        ui.btn_slot_export.clicked.connect(self.export_event_slot)
+        ui.btn_slot_import.clicked.connect(self.import_event_slot)
 
 
         # ---------------------------------------------------------
@@ -1983,11 +2030,476 @@ class DiorClientGUI:
         })
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"EVENT: Settings for '{event_name}' auto-saved.")
 
         # Optional: Direktes Feedback im Overlay (Test)
         # self.trigger_overlay_event(event_name)
-        
+
+    # =========================================================
+    # EVENT SAVE SLOT SYSTEM
+    # =========================================================
+    def init_event_slots(self):
+        """Initialize the event slot system. Migrate legacy config if needed."""
+        import copy
+
+        # 1. MIGRATION: If event_slots doesn't exist yet, create it from current events
+        if "event_slots" not in self.config:
+            existing_events = self.config.get("events", {})
+            self.config["event_slots"] = {
+                "Default": copy.deepcopy(existing_events)
+            }
+            self.config["active_event_slot"] = "Default"
+            self.save_config()
+            self.add_log("SYS: Migrated existing events into 'Default' preset slot.")
+
+        # 2. Safety: Ensure at least one slot exists
+        if not self.config["event_slots"]:
+            self.config["event_slots"]["Default"] = {}
+            self.config["active_event_slot"] = "Default"
+
+        # 3. Populate the combo box
+        ui = self.ovl_config_win
+        ui.combo_event_slot.blockSignals(True)
+        ui.combo_event_slot.clear()
+
+        slot_names = list(self.config["event_slots"].keys())
+        ui.combo_event_slot.addItems(slot_names)
+
+        # 4. Select the active slot
+        active_slot = self.config.get("active_event_slot", slot_names[0])
+        if active_slot not in slot_names:
+            active_slot = slot_names[0]
+            self.config["active_event_slot"] = active_slot
+
+        idx = ui.combo_event_slot.findText(active_slot)
+        if idx >= 0:
+            ui.combo_event_slot.setCurrentIndex(idx)
+
+        ui.combo_event_slot.blockSignals(False)
+
+        # 5. Load active slot into self.config["events"]
+        import copy as copy2
+        self.config["events"] = copy2.deepcopy(self.config["event_slots"].get(active_slot, {}))
+
+    def switch_event_slot(self, index):
+        """Switch to a different event slot."""
+        import copy
+        ui = self.ovl_config_win
+        slot_name = ui.combo_event_slot.currentText()
+        if not slot_name:
+            return
+
+        # 1. Save current events back to the PREVIOUS slot
+        prev_slot = self.config.get("active_event_slot", "")
+        if prev_slot and prev_slot in self.config.get("event_slots", {}):
+            self.config["event_slots"][prev_slot] = copy.deepcopy(self.config.get("events", {}))
+
+        # 2. Load new slot into active events
+        new_events = self.config.get("event_slots", {}).get(slot_name, {})
+        self.config["events"] = copy.deepcopy(new_events)
+        self.config["active_event_slot"] = slot_name
+
+        # 3. Save & refresh UI
+        self.save_config()
+
+        # Reset the editing state
+        ui.lbl_editing.setText("EDITING: NONE")
+        ui.combo_evt_img.clear()
+        ui.combo_evt_snd.clear()
+        ui.ent_evt_duration.setText("3000")
+        ui.slider_evt_scale.setValue(100)
+        ui.slider_evt_vol.setValue(100)
+
+        self.add_log(f"EVENT: Switched to preset '{slot_name}'.")
+
+    def create_event_slot(self):
+        """Create a new event slot, optionally copying the current one."""
+        import copy
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+
+        ui = self.ovl_config_win
+
+        # Ask for name
+        name, ok = QInputDialog.getText(
+            self.main_hub, "New Event Preset",
+            "Enter a name for the new preset:",
+        )
+        if not ok or not name.strip():
+            return
+
+        name = name.strip()
+
+        # Check for duplicates
+        if name in self.config.get("event_slots", {}):
+            QMessageBox.warning(self.main_hub, "Duplicate Name",
+                                f"A preset named '{name}' already exists.")
+            return
+
+        # Ask if they want to copy current slot
+        current_slot = self.config.get("active_event_slot", "Default")
+        reply = QMessageBox.question(
+            self.main_hub, "Copy Existing?",
+            f"Copy all events from the current preset '{current_slot}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Save current state first
+            self.config["event_slots"][current_slot] = copy.deepcopy(self.config.get("events", {}))
+            new_events = copy.deepcopy(self.config.get("events", {}))
+        else:
+            new_events = {}
+
+        # Create the slot
+        self.config["event_slots"][name] = new_events
+
+        # Add to combo and switch to it
+        ui.combo_event_slot.blockSignals(True)
+        ui.combo_event_slot.addItem(name)
+        ui.combo_event_slot.blockSignals(False)
+
+        # Switch to the new slot
+        idx = ui.combo_event_slot.findText(name)
+        ui.combo_event_slot.setCurrentIndex(idx)  # This triggers switch_event_slot
+
+        self.add_log(f"EVENT: Created new preset '{name}'.")
+
+    def rename_event_slot(self):
+        """Rename the currently active event slot."""
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+
+        ui = self.ovl_config_win
+        current_name = ui.combo_event_slot.currentText()
+        if not current_name:
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self.main_hub, "Rename Preset",
+            f"New name for '{current_name}':",
+            text=current_name
+        )
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+
+        if new_name == current_name:
+            return
+
+        # Check for duplicates
+        if new_name in self.config.get("event_slots", {}):
+            QMessageBox.warning(self.main_hub, "Duplicate Name",
+                                f"A preset named '{new_name}' already exists.")
+            return
+
+        # Rename in config
+        slots = self.config["event_slots"]
+        slots[new_name] = slots.pop(current_name)
+        self.config["active_event_slot"] = new_name
+
+        # Update combo
+        ui.combo_event_slot.blockSignals(True)
+        idx = ui.combo_event_slot.currentIndex()
+        ui.combo_event_slot.setItemText(idx, new_name)
+        ui.combo_event_slot.blockSignals(False)
+
+        self.save_config()
+        self.add_log(f"EVENT: Renamed preset '{current_name}' → '{new_name}'.")
+
+    def delete_event_slot(self):
+        """Delete the currently active event slot."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        ui = self.ovl_config_win
+        current_name = ui.combo_event_slot.currentText()
+        if not current_name:
+            return
+
+        slots = self.config.get("event_slots", {})
+
+        # Prevent deleting the last slot
+        if len(slots) <= 1:
+            QMessageBox.warning(self.main_hub, "Cannot Delete",
+                                "You must have at least one preset. Create a new one first.")
+            return
+
+        # Confirm
+        reply = QMessageBox.question(
+            self.main_hub, "Delete Preset",
+            f"Are you sure you want to delete '{current_name}'?\n\nThis will permanently remove all event settings in this preset.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Remove from config
+        del slots[current_name]
+
+        # Remove from combo and switch to first available
+        ui.combo_event_slot.blockSignals(True)
+        idx = ui.combo_event_slot.currentIndex()
+        ui.combo_event_slot.removeItem(idx)
+
+        # Switch to the first remaining slot
+        first_slot = list(slots.keys())[0]
+        self.config["active_event_slot"] = first_slot
+
+        switch_idx = ui.combo_event_slot.findText(first_slot)
+        ui.combo_event_slot.setCurrentIndex(max(switch_idx, 0))
+        ui.combo_event_slot.blockSignals(False)
+
+        # Explicitly load the new slot's events (don't rely on signal)
+        import copy
+        self.config["events"] = copy.deepcopy(slots.get(first_slot, {}))
+
+        # Reset the editing state
+        ui.lbl_editing.setText("EDITING: NONE")
+        ui.combo_evt_img.clear()
+        ui.combo_evt_snd.clear()
+        ui.ent_evt_duration.setText("3000")
+        ui.slider_evt_scale.setValue(100)
+        ui.slider_evt_vol.setValue(100)
+
+        self.save_config()
+        self.add_log(f"EVENT: Deleted preset '{current_name}'. Switched to '{first_slot}'.")
+
+    def export_event_slot(self):
+        """Export the current event slot as a .zip file with all assets."""
+        import zipfile
+        import copy
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+        ui = self.ovl_config_win
+        slot_name = self.config.get("active_event_slot", "Default")
+
+        # Sync current state to slot first
+        self.config["event_slots"][slot_name] = copy.deepcopy(self.config.get("events", {}))
+
+        events_data = copy.deepcopy(self.config.get("events", {}))
+        if not events_data:
+            QMessageBox.information(self.main_hub, "Nothing to Export",
+                                    "The current preset has no events configured.")
+            return
+
+        # Ask for save location
+        default_name = f"{slot_name}.zip"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self.main_hub, "Export Event Preset",
+            os.path.join(os.path.expanduser("~"), "Desktop", default_name),
+            "ZIP Files (*.zip)"
+        )
+        if not save_path:
+            return
+
+        # Collect all referenced asset filenames
+        asset_files = set()
+        for evt_name, evt_data in events_data.items():
+            # Images
+            img = evt_data.get("img", "")
+            if isinstance(img, list):
+                for i in img:
+                    if i: asset_files.add(str(i))
+            elif img:
+                asset_files.add(str(img))
+
+            # Sounds
+            snd = evt_data.get("snd", "")
+            if isinstance(snd, list):
+                for s in snd:
+                    if s: asset_files.add(str(s))
+            elif snd:
+                asset_files.add(str(snd))
+
+        # Build the ZIP
+        try:
+            packed_count = 0
+            missing = []
+
+            with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # 1. Write the event settings JSON
+                settings_json = json.dumps({
+                    "preset_name": slot_name,
+                    "events": events_data
+                }, indent=4)
+                zf.writestr("preset_settings.json", settings_json)
+
+                # 2. Pack each asset file
+                for asset_name in sorted(asset_files):
+                    # Try to find the file in all asset locations
+                    found_path = None
+
+                    # Check via get_asset_path first
+                    candidate = get_asset_path(asset_name)
+                    if os.path.isfile(candidate):
+                        found_path = candidate
+                    else:
+                        # Fallback: search all asset dirs
+                        for search_dir in [ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR]:
+                            test = os.path.join(search_dir, asset_name)
+                            if os.path.isfile(test):
+                                found_path = test
+                                break
+
+                    if found_path:
+                        # Store in zip under "assets/" prefix
+                        zf.write(found_path, f"assets/{asset_name}")
+                        packed_count += 1
+                    else:
+                        missing.append(asset_name)
+
+            # Report
+            msg = f"Preset '{slot_name}' exported successfully!\n\n"
+            msg += f"• {len(events_data)} events\n"
+            msg += f"• {packed_count} asset files packed"
+            if missing:
+                msg += f"\n\n⚠ {len(missing)} asset(s) not found (skipped):\n"
+                msg += "\n".join(f"  - {m}" for m in missing[:10])
+                if len(missing) > 10:
+                    msg += f"\n  ... and {len(missing) - 10} more"
+
+            QMessageBox.information(self.main_hub, "Export Complete", msg)
+            self.add_log(f"EVENT: Exported preset '{slot_name}' → {save_path} ({packed_count} assets)")
+
+        except Exception as e:
+            QMessageBox.critical(self.main_hub, "Export Error", f"Failed to export:\n{e}")
+            self.add_log(f"ERROR: Export failed: {e}")
+
+    def import_event_slot(self):
+        """Import an event preset from a .zip file."""
+        import zipfile
+        import copy
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+        ui = self.ovl_config_win
+
+        # Ask for file
+        zip_path, _ = QFileDialog.getOpenFileName(
+            self.main_hub, "Import Event Preset",
+            os.path.expanduser("~"),
+            "ZIP Files (*.zip)"
+        )
+        if not zip_path:
+            return
+
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                # 1. Read settings JSON
+                if "preset_settings.json" not in zf.namelist():
+                    QMessageBox.critical(self.main_hub, "Invalid File",
+                                         "This ZIP doesn't contain a valid event preset.\n(Missing preset_settings.json)")
+                    return
+
+                settings_raw = zf.read("preset_settings.json").decode("utf-8")
+                settings = json.loads(settings_raw)
+                imported_events = settings.get("events", {})
+                imported_name = settings.get("preset_name", "Imported")
+
+                if not imported_events:
+                    QMessageBox.information(self.main_hub, "Empty Preset",
+                                            "The imported preset contains no events.")
+                    return
+
+                # 2. Ask user: New Slot or Merge?
+                dlg = QMessageBox(self.main_hub)
+                dlg.setWindowTitle("Import Mode")
+                dlg.setText(
+                    f"Preset: '{imported_name}' ({len(imported_events)} events)\n\n"
+                    f"How would you like to import?"
+                )
+                btn_save = dlg.addButton("Save", QMessageBox.ButtonRole.YesRole)
+                btn_merge = dlg.addButton("Merge", QMessageBox.ButtonRole.NoRole)
+                btn_cancel = dlg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+                dlg.setDefaultButton(btn_save)
+                dlg.exec()
+
+                clicked = dlg.clickedButton()
+                if clicked == btn_cancel:
+                    return
+
+                create_new = (clicked == btn_save)
+
+                # 3. Extract asset files to correct folders
+                asset_count = 0
+                for entry in zf.namelist():
+                    if entry.startswith("assets/") and not entry.endswith("/"):
+                        filename = entry.replace("assets/", "")
+                        if not filename:
+                            continue
+
+                        # Determine target path via get_asset_path
+                        target_path = get_asset_path(filename)
+                        target_dir = os.path.dirname(target_path)
+
+                        # Ensure directory exists
+                        os.makedirs(target_dir, exist_ok=True)
+
+                        # Extract (skip if already exists — don't overwrite user's files)
+                        if not os.path.isfile(target_path):
+                            with open(target_path, 'wb') as f:
+                                f.write(zf.read(entry))
+                            asset_count += 1
+                        else:
+                            asset_count += 1  # Still count it as available
+
+                # 4. Apply
+                if create_new:
+                    # Find a unique name
+                    final_name = imported_name
+                    counter = 2
+                    while final_name in self.config.get("event_slots", {}):
+                        final_name = f"{imported_name} ({counter})"
+                        counter += 1
+
+                    # Create new slot
+                    self.config["event_slots"][final_name] = copy.deepcopy(imported_events)
+
+                    # Add to combo and switch to it
+                    ui.combo_event_slot.blockSignals(True)
+                    ui.combo_event_slot.addItem(final_name)
+                    ui.combo_event_slot.blockSignals(False)
+
+                    idx = ui.combo_event_slot.findText(final_name)
+                    ui.combo_event_slot.setCurrentIndex(idx)  # triggers switch_event_slot
+
+                    msg = f"Imported as new preset '{final_name}'!"
+                else:
+                    # Merge into current slot
+                    current_slot = self.config.get("active_event_slot", "Default")
+                    for evt_name, evt_data in imported_events.items():
+                        self.config["events"][evt_name] = copy.deepcopy(evt_data)
+
+                    # Sync to slot
+                    self.config["event_slots"][current_slot] = copy.deepcopy(self.config["events"])
+
+                    # Reset editing UI
+                    ui.lbl_editing.setText("EDITING: NONE")
+                    final_name = current_slot
+                    msg = f"Merged {len(imported_events)} events into '{current_slot}'!"
+
+                self.save_config()
+
+                # Refresh asset dropdowns (new files may have been added)
+                self.populate_overlay_assets()
+
+                msg += f"\n\n• {len(imported_events)} events\n• {asset_count} asset files"
+                QMessageBox.information(self.main_hub, "Import Complete", msg)
+                self.add_log(f"EVENT: Imported preset from {os.path.basename(zip_path)} → '{final_name}'")
+
+        except zipfile.BadZipFile:
+            QMessageBox.critical(self.main_hub, "Invalid File",
+                                 "The selected file is not a valid ZIP archive.")
+        except Exception as e:
+            QMessageBox.critical(self.main_hub, "Import Error", f"Failed to import:\n{e}")
+            self.add_log(f"ERROR: Import failed: {e}")
+
+
     def toggle_knife_visibility(self):
         """Toggles the knife icons on/off and updates the UI."""
         ui = self.ovl_config_win
@@ -3663,6 +4175,13 @@ class DiorClientGUI:
         }
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"UI: Event '{etype}' saved (Img: '{img_val}').")
 
 
