@@ -336,6 +336,7 @@ class DiorClientGUI:
         self.char_win = characters_qt.CharacterWidget(self)
         self.ovl_config_win = overlay_config_qt.OverlayConfigWindow(self)
         self.populate_overlay_assets()
+        self.init_event_slots()
         self.settings_win = settings_qt.SettingsWidget(self)
 
         # Create overlay
@@ -1064,6 +1065,13 @@ class DiorClientGUI:
             count += 1
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"SYS: Layout applied to {count} Events.")
         QMessageBox.information(ui, "Success", f"Layout successfully applied!")
 
@@ -1156,6 +1164,12 @@ class DiorClientGUI:
         ui.combo_evt_img.editTextChanged.connect(self.save_event_config_from_qt)
         ui.combo_evt_snd.editTextChanged.connect(self.save_event_config_from_qt)
         ui.check_play_duplicate.toggled.connect(self.save_event_config_from_qt)
+
+        # --- EVENT SLOT SIGNALS ---
+        ui.combo_event_slot.currentIndexChanged.connect(self.switch_event_slot)
+        ui.btn_slot_new.clicked.connect(self.create_event_slot)
+        ui.btn_slot_rename.clicked.connect(self.rename_event_slot)
+        ui.btn_slot_delete.clicked.connect(self.delete_event_slot)
 
 
         # ---------------------------------------------------------
@@ -2020,11 +2034,247 @@ class DiorClientGUI:
         })
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"EVENT: Settings for '{event_name}' auto-saved.")
 
         # Optional: Direktes Feedback im Overlay (Test)
         # self.trigger_overlay_event(event_name)
-        
+
+    # =========================================================
+    # EVENT SAVE SLOT SYSTEM
+    # =========================================================
+    def init_event_slots(self):
+        """Initialize the event slot system. Migrate legacy config if needed."""
+        import copy
+
+        # 1. MIGRATION: If event_slots doesn't exist yet, create it from current events
+        if "event_slots" not in self.config:
+            existing_events = self.config.get("events", {})
+            self.config["event_slots"] = {
+                "Default": copy.deepcopy(existing_events)
+            }
+            self.config["active_event_slot"] = "Default"
+            self.save_config()
+            self.add_log("SYS: Migrated existing events into 'Default' preset slot.")
+
+        # 2. Safety: Ensure at least one slot exists
+        if not self.config["event_slots"]:
+            self.config["event_slots"]["Default"] = {}
+            self.config["active_event_slot"] = "Default"
+
+        # 3. Populate the combo box
+        ui = self.ovl_config_win
+        ui.combo_event_slot.blockSignals(True)
+        ui.combo_event_slot.clear()
+
+        slot_names = list(self.config["event_slots"].keys())
+        ui.combo_event_slot.addItems(slot_names)
+
+        # 4. Select the active slot
+        active_slot = self.config.get("active_event_slot", slot_names[0])
+        if active_slot not in slot_names:
+            active_slot = slot_names[0]
+            self.config["active_event_slot"] = active_slot
+
+        idx = ui.combo_event_slot.findText(active_slot)
+        if idx >= 0:
+            ui.combo_event_slot.setCurrentIndex(idx)
+
+        ui.combo_event_slot.blockSignals(False)
+
+        # 5. Load active slot into self.config["events"]
+        import copy as copy2
+        self.config["events"] = copy2.deepcopy(self.config["event_slots"].get(active_slot, {}))
+
+    def switch_event_slot(self, index):
+        """Switch to a different event slot."""
+        import copy
+        ui = self.ovl_config_win
+        slot_name = ui.combo_event_slot.currentText()
+        if not slot_name:
+            return
+
+        # 1. Save current events back to the PREVIOUS slot
+        prev_slot = self.config.get("active_event_slot", "")
+        if prev_slot and prev_slot in self.config.get("event_slots", {}):
+            self.config["event_slots"][prev_slot] = copy.deepcopy(self.config.get("events", {}))
+
+        # 2. Load new slot into active events
+        new_events = self.config.get("event_slots", {}).get(slot_name, {})
+        self.config["events"] = copy.deepcopy(new_events)
+        self.config["active_event_slot"] = slot_name
+
+        # 3. Save & refresh UI
+        self.save_config()
+
+        # Reset the editing state
+        ui.lbl_editing.setText("EDITING: NONE")
+        ui.combo_evt_img.clear()
+        ui.combo_evt_snd.clear()
+        ui.ent_evt_duration.setText("3000")
+        ui.slider_evt_scale.setValue(100)
+        ui.slider_evt_vol.setValue(100)
+
+        self.add_log(f"EVENT: Switched to preset '{slot_name}'.")
+
+    def create_event_slot(self):
+        """Create a new event slot, optionally copying the current one."""
+        import copy
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+
+        ui = self.ovl_config_win
+
+        # Ask for name
+        name, ok = QInputDialog.getText(
+            self.main_hub, "New Event Preset",
+            "Enter a name for the new preset:",
+        )
+        if not ok or not name.strip():
+            return
+
+        name = name.strip()
+
+        # Check for duplicates
+        if name in self.config.get("event_slots", {}):
+            QMessageBox.warning(self.main_hub, "Duplicate Name",
+                                f"A preset named '{name}' already exists.")
+            return
+
+        # Ask if they want to copy current slot
+        current_slot = self.config.get("active_event_slot", "Default")
+        reply = QMessageBox.question(
+            self.main_hub, "Copy Existing?",
+            f"Copy all events from the current preset '{current_slot}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Save current state first
+            self.config["event_slots"][current_slot] = copy.deepcopy(self.config.get("events", {}))
+            new_events = copy.deepcopy(self.config.get("events", {}))
+        else:
+            new_events = {}
+
+        # Create the slot
+        self.config["event_slots"][name] = new_events
+
+        # Add to combo and switch to it
+        ui.combo_event_slot.blockSignals(True)
+        ui.combo_event_slot.addItem(name)
+        ui.combo_event_slot.blockSignals(False)
+
+        # Switch to the new slot
+        idx = ui.combo_event_slot.findText(name)
+        ui.combo_event_slot.setCurrentIndex(idx)  # This triggers switch_event_slot
+
+        self.add_log(f"EVENT: Created new preset '{name}'.")
+
+    def rename_event_slot(self):
+        """Rename the currently active event slot."""
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+
+        ui = self.ovl_config_win
+        current_name = ui.combo_event_slot.currentText()
+        if not current_name:
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self.main_hub, "Rename Preset",
+            f"New name for '{current_name}':",
+            text=current_name
+        )
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+
+        if new_name == current_name:
+            return
+
+        # Check for duplicates
+        if new_name in self.config.get("event_slots", {}):
+            QMessageBox.warning(self.main_hub, "Duplicate Name",
+                                f"A preset named '{new_name}' already exists.")
+            return
+
+        # Rename in config
+        slots = self.config["event_slots"]
+        slots[new_name] = slots.pop(current_name)
+        self.config["active_event_slot"] = new_name
+
+        # Update combo
+        ui.combo_event_slot.blockSignals(True)
+        idx = ui.combo_event_slot.currentIndex()
+        ui.combo_event_slot.setItemText(idx, new_name)
+        ui.combo_event_slot.blockSignals(False)
+
+        self.save_config()
+        self.add_log(f"EVENT: Renamed preset '{current_name}' → '{new_name}'.")
+
+    def delete_event_slot(self):
+        """Delete the currently active event slot."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        ui = self.ovl_config_win
+        current_name = ui.combo_event_slot.currentText()
+        if not current_name:
+            return
+
+        slots = self.config.get("event_slots", {})
+
+        # Prevent deleting the last slot
+        if len(slots) <= 1:
+            QMessageBox.warning(self.main_hub, "Cannot Delete",
+                                "You must have at least one preset. Create a new one first.")
+            return
+
+        # Confirm
+        reply = QMessageBox.question(
+            self.main_hub, "Delete Preset",
+            f"Are you sure you want to delete '{current_name}'?\n\nThis will permanently remove all event settings in this preset.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Remove from config
+        del slots[current_name]
+
+        # Remove from combo and switch to first available
+        ui.combo_event_slot.blockSignals(True)
+        idx = ui.combo_event_slot.currentIndex()
+        ui.combo_event_slot.removeItem(idx)
+
+        # Switch to the first remaining slot
+        first_slot = list(slots.keys())[0]
+        self.config["active_event_slot"] = first_slot
+
+        switch_idx = ui.combo_event_slot.findText(first_slot)
+        ui.combo_event_slot.setCurrentIndex(max(switch_idx, 0))
+        ui.combo_event_slot.blockSignals(False)
+
+        # Explicitly load the new slot's events (don't rely on signal)
+        import copy
+        self.config["events"] = copy.deepcopy(slots.get(first_slot, {}))
+
+        # Reset the editing state
+        ui.lbl_editing.setText("EDITING: NONE")
+        ui.combo_evt_img.clear()
+        ui.combo_evt_snd.clear()
+        ui.ent_evt_duration.setText("3000")
+        ui.slider_evt_scale.setValue(100)
+        ui.slider_evt_vol.setValue(100)
+
+        self.save_config()
+        self.add_log(f"EVENT: Deleted preset '{current_name}'. Switched to '{first_slot}'.")
+
+
     def toggle_knife_visibility(self):
         """Toggles the knife icons on/off and updates the UI."""
         ui = self.ovl_config_win
@@ -3700,6 +3950,13 @@ class DiorClientGUI:
         }
 
         self.save_config()
+
+        # Sync to active slot
+        import copy
+        active_slot = self.config.get("active_event_slot", "")
+        if active_slot and "event_slots" in self.config:
+            self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
+
         self.add_log(f"UI: Event '{etype}' saved (Img: '{img_val}').")
 
 

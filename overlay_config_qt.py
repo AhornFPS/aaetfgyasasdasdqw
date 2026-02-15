@@ -566,6 +566,57 @@ class OverlayConfigWindow(QWidget):
         layout = QVBoxLayout(self.tab_events)
         layout.setContentsMargins(10, 10, 10, 10)
 
+        # --- 0. SAVE SLOT BAR (Top) ---
+        slot_bar = QHBoxLayout()
+        slot_bar.setSpacing(6)
+
+        lbl_slot = QLabel("PRESET:")
+        lbl_slot.setStyleSheet("color: #00f2ff; font-weight: bold; font-size: 12px;")
+        slot_bar.addWidget(lbl_slot)
+
+        self.combo_event_slot = QComboBox()
+        self.combo_event_slot.setMinimumWidth(180)
+        self.combo_event_slot.setStyleSheet(
+            "QComboBox { background-color: #0a141d; color: #00f2ff; border: 1px solid #00f2ff; padding: 6px 10px; font-weight: bold; font-size: 12px; }"
+            "QComboBox:hover { border: 1px solid #33ffff; }"
+            "QComboBox::drop-down { border: none; }"
+            "QComboBox QAbstractItemView { background-color: #111; color: #eee; selection-background-color: #00f2ff; selection-color: black; }"
+        )
+        slot_bar.addWidget(self.combo_event_slot)
+
+        self.btn_slot_new = QPushButton("+ NEW")
+        self.btn_slot_new.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_new.setFixedHeight(32)
+        self.btn_slot_new.setStyleSheet(
+            "QPushButton { background-color: #003300; color: #66ff66; font-weight: bold; padding: 4px 12px; border: 1px solid #006600; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #004400; border: 1px solid #00ff00; color: white; }"
+            "QPushButton:focus { border: 1px solid #006600; }"
+        )
+        slot_bar.addWidget(self.btn_slot_new)
+
+        self.btn_slot_rename = QPushButton("RENAME")
+        self.btn_slot_rename.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_rename.setFixedHeight(32)
+        self.btn_slot_rename.setStyleSheet(
+            "QPushButton { background-color: #2a2a00; color: #ffff66; font-weight: bold; padding: 4px 12px; border: 1px solid #555500; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #444400; border: 1px solid #ffff00; color: white; }"
+            "QPushButton:focus { border: 1px solid #555500; }"
+        )
+        slot_bar.addWidget(self.btn_slot_rename)
+
+        self.btn_slot_delete = QPushButton("DELETE")
+        self.btn_slot_delete.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_delete.setFixedHeight(32)
+        self.btn_slot_delete.setStyleSheet(
+            "QPushButton { background-color: #330000; color: #ff6666; font-weight: bold; padding: 4px 12px; border: 1px solid #660000; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #440000; border: 1px solid #ff4444; color: white; }"
+            "QPushButton:focus { border: 1px solid #660000; }"
+        )
+        slot_bar.addWidget(self.btn_slot_delete)
+
+        slot_bar.addStretch()
+        layout.addLayout(slot_bar)
+
         # --- DEFINITION DER DROPDOWNS ---
         # Hier sind jetzt deine neuen Heal-Werte eingepflegt
         self.EXPANDABLE_EVENTS = {
