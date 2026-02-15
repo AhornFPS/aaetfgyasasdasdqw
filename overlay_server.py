@@ -171,7 +171,6 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
             html = HTML_TEMPLATE.replace("__WS_PORT__", str(ws_port))
             self.wfile.write(html.encode('utf-8'))
             return
-
         # 2. Assets (Bilder)
         if self.path.startswith('/assets/'):
             filename = self.path.replace('/assets/', '')
@@ -182,6 +181,17 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
                 base_dir = os.path.join(os.getcwd(), "assets")
 
             self.directory = base_dir
+            
+            # Subfolder Support: Check if file exists in root, then try subfolders
+            local_path = os.path.join(base_dir, filename)
+            if not os.path.exists(local_path):
+                # Try Images
+                if os.path.exists(os.path.join(base_dir, "Images", filename)):
+                    filename = "Images/" + filename
+                # Try Sounds
+                elif os.path.exists(os.path.join(base_dir, "Sounds", filename)):
+                    filename = "Sounds/" + filename
+            
             self.path = '/' + filename
             return super().do_GET()
 

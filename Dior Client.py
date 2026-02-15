@@ -70,7 +70,7 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, ASSETS_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
+from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 import sys
@@ -136,7 +136,7 @@ class DiorMainHub(QMainWindow):
         super().__init__()
         self.controller = controller
         self.setWindowTitle("DIOR CLIENT - PS2 MASTER")
-        self.resize(1400, 900)
+        self.resize(1600, 900)
 
         # Central Widget
         central_widget = QWidget()
@@ -428,26 +428,57 @@ class DiorClientGUI:
         if not self.ovl_config_win:
             return
 
-        # Use ASSETS_DIR from dior_utils
-        assets_dir = ASSETS_DIR
-
-        if not os.path.exists(assets_dir):
-            self.add_log(f"WARN: Assets dir not found: {assets_dir}")
-            return
-
         images = []
         sounds = []
 
+        # 1. SCAN IMAGES SUBFOLDER
+        if os.path.exists(IMAGES_DIR):
+            try:
+                for f in os.listdir(IMAGES_DIR):
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        images.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Images subfolder: {e}")
+
+        # 2. SCAN SOUNDS SUBFOLDER
+        if os.path.exists(SOUNDS_DIR):
+            try:
+                for f in os.listdir(SOUNDS_DIR):
+                    if f.lower().endswith(('.mp3', '.ogg', '.wav')):
+                        sounds.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Sounds subfolder: {e}")
+
+        # 3. SCAN CROSSHAIR SUBFOLDER
+        if os.path.exists(CROSSHAIR_DIR):
+            try:
+                for f in os.listdir(CROSSHAIR_DIR):
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        # Add to images if wanted, or just scan
+                        if f not in images: images.append(f)
+            except Exception as e:
+                self.add_log(f"ERROR: Failed to scan Crosshair subfolder: {e}")
+
+        # 4. SCAN ROOT ASSETS FOLDER (Legacy / Other files)
         try:
-            for f in os.listdir(assets_dir):
+            for f in os.listdir(ASSETS_DIR):
                 lower_f = f.lower()
+                # Skip subdirectories
+                if os.path.isdir(os.path.join(ASSETS_DIR, f)):
+                    continue
+                
                 if lower_f.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    images.append(f)
+                    if f not in images: images.append(f)
                 elif lower_f.endswith(('.mp3', '.ogg', '.wav')):
-                    sounds.append(f)
+                    if f not in sounds: sounds.append(f)
         except Exception as e:
-            self.add_log(f"ERROR: Failed to scan assets dir: {e}")
-            return
+            self.add_log(f"ERROR: Failed to scan root assets dir: {e}")
+
+        # Fill UI
+        self.ovl_config_win.combo_evt_img.clear()
+        self.ovl_config_win.combo_evt_img.addItems(sorted(images))
+        self.ovl_config_win.combo_evt_snd.clear()
+        self.ovl_config_win.combo_evt_snd.addItems(sorted(sounds))
 
         # Store base assets for later use
         self.base_images = sorted(images)
@@ -899,14 +930,14 @@ class DiorClientGUI:
         from PyQt6.QtWidgets import QFileDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self.main_hub, "Select Crosshair Image", self.BASE_DIR, "Images (*.png *.jpg *.jpeg)"
+            self.main_hub, "Select Crosshair Image", CROSSHAIR_DIR, "Images (*.png *.jpg *.jpeg)"
         )
 
         if file_path:
             filename = os.path.basename(file_path)
             target_path = get_asset_path(filename)
 
-            # Copy to Assets if necessary
+            # Copy to Assets/Crosshair if necessary
             if os.path.abspath(file_path) != os.path.abspath(target_path):
                 try:
                     shutil.copy2(file_path, target_path)
