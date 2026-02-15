@@ -2187,39 +2187,51 @@ class DiorClientGUI:
     # (Duplicate removed - see line 3832)
 
     def test_killfeed_visuals(self):
-        """Inserts a test entry into the killfeed."""
-        if not self.overlay_win: return
-        self.add_log("SYS: Testing Killfeed visuals...")
+        """Starts a robust multi-entry preview for the killfeed."""
+        if not self.overlay_win:
+            self.add_log("WARN: Overlay not active!")
+            return
+
+        self.add_log("SYS: Starting Killfeed visual test...")
+        self.is_feed_test = True
 
         # 1. Config & Style
-        kf_cfg = self.config.get("killfeed", {})
+        kf_cfg_raw = self.config.get("killfeed", {})
+        kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
         kf_font = kf_cfg.get("font_size", 19)
         base_style = (
             f"font-family: 'Black Ops One', sans-serif; font-size: {kf_font}px; "
             "margin-bottom: 2px; text-align: right;"
         )
 
-        hs_icon = kf_cfg.get("file", "headshot.png")
+        hs_icon = kf_cfg.get("hs_icon", "headshot.png")
         hs_size = kf_cfg.get("hs_icon_size", 19)
         icon_html = f'<img src="{get_asset_path(hs_icon)}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;"> '
 
         # 2. Test Cases
-        tests = [
+        test_entries = [
             f'<div style="{base_style}"><span style="color: #00ff00;">YOU </span>{icon_html}<span style="color: #ffffff;">TargetDummy</span></div>',
             f'<div style="{base_style}"><span style="color: #ff0000;">DEATH </span><span style="color: #ffffff;">SweatyPro77</span></div>',
+            f'<div style="{base_style}"><span style="color: #00f2ff;">KILL </span><span style="color: #ffffff;">RandomPleb</span></div>',
             f'<div style="{base_style}"><span style="color: #ff8c00;">GUNNER </span>{icon_html}<span style="color: #ffffff;">Victim123</span></div>',
-            f'<div style="{base_style}"><span style="color: #00f2ff;">KILL </span><span style="color: #ffffff;">RandomPleb</span></div>'
+            f'<div style="{base_style}"><span style="color: #00ff00;">YOU </span><span style="color: white;">AnotherOne</span></div>'
         ]
         
-        # Pick one
-        msg = random.choice(tests)
-        self.overlay_win.signals.killfeed_entry.emit(msg)
+        # Fire test events sequentially
+        for i, msg in enumerate(test_entries):
+             QTimer.singleShot(i * 600, lambda m=msg: self.overlay_win.signals.killfeed_entry.emit(m))
 
         # Apply positions & style live
-        if self.overlay_win:
-            self.overlay_win.update_killfeed_pos()
-            self.overlay_win.update_killfeed_ui()  # <--- NEW: Immediate scaling on font change
-            self.refresh_ingame_overlay()
+        self.overlay_win.update_killfeed_pos()
+        self.overlay_win.update_killfeed_ui()
+        self.refresh_ingame_overlay()
+
+        # Cleanup after 7 seconds
+        def end_feed_test():
+            self.is_feed_test = False
+            self.add_log("SYS: Killfeed test finished.")
+        
+        QTimer.singleShot(7000, end_feed_test)
 
     def save_voice_config_from_qt(self):
         """Reads voice macros from Qt and saves them."""
@@ -3732,8 +3744,9 @@ class DiorClientGUI:
         game_running = getattr(self, 'ps2_running', False)
 
         # --- FIX: SEPARATE TEST MODES ---
-        stats_test_active = getattr(self, 'is_stats_test', False)  # Tests Stats, Crosshair, Feed
-        streak_test_active = getattr(self, 'is_streak_test', False)  # Tests ONLY Streak
+        stats_test_active = getattr(self, 'is_stats_test', False)   # Tests Stats & Crosshair
+        feed_test_active = getattr(self, 'is_feed_test', False)     # Tests ONLY Feed
+        streak_test_active = getattr(self, 'is_streak_test', False) # Tests ONLY Streak
 
         edit_active = getattr(self, 'is_hud_editing', False)
         game_focused = self.is_game_focused()
@@ -3752,7 +3765,7 @@ class DiorClientGUI:
         mode_gameplay = False  # Separation between "Allowed to render" and "Game is actually running"
 
         # Render if any test or edit is running
-        if edit_active or stats_test_active or streak_test_active or path_recording:
+        if edit_active or stats_test_active or streak_test_active or feed_test_active or path_recording:
             should_render = True
         elif getattr(self, "debug_overlay_active", False):
             should_render = True
@@ -3828,8 +3841,8 @@ class DiorClientGUI:
             feed_conf = self.config.get("killfeed", {})
             feed_editing = edit_active and ("feed" in getattr(self, "current_edit_targets", []))
 
-            # Feed only during gameplay/edit or stats-test
-            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or stats_test_active:
+            # Feed only during gameplay/edit or feed-test
+            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or feed_test_active:
                 self.overlay_win.feed_label.show()
             else:
                 self.overlay_win.feed_label.hide()
@@ -3840,7 +3853,7 @@ class DiorClientGUI:
 
             # HERE streak_test_active is added!
             if (streak_conf.get("active",
-                                True) and mode_gameplay) or streak_editing or stats_test_active or streak_test_active or path_recording:
+                                True) and mode_gameplay) or streak_editing or streak_test_active or path_recording:
                 
                 # FIX: Only show if we are alive! (is_dead check added)
                 # Exception: Edit mode or streak test
@@ -3937,67 +3950,9 @@ class DiorClientGUI:
         # Force immediate update of stats bar (KD, KPM etc.)
         self.refresh_ingame_overlay()
 
-        # Test scenarios (Type, Name, Tag, IsHS, KD)
-        test_scenarios = [
-            ("kill", "SweatyHeavy", "B0SS", True, 3.5),
-            ("kill", "RandomBlueberry", "", False, 0.8),
-            ("revive", "HelpfulMedic", "SKL", False, 0.0),
-            ("death", "SniperMain420", "D34D", True, 2.1),
-            ("kill", "AnotherVictim", "TR", True, 1.2),
-            ("kill", "GhostTarget_1", "VS", False, 1.5),
-            ("death", "GhostTarget_2", "NC", True, 4.0),
-            ("revive", "MedicMain", "TR", False, 0.0)
-        ]
-
-        def send_fake_feed(t_type, name, tag, is_hs, kd_val):
-            # Base style for text
-            # Killfeed Font Size (Robust)
-            kf_cfg_raw = self.config.get("killfeed", {})
-            kf_cfg = kf_cfg_raw if isinstance(kf_cfg_raw, dict) else {}
-            kf_f = kf_cfg.get("font_size", 19)
-            base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {kf_f}px; text-shadow: 1px 1px 2px #000; margin-bottom: 2px; text-align: right;"
-
-            # Tag formatting
-            tag_display = f"[{tag}]" if tag else ""
-
-            # Icon logic
-            icon_html = ""
-            if is_hs:
-                hs_icon = self.config.get("killfeed", {}).get("hs_icon", "headshot.png")
-                hs_path = get_asset_path(hs_icon).replace("\\", "/")
-                if os.path.exists(hs_path):
-                    # Icon far left
-                    hs_size = kf_cfg.get("hs_icon_size", 19)
-                    icon_html = f'<img src="{hs_path}" width="{hs_size}" height="{hs_size}" style="vertical-align: middle;">&nbsp;'
-
-            # Assemble HTML
-            if t_type == "kill":
-                msg = f"""<div style="{base_style}">
-                        {icon_html}<span style="color: #888;">{tag_display} </span>
-                        <span style="color: white;">{name}</span>
-                        <span style="color: #aaa; font-size: 16px;"> ({kd_val})</span>
-                        </div>"""
-            elif t_type == "death":
-                msg = f"""<div style="{base_style}">
-                        {icon_html}<span style="color: #888;">{tag_display} </span>
-                        <span style="color: #ff4444;">{name}</span>
-                        <span style="color: #aaa; font-size: 16px;"> ({kd_val})</span>
-                        </div>"""
-            elif t_type == "revive":
-                msg = f"""<div style="{base_style}">
-                        <span style="color: #00ff00;">✚ REVIVED BY </span>
-                        <span style="color: white;">{name}</span>
-                        </div>"""
-
-            # Send signal
-            if self.overlay_win:
-                self.overlay_win.signals.killfeed_entry.emit(msg)
-
-        # Fire test events sequentially (PyQt6 QTimer instead of root.after)
-        for i, (t, n, tag, hs, kd) in enumerate(test_scenarios):
-            # QTimer.singleShot(Delay_ms, Function)
-            QTimer.singleShot(i * 500, lambda t=t, n=n, tag=tag, hs=hs, kd=kd: send_fake_feed(t, n, tag, hs, kd))
-
+        # Fire test events sequentially (Stats only)
+        # Note: Killfeed dummy entries removed here to decouple tests.
+        
         # --- AUTO-CLEAR AND CLEANUP ---
         def end_test():
             self.is_stats_test = False
