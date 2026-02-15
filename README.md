@@ -4,7 +4,7 @@ A powerful overlay and stat tracking application for PlanetSide 2, featuring rea
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+
 
 ## ✨ Features
 
@@ -117,26 +117,6 @@ All settings are stored in `config.json` and can be modified through the UI:
 - **Crosshair**: Custom crosshair images and positioning
 - **Twitch**: Channel, message duration, font size
 
-## 📁 Project Structure
-
-```
-BetterPlanetside/
-├── Dior Client.py           # Main application
-├── overlay_window.py        # Overlay rendering
-├── census_worker.py         # PlanetSide 2 API integration
-├── twitch_worker.py         # Twitch chat integration
-├── dashboard_qt.py          # Dashboard UI
-├── characters_qt.py         # Character management
-├── settings_qt.py           # Settings UI
-├── overlay_config_qt.py     # Overlay configuration
-├── dior_utils.py            # Utility functions
-├── dior_db.py               # Database handler
-├── assets/                  # Images, sounds, fonts
-├── requirements.txt         # Python dependencies
-├── launch.sh                # Linux launcher
-├── build-linux.sh           # Linux build script
-└── Better Planetside.spec   # PyInstaller configuration
-```
 
 ## 🐛 Troubleshooting
 
@@ -157,26 +137,16 @@ BetterPlanetside/
 
 
 
-## 📜 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **PlanetSide 2 Census API** - Daybreak Games
-- **PyQt6** - GUI framework
-- **Black Ops One Font** - James Grieshaber (SIL Open Font License)
-- **Community** - For feedback and testing
 
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/BetterPlanetside/issues)
-- **Discord**: [Your Discord Server]
-- **Twitch**: [Your Twitch Channel]
+- **Discord**: [Ahorn #schieberegler, Cedricc #cedricc_tv]
+- **Twitch**: [Ahorn](https://www.twitch.tv/ahorn)
 
 ## ⚠️ Disclaimer
 
-This is a third-party application and is not affiliated with, endorsed by, or connected to Daybreak Game Company LLC or PlanetSide 2. Use at your own risk.
+This is a third-party application and is not affiliated with, endorsed by, or connected to Daybreak Game Company LLC or PlanetSide 2.
 
 ---
 
