@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Better Planetside Overlay</title>
+  <link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+  <div id="crosshair-layer" class="layer flat-layer"></div>
+  <div id="stats-layer" class="layer flat-layer"></div>
+  <div id="hud-root" class="visor">
+    <div id="streak-layer" class="layer"></div>
+    <div id="feed-layer" class="layer"></div>
+    <div id="events-layer" class="layer"></div>
+    <div id="hitmarker-layer" class="layer"></div>
+  </div>
+
+  <script src="/overlay-config.js"></script>
+  <script src="/web/websocket.js"></script>
+  <script src="/web/dispatcher.js"></script>
+</body>
+</html>

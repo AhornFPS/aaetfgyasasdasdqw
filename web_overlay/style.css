@@ -1,0 +1,195 @@
+:root {
+  --hud-cyan: #00f2ff;
+  --hud-orange: #ff8c2a;
+  --hud-red: #ff4d4d;
+  --hud-white: #f7fbff;
+  --hud-dim: rgba(255, 255, 255, 0.7);
+  --hud-shadow-cyan: 0 0 10px rgba(0, 242, 255, 0.8), 0 0 24px rgba(0, 242, 255, 0.45);
+  --hud-shadow-red: 0 0 10px rgba(255, 77, 77, 0.85), 0 0 24px rgba(255, 77, 77, 0.45);
+}
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  font-family: "Black Ops One", "Segoe UI", sans-serif;
+}
+
+body {
+  color: var(--hud-white);
+}
+
+#hud-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  transform: perspective(1100px) rotateX(1.5deg);
+  transform-origin: center center;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+}
+
+.flat-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+#feed-layer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.feed-item {
+  opacity: 0;
+  animation: feedIn 180ms ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.6));
+}
+
+.feed-item.fade-out {
+  animation: fadeOut 300ms ease-in forwards;
+}
+
+#stats-layer .stats-card {
+  display: inline-block;
+  min-width: 260px;
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.6));
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#stats-layer .stats-card.no-glow {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.6));
+}
+
+#streak-layer .streak-core {
+  position: absolute;
+  transform-origin: center center;
+}
+
+#streak-layer .streak-knife-layer {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  z-index: 1;
+}
+
+#streak-layer .streak-bg {
+  position: relative;
+  display: block;
+  z-index: 2;
+}
+
+#streak-layer .streak-count {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-shadow: var(--hud-shadow-cyan);
+  white-space: nowrap;
+  z-index: 3;
+}
+
+#streak-layer .streak-count.no-glow {
+  text-shadow: none;
+}
+
+#streak-layer .knife {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  transform-origin: center center;
+  filter: drop-shadow(0 0 7px rgba(0, 242, 255, 0.75));
+  animation: knifePop 240ms ease-out;
+  z-index: 1;
+}
+
+#streak-layer .knife.no-glow {
+  filter: none;
+}
+
+#crosshair-layer .crosshair {
+  position: absolute;
+  transform-origin: center center;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+#crosshair-layer .crosshair-core-shadow {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.34) 46%, rgba(0, 0, 0, 0) 76%);
+  filter: blur(0.6px);
+}
+
+#events-layer .event-item,
+#hitmarker-layer .event-item {
+  position: absolute;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(0, 242, 255, 0.9));
+  animation: eventIn 120ms ease-out;
+  will-change: opacity;
+}
+
+#events-layer .event-item.death-impact,
+#hitmarker-layer .event-item.death-impact {
+  filter: drop-shadow(0 0 14px rgba(255, 77, 77, 0.9));
+}
+
+body.hud-impact #hud-root {
+  animation: hudGlitch 420ms linear;
+}
+
+@keyframes feedIn {
+  from { opacity: 0; transform: translateX(22px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes eventIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes knifePop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+  to { opacity: 1; }
+}
+
+@keyframes streakPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@keyframes breathe {
+  0% { filter: brightness(0.95); }
+  50% { filter: brightness(1.12); }
+  100% { filter: brightness(0.95); }
+}
+
+@keyframes hudGlitch {
+  0% { transform: translateX(0); filter: hue-rotate(0deg); }
+  20% { transform: translateX(2px); filter: hue-rotate(8deg); }
+  40% { transform: translateX(-3px); filter: hue-rotate(-8deg); }
+  60% { transform: translateX(1px); filter: hue-rotate(5deg); }
+  100% { transform: translateX(0); filter: hue-rotate(0deg); }
+}
