@@ -80,6 +80,23 @@ QPushButton#SaveBtn:hover {
     color: white;
 }
 
+QPushButton#ClearBtn {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #440000, stop:1 #220000);
+    color: #ff4444; 
+    border: 1px solid #660000; 
+    padding: 10px 20px; 
+    font-weight: bold; 
+    border-radius: 6px; 
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+QPushButton#ClearBtn:hover { 
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #660000, stop:1 #440000);
+    border-color: #ff0000; 
+    color: white;
+}
+
 /* Custom Slider Styling */
 QSlider::groove:horizontal {
     border: 1px solid #333;
@@ -108,7 +125,8 @@ QSlider::handle:horizontal:hover {
 class SettingsSignals(QObject):
     save_requested = pyqtSignal(dict)  # Sendet die Config-Daten an Main
     browse_ps2_requested = pyqtSignal()  # Trigger für Folder-Dialog
-    change_bg_requested = pyqtSignal()  # Trigger für Background-Dialog
+    browse_bg_requested = pyqtSignal()  # Trigger for Background-Dialog
+    clear_bg_requested = pyqtSignal()   # Trigger for Background Reset
 
 
 class SettingsWidget(QWidget):
@@ -236,12 +254,21 @@ class SettingsWidget(QWidget):
 
         bg_row = QHBoxLayout()
         bg_row.addWidget(QLabel("Menu Background Image:", styleSheet="color: #aaa;"))
+        
+        self.lbl_bg_name = QLabel("No image selected", objectName="PathLabel")
+        self.lbl_bg_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.btn_bg = QPushButton("CHANGE IMAGE", objectName="ActionBtn")
         self.btn_bg.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_bg.clicked.connect(lambda: self.signals.change_bg_requested.emit())
+        self.btn_bg.clicked.connect(lambda: self.signals.browse_bg_requested.emit())
 
+        self.btn_clear_bg = QPushButton("CLEAR", objectName="ClearBtn")
+        self.btn_clear_bg.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_bg.clicked.connect(lambda: self.signals.clear_bg_requested.emit())
+
+        bg_row.addWidget(self.lbl_bg_name)
         bg_row.addWidget(self.btn_bg)
+        bg_row.addWidget(self.btn_clear_bg)
         ui_layout.addLayout(bg_row)
 
         main_layout.addWidget(self.ui_group)
@@ -331,6 +358,14 @@ class SettingsWidget(QWidget):
             self.combo_audio_device.setCurrentIndex(0) # Default
         self.combo_audio_device.blockSignals(False)
 
+        # 4. Background Path
+        bg_path = config_data.get("main_background_path", "")
+        if bg_path:
+            import os
+            self.lbl_bg_name.setText(os.path.basename(bg_path))
+        else:
+            self.lbl_bg_name.setText("None")
+
     def update_volume_label(self, val):
         """Nur für die Optik beim Ziehen."""
         self.lbl_vol_val.setText(f"{val}%")
@@ -339,7 +374,8 @@ class SettingsWidget(QWidget):
         """Sammelt Daten und sendet sie an Main (zum Speichern)."""
         data = {
             "audio_volume": self.slider_vol.value(),
-            "audio_device": self.combo_audio_device.currentText()
+            "audio_device": self.combo_audio_device.currentText(),
+            "main_background_path": self.lbl_bg_name.text() if self.lbl_bg_name.text() != "None" else ""
         }
         # Signal senden
         self.signals.save_requested.emit(data)

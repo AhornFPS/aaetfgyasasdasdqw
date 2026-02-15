@@ -330,6 +330,14 @@ class DiorClientGUI:
         self.load_settings_to_ui()
         self.settings_win.load_config(self.config, self.ps2_dir)
         
+        # Apply background from config
+        bg_val = self.config.get("main_background_path", "")
+        if bg_val:
+            if os.path.isabs(bg_val):
+                self.apply_main_background(bg_val)
+            else:
+                self.apply_main_background(get_asset_path(bg_val))
+        
 
         # Initialize positions
         if self.overlay_win:
@@ -647,9 +655,15 @@ class DiorClientGUI:
                 if hasattr(self.overlay_win, 'set_audio_device'):
                     self.overlay_win.set_audio_device(dev)
 
+        # Save Background Path
+        if "main_background_path" in data:
+            # We assume it's already in assets or we just keep what the UI has.
+            # Usually handled by immediate signals, but for the Save button:
+            self.config["main_background_path"] = data["main_background_path"]
+
         # Save to disk
         self.save_config()
-        self.add_log(f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')})")
+        self.add_log(f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')}, BG: {data.get('main_background_path', 'N/A')})")
 
     def clean_path(self, path_str):
         """Removes 'No file selected' and empty paths."""
@@ -1296,7 +1310,8 @@ class DiorClientGUI:
 
         # Settings (CHANGES WERE HERE)
         self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
-        self.safe_connect(self.settings_win.signals.change_bg_requested, self.change_background_file)
+        self.safe_connect(self.settings_win.signals.browse_bg_requested, self.change_background_file)
+        self.safe_connect(self.settings_win.signals.clear_bg_requested, self.clear_background_file)
 
         # IMPORTANT: Connect the save signal!
         self.safe_connect(self.settings_win.signals.save_requested, self.update_main_config_from_settings)
@@ -3274,7 +3289,7 @@ class DiorClientGUI:
         else:
             dur = specific_dur if specific_dur > 0 else global_dur
 
-        if event_type.lower() == "hitmarker":
+        if event_type.lower() in ["hitmarker", "headshot hitmarker"]:
             dur = specific_dur
 
         # 4. DETERMINE PATHS
@@ -3312,7 +3327,7 @@ class DiorClientGUI:
                     sound_path = snd_name
 
         # 5. TRIGGER
-        is_hitmarker = (event_type.lower() == "hitmarker")
+        is_hitmarker = (event_type.lower() in ["hitmarker", "headshot hitmarker"])
         play_duplicate = event_data.get("play_duplicate", True)
 
         if img_path or sound_path:
@@ -4603,7 +4618,9 @@ class DiorClientGUI:
 
     def apply_main_background(self, path):
         """Sets the background image via stylesheet for the main window."""
-        if not path or not os.path.exists(path):
+        if not path:
+            # RESET to default or empty
+            self.main_hub.setStyleSheet("QMainWindow { border-image: none; background-color: #0b0b0b; }")
             return
 
         # Windows paths must be converted to slashes for CSS
@@ -4617,11 +4634,23 @@ class DiorClientGUI:
         """
         self.main_hub.setStyleSheet(style)
 
-    def change_background_file(self):
-        """Opens the file dialog and saves the background (PyQt6 version)."""
-        from PyQt6.QtWidgets import QFileDialog
+    def clear_background_file(self):
+        """Resets the background image to default."""
+        self.config["main_background_path"] = ""
+        self.save_config()
+        self.apply_main_background(None)
+        
+        if hasattr(self, 'settings_win') and hasattr(self.settings_win, 'lbl_bg_name'):
+            self.settings_win.lbl_bg_name.setText("None")
+            
+        self.add_log("SYS: Background cleared.")
 
-        # 1. Select file (PyQt dialog instead of Tkinter)
+    def change_background_file(self):
+        """Opens the file dialog, copies the file to assets, and saves the background."""
+        from PyQt6.QtWidgets import QFileDialog
+        import shutil
+
+        # 1. Select file
         file_path, _ = QFileDialog.getOpenFileName(
             self.main_hub,
             "Choose background image",
@@ -4630,14 +4659,44 @@ class DiorClientGUI:
         )
 
         if file_path:
-            # 2. Save config
-            self.config["main_background_path"] = file_path
-            self.save_config()
+            try:
+                # 2. Determine target path
+                filename = os.path.basename(file_path)
+                dest_path = os.path.join(ASSETS_DIR, filename)
+                
+                # Check if it is already the current one
+                current_bg = self.config.get("main_background_path", "")
+                if current_bg == filename or current_bg == file_path:
+                    # It's already set, just refresh the view to be sure
+                    self.apply_main_background(file_path if os.path.isabs(file_path) else get_asset_path(file_path))
+                    self.add_log(f"SYS: Background '{filename}' is already active.")
+                    return
 
-            # 3. Apply background immediately
-            self.apply_main_background(file_path)
+                # 3. Copy to assets folder ONLY if it's not already there
+                if os.path.abspath(file_path) != os.path.abspath(dest_path):
+                    try:
+                        shutil.copy2(file_path, dest_path)
+                    except OSError as e:
+                        # WinError 32: File in use -> This happens if the file exists and is active
+                        if os.path.exists(dest_path):
+                            self.add_log(f"SYS: Asset '{filename}' already exists and is locked. Using existing file.")
+                        else:
+                            raise e # Rethrow if it's a real error
+                
+                # 4. Save filename in config
+                self.config["main_background_path"] = filename
+                self.save_config()
 
-            self.add_log(f"SYS: Background changed to {os.path.basename(file_path)}")
+                # 5. Apply immediately
+                self.apply_main_background(dest_path)
+                
+                # 6. Update UI Label
+                if hasattr(self, 'settings_win') and hasattr(self.settings_win, 'lbl_bg_name'):
+                    self.settings_win.lbl_bg_name.setText(filename)
+
+                self.add_log(f"SYS: Background changed to {filename}")
+            except Exception as e:
+                self.add_log(f"ERR: Failed to set background: {e}")
 
     def execute_launch(self, mode):
         # 1. Directory Check

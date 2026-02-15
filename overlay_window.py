@@ -922,6 +922,7 @@ class QtOverlay(QWidget):
 
             if img_path and os.path.exists(img_path):
                 self.show_hitmarker(img_path, duration, x, y, scale)
+
             return
 
         # --- CASE B: NORMAL EVENTS (Queue) ---

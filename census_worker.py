@@ -557,7 +557,10 @@ class CensusWorker:
                     is_queue_active = self.c.config.get("event_queue_active", True)
 
                     # Trigger hitmarker first
-                    self.c.trigger_overlay_event("Hitmarker")
+                    if is_hs:
+                        self.c.trigger_overlay_event("Headshot Hitmarker")
+                    else:
+                        self.c.trigger_overlay_event("Hitmarker")
 
                     if is_queue_active:
                         for evt in base_events: self.c.trigger_overlay_event(evt)
