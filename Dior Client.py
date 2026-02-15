@@ -1029,7 +1029,7 @@ class DiorClientGUI:
 
         # Security prompt
         reply = QMessageBox.question(ui, "Apply Layout?",
-                                     f"Should the layout of '{source_name}' (Position & Size) be applied to ALL other events?",
+                                     f"Should the layout of '{source_name}' (Position & Size) be applied to ALL other events (including sub-events)?",
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
 
         if reply != QMessageBox.StandardButton.Yes:
@@ -1048,13 +1048,34 @@ class DiorClientGUI:
 
         new_scale = ui.slider_evt_scale.value() / 100.0
 
-        # Apply to all
+        # Apply to all - NEW LOGIC: Collect ALL possible events
         count = 0
         if "events" not in self.config: self.config["events"] = {}
 
-        for evt_key in self.config["events"]:
+        # 1. Collect all names
+        all_events = set()
+        
+        # From Categories (Standard, Multi Kill, etc.)
+        if hasattr(ui, "event_categories"):
+            for cat_list in ui.event_categories.values():
+                all_events.update(cat_list)
+        
+        # From Expandables (Heal 2, Kill Infil, etc.)
+        if hasattr(ui, "EXPANDABLE_EVENTS"):
+            for sub_list in ui.EXPANDABLE_EVENTS.values():
+                all_events.update(sub_list)
+
+        # 2. Iterate and apply
+        for evt_key in all_events:
             if evt_key == source_name: continue
-            if evt_key.lower() == "hitmarker" or evt_key.lower() == "headshot hitmarker": continue
+            
+            # EXCLUSIONS
+            if evt_key.lower() == "hitmarker" or evt_key.lower() == "headshot hitmarker": 
+                continue
+
+            # Create entry if missing
+            if evt_key not in self.config["events"]:
+                self.config["events"][evt_key] = {}
 
             # Only change layout, keep images/sounds!
             self.config["events"][evt_key]["x"] = new_x
@@ -1071,7 +1092,7 @@ class DiorClientGUI:
             self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
 
         self.add_log(f"SYS: Layout applied to {count} Events.")
-        QMessageBox.information(ui, "Success", f"Layout successfully applied!")
+        QMessageBox.information(ui, "Success", f"Layout successfully applied to {count} events!")
 
     def process_search_results_qt(self, stats, weapons):
         """Wird im Haupt-Thread aufgerufen, wenn der Worker fertig ist."""
