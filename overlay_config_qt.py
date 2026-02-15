@@ -782,7 +782,7 @@ class OverlayConfigWindow(QWidget):
         
         self.combo_evt_img = QComboBox()
         self.combo_evt_img.setEditable(True)
-        self.combo_evt_img.setPlaceholderText("Select or add images...")
+        self.combo_evt_img.setPlaceholderText("No file selected")
         self.combo_evt_img.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         io_grid.addWidget(self.combo_evt_img, 0, 1)
         
@@ -812,7 +812,7 @@ class OverlayConfigWindow(QWidget):
         
         self.combo_evt_snd = QComboBox()
         self.combo_evt_snd.setEditable(True)
-        self.combo_evt_snd.setPlaceholderText("Select or add sounds...")
+        self.combo_evt_snd.setPlaceholderText("No file selected")
         self.combo_evt_snd.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         io_grid.addWidget(self.combo_evt_snd, 1, 1)
         
