@@ -591,15 +591,7 @@ class PS2SettingsEditor(QMainWindow):
         ]))
         
         # Rendering Section
-        overall_quality_map = [
-            ("Custom", "-1"),
-            ("Very Low", "5"),
-            ("Low", "1"),
-            ("Medium", "2"),
-            ("High", "3"),
-            ("Ultra", "4"),
 
-        ]
         
         graphics_quality_map = [
             ("Low", "1"),
@@ -663,7 +655,7 @@ class PS2SettingsEditor(QMainWindow):
         # Common fallback for -1/Custom if needed by maps
         
         vbox_gfx.addWidget(self.create_form_group("Rendering", "Rendering", [
-            ("OverallQuality", "mapped_combo", overall_quality_map),
+
             ("GraphicsQuality", "mapped_combo", graphics_quality_map),
             ("TextureQuality", "mapped_combo", texture_quality_map), 
             ("ShadowQuality", "mapped_combo", shadow_quality_map),
@@ -736,6 +728,12 @@ class PS2SettingsEditor(QMainWindow):
     def load_ini(self, path):
         try:
             self.config.read(path)
+            
+            # FORCE OverallQuality to Custom (-1)
+            if not self.config.has_section("Rendering"):
+                self.config.add_section("Rendering")
+            self.config.set("Rendering", "OverallQuality", "-1")
+            
             self.current_ini_path = path
             self.setup_tabs()
             self.lbl_status.setText(f"Loaded: {os.path.basename(path)}")
