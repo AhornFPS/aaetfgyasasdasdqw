@@ -681,7 +681,7 @@ class CensusWorker:
                 self.c.is_dead = True
                 self.c.was_revived = False
                 self.c.add_log(f"DEBUG: Death State Set. Streak Count: {self.c.killstreak_count}")
-                # self.c.update_streak_display()
+                self.c.update_streak_display()
 
                 # --- 4. KILLFEED INFO ---
                 if killer_id and killer_id != "0":
