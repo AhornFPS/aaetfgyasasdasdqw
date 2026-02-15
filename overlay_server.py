@@ -15,7 +15,7 @@ WS_PORT = 6789
 def _project_root():
     if hasattr(sys, '_MEIPASS'):
         return sys._MEIPASS
-    return os.getcwd()
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def _overlay_web_dir():
