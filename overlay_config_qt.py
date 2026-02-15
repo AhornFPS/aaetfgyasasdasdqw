@@ -961,6 +961,12 @@ class OverlayConfigWindow(QWidget):
         self.check_play_duplicate.setToolTip("If enabled: Multiple identical events can be in the queue.\nIf disabled: Only one instance of this event is allowed in the queue.")
         input_layout.addWidget(self.check_play_duplicate)
 
+        # CHECKBOX: Impact Glitch
+        self.check_evt_impact = QCheckBox("Impact Glitch")
+        self.check_evt_impact.setStyleSheet("color: #ddd;")
+        self.check_evt_impact.setToolTip("If enabled: This event triggers the global HUD glitch impact effect.")
+        input_layout.addWidget(self.check_evt_impact)
+
         # Separator
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -1181,9 +1187,13 @@ class OverlayConfigWindow(QWidget):
 
         self.check_streak_anim = QCheckBox("ENABLE PULSE ANIMATION")
         self.check_streak_anim.setStyleSheet(cb_style + "QCheckBox { color: #ffcc00; }")
+        self.check_streak_glow = QCheckBox("ENABLE GLOW")
+        self.check_streak_glow.setStyleSheet(cb_style + "QCheckBox { color: #00f2ff; }")
+        self.check_streak_glow.setChecked(True)
 
         sw_layout.addWidget(self.check_streak_master)
         sw_layout.addWidget(self.check_streak_anim)
+        sw_layout.addWidget(self.check_streak_glow)
         main_layout.addLayout(sw_layout)
 
         # --- 2. MAIN VISUALS ---
@@ -1481,17 +1491,6 @@ class OverlayConfigWindow(QWidget):
         )
         st_layout.addWidget(self.btn_toggle_stats)
 
-        # Background Image
-        st_layout.addWidget(QLabel("Background (PNG):", objectName="SubText"))
-        st_img_h = QHBoxLayout()
-        self.ent_stats_img = QLineEdit()
-        self.btn_browse_stats_bg = QPushButton("...")
-        self.btn_browse_stats_bg.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_browse_stats_bg.setFixedWidth(40)
-        st_img_h.addWidget(self.ent_stats_img)
-        st_img_h.addWidget(self.btn_browse_stats_bg)
-        st_layout.addLayout(st_img_h)
-
         # Text Adjustments
         lbl_adj = QLabel("Text Adjust Number:")
         lbl_adj.setStyleSheet("color: #ffcc00;")
@@ -1509,15 +1508,6 @@ class OverlayConfigWindow(QWidget):
         adj_grid.addWidget(self.slider_st_ty, 1, 1)
 
         st_layout.addLayout(adj_grid)
-
-        # Scale
-        scale_h = QHBoxLayout()
-        scale_h.addWidget(QLabel("Image scale:"))
-        self.slider_st_scale = QSlider(Qt.Orientation.Horizontal)
-        self.slider_st_scale.setRange(10, 200)
-        self.slider_st_scale.setValue(100)
-        scale_h.addWidget(self.slider_st_scale)
-        st_layout.addLayout(scale_h)
 
         # TOGGLES FOR INDIVIDUAL STATS
         st_layout.addWidget(QLabel("Visible Stats:", styleSheet="color: #ffcc00; font-weight:bold;"))
@@ -1566,6 +1556,10 @@ class OverlayConfigWindow(QWidget):
         self.btn_stats_value_color.setObjectName("ColorBtn")
         self.btn_stats_value_color.setToolTip("Default color for values")
         st_fs_layout.addWidget(self.btn_stats_value_color)
+        self.check_stats_glow = QCheckBox("Stats Glow")
+        self.check_stats_glow.setStyleSheet("color: #00ff00;")
+        self.check_stats_glow.setChecked(True)
+        st_fs_layout.addWidget(self.check_stats_glow)
         
         st_fs_layout.addStretch()
         st_layout.addLayout(st_fs_layout)
@@ -1652,6 +1646,25 @@ class OverlayConfigWindow(QWidget):
         self.check_show_vehicle = QCheckBox("Show Vehicle Kills in Feed")
         self.check_show_vehicle.setStyleSheet("color: #00ff00;")
         kf_layout.addWidget(self.check_show_vehicle)
+
+        # Auto remove / lifetime
+        feed_ttl_layout = QHBoxLayout()
+        self.check_feed_auto_remove = QCheckBox("Auto-remove feed lines")
+        self.check_feed_auto_remove.setStyleSheet("color: #00ff00;")
+        self.check_feed_auto_remove.setChecked(True)
+        self.check_feed_auto_remove.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        feed_ttl_layout.addWidget(self.check_feed_auto_remove)
+        feed_ttl_layout.addStretch()
+        lbl_feed_stay = QLabel("Stay (sec):")
+        lbl_feed_stay.setStyleSheet("color: #ddd;")
+        feed_ttl_layout.addWidget(lbl_feed_stay)
+        feed_ttl_layout.addSpacing(6)
+        self.spin_feed_stay_sec = QSpinBox()
+        self.spin_feed_stay_sec.setRange(1, 600)
+        self.spin_feed_stay_sec.setValue(10)
+        self.spin_feed_stay_sec.setFixedWidth(80)
+        feed_ttl_layout.addWidget(self.spin_feed_stay_sec)
+        kf_layout.addLayout(feed_ttl_layout)
 
         # FONT SIZE (FEED)
         kf_fs_layout = QHBoxLayout()
