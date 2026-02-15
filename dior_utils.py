@@ -35,14 +35,16 @@ IS_PACKAGED = getattr(sys, 'frozen', False) or 'APPDIR' in os.environ
 
 if IS_PACKAGED:
     BASE_DIR = get_user_data_dir()
-    print(f"DEBUG: PACKAGED MODE DETECTED. BASE_DIR: {BASE_DIR}")
-    sys.stdout.flush() 
+    if sys.stdout:
+        print(f"DEBUG: PACKAGED MODE DETECTED. BASE_DIR: {BASE_DIR}")
+        sys.stdout.flush()
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DB_PATH = os.path.join(BASE_DIR, "ps2_master.db")
-print(f"DEBUG: FINAL DB_PATH: {DB_PATH}")
-sys.stdout.flush()
+if sys.stdout:
+    print(f"DEBUG: FINAL DB_PATH: {DB_PATH}")
+    sys.stdout.flush()
 
 # ---------------------------------------------------------
 # 2. ASSETS_DIR: Hier liegen Bilder und Sounds (Read-Only)
