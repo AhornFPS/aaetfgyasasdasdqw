@@ -1024,7 +1024,7 @@ class DiorClientGUI:
 
         for evt_key in self.config["events"]:
             if evt_key == source_name: continue
-            if evt_key.lower() == "hitmarker": continue
+            if evt_key.lower() == "hitmarker" or evt_key.lower() == "headshot hitmarker": continue
 
             # Only change layout, keep images/sounds!
             self.config["events"][evt_key]["x"] = new_x
@@ -1892,12 +1892,21 @@ class DiorClientGUI:
                 ui.combo_evt_snd.setCurrentIndex(0)
 
             # Scale Slider (Config value * 100 for slider range)
-            scale_val = int(data.get("scale", 1.0) * 100)
+            v_scale = data.get("scale", 1.0)
+            if v_scale > 5.0: v_scale = 1.0 # Safety for old or invalid values
+            scale_val = int(v_scale * 100)
             ui.slider_evt_scale.setValue(scale_val)
+            if hasattr(ui, 'lbl_scale_val'):
+                ui.lbl_scale_val.setText(f"{v_scale:.2f}")
 
             # Volume Slider
-            vol_val = int(data.get("volume", 1.0) * 100)
+            v_vol = data.get("volume", 1.0)
+            if v_vol > 1.0: v_vol /= 100.0 # Handle old 0-100 format
+            vol_val = int(v_vol * 100)
             ui.slider_evt_vol.setValue(vol_val)
+            if hasattr(ui, 'lbl_vol_val'):
+                ui.lbl_vol_val.setText(f"{vol_val}%")
+
 
             # Duration
             ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
@@ -3537,11 +3546,18 @@ class DiorClientGUI:
         ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
 
         # Set Sliders
-        raw_scale = data.get("scale", 1.0)
-        ui.slider_evt_scale.setValue(int(raw_scale * 100))
+        v_scale = data.get("scale", 1.0)
+        if v_scale > 5.0: v_scale = 1.0
+        ui.slider_evt_scale.setValue(int(v_scale * 100))
+        if hasattr(ui, "lbl_scale_val"):
+            ui.lbl_scale_val.setText(f"{v_scale:.2f}")
 
-        raw_vol = data.get("volume", 1.0)
-        ui.slider_evt_vol.setValue(int(raw_vol * 100))
+        v_vol = data.get("volume", 1.0)
+        if v_vol > 1.0: v_vol /= 100.0
+        vol_p = int(v_vol * 100)
+        ui.slider_evt_vol.setValue(vol_p)
+        if hasattr(ui, "lbl_vol_val"):
+            ui.lbl_vol_val.setText(f"{vol_p}%")
 
         # Update label
         ui.lbl_editing.setText(f"EDITING: {event_type}")
