@@ -4660,23 +4660,37 @@ class DiorClientGUI:
 
         if file_path:
             try:
-                # 2. Copy to assets folder
+                # 2. Determine target path
                 filename = os.path.basename(file_path)
                 dest_path = os.path.join(ASSETS_DIR, filename)
                 
-                # Only copy if it's not already there
+                # Check if it is already the current one
+                current_bg = self.config.get("main_background_path", "")
+                if current_bg == filename or current_bg == file_path:
+                    # It's already set, just refresh the view to be sure
+                    self.apply_main_background(file_path if os.path.isabs(file_path) else get_asset_path(file_path))
+                    self.add_log(f"SYS: Background '{filename}' is already active.")
+                    return
+
+                # 3. Copy to assets folder ONLY if it's not already there
                 if os.path.abspath(file_path) != os.path.abspath(dest_path):
-                    shutil.copy2(file_path, dest_path)
+                    try:
+                        shutil.copy2(file_path, dest_path)
+                    except OSError as e:
+                        # WinError 32: File in use -> This happens if the file exists and is active
+                        if os.path.exists(dest_path):
+                            self.add_log(f"SYS: Asset '{filename}' already exists and is locked. Using existing file.")
+                        else:
+                            raise e # Rethrow if it's a real error
                 
-                # 3. Save relative path/filename in config
-                # We store just the filename to ensure it works across moves
+                # 4. Save filename in config
                 self.config["main_background_path"] = filename
                 self.save_config()
 
-                # 4. Apply background immediately
+                # 5. Apply immediately
                 self.apply_main_background(dest_path)
                 
-                # 5. Update UI
+                # 6. Update UI Label
                 if hasattr(self, 'settings_win') and hasattr(self.settings_win, 'lbl_bg_name'):
                     self.settings_win.lbl_bg_name.setText(filename)
 
