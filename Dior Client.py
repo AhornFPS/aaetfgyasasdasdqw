@@ -1115,6 +1115,14 @@ class DiorClientGUI:
             if self.overlay_win:
                 self.overlay_win.showFullScreen()
                 self.overlay_win.raise_()
+                # Force first-frame stats render in debug mode.
+                # Without this, normal throttle can skip the initial push.
+                self.stats_last_refresh_time = 0
+                try:
+                    self.overlay_win.update_stats_display({}, is_dummy=True)
+                    self.update_stats_position_safe()
+                except Exception:
+                    pass
         else:
             ui.btn_debug_overlay.setText("DEBUG OVERLAY: OFF")
             ui.btn_debug_overlay.setStyleSheet(
@@ -1161,6 +1169,7 @@ class DiorClientGUI:
         ui.combo_evt_img.editTextChanged.connect(self.save_event_config_from_qt)
         ui.combo_evt_snd.editTextChanged.connect(self.save_event_config_from_qt)
         ui.check_play_duplicate.toggled.connect(self.save_event_config_from_qt)
+        ui.check_evt_impact.toggled.connect(self.save_event_config_from_qt)
 
         # --- EVENT SLOT SIGNALS ---
         ui.combo_event_slot.currentIndexChanged.connect(self.switch_event_slot)
@@ -1251,6 +1260,8 @@ class DiorClientGUI:
         # Auto-Save for Checkboxes & Sliders
         self.safe_connect(ui.check_streak_master.toggled, self.save_streak_settings_from_qt)
         self.safe_connect(ui.check_streak_anim.toggled, self.save_streak_settings_from_qt)
+        if hasattr(ui, "check_streak_glow"):
+            self.safe_connect(ui.check_streak_glow.toggled, self.save_streak_settings_from_qt)
 
         for slider in [ui.slider_tx, ui.slider_ty, ui.slider_scale]:
             self.safe_connect(slider.valueChanged, self.save_streak_settings_from_qt)
@@ -1294,7 +1305,7 @@ class DiorClientGUI:
         # 6. OVERLAY TAB: STATS & FEED
         # ---------------------------------------------------------
         # Sliders
-        for slider in [ui.slider_st_scale, ui.slider_st_tx, ui.slider_st_ty]:
+        for slider in [ui.slider_st_tx, ui.slider_st_ty]:
             self.safe_connect(slider.valueChanged, self.save_stats_config_from_qt)
 
         # Color Buttons for Stats
@@ -1302,13 +1313,6 @@ class DiorClientGUI:
             self.safe_connect(ui.btn_stats_label_color.clicked, lambda: self.pick_stats_color("labels"))
         if hasattr(ui, 'btn_stats_value_color'):
             self.safe_connect(ui.btn_stats_value_color.clicked, lambda: self.pick_stats_color("values"))
-
-        # Browse Buttons for Stats
-        try:
-            ui.btn_browse_stats_bg.clicked.disconnect()
-        except:
-            pass
-        ui.btn_browse_stats_bg.clicked.connect(lambda: self.browse_file_qt(ui.ent_stats_img, "png"))
 
         try:
             ui.btn_browse_hs_icon.clicked.disconnect()
@@ -1323,8 +1327,9 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_toggle_stats.clicked, self.toggle_stats_visibility)
         
         # LIVE-AUTO-SAVE (Stats)
-        self.safe_connect(ui.ent_stats_img.textChanged, self.save_stats_config_from_qt)
         self.safe_connect(ui.combo_st_font.currentTextChanged, self.save_stats_config_from_qt)
+        if hasattr(ui, "check_stats_glow"):
+            self.safe_connect(ui.check_stats_glow.toggled, self.save_stats_config_from_qt)
 
         # STATS TOGGLES
         if hasattr(ui, "check_show_k"):
@@ -1355,6 +1360,10 @@ class DiorClientGUI:
             self.safe_connect(ui.check_show_gunner.toggled, self.save_feed_config_from_qt)
         if hasattr(ui, "check_show_vehicle"):
             self.safe_connect(ui.check_show_vehicle.toggled, self.save_feed_config_from_qt)
+        if hasattr(ui, "check_feed_auto_remove"):
+            self.safe_connect(ui.check_feed_auto_remove.toggled, self.save_feed_config_from_qt)
+        if hasattr(ui, "spin_feed_stay_sec"):
+            self.safe_connect(ui.spin_feed_stay_sec.valueChanged, self.save_feed_config_from_qt)
 
         self.safe_connect(ui.ent_hs_icon.textChanged, self.save_feed_config_from_qt)
         self.safe_connect(ui.combo_feed_font.currentTextChanged, self.save_feed_config_from_qt)
@@ -1436,28 +1445,43 @@ class DiorClientGUI:
             self.on_event_clicked(val)
         
         elif key == "obs_service_toggle":
-            obs_cfg = self.config.get("obs_service", {})
-            obs_cfg["enabled"] = val
-            self.config["obs_service"] = obs_cfg
-            self.save_config()
-            
-            if val:
-                self.overlay_win.start_server()
-            else:
-                self.overlay_win.stop_server()
-            self.add_log(f"SYS: OBS Service {'enabled' if val else 'disabled'}.")
+            try:
+                obs_cfg = self.config.get("obs_service", {})
+                obs_cfg["enabled"] = bool(val)
+                self.config["obs_service"] = obs_cfg
+                self.save_config()
+
+                if not self.overlay_win:
+                    self.add_log("WARN: Overlay window is not active; OBS service toggle deferred.")
+                    return
+
+                if bool(val):
+                    # Ensure server is running (used by both OBS and internal web HUD).
+                    self.overlay_win.start_server()
+                    self.add_log("SYS: OBS Service enabled.")
+                else:
+                    # Do NOT stop here: internal HUD rendering depends on the same local service.
+                    # We only mark OBS integration as disabled in config.
+                    self.add_log("SYS: OBS Service disabled (internal HUD service stays running).")
+            except Exception as e:
+                self.add_log(f"ERR: OBS Service toggle failed: {e}")
             
         elif key == "obs_service_ports":
-            obs_cfg = self.config.get("obs_service", {})
-            obs_cfg.update(val)
-            self.config["obs_service"] = obs_cfg
-            self.save_config()
-            
-            # Restart if running
-            if obs_cfg.get("enabled", False):
-                self.add_log("SYS: Restarting OBS Service with new ports...")
-                self.overlay_win.start_server()
-            self.add_log(f"SYS: OBS Ports updated: Http:{val['port']} WS:{val['ws_port']}.")
+            try:
+                obs_cfg = self.config.get("obs_service", {})
+                obs_cfg.update(val)
+                self.config["obs_service"] = obs_cfg
+                self.save_config()
+
+                # Restart only when OBS service is enabled and overlay exists.
+                if obs_cfg.get("enabled", False) and self.overlay_win:
+                    self.add_log("SYS: Restarting OBS Service with new ports...")
+                    self.overlay_win.start_server()
+                else:
+                    self.add_log("SYS: OBS ports saved (restart or enable OBS service to apply).")
+                self.add_log(f"SYS: OBS Ports updated: Http:{val['port']} WS:{val['ws_port']}.")
+            except Exception as e:
+                self.add_log(f"ERR: OBS port update failed: {e}")
 
     def on_overlay_item_moved(self, item_name, x, y):
         """Called when an item in the overlay was moved with the mouse."""
@@ -1476,6 +1500,15 @@ class DiorClientGUI:
 
             ui.slider_twitch_x.blockSignals(False)
             ui.slider_twitch_y.blockSignals(False)
+        elif item_name == "stats":
+            ui = self.ovl_config_win
+            if hasattr(ui, "slider_st_x") and hasattr(ui, "slider_st_y"):
+                ui.slider_st_x.blockSignals(True)
+                ui.slider_st_y.blockSignals(True)
+                ui.slider_st_x.setValue(int(x))
+                ui.slider_st_y.setValue(int(y))
+                ui.slider_st_x.blockSignals(False)
+                ui.slider_st_y.blockSignals(False)
 
     def trigger_twitch_test(self):
         """Triggers a standard test message to check layout and position."""
@@ -1893,6 +1926,7 @@ class DiorClientGUI:
         ui.slider_evt_vol.blockSignals(True)
         ui.ent_evt_duration.blockSignals(True)
         ui.check_play_duplicate.blockSignals(True)
+        ui.check_evt_impact.blockSignals(True)
 
         try:
             # 2. Fill fields (with fallback values if empty)
@@ -1957,6 +1991,7 @@ class DiorClientGUI:
 
             # Play Duplicate
             ui.check_play_duplicate.setChecked(data.get("play_duplicate", True))
+            ui.check_evt_impact.setChecked(bool(data.get("impact", False)))
 
         finally:
             # UNBLOCK ALL SIGNALS
@@ -1966,6 +2001,7 @@ class DiorClientGUI:
             ui.slider_evt_vol.blockSignals(False)
             ui.ent_evt_duration.blockSignals(False)
             ui.check_play_duplicate.blockSignals(False)
+            ui.check_evt_impact.blockSignals(False)
 
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
 
@@ -2018,6 +2054,7 @@ class DiorClientGUI:
         vol_val = ui.slider_evt_vol.value() / 100.0 # Standardize to 0.0-1.0
         dur_val = int(ui.ent_evt_duration.text()) if ui.ent_evt_duration.text() else 0
         play_dup = ui.check_play_duplicate.isChecked()
+        impact_enabled = ui.check_evt_impact.isChecked()
 
         # Update Config
         if "events" not in self.config: self.config["events"] = {}
@@ -2029,7 +2066,8 @@ class DiorClientGUI:
             "scale": scale_val,
             "volume": vol_val,
             "duration": dur_val,
-            "play_duplicate": play_dup
+            "play_duplicate": play_dup,
+            "impact": impact_enabled
         })
 
         self.save_config()
@@ -2119,6 +2157,10 @@ class DiorClientGUI:
         ui.ent_evt_duration.setText("3000")
         ui.slider_evt_scale.setValue(100)
         ui.slider_evt_vol.setValue(100)
+        if hasattr(ui, "check_play_duplicate"):
+            ui.check_play_duplicate.setChecked(True)
+        if hasattr(ui, "check_evt_impact"):
+            ui.check_evt_impact.setChecked(False)
 
         self.add_log(f"EVENT: Switched to preset '{slot_name}'.")
 
@@ -2616,6 +2658,7 @@ class DiorClientGUI:
         # --- B) READ DATA FROM GUI ---
         is_active = s_ui.check_streak_master.isChecked()
         anim_active = s_ui.check_streak_anim.isChecked()
+        streak_glow = s_ui.check_streak_glow.isChecked() if hasattr(s_ui, "check_streak_glow") else current_conf.get("streak_glow", current_conf.get("knife_glow", True))
         show_knives = s_ui.btn_toggle_knives.isChecked()
 
         main_img = clean_path(s_ui.ent_streak_img.text())
@@ -2652,6 +2695,8 @@ class DiorClientGUI:
         self.config["streak"].update({
             "active": is_active,
             "anim_active": anim_active,
+            "streak_glow": streak_glow,
+            "knife_glow": streak_glow,  # Backward-compat mirror for older builds.
             "show_knives": show_knives,
             "img": main_img,
             "speed": speed,
@@ -2691,10 +2736,8 @@ class DiorClientGUI:
         
         st_data = {
             "active": saved_active_state,
-            "img": s_ui.ent_stats_img.text(),
             "tx": s_ui.slider_st_tx.value(),
             "ty": s_ui.slider_st_ty.value(),
-            "scale": s_ui.slider_st_scale.value() / 100.0,
             
             # Position behalten
             "x": current_st_conf.get("x", 50),
@@ -2705,6 +2748,7 @@ class DiorClientGUI:
             # NEW: Save colors separately (in case they are missing in config_backup)
             "label_color": current_st_conf.get("label_color", "#00f2ff"),
             "value_color": current_st_conf.get("value_color", "#ffffff"),
+            "glow": s_ui.check_stats_glow.isChecked() if hasattr(s_ui, "check_stats_glow") else current_st_conf.get("glow", True),
 
             # Toggle Stats
             "show_k": s_ui.check_show_k.isChecked(),
@@ -2723,6 +2767,10 @@ class DiorClientGUI:
         self.save_config()
         self.update_stats_position_safe()
         self.add_log("SYS: Stats configuration updated.")
+
+        # Immediate web HUD update for slider tweaks (no loop delay / no stale position).
+        if self.overlay_win and hasattr(self.overlay_win, "reapply_stats_from_config"):
+            self.overlay_win.reapply_stats_from_config()
         
         # Force redraw to apply visibility changes immediately
         self.update_session_time()
@@ -2740,6 +2788,8 @@ class DiorClientGUI:
             "show_revives": s_ui.check_show_revives.isChecked(),
             "show_gunner": s_ui.check_show_gunner.isChecked() if hasattr(s_ui, "check_show_gunner") else True,
             "show_vehicle": s_ui.check_show_vehicle.isChecked() if hasattr(s_ui, "check_show_vehicle") else True,
+            "auto_remove": s_ui.check_feed_auto_remove.isChecked() if hasattr(s_ui, "check_feed_auto_remove") else current_kf_conf.get("auto_remove", True),
+            "stay_seconds": int(s_ui.spin_feed_stay_sec.value()) if hasattr(s_ui, "spin_feed_stay_sec") else int(current_kf_conf.get("stay_seconds", 10)),
             
             # Keep position
             "x": current_kf_conf.get("x", 50),
@@ -2769,6 +2819,8 @@ class DiorClientGUI:
 
         self.add_log("SYS: Starting Killfeed visual test...")
         self.is_feed_test = True
+        # Start from a clean feed so test output is deterministic.
+        self.overlay_win.signals.clear_feed.emit()
 
         # 1. Config & Style
         kf_cfg_raw = self.config.get("killfeed", {})
@@ -2804,6 +2856,8 @@ class DiorClientGUI:
         # Cleanup after 7 seconds
         def end_feed_test():
             self.is_feed_test = False
+            if self.overlay_win:
+                self.overlay_win.signals.clear_feed.emit()
             self.add_log("SYS: Killfeed test finished.")
         
         QTimer.singleShot(7000, end_feed_test)
@@ -2828,6 +2882,11 @@ class DiorClientGUI:
         ui = self.ovl_config_win
 
         s_conf = self.config.get("streak", {})
+        # Compatibility migration: old configs used `knife_glow`.
+        if "streak_glow" not in s_conf and "knife_glow" in s_conf:
+            s_conf["streak_glow"] = bool(s_conf.get("knife_glow", True))
+            self.config["streak"] = s_conf
+            self.save_config()
         st_conf = self.config.get("stats_widget", {"active": True})
         kf_conf = self.config.get("killfeed", {})
         v_conf = self.config.get("auto_voice", {})
@@ -2920,6 +2979,10 @@ class DiorClientGUI:
         ui.check_streak_anim.setChecked(s_conf.get("anim_active", True))
         ui.check_streak_master.blockSignals(False)
         ui.check_streak_anim.blockSignals(False)
+        if hasattr(ui, "check_streak_glow"):
+            ui.check_streak_glow.blockSignals(True)
+            ui.check_streak_glow.setChecked(s_conf.get("streak_glow", s_conf.get("knife_glow", True)))
+            ui.check_streak_glow.blockSignals(False)
 
         # >>> NEW: LOAD KNIFE BUTTON STATUS (Part C) <<<
         knives_active = s_conf.get("show_knives", True)
@@ -2989,10 +3052,6 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
 
-        ui.ent_stats_img.blockSignals(True)
-        ui.ent_stats_img.setText(st_conf.get("img", "stats_bg.png"))
-        ui.ent_stats_img.blockSignals(False)
-
         # Sliders (as before)
         ui.slider_st_tx.blockSignals(True)
         ui.slider_st_tx.setValue(st_conf.get("tx", 0))
@@ -3000,9 +3059,6 @@ class DiorClientGUI:
         ui.slider_st_ty.blockSignals(True)
         ui.slider_st_ty.setValue(st_conf.get("ty", 0))
         ui.slider_st_ty.blockSignals(False)
-        ui.slider_st_scale.blockSignals(True)
-        ui.slider_st_scale.setValue(int(st_conf.get("scale", 1.0) * 100))
-        ui.slider_st_scale.blockSignals(False)
 
         # NEW: Font Size (Stats) - Dropdown Support
         ui.combo_st_font.blockSignals(True)
@@ -3051,6 +3107,11 @@ class DiorClientGUI:
             ui.check_show_kd.setChecked(st_conf.get("show_kd", True))
             ui.check_show_kd.blockSignals(False)
 
+        if hasattr(ui, "check_stats_glow"):
+            ui.check_stats_glow.blockSignals(True)
+            ui.check_stats_glow.setChecked(st_conf.get("glow", True))
+            ui.check_stats_glow.blockSignals(False)
+
         # 2. Killfeed Button Status
         kf_active = kf_conf.get("active", True)
         if kf_active:
@@ -3084,6 +3145,14 @@ class DiorClientGUI:
             ui.check_show_vehicle.blockSignals(True)
             ui.check_show_vehicle.setChecked(kf_conf.get("show_vehicle", True))
             ui.check_show_vehicle.blockSignals(False)
+        if hasattr(ui, "check_feed_auto_remove"):
+            ui.check_feed_auto_remove.blockSignals(True)
+            ui.check_feed_auto_remove.setChecked(kf_conf.get("auto_remove", True))
+            ui.check_feed_auto_remove.blockSignals(False)
+        if hasattr(ui, "spin_feed_stay_sec"):
+            ui.spin_feed_stay_sec.blockSignals(True)
+            ui.spin_feed_stay_sec.setValue(int(kf_conf.get("stay_seconds", 10)))
+            ui.spin_feed_stay_sec.blockSignals(False)
 
         # NEW: Font Size (Feed) - Dropdown Support / HS Icon Size
         ui.combo_feed_font.blockSignals(True)
@@ -3431,21 +3500,20 @@ class DiorClientGUI:
         if not self.overlay_win: 
             return
 
-        # Use overlay method if available
-        if hasattr(self.overlay_win, "center_crosshair"):
-            self.overlay_win.center_crosshair()
-            
-        # Update config to match
-        if hasattr(self.overlay_win, "crosshair_label"):
-            pos = self.overlay_win.crosshair_label.pos()
-            # Convert back to unscaled logic coordinates
-            logic_x = int(pos.x() / self.overlay_win.ui_scale)
-            logic_y = int(pos.y() / self.overlay_win.ui_scale)
-            
-            if "crosshair" not in self.config: self.config["crosshair"] = {}
-            self.config["crosshair"]["x"] = logic_x
-            self.config["crosshair"]["y"] = logic_y
-            self.save_config()
+        # Save true CENTER coordinates (config stores center point, not top-left).
+        center_x_px = int(self.overlay_win.width() / 2)
+        center_y_px = int(self.overlay_win.height() / 2)
+        logic_x = int(round(center_x_px / self.overlay_win.ui_scale))
+        logic_y = int(round(center_y_px / self.overlay_win.ui_scale))
+
+        if "crosshair" not in self.config:
+            self.config["crosshair"] = {}
+        self.config["crosshair"]["x"] = logic_x
+        self.config["crosshair"]["y"] = logic_y
+        self.save_config()
+
+        # Force immediate live update so UI and web overlay match right away.
+        self.update_crosshair_from_qt()
 
     def apply_crosshair_settings(self):
         try:
@@ -3495,6 +3563,7 @@ class DiorClientGUI:
         # 1. Read values from GUI
         is_active = ui.check_cross.isChecked()
         file_path = ui.cross_path.text().strip()
+        shadow_enabled = ui.btn_toggle_cross_shadow.isChecked() if hasattr(ui, "btn_toggle_cross_shadow") else False
 
         # 2. Prepare config dictionary if not existent
         if "crosshair" not in self.config:
@@ -3503,6 +3572,7 @@ class DiorClientGUI:
         # 3. Update values
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = file_path
+        self.config["crosshair"]["shadow"] = shadow_enabled
 
         # Fallback for size if not set
         if "size" not in self.config["crosshair"]:
@@ -4146,6 +4216,11 @@ class DiorClientGUI:
         if hasattr(ui, "lbl_vol_val"):
             ui.lbl_vol_val.setText(f"{vol_p}%")
 
+        if hasattr(ui, "check_play_duplicate"):
+            ui.check_play_duplicate.setChecked(bool(data.get("play_duplicate", True)))
+        if hasattr(ui, "check_evt_impact"):
+            ui.check_evt_impact.setChecked(bool(data.get("impact", False)))
+
         # Update label
         ui.lbl_editing.setText(f"EDITING: {event_type}")
 
@@ -4240,7 +4315,8 @@ class DiorClientGUI:
             "duration": dur_val,
             "x": save_x,
             "y": save_y,
-            "play_duplicate": ui.check_play_duplicate.isChecked()
+            "play_duplicate": ui.check_play_duplicate.isChecked(),
+            "impact": ui.check_evt_impact.isChecked() if hasattr(ui, "check_evt_impact") else False
         }
 
         self.save_config()
@@ -4265,6 +4341,8 @@ class DiorClientGUI:
         if hasattr(self.overlay_win, 'stats_bg_label'):
             self.overlay_win.stats_bg_label.hide()
             self.overlay_win.stats_text_label.hide()
+            if hasattr(self.overlay_win, 'clear_stats_web'):
+                self.overlay_win.clear_stats_web()
 
         # 2. Killfeed
         if hasattr(self.overlay_win, 'feed_label'):
@@ -4282,6 +4360,8 @@ class DiorClientGUI:
         # 4. Crosshair
         if hasattr(self.overlay_win, 'crosshair_label'):
             self.overlay_win.crosshair_label.hide()
+        if hasattr(self.overlay_win, 'clear_crosshair_web'):
+            self.overlay_win.clear_crosshair_web()
 
     def stop_overlay_logic(self):
         """Hides all overlay elements and RESETS all data/counters (e.g. at game exit)"""
@@ -4331,7 +4411,13 @@ class DiorClientGUI:
         streak_test_active = getattr(self, 'is_streak_test', False) # Tests ONLY Streak
 
         edit_active = getattr(self, 'is_hud_editing', False)
+        debug_active = bool(getattr(self, "debug_overlay_active", False))
         game_focused = self.is_game_focused()
+
+        # Detect debug overlay edge transitions for first-frame initialization.
+        prev_debug_active = bool(getattr(self, "_last_debug_overlay_active", False))
+        debug_just_enabled = debug_active and not prev_debug_active
+        self._last_debug_overlay_active = debug_active
 
         # --- NEW: Detect focus change for automatic refresh ---
         was_focused = getattr(self, "_last_focus_state", True)
@@ -4349,7 +4435,7 @@ class DiorClientGUI:
         # Render if any test or edit is running
         if edit_active or stats_test_active or streak_test_active or feed_test_active or path_recording:
             should_render = True
-        elif getattr(self, "debug_overlay_active", False):
+        elif debug_active:
             should_render = True
             mode_gameplay = True
         elif master_switch and game_running and game_focused:
@@ -4383,23 +4469,25 @@ class DiorClientGUI:
 
             # Show on: (Gameplay & Active) OR (Editing) OR (Stats Test)
             # IMPORTANT: streak_test_active is missing here intentionally!
-            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active:
+            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active or debug_active:
                 # THROTTLE LOGIC: Only update once per second, except in Edit/Test mode
                 now = time.time()
                 should_update_stats = True
                 
-                if mode_gameplay and not (stats_editing or stats_test_active):
+                if mode_gameplay and not (stats_editing or stats_test_active or debug_active):
                     if (now - self.stats_last_refresh_time) < 1.0:
                         should_update_stats = False
                 
                 if should_update_stats:
+                    if debug_just_enabled:
+                        self.stats_last_refresh_time = 0
                     self.stats_last_refresh_time = now
                     # Actual stats calculation
                     my_id = self.current_character_id
                     s = self.session_stats.get(my_id, {}) if my_id else {}
                     
                     # USE CENTRAL LOGIC in overlay window (Fixes Flickering & Toggles)
-                    is_preview = stats_test_active or (stats_editing and not game_running)
+                    is_preview = stats_test_active or debug_active or (stats_editing and not game_running)
                     self.overlay_win.update_stats_display(s, is_dummy=is_preview)
                     
                     self.overlay_win.stats_bg_label.show()
@@ -4408,16 +4496,21 @@ class DiorClientGUI:
             else:
                 self.overlay_win.stats_bg_label.hide()
                 self.overlay_win.stats_text_label.hide()
+                if hasattr(self.overlay_win, "clear_stats_web"):
+                    self.overlay_win.clear_stats_web()
 
             # === B) CROSSHAIR ===
             cross_conf = self.config.get("crosshair", {})
             cross_editing = edit_active and ("crosshair" in getattr(self, "current_edit_targets", []))
+            ch_file = clean_path(cross_conf.get("file", "crosshair.png"))
+            if not ch_file:
+                ch_file = "crosshair.png"
+            ch_path = get_asset_path(ch_file)
+            ch_size = int(cross_conf.get("size", 32))
 
             # Crosshair only during gameplay/edit or stats-test (not during streak-test)
-            if (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active:
-                self.overlay_win.crosshair_label.show()
-            else:
-                self.overlay_win.crosshair_label.hide()
+            should_show_crosshair = (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active
+            self.overlay_win.update_crosshair(ch_path, ch_size, should_show_crosshair)
 
             # === C) KILLFEED ===
             feed_conf = self.config.get("killfeed", {})
@@ -4443,11 +4536,18 @@ class DiorClientGUI:
                 show_condition = (self.killstreak_count > 0 and not getattr(self, "is_dead", False) and self.current_character_id)
                 
                 if show_condition or streak_editing or streak_test_active or path_recording:
-                    self.overlay_win.streak_bg_label.show()
-                    self.overlay_win.streak_text_label.show()
-                    for k in self.overlay_win.knife_labels:
-                        if getattr(k, '_is_active', False) or streak_editing:
-                            k.show()
+                    # Qt streak widgets are preview-only now; runtime streak is rendered by web HUD.
+                    if streak_editing or path_recording:
+                        self.overlay_win.streak_bg_label.show()
+                        self.overlay_win.streak_text_label.show()
+                        for k in self.overlay_win.knife_labels:
+                            if getattr(k, '_is_active', False) or streak_editing:
+                                k.show()
+                    else:
+                        self.overlay_win.streak_bg_label.hide()
+                        self.overlay_win.streak_text_label.hide()
+                        for k in self.overlay_win.knife_labels:
+                            k.hide()
                 else:
                     self.overlay_win.streak_bg_label.hide()
                     self.overlay_win.streak_text_label.hide()
@@ -4624,27 +4724,19 @@ class DiorClientGUI:
 
             # A) STATS WIDGET (KD display)
             if "stats" in targets:
-                cfg = self.config.get("stats_widget", {})
-                img_name = clean_path(cfg.get("img", ""))
-                img_path = get_asset_path(img_name) if img_name else ""
-
                 # Force immediate update with constant dummy
                 # This makes it immediately visible and colorful
                 stats_cfg_raw = self.config.get("stats_widget", {})
                 stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
                 f_size = stats_cfg.get("font_size", 22)
-                self.overlay_win.set_stats_html(DUMMY_STATS_TEMPLATE.format(f_size=f_size), img_path)
+                self.overlay_win.set_stats_html(DUMMY_STATS_TEMPLATE.format(f_size=f_size))
 
                 self.overlay_win.stats_bg_label.show()
 
-                # Force size for frame (if image is missing)
-                if not img_path or not os.path.exists(img_path):
-                    w = int(600 * self.overlay_win.ui_scale)  # Make slightly wider for long text
-                    h = int(60 * self.overlay_win.ui_scale)
-                    self.overlay_win.stats_bg_label.setFixedSize(w, h)
-                else:
-                    self.overlay_win.stats_bg_label.setFixedSize(16777215, 16777215)
-                    self.overlay_win.stats_bg_label.adjustSize()
+                # Force fixed drag frame size for stats (text-only web renderer).
+                w = int(600 * self.overlay_win.ui_scale)  # Make slightly wider for long text
+                h = int(60 * self.overlay_win.ui_scale)
+                self.overlay_win.stats_bg_label.setFixedSize(w, h)
 
                 # Start loop (uses DUMMY_STATS_HTML now, so no jumping!)
                 self.refresh_ingame_overlay()
