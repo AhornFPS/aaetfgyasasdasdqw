@@ -2125,6 +2125,35 @@ class DiorClientGUI:
 
         self.add_log(f"EVENT: Switched to preset '{slot_name}'.")
 
+    @staticmethod
+    def _validate_slot_name(name):
+        """Returns (cleaned_name, error_msg). error_msg is None if valid."""
+        import re
+        INVALID_CHARS = r'\/:*?"<>|'
+        RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL',
+                          'COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9',
+                          'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9'}
+
+        name = name.strip()
+        if not name:
+            return name, "Name cannot be empty."
+
+        # Check for invalid characters
+        found = [c for c in name if c in INVALID_CHARS]
+        if found:
+            chars = ' '.join(set(found))
+            return name, f"Name contains invalid characters: {chars}\n\nThese are not allowed: {INVALID_CHARS}"
+
+        # Check for reserved Windows names
+        if name.upper().split('.')[0] in RESERVED_NAMES:
+            return name, f"'{name}' is a reserved system name and cannot be used."
+
+        # Check length
+        if len(name) > 100:
+            return name, "Name is too long (max 100 characters)."
+
+        return name, None
+
     def create_event_slot(self):
         """Create a new event slot, optionally copying the current one."""
         import copy
@@ -2140,7 +2169,10 @@ class DiorClientGUI:
         if not ok or not name.strip():
             return
 
-        name = name.strip()
+        name, err = self._validate_slot_name(name)
+        if err:
+            QMessageBox.warning(self.main_hub, "Invalid Name", err)
+            return
 
         # Check for duplicates
         if name in self.config.get("event_slots", {}):
@@ -2194,7 +2226,10 @@ class DiorClientGUI:
         if not ok or not new_name.strip():
             return
 
-        new_name = new_name.strip()
+        new_name, err = self._validate_slot_name(new_name)
+        if err:
+            QMessageBox.warning(self.main_hub, "Invalid Name", err)
+            return
 
         if new_name == current_name:
             return
