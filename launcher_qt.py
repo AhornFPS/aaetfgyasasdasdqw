@@ -3,6 +3,8 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QColor
+import os
+from ps2_settings_editor import PS2SettingsEditor
 
 
 # --- SIGNALE ---
@@ -163,11 +165,44 @@ class LauncherWidget(QWidget):
         cards_layout.addWidget(self.low_card)
         main_layout.addLayout(cards_layout)
 
+        # Settings Editor Button
+        self.btn_settings = QPushButton("SETTINGS EDITOR")
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.setStyleSheet("""
+            QPushButton {
+                background-color: #222;
+                color: #888;
+                border: 1px solid #444;
+                padding: 10px;
+                font-weight: bold;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #333;
+                color: #fff;
+                border: 1px solid #00f2ff;
+            }
+        """)
+        self.btn_settings.clicked.connect(self.open_settings_editor)
+        main_layout.addWidget(self.btn_settings)
+
         # Info Footer
         self.lbl_info = QLabel("STATUS: SYSTEM_READY | INTEGRITY: OPTIMAL")
         self.lbl_info.setStyleSheet("color: #4a6a7a; font-family: 'Consolas'; font-size: 11px;")
         self.lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.lbl_info)
+
+        self.settings_editor_window = None
+
+    def open_settings_editor(self):
+        if self.settings_editor_window is None:
+            # Pass base_path if possible, otherwise it defaults to cwd
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            self.settings_editor_window = PS2SettingsEditor(base_path=base_path)
+        
+        self.settings_editor_window.show()
+        self.settings_editor_window.raise_()
+        self.settings_editor_window.activateWindow()
 
 
 if __name__ == "__main__":

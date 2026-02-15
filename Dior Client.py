@@ -393,8 +393,8 @@ class DiorClientGUI:
 
         # 9. CHECK VOICE MACRO PERMISSIONS (LINUX)
         # If Voice Macros are active, trigger 'xdotool' once for the Permission Popup.
-        if not sys.platform.startswith("win"):
-            v_active = self.config.get("auto_voice", {}).get("active", True)
+        if sys.platform.startswith("linux"):
+            v_active = self.config.get("auto_voice", {}).get("active", False)
             if v_active and XDO_TOOL:
                 self.add_log("SYS: Auto-Voice active -> Triggering initial permission check...")
                 threading.Thread(target=self._linux_permission_check, daemon=True).start()
@@ -446,10 +446,15 @@ class DiorClientGUI:
         self.add_log(f"SYS: Assets loaded (Images: {len(images)}, Sounds: {len(sounds)})")
 
     def _linux_permission_check(self):
-        """Simulates a harmless keypress to request permissions."""
+        """Simulates a few harmless keypresses to ensure the OS requests input permissions."""
+        if not XDO_TOOL: return
         try:
             # Shift key press/release (harmless)
-            subprocess.run([XDO_TOOL, "key", "Shift_L"], check=False)
+            # We do it 3 times with small delays to ensure the OS notices the input attempt
+            for _ in range(3):
+                subprocess.run([XDO_TOOL, "key", "Shift_L"], check=False)
+                time.sleep(0.2)
+            self.add_log("SYS: Sent permission trigger (Shift_L). Check for OS popups!")
         except Exception as e:
             print(f"Permission Check Fail: {e}")
 
@@ -523,6 +528,10 @@ class DiorClientGUI:
                 "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
+
+        # Trigger permission check on Linux if turned ON
+        if checked and sys.platform.startswith("linux") and XDO_TOOL:
+            threading.Thread(target=self._linux_permission_check, daemon=True).start()
 
 
     def toggle_stats_visibility(self):
@@ -1284,6 +1293,8 @@ class DiorClientGUI:
         # ---------------------------------------------------------
         self.safe_connect(ui.btn_toggle_voice.toggled, self.toggle_voice_macros)
         self.safe_connect(ui.btn_save_voice.clicked, self.save_voice_config_from_qt)
+        if hasattr(ui, 'btn_request_voice_permission'):
+            self.safe_connect(ui.btn_request_voice_permission.clicked, lambda: threading.Thread(target=self._linux_permission_check, daemon=True).start())
         for combo in ui.voice_combos.values():
             self.safe_connect(combo.currentIndexChanged, self.save_voice_config_from_qt)
 
@@ -3278,7 +3289,7 @@ class DiorClientGUI:
         else:
             dur = specific_dur if specific_dur > 0 else global_dur
 
-        if event_type.lower() == "hitmarker":
+        if event_type.lower() in ["hitmarker", "headshot hitmarker"]:
             dur = specific_dur
 
         # 4. DETERMINE PATHS
@@ -3316,7 +3327,7 @@ class DiorClientGUI:
                     sound_path = snd_name
 
         # 5. TRIGGER
-        is_hitmarker = (event_type.lower() == "hitmarker")
+        is_hitmarker = (event_type.lower() in ["hitmarker", "headshot hitmarker"])
         play_duplicate = event_data.get("play_duplicate", True)
 
         if img_path or sound_path:

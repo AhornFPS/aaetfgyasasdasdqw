@@ -421,6 +421,7 @@ class CensusWorker:
                 v_obj = get_stat_obj(victim_id, p.get("team_id"))
                 v_obj["d"] += 1
                 if is_hs_weapon:
+                    v_obj["dhs_eligible"] += 1
                     if is_hs: v_obj["dhs"] += 1
 
         # -------------------------------------------------
@@ -556,7 +557,10 @@ class CensusWorker:
                     is_queue_active = self.c.config.get("event_queue_active", True)
 
                     # Trigger hitmarker first
-                    self.c.trigger_overlay_event("Hitmarker")
+                    if is_hs:
+                        self.c.trigger_overlay_event("Headshot Hitmarker")
+                    else:
+                        self.c.trigger_overlay_event("Hitmarker")
 
                     if is_queue_active:
                         for evt in base_events: self.c.trigger_overlay_event(evt)

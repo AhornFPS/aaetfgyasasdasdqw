@@ -609,6 +609,9 @@ class OverlayConfigWindow(QWidget):
                 "Gunner Kill Mosquito", "Gunner Kill Liberator", "Gunner Kill Galaxy", "Gunner Kill Valkyrie",
                 "Gunner Kill Harasser", "Gunner Kill Ant", "Gunner Kill Colossus", "Gunner Kill Javelin",
                 "Gunner Kill Dervish", "Gunner Kill Chimera", "Gunner Kill Corsair"
+            ],
+            "Hitmarker": [
+                "Headshot Hitmarker"
             ]
         }
 
@@ -1652,6 +1655,17 @@ class OverlayConfigWindow(QWidget):
         layout.addWidget(self.btn_toggle_voice)
 
         layout.addSpacing(20)
+
+        if sys.platform.startswith("linux"):
+            self.btn_request_voice_permission = QPushButton("REQUEST LINUX PERMISSIONS")
+            self.btn_request_voice_permission.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.btn_request_voice_permission.setFixedHeight(45)
+            self.btn_request_voice_permission.setToolTip("Triggers a harmless keypress to force the OS to ask for input permissions.")
+            self.btn_request_voice_permission.setStyleSheet(
+                "QPushButton { background-color: #333; color: #aaa; border: 1px solid #444; border-radius: 4px; outline: none; margin-bottom: 10px; font-weight: bold; font-size: 13px; }"
+                "QPushButton:hover { background-color: #444; color: #00f2ff; border: 1px solid #00f2ff; }"
+            )
+            layout.addWidget(self.btn_request_voice_permission)
 
         # Grid for Trigger List
         grid_frame = QFrame(objectName="Group")
