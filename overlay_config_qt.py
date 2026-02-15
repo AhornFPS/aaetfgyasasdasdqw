@@ -621,17 +621,6 @@ class OverlayConfigWindow(QWidget):
         sep.setStyleSheet("color: #444;")
         slot_bar.addWidget(sep)
 
-        self.btn_slot_export = QPushButton("⬆ EXPORT")
-        self.btn_slot_export.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_slot_export.setFixedHeight(32)
-        self.btn_slot_export.setStyleSheet(
-            "QPushButton { background-color: #2a2a2a; color: #ccc; font-weight: bold; padding: 4px 12px; border: 1px solid #444; border-radius: 3px; outline: none; }"
-            "QPushButton:hover { background-color: #3a3a3a; border: 1px solid #888; color: white; }"
-            "QPushButton:focus { border: 1px solid #444; }"
-        )
-        self.btn_slot_export.setToolTip("Export current preset as a .zip (settings + images + sounds)")
-        slot_bar.addWidget(self.btn_slot_export)
-
         self.btn_slot_import = QPushButton("⬇ IMPORT")
         self.btn_slot_import.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_slot_import.setFixedHeight(32)
@@ -642,6 +631,17 @@ class OverlayConfigWindow(QWidget):
         )
         self.btn_slot_import.setToolTip("Import a preset .zip file")
         slot_bar.addWidget(self.btn_slot_import)
+
+        self.btn_slot_export = QPushButton("⬆ EXPORT")
+        self.btn_slot_export.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slot_export.setFixedHeight(32)
+        self.btn_slot_export.setStyleSheet(
+            "QPushButton { background-color: #2a2a2a; color: #ccc; font-weight: bold; padding: 4px 12px; border: 1px solid #444; border-radius: 3px; outline: none; }"
+            "QPushButton:hover { background-color: #3a3a3a; border: 1px solid #888; color: white; }"
+            "QPushButton:focus { border: 1px solid #444; }"
+        )
+        self.btn_slot_export.setToolTip("Export current preset as a .zip (settings + images + sounds)")
+        slot_bar.addWidget(self.btn_slot_export)
 
         slot_bar.addStretch()
         layout.addLayout(slot_bar)

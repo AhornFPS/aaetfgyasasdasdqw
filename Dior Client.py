@@ -2436,6 +2436,11 @@ class DiorClientGUI:
                 imported_events = settings.get("events", {})
                 imported_name = settings.get("preset_name", "Imported")
 
+                # SECURITY: Sanitize imported preset name
+                imported_name, name_err = self._validate_slot_name(imported_name)
+                if name_err:
+                    imported_name = "Imported"
+
                 if not imported_events:
                     QMessageBox.information(self.main_hub, "Empty Preset",
                                             "The imported preset contains no events.")
@@ -2460,19 +2465,42 @@ class DiorClientGUI:
 
                 create_new = (clicked == btn_save)
 
-                # 3. Extract asset files to correct folders
+                # 3. Extract asset files to correct folders (HARDENED)
+                ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp',
+                                      '.mp3', '.ogg', '.wav', '.flac'}
                 asset_count = 0
+                skipped = []
                 for entry in zf.namelist():
                     if entry.startswith("assets/") and not entry.endswith("/"):
-                        filename = entry.replace("assets/", "")
+                        filename = entry.replace("assets/", "", 1)
                         if not filename:
+                            continue
+
+                        # SECURITY: Strip any path components — only allow bare filenames
+                        filename = os.path.basename(filename)
+
+                        # SECURITY: Reject path traversal attempts
+                        if '..' in filename or filename.startswith(('/', '\\')):
+                            skipped.append(filename)
+                            continue
+
+                        # SECURITY: Whitelist file extensions
+                        _, ext = os.path.splitext(filename)
+                        if ext.lower() not in ALLOWED_EXTENSIONS:
+                            skipped.append(f"{filename} (blocked extension)")
                             continue
 
                         # Determine target path via get_asset_path
                         target_path = get_asset_path(filename)
-                        target_dir = os.path.dirname(target_path)
 
-                        # Ensure directory exists
+                        # SECURITY: Verify resolved path is inside ASSETS_DIR
+                        real_target = os.path.realpath(target_path)
+                        real_assets = os.path.realpath(ASSETS_DIR)
+                        if not real_target.startswith(real_assets + os.sep) and real_target != real_assets:
+                            skipped.append(f"{filename} (path escape blocked)")
+                            continue
+
+                        target_dir = os.path.dirname(target_path)
                         os.makedirs(target_dir, exist_ok=True)
 
                         # Extract (skip if already exists — don't overwrite user's files)
@@ -2482,6 +2510,9 @@ class DiorClientGUI:
                             asset_count += 1
                         else:
                             asset_count += 1  # Still count it as available
+
+                if skipped:
+                    self.add_log(f"SECURITY: Blocked {len(skipped)} suspicious file(s) during import.")
 
                 # 4. Apply
                 if create_new:
