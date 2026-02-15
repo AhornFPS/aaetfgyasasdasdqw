@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QGraphicsDropShadowE
 
 # Graphics resources come from QtGui
 from PyQt6.QtGui import (QPixmap, QColor, QPainter, QPen, QBrush,
-                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument, QRegion)
+                            QTransform, QMovie, QCursor, QTextCursor, QTextDocument, QRegion, QImageReader)
 
 # Sound Support (Optional, if pygame is missing)
 try:
@@ -85,6 +85,57 @@ class DraggableChat(QWebEngineView):
 
     def clear(self):
         self.page().runJavaScript("clearChat()")
+
+
+class EffectBrowser(QWebEngineView):
+    """
+    A specialized WebEngineView for rendering effects (Images/GIFs).
+    Solves issues with typical QLabel GIF rendering by using Chromium's engine.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.page().setBackgroundColor(QColor(0, 0, 0, 0))
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+        settings = self.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        
+        # Optimization: Disable context menu
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+
+    def set_effect(self, img_path):
+        if not img_path:
+            self.setHtml("")
+            return
+            
+        # Clean path for cross-platform compatibility
+        abs_path = os.path.abspath(img_path).replace("\\", "/")
+        filename = os.path.basename(abs_path)
+        base_dir = os.path.dirname(abs_path)
+        
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ margin: 0; padding: 0; overflow: hidden; background: transparent; }}
+                img {{ width: 100vw; height: 100vh; object-fit: contain; }}
+            </style>
+        </head>
+        <body>
+            <img src="{filename}">
+        </body>
+        </html>
+        """
+        
+        # Providing the directory as the base URL allows simple relative "src" resolution
+        base_url = QUrl.fromLocalFile(base_dir + "/")
+        self.setHtml(html, base_url)
+
+    def clear(self):
+        self.setHtml("")
 
 
 class ChatMessageWidget(QWidget):
@@ -324,10 +375,16 @@ class QtOverlay(QWidget):
         self.event_preview_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.event_preview_label.hide()
 
-        self.img_label = QLabel(self)
-        self.img_label.setScaledContents(True)
-        self.img_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.img_label.hide()
+        # --- MULTI-EVENT POOL ---
+        self.img_pool = []
+        for _ in range(10): # Support up to 10 simultaneous events
+            lbl = EffectBrowser(self)
+            lbl.hide()
+            lbl._is_busy = False
+            self.img_pool.append(lbl)
+            
+        # Compatibility reference for code that still expects self.img_label
+        self.img_label = self.img_pool[0]
 
         # 3. CONNECT SIGNALS
         self.signals = OverlaySignals()
@@ -402,6 +459,69 @@ class QtOverlay(QWidget):
                 self.start_server()
 
         self.active_edit_targets = []
+
+        # --- PRELOAD ASSETS (NEW) ---
+        QTimer.singleShot(1000, self.preload_config_assets)
+
+    def preload_config_assets(self):
+        """Preloads all images defined in the config into RAM cache to avoid disk hitching."""
+        if not self.gui_ref or not hasattr(self.gui_ref, 'config'):
+            return
+
+        conf = self.gui_ref.config
+        paths_to_load = []
+
+        # 1. Events
+        events = conf.get("events", {})
+        for ev in events.values():
+            img = ev.get("img")
+            if img:
+                if isinstance(img, list): paths_to_load.extend(img)
+                else: paths_to_load.append(img)
+
+        # 2. Crosshair
+        ch = conf.get("crosshair", {})
+        if ch.get("path"): paths_to_load.append(ch["path"])
+
+        # 3. Streak
+        stk = conf.get("streak", {})
+        if stk.get("img"): paths_to_load.append(stk["img"])
+        for fac in ["tr", "nc", "vs"]:
+            k = stk.get(f"knife_{fac.lower()}") 
+            if k: paths_to_load.append(k)
+
+        # 4. Stats
+        stats = conf.get("stats_widget", {})
+        if stats.get("img"): paths_to_load.append(stats["img"])
+
+        # 5. Feed
+        feed = conf.get("killfeed", {})
+        if feed.get("hs_icon"): paths_to_load.append(feed["hs_icon"])
+
+        # 6. Main Background
+        bg = conf.get("main_background_path")
+        if bg:
+            if isinstance(bg, list): paths_to_load.extend(bg)
+            else: paths_to_load.append(bg)
+
+        # Process all paths
+        count = 0
+        for p in set(paths_to_load): # Unique only
+            if not p: continue
+            
+            # Resolve relative paths
+            full_path = p
+            if not os.path.isabs(p):
+                full_path = get_asset_path(p)
+            
+            if os.path.exists(full_path):
+                # We "touch" the cache logic to load the pixmap
+                if not p.lower().endswith(".gif"):
+                    self.get_cached_pixmap(full_path)
+                    count += 1
+        
+        if hasattr(self.gui_ref, 'add_log'):
+            self.gui_ref.add_log(f"SYS: Preloaded {count} assets into RAM.")
 
     @staticmethod
     def _get_pulse_sink_map():
@@ -929,14 +1049,12 @@ class QtOverlay(QWidget):
         if not hasattr(self, 'queue_enabled'): self.queue_enabled = True
 
         if not self.queue_enabled:
-            # Queue off: Cancel everything, show immediately
-            self.clear_queue_now()
-
+            # Queue off: show immediately in parallel (pooled)
             if sound_path:
                 try:
                     if 'pygame' in sys.modules:
                         snd = pygame.mixer.Sound(sound_path)
-                        snd.set_volume(volume * master_vol) # <--- Set volume
+                        snd.set_volume(volume * master_vol)
                         snd.play()
                         self._ensure_audio_routing()
                 except:
@@ -1070,7 +1188,9 @@ class QtOverlay(QWidget):
             except:
                 pass
 
-        self.queue_timer.start(duration)
+        # Trigger the next one immediately (Parallel/Pooled)
+        # Use singleShot to avoid infinite recursion / stack overflow
+        QTimer.singleShot(0, self.process_next_event)
 
     def finish_current_event(self):
         self.current_event_key = None
@@ -1080,64 +1200,76 @@ class QtOverlay(QWidget):
         self.event_queue.clear()
         self.queue_timer.stop()
         self.is_showing = False
+        self.hide_all_events()
 
     def display_image(self, img_path, duration, abs_x, abs_y, scale=1.0):
-        if hasattr(self, 'hide_timer') and self.hide_timer.isActive():
-            self.hide_timer.stop()
-
-        if self.img_label.movie():
-            self.img_label.movie().stop()
-            self.img_label.setMovie(None)
-
         if not img_path or not os.path.exists(img_path):
-            self.img_label.hide()
             return
 
-        if img_path.lower().endswith(".gif"):
-            # We do NOT cache GIFs as Pixmaps since they are animated (QMovie).
-            # This is okay since GIFs are rare compared to hitmarkers.
-            if img_path not in self.movie_cache:
-                m = QMovie(img_path)
-                m.setCacheMode(QMovie.CacheMode.CacheAll)
-                m.start()
-                self.movie_cache[img_path] = m
+        # 1. Find an available label from the pool
+        target_label = None
+        for lbl in self.img_pool:
+            if not lbl._is_busy:
+                target_label = lbl
+                break
+        
+        # If none are free, overwrite the oldest one (index 0)
+        if not target_label:
+            target_label = self.img_pool[0]
+            if hasattr(target_label, 'hide_timer') and target_label.hide_timer.isActive():
+                target_label.hide_timer.stop()
+            target_label.hide()
+            target_label.clear()
 
-            movie = self.movie_cache[img_path]
-            self.img_label.setMovie(movie)
-            # Important: The movie may need to be restarted/shown for the new label
-            movie.jumpToFrame(0)
-            movie.start()
+        # 2. Determine unscaled dimensions
+        reader = QImageReader(img_path)
+        orig_size = reader.size()
+        
+        if orig_size.isValid():
+            w = int(orig_size.width() * self.ui_scale * scale)
+            h = int(orig_size.height() * self.ui_scale * scale)
+            target_label.setFixedSize(w, h)
         else:
-            # --- CACHE USED (Static images) ---
-            pixmap = self.get_cached_pixmap(img_path)
-            if pixmap.isNull(): return
+            target_label.setFixedSize(self.s(400), self.s(400))
 
-            final_scale = self.ui_scale * scale
-            if final_scale != 1.0:
-                w = int(pixmap.width() * final_scale)
-                h = int(pixmap.height() * final_scale)
-                pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
-                                       Qt.TransformationMode.SmoothTransformation)
+        # 3. Set content and show
+        target_label._is_busy = True # Mark as busy immediately
+        target_label.set_effect(img_path)
+        self.safe_move(target_label, self.s(abs_x), self.s(abs_y))
+        target_label.show()
+        target_label.raise_()
 
-            self.img_label.setPixmap(pixmap)
+        # 4. Individual timer for each label
+        if not hasattr(target_label, 'hide_timer'):
+            target_label.hide_timer = QTimer(self)
+            target_label.hide_timer.setSingleShot(True)
+            # Use closure to capture the specific label
+            target_label.hide_timer.timeout.connect(lambda l=target_label: self._hide_image_specific(l))
 
-        self.img_label.adjustSize()
-        self.safe_move(self.img_label, self.s(abs_x), self.s(abs_y))
-        self.img_label.show()
-        self.img_label.raise_()
+        target_label.hide_timer.start(duration)
 
-        if not hasattr(self, 'hide_timer'):
-            self.hide_timer = QTimer(self)
-            self.hide_timer.setSingleShot(True)
-            self.hide_timer.timeout.connect(self._hide_image_safe)
+    def _hide_image_specific(self, label):
+        """Hides a single specific label from the pool."""
+        label.clear()
+        label.hide()
+        label._is_busy = False # Free it up
+        # If it was the 'main' event tracking name, we might want to clear it?
+        if label == self.img_pool[0]:
+            self.current_event_key = None
 
-        self.hide_timer.start(duration)
+    def hide_all_events(self):
+        """Clears the queue and hides ALL active event labels."""
+        for lbl in self.img_pool:
+            if hasattr(lbl, 'hide_timer') and lbl.hide_timer.isActive():
+                lbl.hide_timer.stop()
+            lbl.hide()
+            lbl.clear()
+            lbl._is_busy = False
+        self.current_event_key = None
 
     def _hide_image_safe(self):
-        if self.img_label.movie():
-            self.img_label.movie().stop()
-        self.img_label.hide()
-        self.current_event_key = None
+        """Legacy helper for a single hide call (now targets all)."""
+        self.hide_all_events()
 
     # --- CORE FUNCTIONS ---
     def resizeEvent(self, event):

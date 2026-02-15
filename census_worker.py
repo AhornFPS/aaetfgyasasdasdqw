@@ -567,14 +567,10 @@ class CensusWorker:
                         if multi_event: self.c.trigger_overlay_event(multi_event)
                         if streak_event: self.c.trigger_overlay_event(streak_event)
                     else:
-                        final_event = None
-                        if streak_event:
-                            final_event = streak_event
-                        elif multi_event:
-                            final_event = multi_event
-                        elif base_events:
-                            final_event = base_events[0]
-                        if final_event: self.c.trigger_overlay_event(final_event)
+                        # Queue disabled: Still trigger ALL, but they play in parallel now!
+                        for evt in base_events: self.c.trigger_overlay_event(evt)
+                        if multi_event: self.c.trigger_overlay_event(multi_event)
+                        if streak_event: self.c.trigger_overlay_event(streak_event)
 
 
 

@@ -425,9 +425,9 @@ class DiorClientGUI:
             self.add_log(f"ERROR: Failed to scan assets dir: {e}")
             return
 
-        # Store base assets for later use (with empty option first)
-        self.base_images = [""] + sorted(images)
-        self.base_sounds = [""] + sorted(sounds)
+        # Store base assets for later use
+        self.base_images = sorted(images)
+        self.base_sounds = sorted(sounds)
 
         # Populate Image Combo
         if hasattr(self.ovl_config_win, 'combo_evt_img'):
@@ -1091,6 +1091,17 @@ class DiorClientGUI:
 
         if self.overlay_win:
             self.safe_connect(self.overlay_win.signals.edit_mode_toggled, self.toggle_hud_edit_mode)
+            
+        # --- EVENT AUTO-SAVE SIGNALS ---
+        ui.slider_evt_scale.valueChanged.connect(self.save_event_config_from_qt)
+        ui.slider_evt_vol.valueChanged.connect(self.save_event_config_from_qt)
+        ui.ent_evt_duration.textChanged.connect(self.save_event_config_from_qt)
+        ui.combo_evt_img.currentIndexChanged.connect(self.save_event_config_from_qt)
+        ui.combo_evt_snd.currentIndexChanged.connect(self.save_event_config_from_qt)
+        ui.combo_evt_img.editTextChanged.connect(self.save_event_config_from_qt)
+        ui.combo_evt_snd.editTextChanged.connect(self.save_event_config_from_qt)
+        ui.check_play_duplicate.toggled.connect(self.save_event_config_from_qt)
+
 
         # ---------------------------------------------------------
         # 2. OVERLAY TAB: IDENTITY
@@ -1800,72 +1811,87 @@ class DiorClientGUI:
         ui = self.ovl_config_win
         # Get data from config (section 'events')
         ev_conf = self.config.get("events", {})
-        data = ev_conf.get(event_name, {})
+        # Use copy() to prevent mutations during loading
+        data = ev_conf.get(event_name, {}).copy()
 
         # 1. Update label
         ui.lbl_editing.setText(f"EDITING: {event_name}")
         ui.current_event = event_name
 
-        # 2. Fill fields (with fallback values if empty)
-        
-        # IMAGE
-        img_val = data.get("img", "")
+        # BLOCK ALL SIGNALS during loading to avoid recursive auto-saves
         ui.combo_evt_img.blockSignals(True)
-        ui.combo_evt_img.clear()
-        
-        # Only add specific items from config
-        if isinstance(img_val, list):
-            for x in img_val:
-                ui.combo_evt_img.addItem(str(x))
-            if img_val:
-                ui.combo_evt_img.setCurrentIndex(0)
-        elif img_val:
-            ui.combo_evt_img.addItem(str(img_val))
-            ui.combo_evt_img.setCurrentIndex(0)
-        # If empty, leave empty
-        
-        ui.combo_evt_img.blockSignals(False)
-        
-        # Manual update of image preview
-        current_img_text = ui.combo_evt_img.currentText()
-        if hasattr(ui, 'update_preview_image'):
-             ui.update_preview_image(get_asset_path(current_img_text))
-
-        # SOUND
-        snd_val = data.get("snd", data.get("sound", ""))
         ui.combo_evt_snd.blockSignals(True)
-        ui.combo_evt_snd.clear()
-        
-        # Only add specific items from config
-        if isinstance(snd_val, list):
-            for x in snd_val:
-                ui.combo_evt_snd.addItem(str(x))
-            if snd_val:
-                ui.combo_evt_snd.setCurrentIndex(0)
-        elif snd_val:
-            ui.combo_evt_snd.addItem(str(snd_val))
-            ui.combo_evt_snd.setCurrentIndex(0)
-        # If empty, leave empty
-            
-        ui.combo_evt_snd.blockSignals(False)
-
-        # Scale Slider (Config value * 100 for slider range)
-        scale_val = int(data.get("scale", 1.0) * 100)
-        ui.slider_evt_scale.setValue(scale_val)
-
-        # Volume Slider
-        vol_val = int(data.get("volume", 100) * 100)
-        ui.slider_evt_vol.setValue(vol_val)
-
-        # Duration
-        ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
-
-        # Play Duplicate
+        ui.slider_evt_scale.blockSignals(True)
+        ui.slider_evt_vol.blockSignals(True)
+        ui.ent_evt_duration.blockSignals(True)
         ui.check_play_duplicate.blockSignals(True)
-        ui.check_play_duplicate.setChecked(data.get("play_duplicate", True))
-        ui.check_play_duplicate.blockSignals(False)
+
+        try:
+            # 2. Fill fields (with fallback values if empty)
+            
+            # IMAGE
+            img_val = data.get("img", "")
+            ui.combo_evt_img.clear()
+            
+            # Only add specific items from config
+            def is_valid_asset(name):
+                return name and isinstance(name, str) and "No file selected" not in name
+
+            if isinstance(img_val, list):
+                for x in img_val:
+                    if is_valid_asset(str(x)):
+                        ui.combo_evt_img.addItem(str(x))
+                if ui.combo_evt_img.count() > 0:
+                    ui.combo_evt_img.setCurrentIndex(0)
+            elif is_valid_asset(str(img_val)):
+                ui.combo_evt_img.addItem(str(img_val))
+                ui.combo_evt_img.setCurrentIndex(0)
+            
+            # Manual update of image preview
+            current_img_text = ui.combo_evt_img.currentText()
+            if hasattr(ui, 'update_preview_image'):
+                 ui.update_preview_image(get_asset_path(current_img_text))
+
+            # SOUND
+            snd_val = data.get("snd", data.get("sound", ""))
+            ui.combo_evt_snd.clear()
+            
+            # Only add specific items from config
+            if isinstance(snd_val, list):
+                for x in snd_val:
+                    if is_valid_asset(str(x)):
+                        ui.combo_evt_snd.addItem(str(x))
+                if ui.combo_evt_snd.count() > 0:
+                    ui.combo_evt_snd.setCurrentIndex(0)
+            elif is_valid_asset(str(snd_val)):
+                ui.combo_evt_snd.addItem(str(snd_val))
+                ui.combo_evt_snd.setCurrentIndex(0)
+
+            # Scale Slider (Config value * 100 for slider range)
+            scale_val = int(data.get("scale", 1.0) * 100)
+            ui.slider_evt_scale.setValue(scale_val)
+
+            # Volume Slider
+            vol_val = int(data.get("volume", 1.0) * 100)
+            ui.slider_evt_vol.setValue(vol_val)
+
+            # Duration
+            ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
+
+            # Play Duplicate
+            ui.check_play_duplicate.setChecked(data.get("play_duplicate", True))
+
+        finally:
+            # UNBLOCK ALL SIGNALS
+            ui.combo_evt_img.blockSignals(False)
+            ui.combo_evt_snd.blockSignals(False)
+            ui.slider_evt_scale.blockSignals(False)
+            ui.slider_evt_vol.blockSignals(False)
+            ui.ent_evt_duration.blockSignals(False)
+            ui.check_play_duplicate.blockSignals(False)
 
         self.add_log(f"UI: Settings for '{event_name}' loaded.")
+
 
     def save_event_config_from_qt(self):
         """Saves currently edited event data to config."""
@@ -1874,32 +1900,46 @@ class DiorClientGUI:
         if not event_name:
             return
 
-        # Read data from UI
-        # Daten aus UI lesen (NEW COMBOBOX LOGIC)
+        # Read data from UI (NEW COMBOBOX LOGIC)
+        def clean_txt(t):
+            t = t.strip()
+            if not t or "No file selected" in t: return ""
+            return t
+
         # 1. Image Data
         img_items = []
         for i in range(ui.combo_evt_img.count()):
-            txt = ui.combo_evt_img.itemText(i).strip()
+            txt = clean_txt(ui.combo_evt_img.itemText(i))
             if txt and txt not in img_items:
                 img_items.append(txt)
         
-        if not img_items: img = ""
-        elif len(img_items) == 1: img = img_items[0]
-        else: img = img_items
+        # Also check current text (it might not be in the list yet if typed)
+        curr_img = clean_txt(ui.combo_evt_img.currentText())
+        if curr_img and curr_img not in img_items:
+            img_items.append(curr_img)
+
+        if not img_items: img_val = ""
+        elif len(img_items) == 1: img_val = img_items[0]
+        else: img_val = img_items
 
         # 2. Sound Data
         snd_items = []
         for i in range(ui.combo_evt_snd.count()):
-            txt = ui.combo_evt_snd.itemText(i).strip()
+            txt = clean_txt(ui.combo_evt_snd.itemText(i))
             if txt and txt not in snd_items:
                 snd_items.append(txt)
 
-        if not snd_items: snd = ""
-        elif len(snd_items) == 1: snd = snd_items[0]
-        else: snd = snd_items
-        scale = ui.slider_evt_scale.value() / 100.0
-        vol = ui.slider_evt_vol.value()
-        dur = int(ui.ent_evt_duration.text()) if ui.ent_evt_duration.text() else 0
+        curr_snd = clean_txt(ui.combo_evt_snd.currentText())
+        if curr_snd and curr_snd not in snd_items:
+            snd_items.append(curr_snd)
+
+        if not snd_items: snd_val = ""
+        elif len(snd_items) == 1: snd_val = snd_items[0]
+        else: snd_val = snd_items
+        
+        scale_val = ui.slider_evt_scale.value() / 100.0
+        vol_val = ui.slider_evt_vol.value() / 100.0 # Standardize to 0.0-1.0
+        dur_val = int(ui.ent_evt_duration.text()) if ui.ent_evt_duration.text() else 0
         play_dup = ui.check_play_duplicate.isChecked()
 
         # Update Config
@@ -1907,16 +1947,16 @@ class DiorClientGUI:
         if event_name not in self.config["events"]: self.config["events"][event_name] = {}
 
         self.config["events"][event_name].update({
-            "img": img,
-            "snd": snd,
-            "scale": scale,
-            "volume": vol,
-            "duration": dur,
+            "img": img_val,
+            "snd": snd_val,
+            "scale": scale_val,
+            "volume": vol_val,
+            "duration": dur_val,
             "play_duplicate": play_dup
         })
 
         self.save_config()
-        self.add_log(f"EVENT: Settings for '{event_name}' saved.")
+        self.add_log(f"EVENT: Settings for '{event_name}' auto-saved.")
 
         # Optional: Direktes Feedback im Overlay (Test)
         # self.trigger_overlay_event(event_name)
@@ -3433,6 +3473,9 @@ class DiorClientGUI:
             else:
                 widget.setText(filename)
 
+            # AUTO SAVE
+            self.save_event_config_from_qt()
+
     def load_event_ui_data(self, event_type):
         """Loads config data of an event into the Qt-UI fields"""
         if not event_type: return
@@ -3440,30 +3483,33 @@ class DiorClientGUI:
         data = self.config.get("events", {}).get(event_type, {})
         ui = self.ovl_config_win
 
+        def is_valid_asset(name):
+            return name and isinstance(name, str) and "No file selected" not in name
+
         # Fill fields
         ui.combo_evt_img.clear()
         img_data = data.get("img", "")
         if isinstance(img_data, list):
             for item in img_data:
-                ui.combo_evt_img.addItem(item)
+                if is_valid_asset(str(item)):
+                    ui.combo_evt_img.addItem(str(item))
             if ui.combo_evt_img.count() > 0:
                 ui.combo_evt_img.setCurrentIndex(0)
-        else:
-            if img_data:
-                ui.combo_evt_img.addItem(img_data)
-                ui.combo_evt_img.setCurrentIndex(0)
+        elif is_valid_asset(str(img_data)):
+            ui.combo_evt_img.addItem(str(img_data))
+            ui.combo_evt_img.setCurrentIndex(0)
         
         ui.combo_evt_snd.clear()
         snd_data = data.get("snd", "")
         if isinstance(snd_data, list):
             for item in snd_data:
-                ui.combo_evt_snd.addItem(item)
+                if is_valid_asset(str(item)):
+                    ui.combo_evt_snd.addItem(str(item))
             if ui.combo_evt_snd.count() > 0:
                 ui.combo_evt_snd.setCurrentIndex(0)
-        else:
-            if snd_data:
-                ui.combo_evt_snd.addItem(snd_data)
-                ui.combo_evt_snd.setCurrentIndex(0)
+        elif is_valid_asset(str(snd_data)):
+            ui.combo_evt_snd.addItem(str(snd_data))
+            ui.combo_evt_snd.setCurrentIndex(0)
         ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
 
         # Set Sliders
@@ -3513,17 +3559,22 @@ class DiorClientGUI:
             save_x = existing_data.get("x", 100)
             save_y = existing_data.get("y", 100)
 
-        # Read data (with .strip() to kill spaces)
+        # Read data (with cleaning)
+        def clean_txt(t):
+            t = t.strip()
+            if not t or "No file selected" in t: return ""
+            return t
+
         # 1. Image Data
         img_items = []
         # Add all items from list
         for i in range(ui.combo_evt_img.count()):
-            txt = ui.combo_evt_img.itemText(i).strip()
+            txt = clean_txt(ui.combo_evt_img.itemText(i))
             if txt and txt not in img_items:
                 img_items.append(txt)
         
         # Add current text if manually typed and not in list
-        curr_img = ui.combo_evt_img.currentText().strip()
+        curr_img = clean_txt(ui.combo_evt_img.currentText())
         if curr_img and curr_img not in img_items:
             img_items.append(curr_img)
             
@@ -3534,12 +3585,12 @@ class DiorClientGUI:
         # 2. Sound Data
         snd_items = []
         for i in range(ui.combo_evt_snd.count()):
-            txt = ui.combo_evt_snd.itemText(i).strip()
+            txt = clean_txt(ui.combo_evt_snd.itemText(i))
             if txt and txt not in snd_items:
                 snd_items.append(txt)
         
         # Add current text if manually typed
-        curr_snd = ui.combo_evt_snd.currentText().strip()
+        curr_snd = clean_txt(ui.combo_evt_snd.currentText())
         if curr_snd and curr_snd not in snd_items:
             snd_items.append(curr_snd)
 
