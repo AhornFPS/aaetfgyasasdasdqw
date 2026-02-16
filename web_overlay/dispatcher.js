@@ -390,7 +390,6 @@
       count.classList.add("no-glow");
     } else if (data.glow_color) {
       count.style.textShadow = `0 0 10px ${data.glow_color}, 0 0 24px ${data.glow_color}`;
-      skull.style.filter = `drop-shadow(0 0 10px ${data.glow_color}) drop-shadow(0 0 5px ${data.glow_color})`;
     }
 
     const knives = Array.isArray(data.knives) ? data.knives : [];
