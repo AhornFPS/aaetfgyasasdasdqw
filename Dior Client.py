@@ -66,9 +66,10 @@ import settings_qt
 import overlay_config_qt
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
-from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS
+from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS, get_user_data_dir
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
+from release_updater import ReleaseUpdater
 import sys
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtWebEngineCore import QWebEngineSettings
@@ -126,6 +127,9 @@ class WorkerSignals(QObject):
     game_status_changed = pyqtSignal(bool)  # True = Start, False = Stop
     # SIGNAL for Server Switch (Thread-Safe)
     request_server_switch = pyqtSignal(str, str)
+    # Updater callbacks (Thread-Safe)
+    update_check_finished = pyqtSignal(object, str)
+    update_download_finished = pyqtSignal(object, object, str)
 
 
 class DiorMainHub(QMainWindow):
@@ -256,6 +260,8 @@ sys.excepthook = log_exception
 
 # Global Constants
 CONFIG_FILE = "config.json"
+CONFIG_SCHEMA_VERSION = 2
+DEFAULT_UPDATE_REPO = "cedric12354/Better-Planetside"
 
 class DiorClientGUI:
     def __init__(self):
@@ -266,6 +272,11 @@ class DiorClientGUI:
 
         # 2. LOAD DATA
         self.config = self.load_config()
+        self.release_updater = None
+        self._update_check_in_progress = False
+        self._update_download_in_progress = False
+        self._latest_update_info = None
+        self.release_updater = self._build_release_updater()
         self.char_data = self.db.load_my_chars()
 
         # Load cache (Returns 2 dictionaries: Names and Outfits)
@@ -289,6 +300,8 @@ class DiorClientGUI:
         self.worker_signals.add_char_finished.connect(self.finalize_add_char_slot)
         self.worker_signals.game_status_changed.connect(self.handle_game_status_change)
         self.worker_signals.request_server_switch.connect(self.switch_server)
+        self.worker_signals.update_check_finished.connect(self._finish_update_check_qt)
+        self.worker_signals.update_download_finished.connect(self._finish_update_download_qt)
 
         # Tracking Variables
         self.killstreak_count = 0
@@ -403,8 +416,17 @@ class DiorClientGUI:
             else:
                 self.add_log("SYS: Configuration successfully loaded.")
 
+        if getattr(self, "_startup_legacy_config_imported", False):
+            self.add_log("SYS: Imported legacy config into user profile directory.")
+
+        if getattr(self, "_startup_config_schema_migrated", False):
+            frm = getattr(self, "_startup_config_schema_from", 1)
+            to = getattr(self, "_startup_config_schema_to", CONFIG_SCHEMA_VERSION)
+            self.add_log(f"SYS: Config schema migrated v{frm} -> v{to}.")
+
         # 7. SHOW
         self.main_hub.show()
+        QTimer.singleShot(1200, self._prompt_apply_staged_update_if_available)
 
         # 8. BACKGROUND THREADS
         threading.Thread(target=self.cache_worker, daemon=True).start()
@@ -1575,6 +1597,8 @@ class DiorClientGUI:
         self.safe_connect(self.settings_win.signals.browse_ps2_requested, self.browse_ps2_folder)
         self.safe_connect(self.settings_win.signals.browse_bg_requested, self.change_background_file)
         self.safe_connect(self.settings_win.signals.clear_bg_requested, self.clear_background_file)
+        if hasattr(self.settings_win.signals, "check_updates_requested"):
+            self.safe_connect(self.settings_win.signals.check_updates_requested, self.check_for_updates_qt)
 
         # IMPORTANT: Connect the save signal!
         self.safe_connect(self.settings_win.signals.save_requested, self.update_main_config_from_settings)
@@ -2389,48 +2413,83 @@ class DiorClientGUI:
     # =========================================================
     # EVENT SAVE SLOT SYSTEM
     # =========================================================
-    def _migrate_heal_event_names(self):
-        """
-        Migrates legacy heal milestone event names to the current naming scheme.
-        Applies to active events and all saved event slots.
-        """
+    @staticmethod
+    def _migrate_heal_event_names_in_event_map(event_map):
         rename_map = {
             "Heal 2": "Heal 50",
             "Heal 10000": "Heal 5000",
         }
+        if not isinstance(event_map, dict):
+            return False
 
-        def merge_if_needed(target_obj, source_obj):
-            if not isinstance(target_obj, dict) or not isinstance(source_obj, dict):
-                return
-            # Preserve existing target config; only fill missing keys from legacy source.
-            for k, v in source_obj.items():
-                if k not in target_obj:
-                    target_obj[k] = v
+        changed_local = False
+        for old_name, new_name in rename_map.items():
+            if old_name not in event_map:
+                continue
+            old_obj = event_map.pop(old_name)
+            if new_name not in event_map:
+                event_map[new_name] = old_obj
+            elif isinstance(event_map.get(new_name), dict) and isinstance(old_obj, dict):
+                # Preserve destination values, only fill missing keys.
+                for k, v in old_obj.items():
+                    if k not in event_map[new_name]:
+                        event_map[new_name][k] = v
+            changed_local = True
+        return changed_local
 
-        def migrate_event_map(event_map):
-            if not isinstance(event_map, dict):
-                return False
-            changed_local = False
-            for old_name, new_name in rename_map.items():
-                if old_name not in event_map:
-                    continue
-                old_obj = event_map.pop(old_name)
-                if new_name not in event_map:
-                    event_map[new_name] = old_obj
-                else:
-                    merge_if_needed(event_map[new_name], old_obj if isinstance(old_obj, dict) else {})
-                changed_local = True
-            return changed_local
-
+    @classmethod
+    def _migrate_heal_event_names_in_config(cls, config_obj):
         changed = False
-        changed = migrate_event_map(self.config.get("events", {})) or changed
+        if not isinstance(config_obj, dict):
+            return False
 
-        slots = self.config.get("event_slots", {})
+        changed = cls._migrate_heal_event_names_in_event_map(config_obj.get("events", {})) or changed
+
+        slots = config_obj.get("event_slots", {})
         if isinstance(slots, dict):
             for slot_data in slots.values():
-                changed = migrate_event_map(slot_data) or changed
-
+                changed = cls._migrate_heal_event_names_in_event_map(slot_data) or changed
         return changed
+
+    def _migrate_heal_event_names(self):
+        """
+        Backward-compatible wrapper for legacy call sites.
+        """
+        return self._migrate_heal_event_names_in_config(self.config)
+
+    def _apply_config_schema_migrations(self, config_obj):
+        """
+        Runs in-place config migrations up to CONFIG_SCHEMA_VERSION.
+        Returns (changed, from_version, to_version).
+        """
+        if not isinstance(config_obj, dict):
+            return False, 1, CONFIG_SCHEMA_VERSION
+
+        raw_ver = config_obj.get("config_schema_version", 1)
+        try:
+            from_version = max(1, int(raw_ver))
+        except Exception:
+            from_version = 1
+
+        current = from_version
+        changed = False
+
+        # v1 -> v2: rename legacy Heal milestones.
+        if current < 2:
+            changed = self._migrate_heal_event_names_in_config(config_obj) or changed
+            current = 2
+
+        if current != int(config_obj.get("config_schema_version", 0) or 0):
+            config_obj["config_schema_version"] = current
+            changed = True
+
+        # Ensure final target schema in case constants advance.
+        if current < CONFIG_SCHEMA_VERSION:
+            config_obj["config_schema_version"] = CONFIG_SCHEMA_VERSION
+            current = CONFIG_SCHEMA_VERSION
+            changed = True
+
+        return changed, from_version, current
 
     def init_event_slots(self):
         """Initialize the event slot system. Migrate legacy config if needed."""
@@ -4073,13 +4132,17 @@ class DiorClientGUI:
                     base[k] = v
             return base
 
-        # 1. Define paths
-        user_config_path = os.path.join(self.BASE_DIR, "config.json")
+        # 1. Define paths (config always stored in per-user data directory)
+        self.user_data_dir = get_user_data_dir()
+        user_config_path = os.path.join(self.user_data_dir, "config.json")
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
         template_path = resource_path("config.json")
+        legacy_config_path = os.path.join(self.BASE_DIR, "config.json")
+        legacy_backup_path = legacy_config_path.replace("config.json", "config_backup.json")
 
         # 2. Standard values (Fallback)
         default_conf = {
+            "config_schema_version": CONFIG_SCHEMA_VERSION,
             "ps2_path": "",
             "overlay_master_active": True,
             "scifi_overlay_active": True,
@@ -4087,10 +4150,25 @@ class DiorClientGUI:
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
             "stats_widget": {"active": True},
-            "killfeed": {"active": True}
+            "killfeed": {"active": True},
+            "updates": {
+                "repo": DEFAULT_UPDATE_REPO,
+                "channel": "stable",
+            },
         }
 
-        # 3. FIRST-START LOGIC: Extract template
+        # 3. FIRST-START LOGIC: Migrate legacy local config into user profile location.
+        same_dir = os.path.abspath(self.user_data_dir) == os.path.abspath(self.BASE_DIR)
+        if (not same_dir) and (not os.path.exists(user_config_path)) and os.path.exists(legacy_config_path):
+            try:
+                shutil.copy2(legacy_config_path, user_config_path)
+                if os.path.exists(legacy_backup_path):
+                    shutil.copy2(legacy_backup_path, backup_config_path)
+                self._startup_legacy_config_imported = True
+            except Exception as e:
+                print(f"WARNING: Legacy config import failed: {e}")
+
+        # 4. FIRST-START LOGIC: Extract template
         if not os.path.exists(user_config_path) and not os.path.exists(backup_config_path) and os.path.exists(
                 template_path):
             try:
@@ -4099,7 +4177,7 @@ class DiorClientGUI:
             except Exception as e:
                 print(f"Config Template Copy Error: {e}")
 
-        # 4. LOADING WITH ERROR HANDLING
+        # 5. LOADING WITH ERROR HANDLING
         loaded_conf = {}
         load_source = "DEFAULT"
 
@@ -4135,16 +4213,31 @@ class DiorClientGUI:
                         load_source = "RESET"
                 else:
                     print("ERROR: No backup found. Using defaults.")
-                    load_source = "RESET"
-
-        # 5. MERGING (Deep Mix defaults with loaded)
+                    load_source = "RESET"        # 6. MERGING (Deep Mix defaults with loaded)
         deep_merge(default_conf, loaded_conf)
+
+        # 7. Run config schema migrations.
+        schema_changed, schema_from, schema_to = self._apply_config_schema_migrations(default_conf)
+        self._startup_config_schema_migrated = schema_changed
+        self._startup_config_schema_from = schema_from
+        self._startup_config_schema_to = schema_to
 
         # Save path for save_config
         self.config_path = user_config_path
 
         # Status speichern, um ihn später im Log anzuzeigen (da add_log hier evtl. noch nicht geht)
         self._startup_config_status = load_source
+
+        # Persist schema-migrated config immediately for deterministic next startup.
+        if schema_changed:
+            try:
+                os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
+                with open(user_config_path, "w", encoding="utf-8") as f:
+                    json.dump(default_conf, f, indent=4)
+                with open(backup_config_path, "w", encoding="utf-8") as f:
+                    json.dump(default_conf, f, indent=4)
+            except Exception as e:
+                print(f"WARNING: Failed to persist schema-migrated config: {e}")
 
         return default_conf
 
@@ -4336,8 +4429,10 @@ class DiorClientGUI:
         """
         try:
             # 1. Get path
-            target_path = getattr(self, 'config_path', os.path.join(self.BASE_DIR, "config.json"))
+            fallback_base = getattr(self, "user_data_dir", get_user_data_dir())
+            target_path = getattr(self, 'config_path', os.path.join(fallback_base, "config.json"))
             backup_path = target_path.replace("config.json", "config_backup.json")
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
             # 2. Clean data (Only serializable data)
             clean_config = {}
@@ -4367,6 +4462,427 @@ class DiorClientGUI:
                 self.add_log(f"ERR: Critical Save Error: {e}")
             else:
                 print(f"ERR: Critical Save Error: {e}")
+
+    def _build_release_updater(self):
+        updates_cfg = self.config.get("updates", {})
+        repo_raw = str(updates_cfg.get("repo", DEFAULT_UPDATE_REPO)).strip()
+        if "/" not in repo_raw:
+            repo_raw = DEFAULT_UPDATE_REPO
+
+        owner, repo = repo_raw.split("/", 1)
+        channel = str(updates_cfg.get("channel", "stable")).strip().lower() or "stable"
+        token = os.getenv("GITHUB_TOKEN", "")
+        user_data_dir = getattr(self, "user_data_dir", get_user_data_dir())
+
+        return ReleaseUpdater(
+            owner=owner,
+            repo=repo,
+            current_version=VERSION,
+            user_data_dir=user_data_dir,
+            channel=channel,
+            token=token,
+        )
+
+    def check_for_updates_qt(self):
+        """Manual updater entry point from Settings UI."""
+        if self._update_check_in_progress:
+            self.add_log("UPDATE: Check already in progress.")
+            return
+        if not self.release_updater:
+            self.release_updater = self._build_release_updater()
+
+        self._update_check_in_progress = True
+        self.add_log("UPDATE: Checking GitHub release manifest...")
+
+        def worker():
+            update_info = None
+            error = ""
+            try:
+                update_info = self.release_updater.check_for_update()
+            except Exception as e:
+                error = str(e)
+            self.worker_signals.update_check_finished.emit(update_info, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_update_check_qt(self, update_info, error_msg):
+        self._update_check_in_progress = False
+
+        if error_msg:
+            self.add_log(f"UPDATE ERROR: {error_msg}")
+            QMessageBox.warning(
+                self.main_hub,
+                "Update Check Failed",
+                f"Could not check for updates.\n\n{error_msg}",
+            )
+            return
+
+        if not update_info:
+            self.add_log(f"UPDATE: You are on the latest version ({VERSION}).")
+            QMessageBox.information(
+                self.main_hub,
+                "No Updates",
+                f"You are up to date.\nCurrent version: {VERSION}",
+            )
+            return
+
+        if not getattr(update_info, "has_update", False):
+            self.add_log(
+                f"UPDATE: Release {update_info.latest_version} found, but no compatible asset for {update_info.platform}."
+            )
+            QMessageBox.information(
+                self.main_hub,
+                "Update Not Compatible",
+                (
+                    f"Found release {update_info.latest_version}, but no compatible package was found for this platform "
+                    f"({update_info.platform})."
+                ),
+            )
+            return
+
+        self._latest_update_info = update_info
+        asset = update_info.asset
+        kind = str(getattr(asset, "kind", "full")).upper() if asset else "UNKNOWN"
+        self.add_log(f"UPDATE: Found {update_info.latest_version} ({kind}).")
+
+        ask = QMessageBox.question(
+            self.main_hub,
+            "Update Available",
+            (
+                f"New version available: {update_info.latest_version}\n"
+                f"Current version: {update_info.current_version}\n"
+                f"Package: {asset.name if asset else 'N/A'}\n\n"
+                "Download and stage this update now?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if ask == QMessageBox.StandardButton.Yes:
+            self._download_update_asset_qt(update_info)
+
+    def _download_update_asset_qt(self, update_info):
+        if self._update_download_in_progress:
+            self.add_log("UPDATE: Download already in progress.")
+            return
+        if not self.release_updater:
+            self.release_updater = self._build_release_updater()
+
+        self._update_download_in_progress = True
+        self.add_log("UPDATE: Downloading update package...")
+
+        def worker():
+            result = None
+            error = ""
+            try:
+                result = self.release_updater.stage_update(update_info)
+            except Exception as e:
+                error = str(e)
+            self.worker_signals.update_download_finished.emit(update_info, result, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_update_download_qt(self, update_info, result, error_msg):
+        self._update_download_in_progress = False
+
+        if error_msg:
+            self.add_log(f"UPDATE ERROR: {error_msg}")
+            QMessageBox.warning(
+                self.main_hub,
+                "Update Download Failed",
+                f"Could not download/stage update.\n\n{error_msg}",
+            )
+            return
+
+        asset_path = (result or {}).get("asset_path", "")
+        pending_path = (result or {}).get("pending_path", "")
+        self.add_log(f"UPDATE: Staged {update_info.latest_version} at {asset_path}")
+        ask_apply = QMessageBox.question(
+            self.main_hub,
+            "Update Staged",
+            (
+                f"Update {update_info.latest_version} downloaded successfully.\n\n"
+                f"Package: {asset_path}\n"
+                f"Metadata: {pending_path}\n\n"
+                "Apply this staged update on restart now?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if ask_apply == QMessageBox.StandardButton.Yes:
+            pending_data = self._read_pending_update()
+            if pending_data:
+                self._start_apply_staged_update_on_restart(pending_data)
+
+    def _get_pending_update_path(self):
+        base = getattr(self, "user_data_dir", get_user_data_dir())
+        return os.path.join(base, "updates", "pending_update.json")
+
+    def _read_pending_update(self):
+        pending_path = self._get_pending_update_path()
+        if not os.path.exists(pending_path):
+            return None
+        try:
+            with open(pending_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return None
+            asset = data.get("asset", {})
+            local_path = str(asset.get("local_path", "")).strip() if isinstance(asset, dict) else ""
+            if not local_path or not os.path.exists(local_path):
+                return None
+            return data
+        except Exception:
+            return None
+
+    def _prompt_apply_staged_update_if_available(self):
+        pending_data = self._read_pending_update()
+        if not pending_data:
+            return
+        if self._update_check_in_progress or self._update_download_in_progress:
+            return
+
+        ver = str(pending_data.get("latest_version", "unknown"))
+        ask = QMessageBox.question(
+            self.main_hub,
+            "Staged Update Found",
+            (
+                f"A staged update ({ver}) is available.\n\n"
+                "Apply it now and restart the app?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if ask == QMessageBox.StandardButton.Yes:
+            self._start_apply_staged_update_on_restart(pending_data)
+
+    def _get_install_root_and_relaunch(self):
+        is_frozen = bool(getattr(sys, "frozen", False))
+        if is_frozen:
+            launch_exe = os.path.abspath(sys.executable)
+            launch_arg0 = ""
+            install_root = os.path.dirname(launch_exe)
+            return install_root, launch_exe, launch_arg0
+
+        script_path = os.path.abspath(__file__)
+        launch_exe = os.path.abspath(sys.executable)
+        launch_arg0 = script_path
+        install_root = os.path.dirname(script_path)
+        return install_root, launch_exe, launch_arg0
+
+    def _write_windows_apply_script(self, script_path):
+        script = r'''param(
+    [string]$PidToWait,
+    [string]$AssetPath,
+    [string]$TargetDir,
+    [string]$PendingPath,
+    [string]$LaunchExe,
+    [string]$LaunchArg0
+)
+
+$ErrorActionPreference = "Stop"
+
+if ($PidToWait) {
+    while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 350
+    }
+}
+
+if (!(Test-Path -LiteralPath $AssetPath)) {
+    throw "Asset not found: $AssetPath"
+}
+
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$baseDir = Split-Path -Parent $PendingPath
+$workDir = Join-Path $baseDir ("apply_" + $timestamp)
+$extractDir = Join-Path $workDir "extract"
+New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+
+$assetLower = $AssetPath.ToLowerInvariant()
+if ($assetLower.EndsWith(".zip")) {
+    Expand-Archive -Path $AssetPath -DestinationPath $extractDir -Force
+} else {
+    throw "Unsupported staged asset format: $AssetPath"
+}
+
+$entries = Get-ChildItem -Path $extractDir -Force
+$sourceDir = $extractDir
+if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) {
+    $sourceDir = $entries[0].FullName
+}
+
+$newDir = "$TargetDir._new_$timestamp"
+New-Item -ItemType Directory -Path $newDir -Force | Out-Null
+Get-ChildItem -Path $sourceDir -Force | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination $newDir -Recurse -Force
+}
+
+$backupDir = "$TargetDir._backup_$timestamp"
+Move-Item -Path $TargetDir -Destination $backupDir -Force
+try {
+    Move-Item -Path $newDir -Destination $TargetDir -Force
+    Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue
+} catch {
+    if (Test-Path -LiteralPath $TargetDir) {
+        Remove-Item -LiteralPath $TargetDir -Recurse -Force
+    }
+    Move-Item -Path $backupDir -Destination $TargetDir -Force
+    throw
+}
+
+if ($LaunchExe) {
+    if ($LaunchArg0) {
+        Start-Process -FilePath $LaunchExe -ArgumentList @($LaunchArg0)
+    } else {
+        Start-Process -FilePath $LaunchExe
+    }
+}
+'''
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script)
+
+    def _write_linux_apply_script(self, script_path):
+        script = r'''#!/usr/bin/env bash
+set -euo pipefail
+
+PID_TO_WAIT="${1:-}"
+ASSET_PATH="${2:-}"
+TARGET_DIR="${3:-}"
+PENDING_PATH="${4:-}"
+LAUNCH_EXE="${5:-}"
+LAUNCH_ARG0="${6:-}"
+
+if [[ -n "$PID_TO_WAIT" ]]; then
+  while kill -0 "$PID_TO_WAIT" 2>/dev/null; do
+    sleep 0.35
+  done
+fi
+
+if [[ ! -f "$ASSET_PATH" ]]; then
+  echo "Asset not found: $ASSET_PATH" >&2
+  exit 2
+fi
+
+timestamp="$(date +%Y%m%d_%H%M%S)"
+base_dir="$(dirname "$PENDING_PATH")"
+work_dir="${base_dir}/apply_${timestamp}"
+extract_dir="${work_dir}/extract"
+mkdir -p "$extract_dir"
+
+case "${ASSET_PATH,,}" in
+  *.zip)
+    if command -v unzip >/dev/null 2>&1; then
+      unzip -oq "$ASSET_PATH" -d "$extract_dir"
+    else
+      echo "unzip is required to apply zip updates" >&2
+      exit 3
+    fi
+    ;;
+  *.tar.gz|*.tgz)
+    tar -xzf "$ASSET_PATH" -C "$extract_dir"
+    ;;
+  *)
+    echo "Unsupported staged asset format: $ASSET_PATH" >&2
+    exit 4
+    ;;
+esac
+
+source_dir="$extract_dir"
+shopt -s nullglob dotglob
+entries=("$extract_dir"/*)
+if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
+  source_dir="${entries[0]}"
+fi
+
+new_dir="${TARGET_DIR}._new_${timestamp}"
+backup_dir="${TARGET_DIR}._backup_${timestamp}"
+mkdir -p "$new_dir"
+cp -a "$source_dir"/. "$new_dir"/
+
+mv "$TARGET_DIR" "$backup_dir"
+if mv "$new_dir" "$TARGET_DIR"; then
+  rm -f "$PENDING_PATH" || true
+else
+  rm -rf "$TARGET_DIR" || true
+  mv "$backup_dir" "$TARGET_DIR"
+  exit 5
+fi
+
+if [[ -n "$LAUNCH_EXE" ]]; then
+  if [[ -n "$LAUNCH_ARG0" ]]; then
+    nohup "$LAUNCH_EXE" "$LAUNCH_ARG0" >/dev/null 2>&1 &
+  else
+    nohup "$LAUNCH_EXE" >/dev/null 2>&1 &
+  fi
+fi
+'''
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script)
+        os.chmod(script_path, 0o755)
+
+    def _start_apply_staged_update_on_restart(self, pending_data):
+        asset = pending_data.get("asset", {}) if isinstance(pending_data, dict) else {}
+        asset_path = str(asset.get("local_path", "")).strip() if isinstance(asset, dict) else ""
+        pending_path = self._get_pending_update_path()
+        if not asset_path or not os.path.exists(asset_path):
+            QMessageBox.warning(
+                self.main_hub,
+                "Staged Update Missing",
+                "The staged update package could not be found.",
+            )
+            return
+
+        install_root, launch_exe, launch_arg0 = self._get_install_root_and_relaunch()
+        updates_dir = os.path.join(getattr(self, "user_data_dir", get_user_data_dir()), "updates")
+        scripts_dir = os.path.join(updates_dir, "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+
+        try:
+            if IS_WINDOWS:
+                script_path = os.path.join(scripts_dir, "apply_update.ps1")
+                self._write_windows_apply_script(script_path)
+                cmd = [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    script_path,
+                    str(os.getpid()),
+                    asset_path,
+                    install_root,
+                    pending_path,
+                    launch_exe,
+                    launch_arg0,
+                ]
+                creation_flags = 0x00000008 | 0x00000200
+                subprocess.Popen(cmd, creationflags=creation_flags)
+            else:
+                script_path = os.path.join(scripts_dir, "apply_update.sh")
+                self._write_linux_apply_script(script_path)
+                cmd = [
+                    "/bin/bash",
+                    script_path,
+                    str(os.getpid()),
+                    asset_path,
+                    install_root,
+                    pending_path,
+                    launch_exe,
+                    launch_arg0,
+                ]
+                subprocess.Popen(
+                    cmd,
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        except Exception as e:
+            self.add_log(f"UPDATE ERROR: Failed to schedule apply-on-restart: {e}")
+            QMessageBox.warning(
+                self.main_hub,
+                "Update Apply Failed",
+                f"Could not schedule apply-on-restart.\n\n{e}",
+            )
+            return
+
+        self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
+        QTimer.singleShot(150, self.qt_app.quit)
 
     def create_overlay_window(self):
         if self.overlay_win:

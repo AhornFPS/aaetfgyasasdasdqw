@@ -65,9 +65,19 @@ If you prefer to run from source or need to develop:
 *Requires `python` and `pip` dependencies installed.*
 
 #### Alternative: Building your own AppImage
-You can build a fresh AppImage using our automation script:
+You can build Linux release artifacts (AppImage + updater `.tar.gz` + `manifest.json`) using:
 ```bash
 ./create-appimage.sh
+```
+
+Include Windows artifacts in a combined manifest and upload directly to a GitHub Release:
+```bash
+./create-appimage.sh \
+  --release-repo cedric12354/Better-Planetside \
+  --tag v1.2.0 \
+  --min-supported 1.1.0 \
+  --windows-full /path/to/Better-Planetside-Windows-v1.2.0.zip \
+  --upload-release
 ```
 
 ## 📋 Requirements
@@ -109,13 +119,39 @@ You can build a fresh AppImage using our automation script:
 
 ## 🛠️ Configuration
 
-All settings are stored in `config.json` and can be modified through the UI:
+All settings are stored in a per-user `config.json` and can be modified through the UI:
+
+- **Windows**: `%APPDATA%\\BetterPlanetside\\config.json`
+- **Linux**: `$XDG_CONFIG_HOME/BetterPlanetside/config.json` (fallback: `~/.config/BetterPlanetside/config.json`)
 
 - **Overlay Elements**: Position, size, colors, fonts
 - **Events**: Custom kill streak events with images/sounds
 - **Stats Widget**: Displayed statistics and formatting
 - **Crosshair**: Custom crosshair images and positioning
 - **Twitch**: Channel, message duration, font size
+
+Schema migrations are applied automatically on startup (for example event-name renames), so existing user configs stay compatible across releases.
+
+### Updates
+
+- Use **Settings -> Check for updates** to query the latest GitHub release.
+- The updater supports `manifest.json` release assets with platform-specific **patch** and **full** packages.
+- Downloaded updates are staged under the user config directory in `updates/staging/` with checksum verification.
+- Staged updates can be applied via **apply-on-restart** with rollback to a backup folder if swap fails.
+- A release manifest template is included in `update_manifest.example.json`.
+- Current auto-apply expects archive artifacts (`.zip` on Windows, `.zip`/`.tar.gz` on Linux).
+
+Generate a release manifest with checksums:
+
+```bash
+python generate_release_manifest.py \
+  --version 1.2.0 \
+  --min-supported 1.1.0 \
+  --base-url https://github.com/cedric12354/Better-Planetside/releases/download/v1.2.0 \
+  --asset stable,windows,full,Better-Planetside-Windows-v1.2.0.zip \
+  --asset stable,linux,full,dist/Better-Planetside-Linux-v1.2.0.tar.gz \
+  --output manifest.json
+```
 
 
 ## 🐛 Troubleshooting

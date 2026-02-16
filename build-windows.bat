@@ -104,6 +104,12 @@ if exist "!ZIP_NAME!" del /f "!ZIP_NAME!"
 REM Create ZIP archive
 powershell -Command "Compress-Archive -Path 'dist\Better Planetside' -DestinationPath '!ZIP_NAME!'"
 
+echo Generating manifest (Windows artifact)...
+python generate_release_manifest.py --version !NEW_VERSION! --asset stable,windows,full,!ZIP_NAME! --output manifest.windows.json
+if errorlevel 1 (
+    echo WARNING: Manifest generation failed.
+)
+
 REM ---------------------------------------------------------
 REM 5. INSTALLER (Inno Setup)
 REM ---------------------------------------------------------

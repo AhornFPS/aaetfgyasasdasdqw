@@ -127,6 +127,7 @@ class SettingsSignals(QObject):
     browse_ps2_requested = pyqtSignal()  # Trigger für Folder-Dialog
     browse_bg_requested = pyqtSignal()  # Trigger for Background-Dialog
     clear_bg_requested = pyqtSignal()   # Trigger for Background Reset
+    check_updates_requested = pyqtSignal()  # Trigger for release update checks
 
 
 class SettingsWidget(QWidget):
@@ -283,6 +284,11 @@ class SettingsWidget(QWidget):
         self.btn_save.clicked.connect(self.request_save)
         main_layout.addWidget(self.btn_save)
 
+        self.btn_check_updates = QPushButton("CHECK FOR UPDATES", objectName="ActionBtn")
+        self.btn_check_updates.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_check_updates.clicked.connect(lambda: self.signals.check_updates_requested.emit())
+        main_layout.addWidget(self.btn_check_updates)
+
     def populate_audio_devices(self):
         self.combo_audio_device.clear()
         self.combo_audio_device.addItem("Default")
@@ -379,3 +385,5 @@ class SettingsWidget(QWidget):
         }
         # Signal senden
         self.signals.save_requested.emit(data)
+
+

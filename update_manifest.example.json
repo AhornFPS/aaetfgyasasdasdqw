@@ -1,0 +1,31 @@
+{
+  "version": "1.2.0",
+  "min_supported": "1.1.0",
+  "assets": [
+    {
+      "channel": "stable",
+      "platform": "windows",
+      "kind": "patch",
+      "from_version": "1.1.0",
+      "name": "Better-Planetside-win-x64-1.1.0-to-1.2.0.patch.zip",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.2.0/Better-Planetside-win-x64-1.1.0-to-1.2.0.patch.zip",
+      "sha256": "PUT_REAL_SHA256_HERE"
+    },
+    {
+      "channel": "stable",
+      "platform": "windows",
+      "kind": "full",
+      "name": "Better-Planetside-win-x64-1.2.0.zip",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.2.0/Better-Planetside-win-x64-1.2.0.zip",
+      "sha256": "PUT_REAL_SHA256_HERE"
+    },
+    {
+      "channel": "stable",
+      "platform": "linux",
+      "kind": "full",
+      "name": "Better_Planetside-x86_64.AppImage",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.2.0/Better_Planetside-x86_64.AppImage",
+      "sha256": "PUT_REAL_SHA256_HERE"
+    }
+  ]
+}
