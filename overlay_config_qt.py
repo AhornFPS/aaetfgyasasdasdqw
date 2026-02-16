@@ -587,6 +587,20 @@ class OverlayConfigWindow(QWidget):
         )
         debug_layout.addWidget(self.btn_debug_overlay)
 
+        # --- SCI-FI STYLE TOGGLE ---
+        debug_layout.addWidget(QLabel("Toggle the experimental sci-fi HUD style.", objectName="SubText"))
+        self.btn_toggle_scifi = QPushButton("SCI-FI HUD: ON")
+        self.btn_toggle_scifi.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_toggle_scifi.setCheckable(True)
+        self.btn_toggle_scifi.setChecked(True)
+        self.btn_toggle_scifi.setFixedHeight(35)
+        self.btn_toggle_scifi.setStyleSheet(
+            "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600; outline: none; }"
+            "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            "QPushButton:focus { border: 1px solid #006600; }"
+        )
+        debug_layout.addWidget(self.btn_toggle_scifi)
+
         layout.addStretch()  # Push everything up
         layout.addWidget(debug_group)
         layout.addWidget(master_box)
@@ -1215,6 +1229,16 @@ class OverlayConfigWindow(QWidget):
         self.btn_toggle_cross_shadow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_toggle_cross_shadow.setCheckable(True)
         layout.addWidget(self.btn_toggle_cross_shadow)
+
+        self.btn_toggle_cross_expand = QPushButton("ADS+FIRE EXPANSION: ON")
+        self.btn_toggle_cross_expand.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_toggle_cross_expand.setCheckable(True)
+        self.btn_toggle_cross_expand.setChecked(True)
+        self.btn_toggle_cross_expand.setToolTip(
+            "If enabled: crosshair ring expands while ADS+fire is held.\n"
+            "Order-gated: hold RMB first, then hold LMB."
+        )
+        layout.addWidget(self.btn_toggle_cross_expand)
 
         # --- NEW EDITOR BUTTON ---
         self.btn_open_editor = QPushButton("CROSSHAIR EDITOR")

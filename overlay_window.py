@@ -270,6 +270,8 @@ class QtOverlay(QWidget):
         self._last_stats_payload = None
         self._stats_web_visible = False
         self._last_streak_payload = None
+        self._last_crosshair_recoil_level = 0.0
+        self._web_overlay_visible = True
 
         # --- CACHE DICTIONARY (NEW) ---
         # Here we store all loaded images
@@ -1013,6 +1015,18 @@ class QtOverlay(QWidget):
         if hasattr(self, "server") and self.server:
             self.server.broadcast(category, payload)
 
+    def set_scifi_mode_enabled(self, enabled):
+        """Broadcast whether experimental sci-fi HUD styling is enabled."""
+        self._broadcast_overlay("scifi_mode", {"enabled": bool(enabled)})
+
+    def set_web_overlay_visibility(self, visible):
+        """Broadcast whether the web HUD should be visible at all."""
+        visible = bool(visible)
+        if visible == self._web_overlay_visible:
+            return
+        self._web_overlay_visible = visible
+        self._broadcast_overlay("overlay_visibility", {"visible": visible})
+
     def _resolve_event_cfg(self, event_name):
         if not self.gui_ref or not event_name:
             return {}
@@ -1067,7 +1081,18 @@ class QtOverlay(QWidget):
         self._broadcast_overlay("stats_clear", {"ts": int(time.time() * 1000)})
 
     def clear_crosshair_web(self):
+        self.set_crosshair_recoil_level(0.0)
         self._broadcast_overlay("crosshair", {"enabled": False, "x": 0, "y": 0})
+
+    def set_crosshair_recoil_active(self, active):
+        self.set_crosshair_recoil_level(1.0 if bool(active) else 0.0)
+
+    def set_crosshair_recoil_level(self, level):
+        level = max(0.0, min(1.0, float(level)))
+        if abs(level - float(self._last_crosshair_recoil_level)) < 0.002:
+            return
+        self._last_crosshair_recoil_level = level
+        self._broadcast_overlay("crosshair_recoil", {"active": level > 0.001, "level": level})
 
     def clear_streak_web(self):
         """Specifically hides the streak on the web HUD."""
@@ -2207,6 +2232,7 @@ class QtOverlay(QWidget):
             self.crosshair_label.hide()
 
         if editing_crosshair:
+            self.set_crosshair_recoil_level(0.0)
             self._broadcast_overlay("crosshair", {
                 "enabled": False,
                 "x": int(tx),
@@ -2215,6 +2241,7 @@ class QtOverlay(QWidget):
             return
 
         if (not enabled and not self.edit_mode) or not path or not os.path.exists(path):
+            self.set_crosshair_recoil_level(0.0)
             self._broadcast_overlay("crosshair", {
                 "enabled": False,
                 "x": int(tx),
@@ -2231,6 +2258,8 @@ class QtOverlay(QWidget):
             "scale": float(self.ui_scale),
             "shadow": bool(crosshair_cfg.get("shadow", False)),
             "ui_scale": float(self.ui_scale),
+            "recoil_active": bool(self._last_crosshair_recoil_level > 0.001),
+            "recoil_level": float(self._last_crosshair_recoil_level),
         })
 
     def update_twitch_visibility(self, enabled):
@@ -2269,6 +2298,9 @@ class QtOverlay(QWidget):
             same_ports = (self.server.http_port == h_port and self.server.ws_port == w_port)
             if same_ports:
                 self.load_web_overlay(h_port)
+                if self.gui_ref:
+                    self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
+                self.set_web_overlay_visibility(True)
                 return
             self.stop_server()
 
@@ -2277,6 +2309,9 @@ class QtOverlay(QWidget):
             actual_h_port, actual_w_port = self.server.start()
             print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
             self.load_web_overlay(actual_h_port)
+            if self.gui_ref:
+                self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
+            self.set_web_overlay_visibility(True)
         except Exception as e:
             print(f"OBS SERVICE ERROR: Could not start server: {e}")
 

@@ -7,9 +7,30 @@
   <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
+  <div id="fx-backdrop" class="fx-layer">
+    <div class="fx-nebula"></div>
+    <div class="fx-grid"></div>
+    <div class="fx-scanlines"></div>
+    <div class="fx-vignette"></div>
+    <div id="fx-impact-wave"></div>
+    <div id="telemetry-strip">
+      <span id="telemetry-left">AURAXIS LINK ONLINE</span>
+      <span id="telemetry-right">00:00:00</span>
+    </div>
+    <div id="system-pips">
+      <span class="sys-pip" data-system="event">EVT</span>
+      <span class="sys-pip" data-system="hitmarker">HIT</span>
+      <span class="sys-pip" data-system="feed">KFD</span>
+      <span class="sys-pip" data-system="stats">STS</span>
+      <span class="sys-pip" data-system="streak">STR</span>
+      <span class="sys-pip" data-system="crosshair">CRS</span>
+    </div>
+  </div>
+
   <div id="crosshair-layer" class="layer flat-layer"></div>
   <div id="stats-layer" class="layer flat-layer"></div>
   <div id="hud-root" class="visor">
+    <div id="burst-layer" class="layer"></div>
     <div id="streak-layer" class="layer"></div>
     <div id="feed-layer" class="layer"></div>
     <div id="events-layer" class="layer"></div>

@@ -437,6 +437,15 @@ class DiorClientGUI:
         self.is_feed_test = False
         self.is_streak_test = False
         self.is_crosshair_test = False
+        self._crosshair_recoil_level = 0.0
+        self._crosshair_lmb_hold_started = None
+        self._crosshair_rmb_primed = False
+        self._crosshair_recoil_supported = bool(IS_WINDOWS and hasattr(ctypes, "windll"))
+        self._crosshair_input_timer = None
+        if self._crosshair_recoil_supported:
+            self._crosshair_input_timer = QTimer(self.main_hub)
+            self._crosshair_input_timer.timeout.connect(self.poll_crosshair_recoil_input)
+            self._crosshair_input_timer.start(35)
 
 
         self.twitch_worker = None
@@ -1013,6 +1022,7 @@ class DiorClientGUI:
         is_active = ui.check_cross.isChecked()
         raw_text = ui.cross_path.text().strip()
         shadow_enabled = ui.btn_toggle_cross_shadow.isChecked()
+        expand_enabled = ui.btn_toggle_cross_expand.isChecked() if hasattr(ui, "btn_toggle_cross_expand") else True
 
         # 2. Cleaning: We only want to save the filename!
         # If the user copied a full path, we cut it off.
@@ -1029,7 +1039,11 @@ class DiorClientGUI:
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = filename  # Only the name!
         self.config["crosshair"]["shadow"] = shadow_enabled
+        self.config["crosshair"]["ads_fire_expand"] = bool(expand_enabled)
         self.update_crosshair_shadow_button(shadow_enabled)
+        self.update_crosshair_expand_button(expand_enabled)
+        if not expand_enabled:
+            self._set_crosshair_recoil_level(0.0)
 
         # Save
         self.save_config()
@@ -1058,6 +1072,25 @@ class DiorClientGUI:
         else:
             ui.btn_toggle_cross_shadow.setText("CROSSHAIR SHADOW: OFF")
             ui.btn_toggle_cross_shadow.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000; outline: none; }"
+                "QPushButton:focus { border: 1px solid #660000; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def update_crosshair_expand_button(self, enabled):
+        ui = self.ovl_config_win
+        if not hasattr(ui, "btn_toggle_cross_expand"):
+            return
+        if enabled:
+            ui.btn_toggle_cross_expand.setText("ADS+FIRE EXPANSION: ON")
+            ui.btn_toggle_cross_expand.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600; outline: none; }"
+                "QPushButton:focus { border: 1px solid #006600; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            ui.btn_toggle_cross_expand.setText("ADS+FIRE EXPANSION: OFF")
+            ui.btn_toggle_cross_expand.setStyleSheet(
                 "QPushButton { background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000; outline: none; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
                 "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
@@ -1210,6 +1243,37 @@ class DiorClientGUI:
 
         self.refresh_ingame_overlay()
 
+    def _set_scifi_toggle_visual(self, enabled):
+        ui = self.ovl_config_win
+        if not hasattr(ui, "btn_toggle_scifi"):
+            return
+        if enabled:
+            ui.btn_toggle_scifi.setText("SCI-FI HUD: ON")
+            ui.btn_toggle_scifi.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600; outline: none; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+                "QPushButton:focus { border: 1px solid #006600; }"
+            )
+        else:
+            ui.btn_toggle_scifi.setText("SCI-FI HUD: OFF")
+            ui.btn_toggle_scifi.setStyleSheet(
+                "QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #660000; outline: none; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+                "QPushButton:focus { border: 1px solid #660000; }"
+            )
+
+    def toggle_scifi_overlay(self, checked):
+        """Enable or disable the experimental sci-fi HUD style."""
+        enabled = bool(checked)
+        self.config["scifi_overlay_active"] = enabled
+        self.save_config()
+        self._set_scifi_toggle_visual(enabled)
+
+        if self.overlay_win and hasattr(self.overlay_win, "set_scifi_mode_enabled"):
+            self.overlay_win.set_scifi_mode_enabled(enabled)
+
+        self.add_log(f"SYS: Sci-Fi HUD {'ENABLED' if enabled else 'DISABLED'}")
+
     def connect_all_qt_signals(self):
         """Central management of all PyQt6 signals (Structured & Clean)."""
         print("SYS: Connecting GUI signals...")
@@ -1271,6 +1335,8 @@ class DiorClientGUI:
         # Debug Overlay
         if hasattr(ui, "btn_debug_overlay"):
             self.safe_connect(ui.btn_debug_overlay.toggled, self.toggle_debug_overlay)
+        if hasattr(ui, "btn_toggle_scifi"):
+            self.safe_connect(ui.btn_toggle_scifi.toggled, self.toggle_scifi_overlay)
 
         # ---------------------------------------------------------
         # 3. OVERLAY TAB: EVENTS
@@ -1392,6 +1458,8 @@ class DiorClientGUI:
         self.safe_connect(ui.check_cross.toggled, self.update_crosshair_from_qt)
         self.safe_connect(ui.cross_path.textChanged, self.update_crosshair_from_qt)
         self.safe_connect(ui.btn_toggle_cross_shadow.toggled, self.update_crosshair_from_qt)
+        if hasattr(ui, "btn_toggle_cross_expand"):
+            self.safe_connect(ui.btn_toggle_cross_expand.toggled, self.update_crosshair_from_qt)
 
         # Browse
         try:
@@ -3276,6 +3344,15 @@ class DiorClientGUI:
             ui.check_master.blockSignals(False)
             self.config["overlay_master_active"] = master_state
 
+            scifi_state = bool(self.config.get("scifi_overlay_active", True))
+            if hasattr(ui, "btn_toggle_scifi"):
+                ui.btn_toggle_scifi.blockSignals(True)
+                ui.btn_toggle_scifi.setChecked(scifi_state)
+                ui.btn_toggle_scifi.blockSignals(False)
+                self._set_scifi_toggle_visual(scifi_state)
+            if self.overlay_win and hasattr(self.overlay_win, "set_scifi_mode_enabled"):
+                self.overlay_win.set_scifi_mode_enabled(scifi_state)
+
         # --- TAB 2: EVENTS ---
         eg_conf = self.config.get("events_global", {})
         if hasattr(ui, "check_events_active"):
@@ -3388,6 +3465,12 @@ class DiorClientGUI:
         ui.btn_toggle_cross_shadow.setChecked(shadow_enabled)
         self.update_crosshair_shadow_button(shadow_enabled)
         ui.btn_toggle_cross_shadow.blockSignals(False)
+        if hasattr(ui, "btn_toggle_cross_expand"):
+            expand_enabled = bool(c_conf.get("ads_fire_expand", True))
+            ui.btn_toggle_cross_expand.blockSignals(True)
+            ui.btn_toggle_cross_expand.setChecked(expand_enabled)
+            self.update_crosshair_expand_button(expand_enabled)
+            ui.btn_toggle_cross_expand.blockSignals(False)
         ui.check_cross.blockSignals(False)
         ui.cross_path.blockSignals(False)
 
@@ -3866,6 +3949,7 @@ class DiorClientGUI:
         is_active = ui.check_cross.isChecked()
         file_path = ui.cross_path.text().strip()
         shadow_enabled = ui.btn_toggle_cross_shadow.isChecked() if hasattr(ui, "btn_toggle_cross_shadow") else False
+        expand_enabled = ui.btn_toggle_cross_expand.isChecked() if hasattr(ui, "btn_toggle_cross_expand") else True
 
         # 2. Prepare config dictionary if not existent
         if "crosshair" not in self.config:
@@ -3875,6 +3959,10 @@ class DiorClientGUI:
         self.config["crosshair"]["active"] = is_active
         self.config["crosshair"]["file"] = file_path
         self.config["crosshair"]["shadow"] = shadow_enabled
+        self.config["crosshair"]["ads_fire_expand"] = bool(expand_enabled)
+        self.update_crosshair_expand_button(expand_enabled)
+        if not expand_enabled:
+            self._set_crosshair_recoil_level(0.0)
 
         # Fallback for size if not set
         if "size" not in self.config["crosshair"]:
@@ -3946,7 +4034,8 @@ class DiorClientGUI:
         default_conf = {
             "ps2_path": "",
             "overlay_master_active": True,
-            "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False},
+            "scifi_overlay_active": True,
+            "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False, "ads_fire_expand": True},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
             "stats_widget": {"active": True},
@@ -4580,6 +4669,7 @@ class DiorClientGUI:
         # 4. Crosshair
         if hasattr(self.overlay_win, 'crosshair_label'):
             self.overlay_win.crosshair_label.hide()
+        self._set_crosshair_recoil_level(0.0)
         if hasattr(self.overlay_win, 'clear_crosshair_web'):
             self.overlay_win.clear_crosshair_web()
         
@@ -4596,6 +4686,7 @@ class DiorClientGUI:
 
         # Hide everything first
         self.hide_overlay_temporary()
+        self._set_crosshair_recoil_level(0.0)
 
         # Then clear killfeed text (hard reset)
         if self.overlay_win and hasattr(self.overlay_win, 'feed_label'):
@@ -4621,6 +4712,102 @@ class DiorClientGUI:
                 self.ovl_status_label.config(text="STATUS: STANDBY", fg="#7a8a9a")
             except:
                 pass
+
+    def _crosshair_context_allows_recoil(self):
+        """True when crosshair recoil animation is allowed to react to mouse input."""
+        if not self.overlay_win:
+            return False
+
+        if getattr(self, "is_hud_editing", False):
+            return False
+
+        cross_conf_raw = self.config.get("crosshair", {})
+        cross_conf = cross_conf_raw if isinstance(cross_conf_raw, dict) else {}
+        if not cross_conf.get("active", True):
+            return False
+        if not cross_conf.get("ads_fire_expand", True):
+            return False
+
+        event_test_active = getattr(self, "is_event_test", False)
+        stats_test_active = getattr(self, "is_stats_test", False)
+        feed_test_active = getattr(self, "is_feed_test", False)
+        streak_test_active = getattr(self, "is_streak_test", False)
+        crosshair_test_active = getattr(self, "is_crosshair_test", False)
+        any_test_active = (
+            event_test_active
+            or stats_test_active
+            or feed_test_active
+            or streak_test_active
+            or crosshair_test_active
+        )
+
+        if any_test_active and not crosshair_test_active:
+            return False
+
+        if crosshair_test_active:
+            return True
+
+        if bool(getattr(self, "debug_overlay_active", False)):
+            return True
+
+        if not self.config.get("overlay_master_active", True):
+            return False
+        if not bool(getattr(self, "ps2_running", False)):
+            return False
+
+        return self.is_game_focused()
+
+    def _set_crosshair_recoil_level(self, level):
+        level = max(0.0, min(1.0, float(level)))
+        if abs(level - float(getattr(self, "_crosshair_recoil_level", 0.0))) < 0.003:
+            return
+
+        self._crosshair_recoil_level = level
+        if self.overlay_win and hasattr(self.overlay_win, "set_crosshair_recoil_level"):
+            self.overlay_win.set_crosshair_recoil_level(level)
+
+    def poll_crosshair_recoil_input(self):
+        """Polls LMB hold duration and updates crosshair recoil level (0..1)."""
+        if not self._crosshair_recoil_supported:
+            self._crosshair_lmb_hold_started = None
+            self._crosshair_rmb_primed = False
+            self._set_crosshair_recoil_level(0.0)
+            return
+
+        recoil_level = 0.0
+        if self._crosshair_context_allows_recoil():
+            try:
+                user32 = ctypes.windll.user32
+                lmb_down = bool(user32.GetAsyncKeyState(0x01) & 0x8000)
+                rmb_down = bool(user32.GetAsyncKeyState(0x02) & 0x8000)
+
+                # Gate by input order:
+                # 1) Hold RMB first (prime), 2) then press/hold LMB to grow recoil.
+                if not rmb_down:
+                    self._crosshair_rmb_primed = False
+                    self._crosshair_lmb_hold_started = None
+                elif not lmb_down:
+                    self._crosshair_rmb_primed = True
+                    self._crosshair_lmb_hold_started = None
+                else:
+                    if self._crosshair_rmb_primed:
+                        now = time.time()
+                        if self._crosshair_lmb_hold_started is None:
+                            self._crosshair_lmb_hold_started = now
+                        held_s = max(0.0, now - self._crosshair_lmb_hold_started)
+                        recoil_level = min(1.0, held_s / 1.0)
+                    else:
+                        self._crosshair_lmb_hold_started = None
+                        recoil_level = 0.0
+            except Exception:
+                self._crosshair_lmb_hold_started = None
+                self._crosshair_rmb_primed = False
+                recoil_level = 0.0
+        else:
+            self._crosshair_lmb_hold_started = None
+            self._crosshair_rmb_primed = False
+
+        self._set_crosshair_recoil_level(recoil_level)
 
     def refresh_ingame_overlay(self):
         """The heartbeat of the overlay: controls visibility with priority for test/edit."""
@@ -4682,6 +4869,8 @@ class DiorClientGUI:
         # Linux Fix: On Wayland/Linux, we need to periodically raise the window
         if should_render and not IS_WINDOWS and self.overlay_win:
             self.overlay_win.raise_()
+        if self.overlay_win and hasattr(self.overlay_win, "set_web_overlay_visibility"):
+            self.overlay_win.set_web_overlay_visibility(should_render)
 
         # ELEMENT CONTROL
         # ---------------------------------------------------------
