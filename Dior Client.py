@@ -4733,11 +4733,18 @@ class DiorClientGUI:
             # BUT avoid dangerous roots like home or Desktop
             install_root = os.path.dirname(launch_exe)
             basename = os.path.basename(install_root).lower()
-            if basename in ("bin", "betterplanetside", "diorclient", "app"):
+            
+            # More robust check for known app directory names
+            allowed_names = ("bin", "betterplanetside", "better planetside", "diorclient", "app")
+            if basename in allowed_names:
                 return install_root, launch_exe, launch_arg0
-            else:
-                # Default to just replacing the executable if root looks generic
-                return launch_exe, launch_exe, launch_arg0
+            
+            # Heuristic: If there is an 'assets' folder here, it's very likely our install root
+            if os.path.isdir(os.path.join(install_root, "assets")):
+                return install_root, launch_exe, launch_arg0
+            
+            # Default to just replacing the executable if root looks generic
+            return launch_exe, launch_exe, launch_arg0
 
         script_path = os.path.abspath(__file__)
         launch_exe = os.path.abspath(sys.executable)
@@ -4822,6 +4829,8 @@ class DiorClientGUI:
         try {
             Copy-Item -LiteralPath $newFile -Destination $TargetDir -Force
             if (Test-Path -LiteralPath $PendingPath) { Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue }
+            # Success: Clean up backup
+            Remove-Item -LiteralPath $backupFile -Force -ErrorAction SilentlyContinue
         } catch {
             if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Force }
             Move-Item -LiteralPath $backupFile -Destination $TargetDir -Force
@@ -4840,11 +4849,21 @@ class DiorClientGUI:
         try {
             Move-Item -LiteralPath $newDir -Destination $TargetDir -Force
             if (Test-Path -LiteralPath $PendingPath) { Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue }
+            # Success: Clean up backup
+            Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
         } catch {
             if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Recurse -Force }
             Move-Item -LiteralPath $backupDir -Destination $TargetDir -Force
             throw
         }
+    }
+
+    # General cleanup
+    if (Test-Path -Path $workDir) { Remove-Item -Path $workDir -Recurse -Force -ErrorAction SilentlyContinue }
+    $oneDayAgo = (Get-Date).AddDays(-1)
+    Get-ChildItem -Path $baseDir -Filter "apply_*" -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -Path (Join-Path $baseDir "staging")) {
+        Get-ChildItem -Path (Join-Path $baseDir "staging") -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo.AddDays(-1) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     if ($SuccessPath) {
@@ -4925,21 +4944,43 @@ source_dir="$extract_dir"
 if [[ ! "${ASSET_PATH,,}" =~ \.(appimage|exe)$ ]]; then
     shopt -s nullglob dotglob
     entries=("$extract_dir"/*)
+    # If there is only one directory, go into it
     if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
       source_dir="${entries[0]}"
     fi
+    # Specialized check: if there is a 'Better Planetside' folder, favor it
+    for entry in "${entries[@]}"; do
+        if [[ -d "$entry" && "$(basename "$entry")" == "Better Planetside" ]]; then
+            source_dir="$entry"
+            break
+        fi
+    done
 fi
 
 # Determine if TARGET_DIR is a file or directory
 if [[ -f "$TARGET_DIR" ]]; then
     # File replacement (onefile / AppImage)
     backup_file="${TARGET_DIR}._backup_${timestamp}"
-    new_file="$extract_dir/$(basename "$TARGET_DIR")"
+    new_file="$source_dir/$(basename "$TARGET_DIR")"
     
+    # Safety: if new_file is somehow a directory (e.g. faulty source_dir), 
+    # look for the binary inside it if it has the same name.
+    if [[ -d "$new_file" ]]; then
+        if [[ -f "$new_file/$(basename "$TARGET_DIR")" ]]; then
+            new_file="$new_file/$(basename "$TARGET_DIR")"
+        fi
+    fi
+
+    if [[ ! -f "$new_file" ]]; then
+        echo "Error: New binary not found at $new_file" >&2
+        exit 7
+    fi
+
     mv "$TARGET_DIR" "$backup_file"
     if cp -a "$new_file" "$TARGET_DIR"; then
         rm -f "$PENDING_PATH" || true
-        # ... success notification ...
+        # Success: Clean up this backup immediately
+        rm -f "$backup_file" || true
     else
         mv "$backup_file" "$TARGET_DIR"
         exit 6
@@ -4949,16 +4990,27 @@ else
     new_dir="${TARGET_DIR}._new_${timestamp}"
     backup_dir="${TARGET_DIR}._backup_${timestamp}"
     mkdir -p "$new_dir"
+    
+    # Use rsync style copy if available, otherwise cp -a
     cp -a "$source_dir"/. "$new_dir"/
 
     mv "$TARGET_DIR" "$backup_dir"
     if mv "$new_dir" "$TARGET_DIR"; then
       rm -f "$PENDING_PATH" || true
+      # Success: Clean up the old directory backup
+      rm -rf "$backup_dir" || true
     else
-      rm -rf "$TARGET_DIR" || true
+      rm -rf "$new_dir" || true
       mv "$backup_dir" "$TARGET_DIR"
       exit 5
     fi
+fi
+
+# General cleanup of working directories
+rm -rf "$work_dir" || true
+find "$base_dir" -maxdepth 1 -name "apply_*" -type d -mtime +1 -exec rm -rf {} + || true
+if [[ -d "$base_dir/staging" ]]; then
+    find "$base_dir/staging" -maxdepth 1 -type d -mtime +2 -exec rm -rf {} + || true
 fi
 
 if [[ -n "$SUCCESS_PATH" ]]; then
