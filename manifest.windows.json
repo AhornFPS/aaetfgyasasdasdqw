@@ -1,15 +1,15 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "min_supported": "",
   "assets": [
     {
       "channel": "stable",
       "platform": "windows",
       "kind": "full",
-      "name": "Better-Planetside-Windows-v1.1.1.zip",
-      "url": "Better-Planetside-Windows-v1.1.1.zip",
-      "sha256": "e470c83673f8b366947fcbaba7929b0af08a7b2b18011f642ac6ccb68d07573b",
-      "size": 247387888
+      "name": "Better-Planetside-Windows-v1.1.2.zip",
+      "url": "Better-Planetside-Windows-v1.1.2.zip",
+      "sha256": "67dd79b3be77bf2081f54900a5ad3ce98276adf296890557736a5f89a46d5674",
+      "size": 247387532
     }
   ]
 }
