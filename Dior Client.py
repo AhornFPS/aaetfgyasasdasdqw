@@ -994,8 +994,8 @@ class DiorClientGUI:
             ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): ON")
             ui.btn_twitch_ignore_special.setStyleSheet(
                 "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; outline: none; border: 1px solid #006600; }"
-                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
                 "QPushButton:focus { border: 1px solid #006600; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
             )
         else:
             ui.btn_twitch_ignore_special.setText("IGNORE SPECIAL CHARS (!): OFF")
@@ -1275,15 +1275,15 @@ class DiorClientGUI:
             ui.btn_toggle_scifi.setText("SCI-FI HUD: ON")
             ui.btn_toggle_scifi.setStyleSheet(
                 "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600; outline: none; }"
-                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
                 "QPushButton:focus { border: 1px solid #006600; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
             )
         else:
             ui.btn_toggle_scifi.setText("SCI-FI HUD: OFF")
             ui.btn_toggle_scifi.setStyleSheet(
                 "QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #660000; outline: none; }"
-                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
             )
 
     def toggle_scifi_overlay(self, checked):
@@ -4705,10 +4705,39 @@ class DiorClientGUI:
     def _get_install_root_and_relaunch(self):
         is_frozen = bool(getattr(sys, "frozen", False))
         if is_frozen:
+            # Check for AppImage
+            appimage_path = os.environ.get("APPIMAGE")
+            if appimage_path and os.path.exists(appimage_path):
+                launch_exe = os.path.abspath(appimage_path)
+                # For AppImage, we only replace the AppImage file itself
+                # So we tell the script the target is the file, and it should handle it.
+                return launch_exe, launch_exe, ""
+
             launch_exe = os.path.abspath(sys.executable)
             launch_arg0 = ""
+            
+            # Detect if we are in a 'onedir' vs 'onefile' bundle
+            # In onefile, sys._MEIPASS is a temp dir. In onedir, it's the app dir.
+            meipass = getattr(sys, "_MEIPASS", "")
+            if meipass:
+                meipass = os.path.abspath(meipass)
+                exe_dir = os.path.dirname(launch_exe)
+                if meipass == exe_dir:
+                    # Generic onedir: replace the whole folder
+                    return exe_dir, launch_exe, ""
+                else:
+                    # Generic onefile: only replace the EXE
+                    return launch_exe, launch_exe, ""
+            
+            # Fallback: assume the directory containing the exe is the install root
+            # BUT avoid dangerous roots like home or Desktop
             install_root = os.path.dirname(launch_exe)
-            return install_root, launch_exe, launch_arg0
+            basename = os.path.basename(install_root).lower()
+            if basename in ("bin", "betterplanetside", "diorclient", "app"):
+                return install_root, launch_exe, launch_arg0
+            else:
+                # Default to just replacing the executable if root looks generic
+                return launch_exe, launch_exe, launch_arg0
 
         script_path = os.path.abspath(__file__)
         launch_exe = os.path.abspath(sys.executable)
@@ -4726,50 +4755,80 @@ class DiorClientGUI:
     [string]$LaunchArg0,
     [string]$SuccessPath,
     [string]$UpdatedVersion
-)
+    )
 
-$ErrorActionPreference = "Stop"
+    $ErrorActionPreference = "Stop"
 
-if ($PidToWait) {
-    while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
-        Start-Sleep -Milliseconds 350
+    if ($PidToWait) {
+        while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
+            Start-Sleep -Milliseconds 350
+        }
     }
-}
 
-if (!(Test-Path -LiteralPath $AssetPath)) {
-    throw "Asset not found: $AssetPath"
-}
+    if (!(Test-Path -LiteralPath $AssetPath)) {
+        throw "Asset not found: $AssetPath"
+    }
 
-$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$baseDir = Split-Path -Parent $PendingPath
-$workDir = Join-Path $baseDir ("apply_" + $timestamp)
-$extractDir = Join-Path $workDir "extract"
-New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $baseDir = Split-Path -Parent $PendingPath
+    $workDir = Join-Path $baseDir ("apply_" + $timestamp)
+    $extractDir = Join-Path $workDir "extract"
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
 
-$assetLower = $AssetPath.ToLowerInvariant()
-if ($assetLower.EndsWith(".zip")) {
-    Expand-Archive -Path $AssetPath -DestinationPath $extractDir -Force
-} else {
-    throw "Unsupported staged asset format: $AssetPath"
-}
+    $assetLower = $AssetPath.ToLowerInvariant()
+    if ($assetLower.EndsWith(".zip")) {
+        Expand-Archive -Path $AssetPath -DestinationPath $extractDir -Force
+    } elseif ($assetLower.EndsWith(".exe")) {
+        # Asset is the executable itself
+        $newFile = Join-Path $extractDir (Split-Path -Leaf $TargetDir)
+        Copy-Item -Path $AssetPath -Destination $newFile -Force
+    } else {
+        throw "Unsupported staged asset format: $AssetPath"
+    }
 
-$entries = Get-ChildItem -Path $extractDir -Force
-$sourceDir = $extractDir
-if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) {
-    $sourceDir = $entries[0].FullName
-}
+    $entries = Get-ChildItem -Path $extractDir -Force
+    $sourceDir = $extractDir
+    if (!( $assetLower.EndsWith(".exe") )) {
+        if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) {
+            $sourceDir = $entries[0].FullName
+        }
+    }
 
-$newDir = "$TargetDir._new_$timestamp"
-New-Item -ItemType Directory -Path $newDir -Force | Out-Null
-Get-ChildItem -Path $sourceDir -Force | ForEach-Object {
-    Copy-Item -Path $_.FullName -Destination $newDir -Recurse -Force
-}
+    # Determine if TARGET_DIR is a file or directory
+    if (Test-Path -Path $TargetDir -PathType Leaf) {
+        # File replacement (onefile)
+        $backupFile = "$TargetDir._backup_$timestamp"
+        $newFile = Join-Path $extractDir (Split-Path -Leaf $TargetDir)
 
-$backupDir = "$TargetDir._backup_$timestamp"
-Move-Item -Path $TargetDir -Destination $backupDir -Force
-try {
-    Move-Item -Path $newDir -Destination $TargetDir -Force
-    Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $TargetDir -Destination $backupFile -Force
+        try {
+            Copy-Item -LiteralPath $newFile -Destination $TargetDir -Force
+            if (Test-Path -LiteralPath $PendingPath) { Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue }
+        } catch {
+            if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Force }
+            Move-Item -LiteralPath $backupFile -Destination $TargetDir -Force
+            throw
+        }
+    } else {
+        # Directory replacement (onedir)
+        $newDir = "$TargetDir._new_$timestamp"
+        $backupDir = "$TargetDir._backup_$timestamp"
+        New-Item -ItemType Directory -Path $newDir -Force | Out-Null
+        Get-ChildItem -Path $sourceDir -Force | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $newDir -Recurse -Force
+        }
+
+        Move-Item -LiteralPath $TargetDir -Destination $backupDir -Force
+        try {
+            Move-Item -LiteralPath $newDir -Destination $TargetDir -Force
+            if (Test-Path -LiteralPath $PendingPath) { Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue }
+        } catch {
+            if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Recurse -Force }
+            Move-Item -LiteralPath $backupDir -Destination $TargetDir -Force
+            throw
+        }
+    }
+
     if ($SuccessPath) {
         New-Item -ItemType Directory -Path (Split-Path -Parent $SuccessPath) -Force | Out-Null
         $successObj = @{
@@ -4778,22 +4837,15 @@ try {
         }
         $successObj | ConvertTo-Json | Set-Content -Path $SuccessPath -Encoding UTF8
     }
-} catch {
-    if (Test-Path -LiteralPath $TargetDir) {
-        Remove-Item -LiteralPath $TargetDir -Recurse -Force
-    }
-    Move-Item -Path $backupDir -Destination $TargetDir -Force
-    throw
-}
 
-if ($LaunchExe) {
-    if ($LaunchArg0) {
-        Start-Process -FilePath $LaunchExe -ArgumentList @($LaunchArg0)
-    } else {
-        Start-Process -FilePath $LaunchExe
+    if ($LaunchExe) {
+        if ($LaunchArg0) {
+            Start-Process -FilePath $LaunchExe -ArgumentList @($LaunchArg0)
+        } else {
+            Start-Process -FilePath $LaunchExe
+        }
     }
-}
-'''
+    '''
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script)
 
@@ -4839,6 +4891,11 @@ case "${ASSET_PATH,,}" in
   *.tar.gz|*.tgz)
     tar -xzf "$ASSET_PATH" -C "$extract_dir"
     ;;
+  *.appimage|*.exe)
+    # Asset is the executable itself
+    cp -a "$ASSET_PATH" "$extract_dir/$(basename "$TARGET_DIR")"
+    chmod +x "$extract_dir/$(basename "$TARGET_DIR")"
+    ;;
   *)
     echo "Unsupported staged asset format: $ASSET_PATH" >&2
     exit 4
@@ -4846,29 +4903,49 @@ case "${ASSET_PATH,,}" in
 esac
 
 source_dir="$extract_dir"
-shopt -s nullglob dotglob
-entries=("$extract_dir"/*)
-if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
-  source_dir="${entries[0]}"
+if [[ ! "${ASSET_PATH,,}" =~ \.(appimage|exe)$ ]]; then
+    shopt -s nullglob dotglob
+    entries=("$extract_dir"/*)
+    if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
+      source_dir="${entries[0]}"
+    fi
 fi
 
-new_dir="${TARGET_DIR}._new_${timestamp}"
-backup_dir="${TARGET_DIR}._backup_${timestamp}"
-mkdir -p "$new_dir"
-cp -a "$source_dir"/. "$new_dir"/
+# Determine if TARGET_DIR is a file or directory
+if [[ -f "$TARGET_DIR" ]]; then
+    # File replacement (onefile / AppImage)
+    backup_file="${TARGET_DIR}._backup_${timestamp}"
+    new_file="$extract_dir/$(basename "$TARGET_DIR")"
+    
+    mv "$TARGET_DIR" "$backup_file"
+    if cp -a "$new_file" "$TARGET_DIR"; then
+        rm -f "$PENDING_PATH" || true
+        # ... success notification ...
+    else
+        mv "$backup_file" "$TARGET_DIR"
+        exit 6
+    fi
+else
+    # Directory replacement (onedir)
+    new_dir="${TARGET_DIR}._new_${timestamp}"
+    backup_dir="${TARGET_DIR}._backup_${timestamp}"
+    mkdir -p "$new_dir"
+    cp -a "$source_dir"/. "$new_dir"/
 
-mv "$TARGET_DIR" "$backup_dir"
-if mv "$new_dir" "$TARGET_DIR"; then
-  rm -f "$PENDING_PATH" || true
-  if [[ -n "$SUCCESS_PATH" ]]; then
+    mv "$TARGET_DIR" "$backup_dir"
+    if mv "$new_dir" "$TARGET_DIR"; then
+      rm -f "$PENDING_PATH" || true
+    else
+      rm -rf "$TARGET_DIR" || true
+      mv "$backup_dir" "$TARGET_DIR"
+      exit 5
+    fi
+fi
+
+if [[ -n "$SUCCESS_PATH" ]]; then
     mkdir -p "$(dirname "$SUCCESS_PATH")" || true
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '{\n  "version": "%s",\n  "timestamp": "%s"\n}\n' "$UPDATED_VERSION" "$ts" > "$SUCCESS_PATH" || true
-  fi
-else
-  rm -rf "$TARGET_DIR" || true
-  mv "$backup_dir" "$TARGET_DIR"
-  exit 5
 fi
 
 if [[ -n "$LAUNCH_EXE" ]]; then
