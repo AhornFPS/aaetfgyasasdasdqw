@@ -2271,6 +2271,7 @@ class QtOverlay(QWidget):
             "size": int(size),
             "scale": float(self.ui_scale),
             "shadow": bool(crosshair_cfg.get("shadow", False)),
+            "expand_enabled": bool(crosshair_cfg.get("ads_fire_expand", True)),
             "ui_scale": float(self.ui_scale),
             "recoil_active": bool(self._last_crosshair_recoil_level > 0.001),
             "recoil_level": float(self._last_crosshair_recoil_level),

@@ -341,16 +341,19 @@
       crosshairLayer.appendChild(core);
     }
 
-    const ring = document.createElement("div");
-    ring.className = "crosshair-ring";
-    setPos(ring, data, true, false);
-    crosshairLayer.appendChild(ring);
-    crosshairRing = ring;
-    const initialLevel = Number(data.recoil_level);
-    if (Number.isFinite(initialLevel)) {
-      setCrosshairRecoil({ level: initialLevel });
-    } else {
-      setCrosshairRecoil({ active: Boolean(data.recoil_active) });
+    const expandEnabled = data.expand_enabled !== false;
+    if (expandEnabled) {
+      const ring = document.createElement("div");
+      ring.className = "crosshair-ring";
+      setPos(ring, data, true, false);
+      crosshairLayer.appendChild(ring);
+      crosshairRing = ring;
+      const initialLevel = Number(data.recoil_level);
+      if (Number.isFinite(initialLevel)) {
+        setCrosshairRecoil({ level: initialLevel });
+      } else {
+        setCrosshairRecoil({ active: Boolean(data.recoil_active) });
+      }
     }
 
     const img = document.createElement("img");
