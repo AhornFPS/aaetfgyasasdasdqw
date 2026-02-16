@@ -1912,28 +1912,17 @@ class OverlayConfigWindow(QWidget):
 
         layout.addWidget(ignore_group)
 
-        # --- 3. APPEARANCE & POSITION ---
+        # Appearance Group
         app_group = QFrame(objectName="Group")
         a_layout = QGridLayout(app_group)
         a_layout.setSpacing(10)
 
-        a_layout.addWidget(QLabel("APPEARANCE", styleSheet="color: #00f2ff; font-weight: bold; margin-bottom: 5px;"), 0,
-                           0, 1, 2)
+        a_layout.addWidget(QLabel("APPEARANCE", styleSheet="color: #00f2ff; font-weight: bold; margin-bottom: 5px;"), 0, 0, 1, 2)
 
-        a_layout.addWidget(QLabel("Hold Text for (s):"), 7, 0)
-        self.spin_twitch_hold = QSpinBox()
-        self.spin_twitch_hold.setRange(0, 600)  # 0 bis 10 Minuten
-        self.spin_twitch_hold.setSuffix(" s (0 = Permanent)")
-        self.spin_twitch_hold.setValue(15)
-        self.spin_twitch_hold.setFixedWidth(120)
-        a_layout.addWidget(self.spin_twitch_hold, 7, 1)
-
-        layout.addWidget(app_group)
-
-        # Opacity
+        # Background Opacity
         a_layout.addWidget(QLabel("Background Opacity:"), 1, 0)
         self.slider_twitch_opacity = QSlider(Qt.Orientation.Horizontal)
-        self.slider_twitch_opacity.setRange(0, 100)  # 0 = Transparent, 100 = Solid
+        self.slider_twitch_opacity.setRange(0, 100)
         self.slider_twitch_opacity.setValue(30)
         a_layout.addWidget(self.slider_twitch_opacity, 1, 1)
 
@@ -1946,37 +1935,118 @@ class OverlayConfigWindow(QWidget):
         a_layout.addWidget(self.combo_twitch_font, 2, 1)
 
         # Position (Offset)
-        a_layout.addWidget(QLabel("Position X:"), 3, 0)
+        a_layout.addWidget(QLabel("Position X / Y:"), 3, 0)
+        pos_row = QHBoxLayout()
         self.slider_twitch_x = QSlider(Qt.Orientation.Horizontal)
-        self.slider_twitch_x.setRange(0, 1920)  # Beispiel Range
+        self.slider_twitch_x.setRange(0, 1920)
         self.slider_twitch_x.setValue(50)
-        a_layout.addWidget(self.slider_twitch_x, 3, 1)
-
-        a_layout.addWidget(QLabel("Position Y:"), 4, 0)
         self.slider_twitch_y = QSlider(Qt.Orientation.Horizontal)
         self.slider_twitch_y.setRange(0, 1080)
         self.slider_twitch_y.setValue(300)
-        a_layout.addWidget(self.slider_twitch_y, 4, 1)
+        pos_row.addWidget(self.slider_twitch_x)
+        pos_row.addWidget(self.slider_twitch_y)
+        a_layout.addLayout(pos_row, 3, 1)
 
-        # Dimensions (Width/Height)
-        a_layout.addWidget(QLabel("Width:"), 5, 0)
+        # Dimensions (Width / Height)
+        a_layout.addWidget(QLabel("Size W / H:"), 4, 0)
+        size_row = QHBoxLayout()
         self.slider_twitch_w = QSlider(Qt.Orientation.Horizontal)
         self.slider_twitch_w.setRange(200, 800)
         self.slider_twitch_w.setValue(350)
-        a_layout.addWidget(self.slider_twitch_w, 5, 1)
-
-        a_layout.addWidget(QLabel("Height:"), 6, 0)
         self.slider_twitch_h = QSlider(Qt.Orientation.Horizontal)
         self.slider_twitch_h.setRange(200, 1000)
         self.slider_twitch_h.setValue(400)
-        a_layout.addWidget(self.slider_twitch_h, 6, 1)
+        size_row.addWidget(self.slider_twitch_w)
+        size_row.addWidget(self.slider_twitch_h)
+        a_layout.addLayout(size_row, 4, 1)
+
+        # Hold Time
+        a_layout.addWidget(QLabel("Hold Text for (s):"), 5, 0)
+        self.spin_twitch_hold = QSpinBox()
+        self.spin_twitch_hold.setRange(0, 600)
+        self.spin_twitch_hold.setSuffix(" s (0 = Permanent)")
+        self.spin_twitch_hold.setValue(15)
+        self.spin_twitch_hold.setFixedWidth(120)
+        a_layout.addWidget(self.spin_twitch_hold, 5, 1)
 
         layout.addWidget(app_group)
 
-        # --- 4. ACTION BUTTONS ---
+        # --- 4. SILENCE ALERT (NEW) ---
+        silence_group = QFrame(objectName="Group")
+        s_layout = QVBoxLayout(silence_group)
+
+        s_header = QLabel("SILENCE ALERT")
+        s_header.setObjectName("Header")
+        s_layout.addWidget(s_header)
+        s_layout.addWidget(QLabel("Plays a sound if no message is received for a certain time.", objectName="SubText"))
+
+        # Enable Checkbox
+        self.check_twitch_silence_active = QCheckBox("Enable Silence Alert")
+        s_layout.addWidget(self.check_twitch_silence_active)
+
+        # Time Input
+        time_row = QHBoxLayout()
+        time_row.addWidget(QLabel("Silence Timeout (s):"))
+        self.spin_twitch_silence_seconds = QSpinBox()
+        self.spin_twitch_silence_seconds.setRange(5, 86400) # 5 seconds to 24 hours
+        self.spin_twitch_silence_seconds.setValue(600)
+        self.spin_twitch_silence_seconds.setFixedWidth(100)
+        time_row.addWidget(self.spin_twitch_silence_seconds)
+        time_row.addStretch()
+        s_layout.addLayout(time_row)
+
+        # Audio File Picker
+        audio_row = QHBoxLayout()
+        audio_row.addWidget(QLabel("Alert Sound:"))
+        
+        self.combo_twitch_silence_snd = QComboBox()
+        self.combo_twitch_silence_snd.setEditable(True)
+        self.combo_twitch_silence_snd.setPlaceholderText("No file selected")
+        self.combo_twitch_silence_snd.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        audio_row.addWidget(self.combo_twitch_silence_snd)
+        
+        self.btn_browse_twitch_silence_snd = QPushButton("...")
+        self.btn_browse_twitch_silence_snd.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_browse_twitch_silence_snd.setFixedWidth(40)
+        self.btn_browse_twitch_silence_snd.setStyleSheet("padding: 2px;")
+        
+        self.btn_del_twitch_silence_snd = QPushButton("del")
+        self.btn_del_twitch_silence_snd.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_del_twitch_silence_snd.setFixedWidth(40)
+        self.btn_del_twitch_silence_snd.setStyleSheet("color: #ff4444; font-weight: bold; padding: 2px;")
+        self.btn_del_twitch_silence_snd.clicked.connect(lambda: self.combo_twitch_silence_snd.removeItem(self.combo_twitch_silence_snd.currentIndex()))
+
+        audio_row.addWidget(self.btn_browse_twitch_silence_snd)
+        audio_row.addWidget(self.btn_del_twitch_silence_snd)
+        s_layout.addLayout(audio_row)
+
+        # Volume & Test Button
+        vt_row = QHBoxLayout()
+        vt_row.addWidget(QLabel("Volume:"))
+        self.slider_twitch_silence_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_twitch_silence_vol.setRange(0, 100)
+        self.slider_twitch_silence_vol.setValue(100)
+        self.lbl_twitch_silence_vol_val = QLabel("100%")
+        self.lbl_twitch_silence_vol_val.setFixedWidth(40)
+        self.lbl_twitch_silence_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold;")
+        self.slider_twitch_silence_vol.valueChanged.connect(lambda v: self.lbl_twitch_silence_vol_val.setText(f"{v}%"))
+        
+        vt_row.addWidget(self.slider_twitch_silence_vol)
+        vt_row.addWidget(self.lbl_twitch_silence_vol_val)
+        
+        self.btn_test_twitch_silence_snd = QPushButton("TEST")
+        self.btn_test_twitch_silence_snd.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_test_twitch_silence_snd.setFixedWidth(80)
+        self.btn_test_twitch_silence_snd.setStyleSheet("background-color: #444; color: #eee;")
+        vt_row.addWidget(self.btn_test_twitch_silence_snd)
+        
+        s_layout.addLayout(vt_row)
+
+        layout.addWidget(silence_group)
+
+        # --- 5. ACTION BUTTONS ---
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
-
 
         self.btn_test_twitch = QPushButton("TEST MSG")
         self.btn_test_twitch.setFocusPolicy(Qt.FocusPolicy.NoFocus)

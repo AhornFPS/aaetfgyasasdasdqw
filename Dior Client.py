@@ -414,6 +414,7 @@ class DiorClientGUI:
 
         self.twitch_worker = None
         self.twitch_thread = None
+        self.last_twitch_msg_time = time.time() # Start tracking from now
 
         # 9. CHECK VOICE MACRO PERMISSIONS (LINUX)
         # If Voice Macros are active, trigger 'xdotool' once for the Permission Popup.
@@ -500,7 +501,9 @@ class DiorClientGUI:
             self.ovl_config_win.combo_evt_snd.addItems(self.base_sounds)
             self.ovl_config_win.combo_evt_snd.blockSignals(False)
 
-        self.add_log(f"SYS: Assets loaded (Images: {len(images)}, Sounds: {len(sounds)})")
+        # Store base assets for later use
+        self.base_images = sorted(images)
+        self.base_sounds = sorted(sounds)
 
     def _linux_permission_check(self):
         """Simulates a few harmless keypresses to ensure the OS requests input permissions."""
@@ -1286,7 +1289,23 @@ class DiorClientGUI:
              self.safe_connect(ui.check_play_duplicate.toggled, self.save_event_config_from_qt)
 
         # ---------------------------------------------------------
-        # 4. OVERLAY TAB: KILLSTREAK
+        # 5. OVERLAY TAB: TWITCH
+        # ---------------------------------------------------------
+        if hasattr(ui, 'btn_browse_twitch_silence_snd'):
+             ui.btn_browse_twitch_silence_snd.clicked.connect(lambda: self.browse_file_qt(ui.combo_twitch_silence_snd, "audio"))
+        
+        if hasattr(ui, 'btn_del_twitch_silence_snd'):
+             ui.btn_del_twitch_silence_snd.clicked.disconnect() # Remove the lambda from UI file
+             ui.btn_del_twitch_silence_snd.clicked.connect(self.del_twitch_silence_snd)
+        
+        if hasattr(ui, 'btn_save_twitch'):
+            self.safe_connect(ui.btn_save_twitch.clicked, self.save_twitch_config)
+
+        if hasattr(ui, 'btn_test_twitch_silence_snd'):
+             ui.btn_test_twitch_silence_snd.clicked.connect(self.test_twitch_silence_snd)
+
+        # ---------------------------------------------------------
+        # 6. OVERLAY TAB: KILLSTREAK
         # ---------------------------------------------------------
         # Main Image Browse
         try:
@@ -1648,6 +1667,33 @@ class DiorClientGUI:
         self.twitch_thread.start()
 
     def on_new_twitch_msg(self, display_name, html_content, color_code):
+        now = time.time()
+        
+        # 1. Check for Silence Break (Wake-up call)
+        t_conf = self.config.get("twitch", {})
+        if t_conf.get("active", False) and t_conf.get("silence_active", False):
+            timeout_sec = t_conf.get("silence_timeout", 600)
+            diff = now - self.last_twitch_msg_time
+            
+            if diff > timeout_sec:
+                snd_list = t_conf.get("silence_snd", [])
+                if snd_list:
+                    snd_name = random.choice(snd_list) if isinstance(snd_list, list) else snd_list
+                    try:
+                        if globals().get("HAS_SOUND", True):
+                            path = get_asset_path(snd_name)
+                            if os.path.exists(path):
+                                silence_vol = t_conf.get("silence_vol", 100) / 100.0
+                                master_vol = self.config.get("audio_volume", 50) / 100.0
+                                s = pygame.mixer.Sound(path)
+                                s.set_volume(silence_vol * master_vol)
+                                s.play()
+                                self.add_log(f"TWITCH: Wake-up call! (Silence was {int(diff)}s)")
+                    except Exception as e:
+                        print(f"Twitch Silence Play Error: {e}")
+
+        # 2. Update time and show message
+        self.last_twitch_msg_time = now
         if self.overlay_win:
             self.overlay_win.add_twitch_message(display_name, html_content, color_code)
 
@@ -1692,7 +1738,12 @@ class DiorClientGUI:
             "h": ui.slider_twitch_h.value(),
             "opacity": ui.slider_twitch_opacity.value(),
             "font_size": int(ui.combo_twitch_font.currentText()),
-            "hold_time": ui.spin_twitch_hold.value()  # NEW: Save Hold Time
+            "hold_time": ui.spin_twitch_hold.value(),
+            "silence_active": ui.check_twitch_silence_active.isChecked(),
+            "silence_timeout": ui.spin_twitch_silence_seconds.value(),
+            "silence_snd": [ui.combo_twitch_silence_snd.itemText(i) for i in range(ui.combo_twitch_silence_snd.count())],
+            "silence_snd_active": ui.combo_twitch_silence_snd.currentText(),
+            "silence_vol": ui.slider_twitch_silence_vol.value()
         }
 
         # Save in global config
@@ -1711,7 +1762,37 @@ class DiorClientGUI:
         # 3. Update visual representation (Position, Opacity, Font)
         # This triggers the new update_twitch_style method in the overlay
         self.update_twitch_visuals()
+        
         self.add_log("TWITCH: Settings saved.")
+
+    def del_twitch_silence_snd(self):
+        """Removes the currently selected sound from the Twitch silence list."""
+        ui = self.ovl_config_win
+        idx = ui.combo_twitch_silence_snd.currentIndex()
+        if idx >= 0:
+            ui.combo_twitch_silence_snd.removeItem(idx)
+            self.save_twitch_config()
+            self.add_log("TWITCH: Sound removed from silence list.")
+
+    def test_twitch_silence_snd(self):
+        """Plays the currently selected sound in the Twitch tab."""
+        ui = self.ovl_config_win
+        snd_name = ui.combo_twitch_silence_snd.currentText()
+        if not snd_name: return
+        
+        try:
+            if globals().get("HAS_SOUND", True):
+                path = get_asset_path(snd_name)
+                if os.path.exists(path):
+                    silence_vol = ui.slider_twitch_silence_vol.value() / 100.0
+                    master_vol = self.config.get("audio_volume", 50) / 100.0
+                    s = pygame.mixer.Sound(path)
+                    s.set_volume(silence_vol * master_vol)
+                    s.play()
+                    self.add_log(f"TEST: Playing '{snd_name}' (Twitch Silence)")
+        except Exception as e:
+            self.add_log(f"ERR: Test Sound Play failed: {e}")
+
 
     def browse_ps2_folder(self):
         """Selects the PS2 folder and saves it immediately permanently."""
@@ -3382,6 +3463,25 @@ class DiorClientGUI:
         # Ignore List
         ui.ent_twitch_ignore.setText(twitch_conf.get("ignore_list", ""))
 
+        # Silence Alert settings
+        ui.check_twitch_silence_active.setChecked(twitch_conf.get("silence_active", False))
+        ui.spin_twitch_silence_seconds.setValue(twitch_conf.get("silence_timeout", 600))
+        
+        # Populate combobox with saved sounds
+        ui.combo_twitch_silence_snd.blockSignals(True)
+        ui.combo_twitch_silence_snd.clear()
+        saved_snds = twitch_conf.get("silence_snd", [])
+        if isinstance(saved_snds, list):
+            ui.combo_twitch_silence_snd.addItems(saved_snds)
+        elif saved_snds: # Backward compat for single string
+            ui.combo_twitch_silence_snd.addItem(saved_snds)
+        
+        # Restore active selection
+        ui.combo_twitch_silence_snd.setCurrentText(twitch_conf.get("silence_snd_active", ""))
+        ui.combo_twitch_silence_snd.blockSignals(False)
+        
+        ui.slider_twitch_silence_vol.setValue(twitch_conf.get("silence_vol", 100))
+
         # 4. Immediate application to overlay (Sync)
         self.overlay_win.set_chat_hold_time(twitch_conf.get("hold_time", 15))
         self.update_twitch_visuals()
@@ -4257,15 +4357,25 @@ class DiorClientGUI:
 
             # Set text field or ComboBox
             if isinstance(widget, QComboBox):
-                # Check if already in? Doesn't matter, we add it (User might want to increase weighting?)
-                # Or better: we allow duplicates, it's easier.
-                widget.addItem(filename)
-                widget.setCurrentIndex(widget.count() - 1)
+                # Prevent duplicates
+                found = False
+                for i in range(widget.count()):
+                    if widget.itemText(i) == filename:
+                        widget.setCurrentIndex(i)
+                        found = True
+                        break
+                
+                if not found:
+                    widget.addItem(filename)
+                    widget.setCurrentIndex(widget.count() - 1)
             else:
                 widget.setText(filename)
 
             # AUTO SAVE
-            self.save_event_config_from_qt()
+            if widget == self.ovl_config_win.combo_twitch_silence_snd:
+                self.save_twitch_config()
+            else:
+                self.save_event_config_from_qt()
 
     def load_event_ui_data(self, event_type):
         """Loads config data of an event into the Qt-UI fields"""
