@@ -82,7 +82,7 @@ echo "Repo: ${RELEASE_REPO}"
 echo
 
 echo "Pulling latest code..."
-git pull --rebase --autostash
+
 
 if [[ -z "$TAG" ]]; then
   if [[ ! -f "version.py" ]]; then

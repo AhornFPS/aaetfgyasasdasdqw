@@ -426,8 +426,9 @@ class DiorClientGUI:
 
         # 7. SHOW
         self.main_hub.show()
-        QTimer.singleShot(900, self._prompt_update_success_if_available)
-        QTimer.singleShot(1200, self._prompt_apply_staged_update_if_available)
+        if getattr(sys, "frozen", False):
+            QTimer.singleShot(900, self._prompt_update_success_if_available)
+            QTimer.singleShot(1200, self._prompt_apply_staged_update_if_available)
 
         # 8. BACKGROUND THREADS
         threading.Thread(target=self.cache_worker, daemon=True).start()
@@ -4214,7 +4215,8 @@ class DiorClientGUI:
                         load_source = "RESET"
                 else:
                     print("ERROR: No backup found. Using defaults.")
-                    load_source = "RESET"        # 6. MERGING (Deep Mix defaults with loaded)
+                    load_source = "RESET"
+        # 6. MERGING (Deep Mix defaults with loaded)
         deep_merge(default_conf, loaded_conf)
 
         # 7. Run config schema migrations.
@@ -4486,6 +4488,15 @@ class DiorClientGUI:
 
     def check_for_updates_qt(self):
         """Manual updater entry point from Settings UI."""
+        if not getattr(sys, "frozen", False):
+            self.add_log("UPDATE: Update check disabled in development mode.")
+            QMessageBox.information(
+                self.main_hub,
+                "Development Mode",
+                "Update checks are disabled when running from source code to prevent overwriting your files."
+            )
+            return
+
         if self._update_check_in_progress:
             self.add_log("UPDATE: Check already in progress.")
             return
@@ -4669,6 +4680,9 @@ class DiorClientGUI:
             return None
 
     def _prompt_apply_staged_update_if_available(self):
+        if not getattr(sys, "frozen", False):
+            return
+
         pending_data = self._read_pending_update()
         if not pending_data:
             return
