@@ -1252,6 +1252,14 @@ class DiorClientGUI:
         ui.signals.setting_changed.connect(self.handle_overlay_setting_changes)
         if hasattr(ui, 'ent_global_duration'):
             ui.ent_global_duration.editingFinished.connect(self.save_global_event_duration)
+        
+        # New global event settings
+        if hasattr(ui, "check_events_active"):
+            self.safe_connect(ui.check_events_active.toggled, self.save_global_event_config_qt)
+        if hasattr(ui, "check_evt_glow"):
+            self.safe_connect(ui.check_evt_glow.toggled, self.save_global_event_config_qt)
+        if hasattr(ui, "btn_evt_glow_color"):
+            self.safe_connect(ui.btn_evt_glow_color.clicked, lambda: self.pick_glow_color_qt("events"))
 
         # Live preview on text input
         ui.combo_evt_img.currentTextChanged.connect(lambda text: ui.update_preview_image(get_asset_path(text)))
@@ -1334,6 +1342,8 @@ class DiorClientGUI:
 
         # Design (Color/Size)
         self.safe_connect(ui.btn_pick_color.clicked, self.pick_streak_color_qt)
+        if hasattr(ui, "btn_streak_glow_color"):
+            self.safe_connect(ui.btn_streak_glow_color.clicked, lambda: self.pick_glow_color_qt("streak"))
         self.safe_connect(ui.slider_font_size.valueChanged, self.save_streak_settings_from_qt)
 
         # Path Recording
@@ -1379,6 +1389,8 @@ class DiorClientGUI:
             self.safe_connect(ui.btn_stats_label_color.clicked, lambda: self.pick_stats_color("labels"))
         if hasattr(ui, 'btn_stats_value_color'):
             self.safe_connect(ui.btn_stats_value_color.clicked, lambda: self.pick_stats_color("values"))
+        if hasattr(ui, 'btn_stats_glow_color'):
+            self.safe_connect(ui.btn_stats_glow_color.clicked, lambda: self.pick_glow_color_qt("stats"))
 
         try:
             ui.btn_browse_hs_icon.clicked.disconnect()
@@ -2023,6 +2035,53 @@ class DiorClientGUI:
             # Save & Update
             self.save_stats_config_from_qt()
 
+    def pick_glow_color_qt(self, section):
+        """Generic glow color picker for different sections."""
+        ui = self.ovl_config_win
+        
+        # Determine config key and button
+        if section == "events":
+            conf_obj = self.config.get("events_global", {})
+            conf_key = "glow_color"
+            btn = ui.btn_evt_glow_color
+            save_fn = self.save_global_event_config_qt
+            default_hex = "#00f2ff"
+        elif section == "streak":
+            conf_obj = self.config.get("streak", {})
+            conf_key = "glow_color"
+            btn = ui.btn_streak_glow_color
+            save_fn = self.save_streak_settings_from_qt
+            default_hex = "#00f2ff"
+        elif section == "stats":
+            conf_obj = self.config.get("stats_widget", {})
+            conf_key = "glow_color"
+            btn = ui.btn_stats_glow_color
+            save_fn = self.save_stats_config_from_qt
+            default_hex = "#00f2ff"
+        else: return
+
+        current_hex = conf_obj.get(conf_key, default_hex)
+        initial = QColor(current_hex)
+        
+        color = QColorDialog.getColor(initial, self.main_hub, f"Select {section.capitalize()} Glow Color")
+        
+        if color.isValid():
+            hex_color = color.name()
+            
+            # Save to correct config section
+            if section == "events":
+                if "events_global" not in self.config: self.config["events_global"] = {}
+                self.config["events_global"][conf_key] = hex_color
+            elif section == "streak":
+                if "streak" not in self.config: self.config["streak"] = {}
+                self.config["streak"][conf_key] = hex_color
+            elif section == "stats":
+                if "stats_widget" not in self.config: self.config["stats_widget"] = {}
+                self.config["stats_widget"][conf_key] = hex_color
+                
+            self._update_color_button_style(btn, hex_color)
+            save_fn()
+
     def _update_color_button_style(self, btn, hex_color):
         """Helper method for styling the color buttons."""
         color = QColor(hex_color)
@@ -2213,6 +2272,19 @@ class DiorClientGUI:
             self.config["event_slots"][active_slot] = copy.deepcopy(self.config["events"])
 
         self.add_log(f"EVENT: Settings for '{event_name}' auto-saved.")
+
+    def save_global_event_config_qt(self):
+        """Saves global event settings like active toggle and glow."""
+        ui = self.ovl_config_win
+        if "events_global" not in self.config: self.config["events_global"] = {}
+        
+        self.config["events_global"].update({
+            "active": ui.check_events_active.isChecked(),
+            "glow": ui.check_evt_glow.isChecked(),
+            "glow_color": self.config.get("events_global", {}).get("glow_color", "#00f2ff")
+        })
+        self.save_config()
+        self.add_log("SYS: Global event configuration saved.")
 
         # Optional: Direktes Feedback im Overlay (Test)
         # self.trigger_overlay_event(event_name)
@@ -2889,7 +2961,8 @@ class DiorClientGUI:
             "knife_vs": knife_vs,
 
             # Path Data
-            "custom_path": final_path_data
+            "custom_path": final_path_data,
+            "glow_color": current_conf.get("glow_color", "#00f2ff")
         })
 
         self.save_config()
@@ -2919,6 +2992,7 @@ class DiorClientGUI:
             "label_color": current_st_conf.get("label_color", "#00f2ff"),
             "value_color": current_st_conf.get("value_color", "#ffffff"),
             "glow": s_ui.check_stats_glow.isChecked() if hasattr(s_ui, "check_stats_glow") else current_st_conf.get("glow", True),
+            "glow_color": current_st_conf.get("glow_color", "#00f2ff"),
 
             # Toggle Stats
             "show_k": s_ui.check_show_k.isChecked(),
@@ -3108,6 +3182,19 @@ class DiorClientGUI:
             self.config["overlay_master_active"] = master_state
 
         # --- TAB 2: EVENTS ---
+        eg_conf = self.config.get("events_global", {})
+        if hasattr(ui, "check_events_active"):
+            ui.check_events_active.blockSignals(True)
+            ui.check_events_active.setChecked(eg_conf.get("active", True))
+            ui.check_events_active.blockSignals(False)
+        if hasattr(ui, "check_evt_glow"):
+            ui.check_evt_glow.blockSignals(True)
+            ui.check_evt_glow.setChecked(eg_conf.get("glow", True))
+            ui.check_evt_glow.blockSignals(False)
+        if hasattr(ui, "btn_evt_glow_color"):
+            eg_col = eg_conf.get("glow_color", "#00f2ff")
+            self._update_color_button_style(ui.btn_evt_glow_color, eg_col)
+
         if hasattr(ui, 'event_checkboxes'):
             for ev_name, checkbox in ui.event_checkboxes.items():
                 entry = ev_conf.get(ev_name, {})
@@ -3153,6 +3240,10 @@ class DiorClientGUI:
             ui.check_streak_glow.blockSignals(True)
             ui.check_streak_glow.setChecked(s_conf.get("streak_glow", s_conf.get("knife_glow", True)))
             ui.check_streak_glow.blockSignals(False)
+        
+        if hasattr(ui, 'btn_streak_glow_color'):
+            sg_col = s_conf.get("glow_color", "#00f2ff")
+            self._update_color_button_style(ui.btn_streak_glow_color, sg_col)
 
         # >>> NEW: LOAD KNIFE BUTTON STATUS (Part C) <<<
         knives_active = s_conf.get("show_knives", True)
@@ -3242,6 +3333,10 @@ class DiorClientGUI:
         if hasattr(ui, 'btn_stats_value_color'):
             v_col = st_conf.get("value_color", "#ffffff")
             self._update_color_button_style(ui.btn_stats_value_color, v_col)
+        
+        if hasattr(ui, 'btn_stats_glow_color'):
+            stg_col = st_conf.get("glow_color", "#00f2ff")
+            self._update_color_button_style(ui.btn_stats_glow_color, stg_col)
 
         # New Toggles - Read from config, default True
         if hasattr(ui, "check_show_k"):

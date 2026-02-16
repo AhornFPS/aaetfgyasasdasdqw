@@ -664,6 +664,31 @@ class OverlayConfigWindow(QWidget):
         slot_bar.addStretch()
         layout.addLayout(slot_bar)
 
+        # --- NEW: MASTER TOGGLE & GLOW ---
+        master_row = QHBoxLayout()
+        master_row.setSpacing(10)
+        
+        self.check_events_active = QCheckBox("Enable Events (Effects)")
+        self.check_events_active.setChecked(True)
+        self.check_events_active.setStyleSheet("color: #00ff00; font-weight: bold;")
+        
+        self.check_evt_glow = QCheckBox("Enable Glow")
+        self.check_evt_glow.setChecked(True)
+        self.check_evt_glow.setStyleSheet("color: #00f2ff;")
+        
+        self.btn_evt_glow_color = QPushButton("PICK")
+        self.btn_evt_glow_color.setObjectName("ColorBtn")
+        self.btn_evt_glow_color.setFixedHeight(28)
+        self.btn_evt_glow_color.setFixedWidth(70)
+        
+        master_row.addWidget(self.check_events_active)
+        master_row.addSpacing(20)
+        master_row.addWidget(self.check_evt_glow)
+        master_row.addWidget(QLabel("Glow Color:", styleSheet="color: #ddd; font-size: 11px;"))
+        master_row.addWidget(self.btn_evt_glow_color)
+        master_row.addStretch()
+        layout.addLayout(master_row)
+
         # --- DEFINITION DER DROPDOWNS ---
         # Hier sind jetzt deine neuen Heal-Werte eingepflegt
         self.EXPANDABLE_EVENTS = {
@@ -1213,7 +1238,17 @@ class OverlayConfigWindow(QWidget):
 
         sw_layout.addWidget(self.check_streak_master)
         sw_layout.addWidget(self.check_streak_anim)
+        sw_layout.addSpacing(10)
         sw_layout.addWidget(self.check_streak_glow)
+        
+        sw_layout.addWidget(QLabel("Glow Color:", styleSheet="border: none; color: #ddd; font-size: 11px;"))
+        self.btn_streak_glow_color = QPushButton("PICK")
+        self.btn_streak_glow_color.setObjectName("ColorBtn")
+        self.btn_streak_glow_color.setFixedHeight(28)
+        self.btn_streak_glow_color.setFixedWidth(70)
+        sw_layout.addWidget(self.btn_streak_glow_color)
+        sw_layout.addStretch()
+        
         main_layout.addLayout(sw_layout)
 
         # --- 2. MAIN VISUALS ---
@@ -1433,9 +1468,10 @@ class OverlayConfigWindow(QWidget):
         design_box = QHBoxLayout()
         design_box.setContentsMargins(0, 0, 0, 0)
 
-        self.btn_pick_color = QPushButton("COLOR")
+        self.btn_pick_color = QPushButton("PICK")
         self.btn_pick_color.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_pick_color.setFixedWidth(70)
+        self.btn_pick_color.setFixedHeight(28)
         self.btn_pick_color.setObjectName("ColorBtn")
 
         self.slider_font_size = QSlider(Qt.Orientation.Horizontal)
@@ -1568,18 +1604,28 @@ class OverlayConfigWindow(QWidget):
         st_fs_layout.addWidget(QLabel("Label Color:"))
         self.btn_stats_label_color = QPushButton("PICK")
         self.btn_stats_label_color.setObjectName("ColorBtn")
+        self.btn_stats_label_color.setFixedHeight(28)
         self.btn_stats_label_color.setToolTip("Color for the labels (e.g. 'KD', 'HSR')")
         st_fs_layout.addWidget(self.btn_stats_label_color)
 
         st_fs_layout.addWidget(QLabel("Value Color:"))
         self.btn_stats_value_color = QPushButton("PICK")
         self.btn_stats_value_color.setObjectName("ColorBtn")
+        self.btn_stats_value_color.setFixedHeight(28)
         self.btn_stats_value_color.setToolTip("Default color for values")
         st_fs_layout.addWidget(self.btn_stats_value_color)
+        
         self.check_stats_glow = QCheckBox("Stats Glow")
         self.check_stats_glow.setStyleSheet("color: #00ff00;")
         self.check_stats_glow.setChecked(True)
         st_fs_layout.addWidget(self.check_stats_glow)
+        
+        st_fs_layout.addWidget(QLabel("Glow Color:"))
+        self.btn_stats_glow_color = QPushButton("PICK")
+        self.btn_stats_glow_color.setObjectName("ColorBtn")
+        self.btn_stats_glow_color.setFixedHeight(28)
+        self.btn_stats_glow_color.setFixedWidth(70)
+        st_fs_layout.addWidget(self.btn_stats_glow_color)
         
         st_fs_layout.addStretch()
         st_layout.addLayout(st_fs_layout)

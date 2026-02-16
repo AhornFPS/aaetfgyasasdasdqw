@@ -46,8 +46,11 @@
   function updateStats(data) {
     const card = document.createElement("div");
     card.className = "stats-card";
-    if (data.glow === false) {
+    const glowActive = data.glow !== false;
+    if (!glowActive) {
       card.classList.add("no-glow");
+    } else if (data.glow_color) {
+      card.style.filter = `drop-shadow(0 0 10px ${data.glow_color}) drop-shadow(0 0 5px ${data.glow_color})`;
     }
     card.style.position = "absolute";
     card.style.width = `${Number(data.box_width || 600)}px`;
@@ -73,8 +76,10 @@
     }
     const content = document.createElement("div");
     content.className = "stats-content";
-    if (data.glow === false) {
+    if (!glowActive) {
       content.classList.add("no-glow");
+    } else if (data.glow_color) {
+      content.style.textShadow = `0 0 10px ${data.glow_color}, 0 0 24px ${data.glow_color}`;
     }
     content.style.position = "relative";
     content.style.left = `${Number(data.tx || 0)}px`;
@@ -207,6 +212,9 @@
     const streakGlow = data.streak_glow !== false;
     if (!streakGlow) {
       count.classList.add("no-glow");
+    } else if (data.glow_color) {
+      count.style.textShadow = `0 0 10px ${data.glow_color}, 0 0 24px ${data.glow_color}`;
+      skull.style.filter = `drop-shadow(0 0 10px ${data.glow_color}) drop-shadow(0 0 5px ${data.glow_color})`;
     }
 
     const knives = Array.isArray(data.knives) ? data.knives : [];
@@ -219,6 +227,9 @@
       img.src = assetUrl(knife.filename);
       img.style.width = `${Number(knife.size || 90)}px`;
       img.style.height = `${Number(knife.size || 90)}px`;
+      if (streakGlow && data.glow_color) {
+        img.style.filter = `drop-shadow(0 0 7px ${data.glow_color})`;
+      }
       if (knife.x_off !== undefined && knife.y_off !== undefined) {
         img.style.transform = `translate(-50%, -50%) translate(${Number(knife.x_off)}px, ${Number(knife.y_off)}px) rotate(${Number(knife.rotation || 0)}deg)`;
       } else {
@@ -254,6 +265,8 @@
     const evType = data.event_type || fallbackType || "event";
     if (evType === "death" || evType === "headshot") {
       img.classList.add("death-impact");
+    } else if (data.glow !== false && data.glow_color) {
+      img.style.filter = `drop-shadow(0 0 10px ${data.glow_color})`;
     }
     if (shouldTriggerImpact(data, evType)) {
       triggerImpact(evType);

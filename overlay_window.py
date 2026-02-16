@@ -1107,6 +1107,12 @@ class QtOverlay(QWidget):
         threading.Thread(target=_do_move, daemon=True).start()
 
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False, play_duplicate=True, event_name=""):
+        # Master Toggle Check
+        if self.gui_ref:
+            eg_conf = self.gui_ref.config.get("events_global", {})
+            if not eg_conf.get("active", True):
+                return
+
         # --- CASE A: HITMARKER (Immediate & Parallel) ---
 
         master_vol = self.get_master_volume()
@@ -1224,6 +1230,8 @@ class QtOverlay(QWidget):
             "centered": False,
             "event_type": (event_name or "hitmarker").lower(),
             "impact": bool(self._event_impact_enabled(event_name or "hitmarker")),
+            "glow": bool(self.gui_ref.config.get("events_global", {}).get("glow", True)) if self.gui_ref else True,
+            "glow_color": self.gui_ref.config.get("events_global", {}).get("glow_color", "#00f2ff") if self.gui_ref else "#00f2ff",
         })
 
     def process_next_event(self):
@@ -1296,6 +1304,8 @@ class QtOverlay(QWidget):
             "event_type": (event_name or "event").lower(),
             "centered": False,
             "impact": bool(self._event_impact_enabled(event_name or "event")),
+            "glow": bool(self.gui_ref.config.get("events_global", {}).get("glow", True)) if self.gui_ref else True,
+            "glow_color": self.gui_ref.config.get("events_global", {}).get("glow_color", "#00f2ff") if self.gui_ref else "#00f2ff",
         })
 
     def _hide_image_specific(self, label):
@@ -1946,6 +1956,7 @@ class QtOverlay(QWidget):
             "box_width": int(box_w),
             "box_height": int(box_h),
             "glow": bool(st_glow),
+            "glow_color": conf.get("glow_color", "#00f2ff") if self.gui_ref else "#00f2ff",
             "ui_scale": float(self.ui_scale),
         }
 
@@ -2095,6 +2106,7 @@ class QtOverlay(QWidget):
             "anim_active": bool(cfg.get("anim_active", True)),
             "anim_speed": int(cfg.get("speed", 50)),
             "streak_glow": bool(cfg.get("streak_glow", cfg.get("knife_glow", True))),
+            "glow_color": cfg.get("glow_color", "#00f2ff"),
             "knives": knives,
             "ui_scale": float(self.ui_scale),
         }
