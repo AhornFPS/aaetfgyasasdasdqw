@@ -1190,9 +1190,22 @@ class OverlayConfigWindow(QWidget):
         size_layout.addWidget(self.lbl_cross_size)
         layout.addLayout(size_layout)
 
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(10)
+        action_layout.setContentsMargins(0, 10, 0, 0)
+
         self.btn_edit_cross = QPushButton("MOVE UI", objectName="EditBtn")
         self.btn_edit_cross.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        layout.addWidget(self.btn_edit_cross)
+        self.btn_edit_cross.setMinimumHeight(35)
+
+        self.btn_test_cross = QPushButton("TEST UI")
+        self.btn_test_cross.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_test_cross.setObjectName("TestBtn")
+        self.btn_test_cross.setMinimumHeight(35)
+
+        action_layout.addWidget(self.btn_edit_cross)
+        action_layout.addWidget(self.btn_test_cross)
+        layout.addLayout(action_layout)
 
         self.btn_center_cross = QPushButton("AUTO-CENTER (Middle)")
         self.btn_center_cross.setFocusPolicy(Qt.FocusPolicy.NoFocus)

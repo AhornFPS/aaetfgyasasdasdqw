@@ -435,6 +435,12 @@ class DiorClientGUI:
 
         self._streak_test_timer = None
         self._streak_backup = None
+        self._event_test_token = 0
+        self.is_event_test = False
+        self.is_stats_test = False
+        self.is_feed_test = False
+        self.is_streak_test = False
+        self.is_crosshair_test = False
 
 
         self.twitch_worker = None
@@ -1307,7 +1313,7 @@ class DiorClientGUI:
 
         # Test / Edit / Special Buttons
         self.safe_connect(ui.btn_test_preview.clicked,
-                          lambda: self.trigger_overlay_event(ui.lbl_editing.text().replace("EDITING: ", "")))
+                          lambda: self.test_event_visuals(ui.lbl_editing.text().replace("EDITING: ", "")))
         self.safe_connect(ui.btn_edit_hud.clicked, self.toggle_hud_edit_mode)
 
         if hasattr(ui, 'btn_apply_all'):
@@ -1401,6 +1407,8 @@ class DiorClientGUI:
         # Center & Edit
         self.safe_connect(ui.btn_center_cross.clicked, self.center_crosshair_qt)
         self.safe_connect(ui.btn_edit_cross.clicked, self.toggle_hud_edit_mode)
+        if hasattr(ui, "btn_test_cross"):
+            self.safe_connect(ui.btn_test_cross.clicked, self.test_crosshair_visuals)
 
         # ---------------------------------------------------------
         # 6. OVERLAY TAB: STATS & FEED
@@ -3080,6 +3088,71 @@ class DiorClientGUI:
 
     # (Duplicate removed - see line 3832)
 
+    def _set_overlay_test_mode(self, mode=None):
+        """Activates exactly one overlay element test mode at a time."""
+        normalized = (mode or "").strip().lower()
+        self.is_event_test = (normalized == "event")
+        self.is_stats_test = (normalized == "stats")
+        self.is_feed_test = (normalized == "feed")
+        self.is_streak_test = (normalized == "streak")
+        self.is_crosshair_test = (normalized == "crosshair")
+
+    def _get_event_duration_ms(self, event_type):
+        """Resolves final event duration using queue/global/specific rules."""
+        events_dict = self.config.get("events", {})
+        event_data = events_dict.get(event_type)
+        if not event_data:
+            for key, val in events_dict.items():
+                if key.lower() == str(event_type).lower():
+                    event_data = val
+                    break
+
+        event_data = event_data if isinstance(event_data, dict) else {}
+        queue_active = self.config.get("event_queue_active", True)
+        global_dur = int(self.config.get("event_global_duration", 3000))
+        specific_dur = int(event_data.get("duration", 0))
+
+        if not queue_active:
+            dur = global_dur
+        else:
+            dur = specific_dur if specific_dur > 0 else global_dur
+
+        etype = str(event_type).lower()
+        if etype in ["hitmarker", "headshot hitmarker"]:
+            dur = specific_dur if specific_dur > 0 else global_dur
+
+        return max(100, int(dur))
+
+    def test_event_visuals(self, event_type):
+        """Runs an isolated event preview that is not cut off by gameplay checks."""
+        if not self.overlay_win:
+            self.add_log("WARN: Overlay not active!")
+            return
+
+        etype = str(event_type or "").strip()
+        if not etype:
+            self.add_log("WARN: No event selected for test.")
+            return
+
+        self._set_overlay_test_mode("event")
+        duration_ms = self._get_event_duration_ms(etype)
+        self._event_test_token += 1
+        token = self._event_test_token
+
+        self.add_log(f"SYS: Testing event '{etype}' ({duration_ms}ms).")
+        self.trigger_overlay_event(etype)
+        self.refresh_ingame_overlay()
+
+        def end_event_test():
+            if token != self._event_test_token:
+                return
+            if self.is_event_test:
+                self._set_overlay_test_mode(None)
+                self.refresh_ingame_overlay()
+            self.add_log(f"SYS: Event test finished ({etype}).")
+
+        QTimer.singleShot(duration_ms + 200, end_event_test)
+
     def test_killfeed_visuals(self):
         """Starts a robust multi-entry preview for the killfeed."""
         if not self.overlay_win:
@@ -3087,7 +3160,7 @@ class DiorClientGUI:
             return
 
         self.add_log("SYS: Starting Killfeed visual test...")
-        self.is_feed_test = True
+        self._set_overlay_test_mode("feed")
         # Start from a clean feed so test output is deterministic.
         self.overlay_win.signals.clear_feed.emit()
 
@@ -3124,7 +3197,8 @@ class DiorClientGUI:
 
         # Cleanup after 7 seconds
         def end_feed_test():
-            self.is_feed_test = False
+            if self.is_feed_test:
+                self._set_overlay_test_mode(None)
             if self.overlay_win:
                 self.overlay_win.signals.clear_feed.emit()
             self.add_log("SYS: Killfeed test finished.")
@@ -4300,6 +4374,16 @@ class DiorClientGUI:
         if not hasattr(self, 'overlay_win') or not self.overlay_win:
             return
 
+        # During isolated tests, events should only render in dedicated event test mode.
+        isolated_non_event_test = (
+            getattr(self, "is_stats_test", False)
+            or getattr(self, "is_feed_test", False)
+            or getattr(self, "is_streak_test", False)
+            or getattr(self, "is_crosshair_test", False)
+        )
+        if isolated_non_event_test:
+            return
+
         # 1. SEARCH CONFIG DATA
         events_dict = self.config.get("events", {})
         event_data = events_dict.get(event_type)
@@ -4749,9 +4833,18 @@ class DiorClientGUI:
         game_running = getattr(self, 'ps2_running', False)
 
         # --- FIX: SEPARATE TEST MODES ---
-        stats_test_active = getattr(self, 'is_stats_test', False)   # Tests Stats & Crosshair
-        feed_test_active = getattr(self, 'is_feed_test', False)     # Tests ONLY Feed
-        streak_test_active = getattr(self, 'is_streak_test', False) # Tests ONLY Streak
+        event_test_active = getattr(self, 'is_event_test', False)
+        stats_test_active = getattr(self, 'is_stats_test', False)
+        feed_test_active = getattr(self, 'is_feed_test', False)
+        streak_test_active = getattr(self, 'is_streak_test', False)
+        crosshair_test_active = getattr(self, 'is_crosshair_test', False)
+        any_test_active = (
+            event_test_active
+            or stats_test_active
+            or feed_test_active
+            or streak_test_active
+            or crosshair_test_active
+        )
 
         edit_active = getattr(self, 'is_hud_editing', False)
         debug_active = bool(getattr(self, "debug_overlay_active", False))
@@ -4776,7 +4869,7 @@ class DiorClientGUI:
         mode_gameplay = False  # Separation between "Allowed to render" and "Game is actually running"
 
         # Render if any test or edit is running
-        if edit_active or stats_test_active or streak_test_active or feed_test_active or path_recording:
+        if edit_active or any_test_active or path_recording:
             should_render = True
         elif debug_active:
             should_render = True
@@ -4805,14 +4898,19 @@ class DiorClientGUI:
             if focus_lost and edit_active:
                 if self.overlay_win:
                     self.overlay_win.set_mouse_passthrough(False, active_targets=getattr(self, "current_edit_targets", []))
+            if any_test_active and not event_test_active and hasattr(self.overlay_win, "hide_all_events"):
+                self.overlay_win.hide_all_events()
             # === A) STATS WIDGET ===
             stats_cfg_raw = self.config.get("stats_widget", {})
             stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
             stats_editing = edit_active and ("stats" in getattr(self, "current_edit_targets", []))
 
-            # Show on: (Gameplay & Active) OR (Editing) OR (Stats Test)
-            # IMPORTANT: streak_test_active is missing here intentionally!
-            if (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or stats_test_active or debug_active:
+            if any_test_active:
+                show_stats = stats_test_active
+            else:
+                show_stats = (stats_cfg.get("active", True) and mode_gameplay) or stats_editing or debug_active
+
+            if show_stats:
                 # THROTTLE LOGIC: Only update once per second, except in Edit/Test mode
                 now = time.time()
                 should_update_stats = True
@@ -4851,16 +4949,22 @@ class DiorClientGUI:
             ch_path = get_asset_path(ch_file)
             ch_size = int(cross_conf.get("size", 32))
 
-            # Crosshair only during gameplay/edit or stats-test (not during streak-test)
-            should_show_crosshair = (cross_conf.get("active", True) and mode_gameplay) or cross_editing or stats_test_active
+            if any_test_active:
+                should_show_crosshair = crosshair_test_active
+            else:
+                should_show_crosshair = (cross_conf.get("active", True) and mode_gameplay) or cross_editing
             self.overlay_win.update_crosshair(ch_path, ch_size, should_show_crosshair)
 
             # === C) KILLFEED ===
             feed_conf = self.config.get("killfeed", {})
             feed_editing = edit_active and ("feed" in getattr(self, "current_edit_targets", []))
 
-            # Feed only during gameplay/edit or feed-test
-            if (feed_conf.get("active", True) and mode_gameplay) or feed_editing or feed_test_active:
+            if any_test_active:
+                show_feed = feed_test_active
+            else:
+                show_feed = (feed_conf.get("active", True) and mode_gameplay) or feed_editing
+
+            if show_feed:
                 self.overlay_win.feed_label.show()
             else:
                 self.overlay_win.feed_label.hide()
@@ -4869,9 +4973,12 @@ class DiorClientGUI:
             streak_conf = self.config.get("streak", {})
             streak_editing = edit_active and ("streak" in getattr(self, "current_edit_targets", []))
 
-            # HERE streak_test_active is added!
-            if (streak_conf.get("active",
-                                True) and mode_gameplay) or streak_editing or streak_test_active or path_recording:
+            if any_test_active:
+                show_streak_section = streak_test_active
+            else:
+                show_streak_section = (streak_conf.get("active", True) and mode_gameplay) or streak_editing or path_recording
+
+            if show_streak_section:
                 
                 # FIX: Only show if we are alive! (is_dead check added)
                 # Exception: Edit mode or streak test
@@ -4972,7 +5079,7 @@ class DiorClientGUI:
             return
 
         self.add_log("UI: Starting visual test (Layout Check)...")
-        self.is_stats_test = True
+        self._set_overlay_test_mode("stats")
 
         # Force immediate update of stats bar (KD, KPM etc.)
         self.refresh_ingame_overlay()
@@ -4982,7 +5089,8 @@ class DiorClientGUI:
         
         # --- AUTO-CLEAR AND CLEANUP ---
         def end_test():
-            self.is_stats_test = False
+            if self.is_stats_test:
+                self._set_overlay_test_mode(None)
             if self.overlay_win:
                 self.overlay_win.signals.clear_feed.emit()
                 # Set stats back to real values (or 0)
@@ -5290,7 +5398,7 @@ class DiorClientGUI:
         """
         Starts a preview with 20 knives (PyQt6 compatible).
         """
-        self.is_streak_test = True
+        self._set_overlay_test_mode("streak")
         # 1. Cancel previous timers
         if self._streak_test_timer:
             self._streak_test_timer.stop()
@@ -5336,7 +5444,8 @@ class DiorClientGUI:
                 self.add_log(f"ERR: Streak Test Reset failed: {e}")
             finally:
                 self._streak_test_timer = None
-                self.is_streak_test = False
+                if self.is_streak_test:
+                    self._set_overlay_test_mode(None)
                 self.add_log("UI: Test finished.")
 
         # 6. Start timer (PyQt6 way)
@@ -5344,6 +5453,27 @@ class DiorClientGUI:
         self._streak_test_timer.setSingleShot(True)
         self._streak_test_timer.timeout.connect(reset_action)
         self._streak_test_timer.start(4000)  # 4 seconds
+
+    def test_crosshair_visuals(self):
+        """Runs an isolated crosshair preview."""
+        if not self.overlay_win:
+            self.add_log("WARN: Overlay not active!")
+            return
+
+        self._set_overlay_test_mode("crosshair")
+        self.add_log("UI: Starting Crosshair test...")
+
+        # Apply latest UI/config values immediately so preview matches current settings.
+        self.update_crosshair_from_qt()
+        self.refresh_ingame_overlay()
+
+        def end_crosshair_test():
+            if self.is_crosshair_test:
+                self._set_overlay_test_mode(None)
+                self.refresh_ingame_overlay()
+            self.add_log("UI: Crosshair test finished.")
+
+        QTimer.singleShot(6000, end_crosshair_test)
 
     def fade_out(self, tag, alpha=255):
         if alpha > 0:
