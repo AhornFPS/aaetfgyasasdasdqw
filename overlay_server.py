@@ -191,7 +191,12 @@ class OverlayServer:
         if self.is_running:
             return
 
+        # Ensure ports are different
+        if self.http_port == self.ws_port:
+            self.ws_port += 1
+
         self.is_running = True
+        self.stop_requested = threading.Event()
         
         # Use events to wait for ports to be bound
         self.http_ready = threading.Event()
@@ -211,13 +216,12 @@ class OverlayServer:
 
     def stop(self):
         self.is_running = False
+        if hasattr(self, 'stop_requested'):
+            self.stop_requested.set()
 
         if self.httpd:
             try:
                 self.httpd.shutdown()
-            except Exception:
-                pass
-            try:
                 self.httpd.server_close()
             except Exception:
                 pass
@@ -225,10 +229,10 @@ class OverlayServer:
 
         if self.ws_loop:
             try:
-                self.ws_loop.call_soon_threadsafe(self.ws_loop.stop)
+                # Thread-safe way to wake up the loop if it's waiting
+                self.ws_loop.call_soon_threadsafe(lambda: None)
             except Exception:
                 pass
-            self.ws_loop = None
 
     def _run_http(self):
         HTTPServer.allow_reuse_address = True
@@ -262,13 +266,20 @@ class OverlayServer:
             for i in range(max_attempts):
                 try:
                     port = self.ws_port + i
-                    # We have to use websockets.serve within the loop
+                    # Prevent overlap with HTTP which might have shifted
+                    if port == self.http_port:
+                        continue
+                        
                     async with websockets.serve(self._ws_handler, '127.0.0.1', port):
                         self.ws_port = port
                         found = True
                         print(f'WS: WebSocket listening on port {self.ws_port}')
                         self.ws_ready.set()
-                        await asyncio.Future() # Run forever
+                        
+                        # Wait until stop is requested
+                        while not self.stop_requested.is_set():
+                            await asyncio.sleep(0.5)
+                        return # Exit the 'async with' context to close the server
                 except OSError:
                     if i < max_attempts - 1: continue
                 except Exception as e:
@@ -277,15 +288,29 @@ class OverlayServer:
             
             if not found:
                 print(f"WS Error: Could not find free port for WebSocket server.")
-                self.ws_ready.set()
+            self.ws_ready.set()
 
         try:
             self.ws_loop.run_until_complete(ws_main())
-        except asyncio.CancelledError:
-            pass
         except Exception as e:
             print(f'WS Loop Error: {e}')
         finally:
+            # Cleanly shut down the loop
+            try:
+                # Cancel all pending tasks
+                tasks = asyncio.all_tasks(self.ws_loop)
+                for task in tasks:
+                    task.cancel()
+                
+                # Run the loop until all tasks are cancelled
+                if tasks:
+                    self.ws_loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                
+                self.ws_loop.run_until_complete(self.ws_loop.shutdown_asyncgens())
+                self.ws_loop.close()
+            except Exception:
+                pass
+            self.ws_loop = None
             self.ws_ready.set()
 
     async def _ws_handler(self, websocket):

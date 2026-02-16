@@ -281,17 +281,19 @@ class TabStreaming(QWidget):
         # Port Configuration
         port_row = QHBoxLayout()
         port_row.addWidget(QLabel("HTTP Port:", styleSheet="color: #bbb; border: none;"))
-        self.ent_port = QLineEdit("8000")
+        self.ent_port = QLineEdit("31337")
         self.ent_port.setFixedWidth(80)
         self.ent_port.setStyleSheet("background-color: #111; color: #fff; border: 1px solid #444; padding: 5px; border-radius: 3px;")
-        self.ent_port.textChanged.connect(self.on_port_changed)
+        self.ent_port.textChanged.connect(self.on_port_ui_update)
+        self.ent_port.editingFinished.connect(self.on_port_commit)
         port_row.addWidget(self.ent_port)
         
         port_row.addWidget(QLabel("  WS Port:", styleSheet="color: #bbb; border: none;"))
-        self.ent_ws_port = QLineEdit("6789")
+        self.ent_ws_port = QLineEdit("31338")
         self.ent_ws_port.setFixedWidth(80)
         self.ent_ws_port.setStyleSheet("background-color: #111; color: #fff; border: 1px solid #444; padding: 5px; border-radius: 3px;")
-        self.ent_ws_port.textChanged.connect(self.on_port_changed)
+        self.ent_ws_port.textChanged.connect(self.on_port_ui_update)
+        self.ent_ws_port.editingFinished.connect(self.on_port_commit)
         port_row.addWidget(self.ent_ws_port)
         
         port_row.addStretch()
@@ -318,7 +320,7 @@ class TabStreaming(QWidget):
         url_group = QFrame(objectName="Group")
         url_layout = QHBoxLayout(url_group)
 
-        self.lbl_url = QLabel("http://localhost:8000/")
+        self.lbl_url = QLabel("http://localhost:31337/")
         self.lbl_url.setStyleSheet("color: #00ff00; font-family: 'Consolas'; font-size: 18px; font-weight: bold;")
 
         self.btn_copy = QPushButton("COPY URL")
@@ -385,14 +387,17 @@ class TabStreaming(QWidget):
                 QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }
             """)
 
-    def on_port_changed(self, text):
+    def on_port_ui_update(self):
         h_port = self.ent_port.text()
         self.lbl_url.setText(f"http://localhost:{h_port}/")
+
+    def on_port_commit(self):
+        h_port = self.ent_port.text()
+        ws_port = self.ent_ws_port.text()
         if self.parent_config:
-            # We pass both ports
             ports = {
-                "port": int(h_port) if h_port.isdigit() else 8000,
-                "ws_port": int(self.ent_ws_port.text()) if self.ent_ws_port.text().isdigit() else 6789
+                "port": int(h_port) if h_port.isdigit() else 31337,
+                "ws_port": int(ws_port) if ws_port.isdigit() else 31338
             }
             self.parent_config.signals.setting_changed.emit("obs_service_ports", ports)
 

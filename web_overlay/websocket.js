@@ -11,7 +11,7 @@
 
     wsUrl() {
       const cfg = window.OVERLAY_CONFIG || {};
-      const port = Number(cfg.wsPort || 6789);
+      const port = Number(cfg.wsPort || 31338);
       return `ws://127.0.0.1:${port}/better_planetside`;
     }
 

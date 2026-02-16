@@ -1493,17 +1493,21 @@ class DiorClientGUI:
         elif key == "obs_service_ports":
             try:
                 obs_cfg = self.config.get("obs_service", {})
+                
+                # NO-OP: Avoid restarting if values haven't changed
+                if obs_cfg.get("port") == val.get("port") and obs_cfg.get("ws_port") == val.get("ws_port"):
+                    return
+
                 obs_cfg.update(val)
                 self.config["obs_service"] = obs_cfg
                 self.save_config()
 
-                # Restart only when OBS service is enabled and overlay exists.
-                if obs_cfg.get("enabled", False) and self.overlay_win:
-                    self.add_log("SYS: Restarting OBS Service with new ports...")
+                # Always restart if overlay is active, as internal HUD depends on it
+                if self.overlay_win:
+                    self.add_log(f"SYS: Applying new ports: Http:{val['port']} WS:{val['ws_port']}...")
                     self.overlay_win.start_server()
                 else:
-                    self.add_log("SYS: OBS ports saved (restart or enable OBS service to apply).")
-                self.add_log(f"SYS: OBS Ports updated: Http:{val['port']} WS:{val['ws_port']}.")
+                    self.add_log(f"SYS: OBS Ports saved (Http:{val['port']} WS:{val['ws_port']}).")
             except Exception as e:
                 self.add_log(f"ERR: OBS port update failed: {e}")
 
