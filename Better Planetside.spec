@@ -9,6 +9,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets', 'assets'),
+        ('web_overlay', 'web_overlay'),
         ('imageformats', 'imageformats'),
         ('config.json', '.'), # Kopiert deine aktuelle Config in das Hauptverzeichnis der EXE
         ('assets/sanction-list.csv', 'assets'),

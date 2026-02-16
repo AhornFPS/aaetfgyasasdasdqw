@@ -6,10 +6,15 @@ import requests
 import os
 from PyQt6.QtCore import QObject, pyqtSignal
 
-# Cache Ordner erstellen
-CACHE_DIR = os.path.join(os.getcwd(), "_emote_cache")
-if not os.path.exists(CACHE_DIR):
-    os.makedirs(CACHE_DIR)
+try:
+    from dior_utils import get_user_data_dir
+    BASE_DATA_DIR = get_user_data_dir()
+except ImportError:
+    # Fallback for standalone testing
+    BASE_DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Cache Ordner Pfad (Creation moved to EmoteManager init)
+CACHE_DIR = os.path.join(BASE_DATA_DIR, "_emote_cache")
 
 
 def fetch_json(url):
@@ -21,9 +26,15 @@ def fetch_json(url):
         pass
     return None
 
-
 class EmoteManager:
     def __init__(self):
+        # Ensure Cache folder exists in a writable location
+        if not os.path.exists(CACHE_DIR):
+            try:
+                os.makedirs(CACHE_DIR, exist_ok=True)
+            except Exception as e:
+                print(f"TWITCH: Could not create cache dir {CACHE_DIR}: {e}")
+
         # Wir mappen den Emote-Code (z.B. "KEKW") auf den lokalen Dateipfad
         self.emote_files = {}
         self.emote_urls = {}

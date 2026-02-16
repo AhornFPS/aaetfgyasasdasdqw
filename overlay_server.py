@@ -4,53 +4,100 @@ import json
 import threading
 import asyncio
 from urllib.parse import unquote
-from http.server import SimpleHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import websockets
+try:
+    from dior_utils import get_user_data_dir
+    LOG_DIR = get_user_data_dir()
+except ImportError:
+    LOG_DIR = os.getcwd()
 
 HTTP_PORT = 8000
 WS_PORT = 6789
 
+def server_log(msg):
+    log_path = os.path.join(LOG_DIR, "overlay_server.log")
+    timestamp = threading.current_thread().name
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {msg}\n")
+    except:
+        pass
+    print(msg)
+
 
 def _project_root():
+    # PyInstaller puts files in sys._MEIPASS.
+    # In one-dir mode with PyInstaller 6+, this is usually the '_internal' folder.
     if hasattr(sys, '_MEIPASS'):
         return sys._MEIPASS
+    
+    # Fallback to script directory
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def _overlay_web_dir():
-    return os.path.join(_project_root(), 'web_overlay')
+    root = _project_root()
+    # Check both direct and _internal subfolder just in case
+    paths = [
+        os.path.join(root, 'web_overlay'),
+        os.path.join(root, '_internal', 'web_overlay')
+    ]
+    for p in paths:
+        if os.path.isdir(p):
+            return p
+    return paths[0]
 
 
 def _assets_dir():
-    return os.path.join(_project_root(), 'assets')
+    root = _project_root()
+    paths = [
+        os.path.join(root, 'assets'),
+        os.path.join(root, '_internal', 'assets')
+    ]
+    for p in paths:
+        if os.path.isdir(p):
+            return p
+    return paths[0]
 
 
-class AssetHTTPHandler(SimpleHTTPRequestHandler):
-    def _send_file(self, full_path, content_type='text/plain; charset=utf-8'):
-        if not os.path.exists(full_path) or not os.path.isfile(full_path):
-            self.send_error(404, 'File not found')
-            return
+class AssetHTTPHandler(BaseHTTPRequestHandler):
+    def _send_file(self, full_path, content_type='text/html; charset=utf-8'):
+        try:
+            if not os.path.exists(full_path) or not os.path.isfile(full_path):
+                server_log(f"HTTP ERROR: File not found: {full_path}")
+                self.send_error(404, f'File not found: {os.path.basename(full_path)}')
+                return
 
-        with open(full_path, 'rb') as f:
-            data = f.read()
+            with open(full_path, 'rb') as f:
+                data = f.read()
 
-        self.send_response(200)
-        self.send_header('Content-type', content_type)
-        self.send_header('Cache-Control', 'no-cache')
-        self.end_headers()
-        self.wfile.write(data)
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Cache-Control', 'no-cache')
+            # Fix CORS for OBS
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            server_log(f"HTTP CRASH in _send_file ({full_path}): {e}")
 
     def _serve_overlay_config(self):
-        ws_port = getattr(self.server, 'ws_port', WS_PORT)
-        payload = f'window.OVERLAY_CONFIG = {{ wsPort: {int(ws_port)} }};\n'
-        data = payload.encode('utf-8')
+        try:
+            ws_port = getattr(self.server, 'ws_port', WS_PORT)
+            payload = f'window.OVERLAY_CONFIG = {{ wsPort: {int(ws_port)} }};\n'
+            data = payload.encode('utf-8')
 
-        self.send_response(200)
-        self.send_header('Content-type', 'application/javascript; charset=utf-8')
-        self.send_header('Cache-Control', 'no-cache')
-        self.end_headers()
-        self.wfile.write(data)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            server_log(f"HTTP CRASH in _serve_overlay_config: {e}")
 
     def _serve_asset(self, req_path):
         filename = unquote(req_path.replace('/assets/', '', 1)).lstrip('/\\')
@@ -58,8 +105,8 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
         if filename.startswith('..'):
             self.send_error(403, 'Forbidden')
             return
+        
         base_dir = _assets_dir()
-
         candidates = [
             os.path.join(base_dir, filename),
             os.path.join(base_dir, 'Images', filename),
@@ -69,11 +116,15 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
 
         for candidate in candidates:
             if os.path.isfile(candidate):
-                self.directory = os.path.dirname(candidate)
-                self.path = '/' + os.path.basename(candidate)
-                return super().do_GET()
+                ext = os.path.splitext(candidate)[1].lower()
+                ctype = 'application/octet-stream'
+                if ext in ('.png', '.jpg', '.jpeg'): ctype = 'image/png' if ext == '.png' else 'image/jpeg'
+                elif ext == '.gif': ctype = 'image/gif'
+                elif ext in ('.mp3', '.wav', '.ogg'): ctype = 'audio/mpeg' if ext == '.mp3' else f'audio/{ext[1:]}'
+                
+                return self._send_file(candidate, ctype)
 
-        self.send_error(404, 'Asset not found')
+        self.send_error(404, f'Asset not found: {filename}')
 
     def _serve_web_file(self, req_path):
         web_dir = _overlay_web_dir()
@@ -94,24 +145,31 @@ class AssetHTTPHandler(SimpleHTTPRequestHandler):
         self._send_file(full_path, ctype_map.get(ext, 'application/octet-stream'))
 
     def do_GET(self):
-        if self.path in ('/', '/index.html'):
-            return self._send_file(os.path.join(_overlay_web_dir(), 'index.html'), 'text/html; charset=utf-8')
+        try:
+            if self.path in ('/', '/index.html'):
+                return self._send_file(os.path.join(_overlay_web_dir(), 'index.html'), 'text/html; charset=utf-8')
 
-        if self.path == '/overlay-config.js':
-            return self._serve_overlay_config()
+            if self.path == '/overlay-config.js':
+                return self._serve_overlay_config()
 
-        if self.path.startswith('/web/'):
-            return self._serve_web_file(self.path)
+            if self.path.startswith('/web/'):
+                return self._serve_web_file(self.path)
 
-        if self.path.startswith('/assets/'):
-            return self._serve_asset(self.path)
+            if self.path.startswith('/assets/'):
+                return self._serve_asset(self.path)
 
-        if self.path == '/favicon.ico':
-            self.send_response(204)
-            self.end_headers()
-            return
+            if self.path == '/favicon.ico':
+                self.send_response(204)
+                self.end_headers()
+                return
 
-        self.send_error(404, 'File not found')
+            self.send_error(404, f'Path not found: {self.path}')
+        except Exception as e:
+            server_log(f"HTTP CRASH in do_GET ({self.path}): {e}")
+
+    def log_message(self, format, *args):
+        # Override to suppress default console logging
+        pass
 
 
 class OverlayServer:

@@ -996,12 +996,14 @@ class DiorClientGUI:
     def update_crosshair_shadow_button(self, enabled):
         ui = self.ovl_config_win
         if enabled:
+            ui.btn_toggle_cross_shadow.setText("CROSSHAIR SHADOW: ON")
             ui.btn_toggle_cross_shadow.setStyleSheet(
                 "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; border: 1px solid #006600; outline: none; }"
                 "QPushButton:focus { border: 1px solid #006600; }"
                 "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
             )
         else:
+            ui.btn_toggle_cross_shadow.setText("CROSSHAIR SHADOW: OFF")
             ui.btn_toggle_cross_shadow.setStyleSheet(
                 "QPushButton { background-color: #440000; color: #ccc; font-weight: bold; border-radius: 4px; border: 1px solid #660000; outline: none; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
@@ -1553,6 +1555,7 @@ class DiorClientGUI:
     def toggle_twitch_active(self, active):
         ui = self.ovl_config_win
         if active:
+            ui.btn_toggle_twitch.setText("TWITCH CHAT: ON")
             ui.btn_toggle_twitch.setStyleSheet(
                 "QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 4px; outline: none; border: 1px solid #006600; }"
                 "QPushButton:focus { border: 1px solid #006600; }"
@@ -1560,6 +1563,7 @@ class DiorClientGUI:
             )
             if self.overlay_win: self.overlay_win.chat_container.show()
         else:
+            ui.btn_toggle_twitch.setText("TWITCH CHAT: OFF")
             ui.btn_toggle_twitch.setStyleSheet(
                 "QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 4px; outline: none; border: 1px solid #660000; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
@@ -3370,8 +3374,9 @@ class DiorClientGUI:
         if hasattr(ui, 'tab_streaming'):
             s_tab = ui.tab_streaming
             s_tab.btn_toggle_service.blockSignals(True)
-            s_tab.btn_toggle_service.setChecked(obs_conf.get("enabled", False))
-            s_tab.btn_toggle_service.setText("OBS SERVICE: ON" if obs_conf.get("enabled", False) else "OBS SERVICE: OFF")
+            enabled = obs_conf.get("enabled", False)
+            s_tab.btn_toggle_service.setChecked(enabled)
+            s_tab.update_button_style(enabled)
             s_tab.btn_toggle_service.blockSignals(False)
             
             s_tab.ent_port.blockSignals(True)
@@ -3716,13 +3721,17 @@ class DiorClientGUI:
         2. config_backup.json (If main file corrupt/empty)
         3. Default values (If all else fails)
         """
+        def deep_merge(base, update):
+            for k, v in update.items():
+                if isinstance(v, dict) and k in base and isinstance(base[k], dict):
+                    deep_merge(base[k], v)
+                else:
+                    base[k] = v
+            return base
+
         # 1. Define paths
         user_config_path = os.path.join(self.BASE_DIR, "config.json")
-
-        # Path to backup file
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
-
-        # Template path (inside EXE)
         template_path = resource_path("config.json")
 
         # 2. Standard values (Fallback)
@@ -3783,8 +3792,8 @@ class DiorClientGUI:
                     print("ERROR: No backup found. Using defaults.")
                     load_source = "RESET"
 
-        # 5. MERGING (Mix defaults with loaded)
-        default_conf.update(loaded_conf)
+        # 5. MERGING (Deep Mix defaults with loaded)
+        deep_merge(default_conf, loaded_conf)
 
         # Save path for save_config
         self.config_path = user_config_path

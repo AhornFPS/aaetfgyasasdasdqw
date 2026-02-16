@@ -272,13 +272,11 @@ class TabStreaming(QWidget):
         self.btn_toggle_service.setCheckable(True)
         self.btn_toggle_service.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_toggle_service.setFixedHeight(45)
-        self.btn_toggle_service.setStyleSheet("""
-            QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 5px; border: 1px solid #660000; outline: none; font-size: 14px; }
-            QPushButton:checked { background-color: #004400; border-color: #00ff00; color: white; }
-            QPushButton:hover { border: 1px solid #00f2ff; }
-        """)
         self.btn_toggle_service.toggled.connect(self.on_service_toggled)
         status_layout.addWidget(self.btn_toggle_service)
+
+        # Apply initial style
+        self.update_button_style(False)
 
         # Port Configuration
         port_row = QHBoxLayout()
@@ -367,10 +365,25 @@ class TabStreaming(QWidget):
 
 
     def on_service_toggled(self, checked):
-        text = "OBS SERVICE: ON" if checked else "OBS SERVICE: OFF"
-        self.btn_toggle_service.setText(text)
+        self.update_button_style(checked)
         if self.parent_config:
             self.parent_config.signals.setting_changed.emit("obs_service_toggle", checked)
+
+    def update_button_style(self, checked):
+        if checked:
+            self.btn_toggle_service.setText("OBS SERVICE: ON")
+            self.btn_toggle_service.setStyleSheet("""
+                QPushButton { background-color: #004400; color: white; font-weight: bold; border-radius: 5px; border: 1px solid #006600; outline: none; font-size: 14px; }
+                QPushButton:focus { border: 1px solid #006600; }
+                QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }
+            """)
+        else:
+            self.btn_toggle_service.setText("OBS SERVICE: OFF")
+            self.btn_toggle_service.setStyleSheet("""
+                QPushButton { background-color: #440000; color: white; font-weight: bold; border-radius: 5px; border: 1px solid #660000; outline: none; font-size: 14px; }
+                QPushButton:focus { border: 1px solid #660000; }
+                QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }
+            """)
 
     def on_port_changed(self, text):
         h_port = self.ent_port.text()
