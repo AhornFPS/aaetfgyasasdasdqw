@@ -1,11 +1,11 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal enableextensions enabledelayedexpansion
 
 REM One-click Windows release helper:
 REM 1) Build Windows artifact (via build-windows.bat)
-REM 2) Generate manifest.windows.json (full + optional patch)
+REM 2) Generate manifest.windows.json + manifest.json (full + optional patch)
 REM 3) Upload Windows assets to release repo
-REM 4) Commit/push version + windows manifest to code repo
+REM 4) Commit/push version + manifests to code repo
 
 set "RELEASE_REPO=cedric12354/Better-Planetside"
 set "CHANNEL=stable"
@@ -104,6 +104,8 @@ if not defined VERSION (
 
 set "TAG=v!VERSION!"
 set "ZIP_NAME=Better-Planetside-Windows-v!VERSION!.zip"
+set "INSTALLER_NAME=BetterPlanetside-Installer-v!VERSION!.exe"
+set "HAS_INSTALLER=0"
 set "BASE_URL=https://github.com/!RELEASE_REPO!/releases/download/!TAG!"
 set "MS_ARG="
 if defined MIN_SUPPORTED set "MS_ARG=--min-supported !MIN_SUPPORTED!"
@@ -111,6 +113,14 @@ if defined MIN_SUPPORTED set "MS_ARG=--min-supported !MIN_SUPPORTED!"
 if not exist "!ZIP_NAME!" (
     echo ERROR: Expected Windows zip not found: !ZIP_NAME!
     exit /b 1
+)
+
+if exist "!INSTALLER_NAME!" (
+    set "HAS_INSTALLER=1"
+    echo Found installer: !INSTALLER_NAME!
+) else (
+    echo WARNING: Installer not found: !INSTALLER_NAME!
+    echo Proceeding without installer upload.
 )
 
 if defined WINDOWS_PATCH_PATH (
@@ -131,6 +141,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+copy /y "manifest.windows.json" "manifest.json" >nul
+if errorlevel 1 (
+    echo ERROR: Failed to create manifest.json from manifest.windows.json
+    exit /b 1
+)
+
 echo Ensuring release !TAG! exists in !RELEASE_REPO!...
 gh release view !TAG! --repo !RELEASE_REPO! >nul 2>&1
 if errorlevel 1 (
@@ -148,9 +164,17 @@ if errorlevel 1 (
 
 echo Uploading Windows assets to release...
 if defined WINDOWS_PATCH_PATH (
-    gh release upload !TAG! "!ZIP_NAME!" "!WINDOWS_PATCH_PATH!" "manifest.windows.json" --repo !RELEASE_REPO! --clobber
+    if "!HAS_INSTALLER!"=="1" (
+        gh release upload !TAG! "!ZIP_NAME!" "!INSTALLER_NAME!" "!WINDOWS_PATCH_PATH!" "manifest.windows.json" "manifest.json" --repo !RELEASE_REPO! --clobber
+    ) else (
+        gh release upload !TAG! "!ZIP_NAME!" "!WINDOWS_PATCH_PATH!" "manifest.windows.json" "manifest.json" --repo !RELEASE_REPO! --clobber
+    )
 ) else (
-    gh release upload !TAG! "!ZIP_NAME!" "manifest.windows.json" --repo !RELEASE_REPO! --clobber
+    if "!HAS_INSTALLER!"=="1" (
+        gh release upload !TAG! "!ZIP_NAME!" "!INSTALLER_NAME!" "manifest.windows.json" "manifest.json" --repo !RELEASE_REPO! --clobber
+    ) else (
+        gh release upload !TAG! "!ZIP_NAME!" "manifest.windows.json" "manifest.json" --repo !RELEASE_REPO! --clobber
+    )
 )
 if errorlevel 1 (
     echo ERROR: Failed to upload Windows assets.
@@ -158,7 +182,7 @@ if errorlevel 1 (
 )
 
 echo Committing release metadata to code repo...
-git add version.py manifest.windows.json
+git add version.py manifest.windows.json manifest.json
 git diff --cached --quiet
 if errorlevel 1 (
     git commit -m "release: !TAG! (windows metadata)"

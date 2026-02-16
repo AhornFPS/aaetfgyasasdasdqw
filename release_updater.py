@@ -198,6 +198,36 @@ class ReleaseUpdater:
                 return asset
         return None
 
+    def _manifest_asset_priority(self, manifest_name: str, platform_key: str) -> int:
+        name = str(manifest_name or "").strip().lower()
+        platform = str(platform_key or "").strip().lower()
+        if not name:
+            return 999
+        if name == f"manifest.{platform}.json":
+            return 0
+        if name == f"{platform}.manifest.json":
+            return 1
+        if name == "manifest.json":
+            return 2
+        if name.endswith(".manifest.json"):
+            return 3
+        return 999
+
+    def _collect_manifest_candidates(self, release_assets: List[Dict], platform_key: str) -> List[Tuple[str, str]]:
+        candidates: List[Tuple[int, str, str]] = []
+        for item in release_assets:
+            name = str(item.get("name", "")).strip()
+            url = str(item.get("browser_download_url", "")).strip()
+            if not name or not url:
+                continue
+            priority = self._manifest_asset_priority(name, platform_key)
+            if priority >= 999:
+                continue
+            candidates.append((priority, name.lower(), url))
+
+        candidates.sort(key=lambda x: (x[0], x[1]))
+        return [(name, url) for _, name, url in candidates]
+
     def check_for_update(self) -> Optional[UpdateInfo]:
         if not self.owner or not self.repo:
             raise RuntimeError("Updater repo owner/name is not configured.")
@@ -219,20 +249,27 @@ class ReleaseUpdater:
         manifest_url = ""
         selected_asset = None
 
+        manifest_candidates: List[Tuple[str, str]] = []
         if isinstance(release_assets, list):
-            for item in release_assets:
-                name = str(item.get("name", "")).lower().strip()
-                if name == "manifest.json" or name.endswith(".manifest.json"):
-                    manifest_url = str(item.get("browser_download_url", "")).strip()
-                    break
+            manifest_candidates = self._collect_manifest_candidates(release_assets, platform_key)
 
-        if manifest_url:
-            manifest = json.loads(self._request_bytes(manifest_url).decode("utf-8"))
+        for _manifest_name, candidate_url in manifest_candidates:
+            try:
+                manifest = json.loads(self._request_bytes(candidate_url).decode("utf-8"))
+            except Exception:
+                continue
+
+            candidate_latest_version = latest_version
             manifest_version = _normalize_version(str(manifest.get("version", latest_version)))
-            # Use manifest version if present and newer than current.
             if is_newer_version(manifest_version, self.current_version):
-                latest_version = manifest_version
-            selected_asset = self._select_manifest_asset(manifest, latest_version, platform_key)
+                candidate_latest_version = manifest_version
+
+            candidate_asset = self._select_manifest_asset(manifest, candidate_latest_version, platform_key)
+            if candidate_asset:
+                manifest_url = candidate_url
+                latest_version = candidate_latest_version
+                selected_asset = candidate_asset
+                break
 
         if not selected_asset:
             selected_asset = self._select_fallback_asset(release_assets if isinstance(release_assets, list) else [], platform_key)

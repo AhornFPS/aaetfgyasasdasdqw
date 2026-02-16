@@ -3,7 +3,7 @@ REM Build script for Better Planetside on Windows
 REM Creates a standalone executable using PyInstaller
 REM Auto-increments the version before building
 
-setlocal enabledelayedexpansion
+setlocal enableextensions enabledelayedexpansion
 
 echo === Better Planetside Windows Build Script ===
 echo.
@@ -118,23 +118,19 @@ echo.
 echo === Building Installer ===
 
 REM Check for Inno Setup compiler in common locations
-set "ISCC=ISCC.exe"
+set "ISCC="
 set "ISCC_X86=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 set "ISCC_X64=C:\Program Files\Inno Setup 6\ISCC.exe"
 
-where "!ISCC!" >nul 2>&1
-if errorlevel 1 (
-    if exist "!ISCC_X86!" (
-        set "ISCC=!ISCC_X86!"
-    ) else (
-        if exist "!ISCC_X64!" (
-            set "ISCC=!ISCC_X64!"
-        ) else (
-            echo WARNING: Inno Setup compiler (ISCC.exe) not found.
-            echo Skipping installer creation. Please install Inno Setup 6 to build installers.
-            goto :cleanup
-        )
-    )
+where ISCC.exe >nul 2>&1
+if not errorlevel 1 set "ISCC=ISCC.exe"
+if not defined ISCC if exist "!ISCC_X86!" set "ISCC=!ISCC_X86!"
+if not defined ISCC if exist "!ISCC_X64!" set "ISCC=!ISCC_X64!"
+
+if not defined ISCC (
+    echo WARNING: Inno Setup compiler ^(ISCC.exe^) not found.
+    echo Skipping installer creation. Please install Inno Setup 6 to build installers.
+    goto :cleanup
 )
 
 echo Using Inno Setup compiler: "!ISCC!"

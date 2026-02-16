@@ -2,10 +2,9 @@
 set -euo pipefail
 
 # One-click Linux release helper:
-# 1) Pull latest code (expects manifest.windows.json from Windows step)
-# 2) Build Linux artifacts
-# 3) Generate combined manifest (imports windows entries + linux entry)
-# 4) Upload AppImage + linux tar + manifest.json to release repo
+# 1) Build Linux artifacts
+# 2) Generate linux-only manifest
+# 3) Upload Linux assets to release repo
 
 RELEASE_REPO="${RELEASE_REPO:-cedric12354/Better-Planetside}"
 CHANNEL="${CHANNEL:-stable}"
@@ -13,7 +12,6 @@ MIN_SUPPORTED="${MIN_SUPPORTED:-}"
 TAG="${TAG:-}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 AUTO_CREATE_RELEASE="${AUTO_CREATE_RELEASE:-1}"
-WINDOWS_MANIFEST="${WINDOWS_MANIFEST:-manifest.windows.json}"
 
 usage() {
   cat <<EOF
@@ -24,7 +22,6 @@ Options:
   --channel NAME                Default: ${CHANNEL}
   --min-supported VERSION       Optional manifest min_supported
   --tag TAG                     Default: v<version.py>
-  --windows-manifest PATH       Default: manifest.windows.json
   --skip-build                  Forwarded to create-appimage.sh
   --no-create-release           Do not auto-create release if missing
   --help                        Show this help
@@ -47,10 +44,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tag)
       TAG="$2"
-      shift 2
-      ;;
-    --windows-manifest)
-      WINDOWS_MANIFEST="$2"
       shift 2
       ;;
     --skip-build)
@@ -81,9 +74,6 @@ echo "=== Linux One-Click Release ==="
 echo "Repo: ${RELEASE_REPO}"
 echo
 
-echo "Pulling latest code..."
-
-
 if [[ -z "$TAG" ]]; then
   if [[ ! -f "version.py" ]]; then
     echo "ERROR: version.py not found and --tag not provided."
@@ -95,12 +85,6 @@ if [[ -z "$TAG" ]]; then
     exit 1
   fi
   TAG="v${VERSION}"
-fi
-
-if [[ ! -f "$WINDOWS_MANIFEST" ]]; then
-  echo "ERROR: Windows manifest not found: $WINDOWS_MANIFEST"
-  echo "Run release-windows-oneclick.bat first and push manifest.windows.json."
-  exit 1
 fi
 
 echo "Ensuring release ${TAG} exists in ${RELEASE_REPO}..."
@@ -118,7 +102,6 @@ cmd=(
   --release-repo "$RELEASE_REPO"
   --channel "$CHANNEL"
   --tag "$TAG"
-  --import-manifest "$WINDOWS_MANIFEST"
   --upload-release
 )
 
@@ -130,7 +113,7 @@ if [[ "$SKIP_BUILD" == "1" ]]; then
   cmd+=(--skip-build)
 fi
 
-echo "Building/uploading Linux artifacts and combined manifest..."
+echo "Building/uploading Linux artifacts..."
 "${cmd[@]}"
 
 echo

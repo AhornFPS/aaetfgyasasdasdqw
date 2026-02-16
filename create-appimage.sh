@@ -13,10 +13,6 @@ RELEASE_REPO="${RELEASE_REPO:-$DEFAULT_RELEASE_REPO}"
 CHANNEL="${CHANNEL:-stable}"
 MIN_SUPPORTED="${MIN_SUPPORTED:-}"
 TAG="${TAG:-}"
-WINDOWS_FULL_ASSET="${WINDOWS_FULL_ASSET:-}"
-WINDOWS_PATCH_ASSET="${WINDOWS_PATCH_ASSET:-}"
-WINDOWS_PATCH_FROM="${WINDOWS_PATCH_FROM:-}"
-IMPORT_MANIFESTS=()
 UPLOAD_RELEASE="${UPLOAD_RELEASE:-0}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
@@ -24,24 +20,19 @@ usage() {
     cat <<EOF
 Usage: ./create-appimage.sh [options]
 
-Builds Linux artifacts, generates manifest.json, and optionally uploads assets.
+Builds Linux artifacts, generates manifest.linux.json, and optionally uploads assets.
 
 Options:
   --release-repo OWNER/REPO     GitHub releases repo (default: ${DEFAULT_RELEASE_REPO})
   --channel NAME                Manifest channel (default: stable)
   --min-supported VERSION       Manifest min_supported value (optional)
   --tag TAG                     Release tag, e.g. v1.2.0 (default: v<version>)
-  --windows-full PATH           Include Windows full ZIP in manifest/upload
-  --windows-patch PATH          Include Windows patch ZIP in manifest/upload
-  --windows-patch-from VERSION  from_version for --windows-patch
-  --import-manifest PATH        Import assets from existing manifest (repeatable)
   --upload-release              Upload AppImage, tar.gz and manifest via gh
   --skip-build                  Skip build-linux.sh and package current dist output
   --help                        Show this help
 
 Environment alternatives:
-  RELEASE_REPO, CHANNEL, MIN_SUPPORTED, TAG,
-  WINDOWS_FULL_ASSET, WINDOWS_PATCH_ASSET, WINDOWS_PATCH_FROM, UPLOAD_RELEASE, SKIP_BUILD
+  RELEASE_REPO, CHANNEL, MIN_SUPPORTED, TAG, UPLOAD_RELEASE, SKIP_BUILD
 EOF
 }
 
@@ -61,22 +52,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --tag)
             TAG="$2"
-            shift 2
-            ;;
-        --windows-full)
-            WINDOWS_FULL_ASSET="$2"
-            shift 2
-            ;;
-        --windows-patch)
-            WINDOWS_PATCH_ASSET="$2"
-            shift 2
-            ;;
-        --windows-patch-from)
-            WINDOWS_PATCH_FROM="$2"
-            shift 2
-            ;;
-        --import-manifest)
-            IMPORT_MANIFESTS+=("$2")
             shift 2
             ;;
         --upload-release)
@@ -99,28 +74,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -n "$WINDOWS_PATCH_ASSET" && -z "$WINDOWS_PATCH_FROM" ]]; then
-    echo "ERROR: --windows-patch requires --windows-patch-from"
-    exit 1
-fi
-
-if [[ -n "$WINDOWS_FULL_ASSET" && ! -f "$WINDOWS_FULL_ASSET" ]]; then
-    echo "ERROR: Windows full asset not found: $WINDOWS_FULL_ASSET"
-    exit 1
-fi
-
-if [[ -n "$WINDOWS_PATCH_ASSET" && ! -f "$WINDOWS_PATCH_ASSET" ]]; then
-    echo "ERROR: Windows patch asset not found: $WINDOWS_PATCH_ASSET"
-    exit 1
-fi
-
-for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
-    if [[ ! -f "$import_manifest" ]]; then
-        echo "ERROR: Import manifest not found: $import_manifest"
-        exit 1
-    fi
-done
-
 echo "=== Creating Linux release artifacts for $APP_NAME ==="
 
 # 1. Build
@@ -139,7 +92,7 @@ if [[ -z "$TAG" ]]; then
 fi
 OUTPUT_NAME="Better_Planetside-v${VERSION}-x86_64.AppImage"
 LINUX_TAR="Better-Planetside-Linux-v${VERSION}.tar.gz"
-MANIFEST_PATH="manifest.json"
+MANIFEST_PATH="manifest.linux.json"
 BASE_URL="https://github.com/${RELEASE_REPO}/releases/download/${TAG}"
 
 echo ""
@@ -224,7 +177,7 @@ ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run --runtime-
 echo "Creating Linux updater archive..."
 tar -czf "$LINUX_TAR" -C dist "Better Planetside"
 
-# 11. Generate combined manifest
+# 11. Generate Linux-only manifest
 echo "Generating manifest at ${MANIFEST_PATH}..."
 manifest_cmd=(
     python generate_release_manifest.py
@@ -236,27 +189,12 @@ manifest_cmd=(
 if [[ -n "$MIN_SUPPORTED" ]]; then
     manifest_cmd+=(--min-supported "$MIN_SUPPORTED")
 fi
-if [[ -n "$WINDOWS_FULL_ASSET" ]]; then
-    manifest_cmd+=(--asset "${CHANNEL},windows,full,${WINDOWS_FULL_ASSET}")
-fi
-if [[ -n "$WINDOWS_PATCH_ASSET" ]]; then
-    manifest_cmd+=(--asset "${CHANNEL},windows,patch,${WINDOWS_PATCH_ASSET},${WINDOWS_PATCH_FROM}")
-fi
-for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
-    manifest_cmd+=(--import-manifest "$import_manifest")
-done
 "${manifest_cmd[@]}"
 
 # 12. Cleanup
 echo "Cleaning up build artifacts..."
 rm -rf "$APPDIR"
 rm -rf build dist build_env
-# Remove temporary imported windows manifest if it's not the main one
-for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
-    if [[ "$import_manifest" != "$MANIFEST_PATH" ]]; then
-        rm -f "$import_manifest"
-    fi
-done
 
 # 13. Optional upload
 if [[ "$UPLOAD_RELEASE" == "1" ]]; then
@@ -267,12 +205,6 @@ if [[ "$UPLOAD_RELEASE" == "1" ]]; then
 
     echo "Uploading assets to ${RELEASE_REPO} (${TAG})..."
     upload_args=("$LINUX_TAR" "$MANIFEST_PATH")
-    if [[ -n "$WINDOWS_FULL_ASSET" ]]; then
-        upload_args+=("$WINDOWS_FULL_ASSET")
-    fi
-    if [[ -n "$WINDOWS_PATCH_ASSET" ]]; then
-        upload_args+=("$WINDOWS_PATCH_ASSET")
-    fi
 
     gh release upload "$TAG" "${upload_args[@]}" --repo "$RELEASE_REPO" --clobber
 fi
