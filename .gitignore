@@ -34,3 +34,12 @@ venv/
 Better-Planetside-*.zip
 Better_Planetside-v*-x86_64.AppImage
 dist/Better-Planetside-Linux-v*.tar.gz
+
+# Release artifacts (generated)
+manifest.json
+manifest.windows.json
+manifest.linux.json
+*.manifest.json
+BetterPlanetside-Installer-v*.exe
+Better-Planetside-Windows-v*.zip
+Better-Planetside-Linux-v*.tar.gz
