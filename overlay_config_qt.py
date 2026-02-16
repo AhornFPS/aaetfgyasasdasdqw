@@ -723,18 +723,15 @@ class OverlayConfigWindow(QWidget):
         layout.addLayout(master_row)
 
         # --- DEFINITION DER DROPDOWNS ---
-        # Hier sind jetzt deine neuen Heal-Werte eingepflegt
+        # Heal milestones intentionally limited to configured subset values.
         self.EXPANDABLE_EVENTS = {
             "Heal": [
-                "Heal 2", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000", "Heal 10000"
+                "Heal 50", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000"
             ],
             "Revive Given": [
                 # WICHTIG: Die Namen müssen mit "Revive Given" anfangen!
                 "Revive Given 5", "Revive Given 10", "Revive Given 25", "Revive Given 50",
                 "Revive Given 100", "Revive Given 500"
-            ],
-            "Revive Taken": [
-                "Revive Taken 5", "Revive Taken 10", "Revive Taken 25"
             ],
             "Resupply": [
                 "Resupply 50", "Resupply 100", "Resupply 250", "Resupply 500", "Resupply 1000"

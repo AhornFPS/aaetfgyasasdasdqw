@@ -1148,7 +1148,7 @@ class DiorClientGUI:
             for cat_list in ui.event_categories.values():
                 all_events.update(cat_list)
         
-        # From Expandables (Heal 2, Kill Infil, etc.)
+        # From Expandables (Heal 50, Kill Infil, etc.)
         if hasattr(ui, "EXPANDABLE_EVENTS"):
             for sub_list in ui.EXPANDABLE_EVENTS.values():
                 all_events.update(sub_list)
@@ -2389,6 +2389,49 @@ class DiorClientGUI:
     # =========================================================
     # EVENT SAVE SLOT SYSTEM
     # =========================================================
+    def _migrate_heal_event_names(self):
+        """
+        Migrates legacy heal milestone event names to the current naming scheme.
+        Applies to active events and all saved event slots.
+        """
+        rename_map = {
+            "Heal 2": "Heal 50",
+            "Heal 10000": "Heal 5000",
+        }
+
+        def merge_if_needed(target_obj, source_obj):
+            if not isinstance(target_obj, dict) or not isinstance(source_obj, dict):
+                return
+            # Preserve existing target config; only fill missing keys from legacy source.
+            for k, v in source_obj.items():
+                if k not in target_obj:
+                    target_obj[k] = v
+
+        def migrate_event_map(event_map):
+            if not isinstance(event_map, dict):
+                return False
+            changed_local = False
+            for old_name, new_name in rename_map.items():
+                if old_name not in event_map:
+                    continue
+                old_obj = event_map.pop(old_name)
+                if new_name not in event_map:
+                    event_map[new_name] = old_obj
+                else:
+                    merge_if_needed(event_map[new_name], old_obj if isinstance(old_obj, dict) else {})
+                changed_local = True
+            return changed_local
+
+        changed = False
+        changed = migrate_event_map(self.config.get("events", {})) or changed
+
+        slots = self.config.get("event_slots", {})
+        if isinstance(slots, dict):
+            for slot_data in slots.values():
+                changed = migrate_event_map(slot_data) or changed
+
+        return changed
+
     def init_event_slots(self):
         """Initialize the event slot system. Migrate legacy config if needed."""
         import copy
@@ -2407,6 +2450,11 @@ class DiorClientGUI:
         if not self.config["event_slots"]:
             self.config["event_slots"]["Default"] = {}
             self.config["active_event_slot"] = "Default"
+
+        # 2b. Heal event name migration for legacy configs/slots.
+        if self._migrate_heal_event_names():
+            self.save_config()
+            self.add_log("SYS: Migrated legacy Heal event names to new milestones.")
 
         # 3. Populate the combo box
         ui = self.ovl_config_win
