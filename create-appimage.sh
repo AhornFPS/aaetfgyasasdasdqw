@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration
 APP_NAME="Better Planetside"
 APP_NAME_SLUG="better-planetside"
-ICON_SOURCE="assets/christiandior.png"
+ICON_SOURCE="assets/Images/BetterPlannetsideIcon.png"
 BUILD_DIR="dist/Better Planetside"
 APPDIR="AppDir"
 DEFAULT_RELEASE_REPO="cedric12354/Better-Planetside"
@@ -258,7 +258,7 @@ if [[ "$UPLOAD_RELEASE" == "1" ]]; then
     fi
 
     echo "Uploading assets to ${RELEASE_REPO} (${TAG})..."
-    upload_args=("$OUTPUT_NAME" "$LINUX_TAR" "$MANIFEST_PATH")
+    upload_args=("$LINUX_TAR" "$MANIFEST_PATH")
     if [[ -n "$WINDOWS_FULL_ASSET" ]]; then
         upload_args+=("$WINDOWS_FULL_ASSET")
     fi

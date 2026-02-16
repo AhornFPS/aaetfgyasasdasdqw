@@ -152,5 +152,5 @@ echo Package:  !ZIP_NAME!
 for %%A in ("!ZIP_NAME!") do echo Size:     %%~zA bytes
 echo.
 
-pause
+if not defined NON_INTERACTIVE pause
 endlocal

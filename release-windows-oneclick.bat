@@ -88,6 +88,8 @@ echo === Windows One-Click Release ===
 echo Repo: !RELEASE_REPO!
 echo.
 
+set "NON_INTERACTIVE=1"
+
 call build-windows.bat
 if errorlevel 1 (
     echo ERROR: build-windows.bat failed.
@@ -174,6 +176,7 @@ if errorlevel 1 (
     echo ERROR: git push failed.
     exit /b 1
 )
+echo Windows assets uploaded and metadata pushed.
 
 echo.
 echo Windows release step finished for !TAG!.

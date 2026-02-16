@@ -1,5 +1,5 @@
 {
-  "version": "1.1.2",
+  "version": "1.1.3",
   "min_supported": "",
   "assets": [
     {
@@ -7,7 +7,7 @@
       "platform": "windows",
       "kind": "full",
       "name": "Better-Planetside-Windows-v1.1.2.zip",
-      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.2/Better-Planetside-Windows-v1.1.2.zip",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.3/Better-Planetside-Windows-v1.1.2.zip",
       "sha256": "e0513b4bfe31a8e68c8213ca25f21fc2e5d7d299b4f02c5bd9c1034c910b6ad0",
       "size": 248430188
     },
@@ -15,10 +15,10 @@
       "channel": "stable",
       "platform": "linux",
       "kind": "full",
-      "name": "Better-Planetside-Linux-v1.1.2.tar.gz",
-      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.2/Better-Planetside-Linux-v1.1.2.tar.gz",
-      "sha256": "985e10e54722959282a6b4badd9701ec4d7029dbe99e9c53a74aed4813327e4d",
-      "size": 308561300
+      "name": "Better-Planetside-Linux-v1.1.3.tar.gz",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.3/Better-Planetside-Linux-v1.1.3.tar.gz",
+      "sha256": "57989eac87e86b275e14255925fe81ff2db09b6fa1f367bedae3b75545a3e877",
+      "size": 308549838
     }
   ]
 }
