@@ -191,16 +191,34 @@ exec "\${HERE}/usr/bin/$APP_NAME_SLUG/Better Planetside" "\$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
-# 8. Download appimagetool if needed
+# 8. Download AppImage tools if needed
 if [ ! -f "appimagetool-x86_64.AppImage" ]; then
     echo "Downloading appimagetool..."
     wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
     chmod +x appimagetool-x86_64.AppImage
 fi
 
+# 8.5 Download runtime if needed (to avoid appimagetool hanging on download)
+if [ ! -f "runtime-x86_64" ] || [ $(stat -c%s "runtime-x86_64" 2>/dev/null || echo 0) -lt 800000 ]; then
+    echo "Downloading AppImage runtime..."
+    RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+    if command -v aria2c >/dev/null 2>&1; then
+        aria2c -x 16 -s 16 -o "runtime-x86_64" "$RUNTIME_URL" --allow-overwrite=true
+    else
+        wget --tries=10 --timeout=30 "$RUNTIME_URL" -O "runtime-x86_64"
+    fi
+    
+    if [ $(stat -c%s "runtime-x86_64" 2>/dev/null || echo 0) -lt 800000 ]; then
+        echo "ERROR: AppImage runtime download failed or is incomplete."
+        exit 1
+    fi
+    chmod +x runtime-x86_64
+fi
+
 # 9. Build AppImage
 echo "Building AppImage..."
-ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run "$APPDIR" "$OUTPUT_NAME"
+# Use --runtime-file to skip appimagetool's internal download
+ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run --runtime-file runtime-x86_64 "$APPDIR" "$OUTPUT_NAME"
 
 # 10. Build Linux updater archive (.tar.gz)
 echo "Creating Linux updater archive..."
