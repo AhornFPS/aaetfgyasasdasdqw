@@ -13,8 +13,8 @@ try:
 except ImportError:
     LOG_DIR = os.getcwd()
 
-HTTP_PORT = 8000
-WS_PORT = 6789
+HTTP_PORT = 31337
+WS_PORT = 31338
 
 def server_log(msg):
     log_path = os.path.join(LOG_DIR, "overlay_server.log")
@@ -192,12 +192,22 @@ class OverlayServer:
             return
 
         self.is_running = True
+        
+        # Use events to wait for ports to be bound
+        self.http_ready = threading.Event()
+        self.ws_ready = threading.Event()
 
-        self.http_thread = threading.Thread(target=self._run_http, daemon=True)
+        self.http_thread = threading.Thread(target=self._run_http, name="HTTP-Server", daemon=True)
         self.http_thread.start()
 
-        self.ws_thread = threading.Thread(target=self._run_ws, daemon=True)
+        self.ws_thread = threading.Thread(target=self._run_ws, name="WS-Server", daemon=True)
         self.ws_thread.start()
+        
+        # Wait a bit for threads to start and bind ports
+        self.http_ready.wait(timeout=2.0)
+        self.ws_ready.wait(timeout=2.0)
+        
+        return self.http_port, self.ws_port
 
     def stop(self):
         self.is_running = False
@@ -222,36 +232,77 @@ class OverlayServer:
 
     def _run_http(self):
         HTTPServer.allow_reuse_address = True
-        try:
-            self.httpd = HTTPServer(('0.0.0.0', self.http_port), AssetHTTPHandler)
-            self.httpd.ws_port = self.ws_port
-            print(f'WEB: Overlay ready at http://localhost:{self.http_port}')
-            self.httpd.serve_forever()
-        except OSError:
-            print(f'WARNUNG: Port {self.http_port} ist belegt.')
-        except Exception as e:
-            print(f'HTTP Server Error: {e}')
+        max_attempts = 10
+        for i in range(max_attempts):
+            try:
+                current_port = self.http_port + i
+                self.httpd = HTTPServer(('127.0.0.1', current_port), AssetHTTPHandler)
+                self.http_port = current_port
+                self.httpd.ws_port = self.ws_port
+                print(f'WEB: Overlay ready at http://localhost:{self.http_port}')
+                self.http_ready.set()
+                self.httpd.serve_forever()
+                return
+            except OSError:
+                if i < max_attempts - 1:
+                    continue
+                print(f'ERROR: All HTTP ports from {self.http_port} to {self.http_port + i} are busy.')
+            except Exception as e:
+                print(f'HTTP Server Error: {e}')
+                break
+        self.http_ready.set() # Release even on failure
 
     def _run_ws(self):
         self.ws_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.ws_loop)
 
-        async def start_ws():
-            try:
-                async with websockets.serve(self._ws_handler, '0.0.0.0', self.ws_port):
-                    await asyncio.Future()
-            except Exception as e:
-                print(f'WS Server Error: {e}')
+        async def ws_main():
+            max_attempts = 10
+            found = False
+            for i in range(max_attempts):
+                try:
+                    port = self.ws_port + i
+                    # We have to use websockets.serve within the loop
+                    async with websockets.serve(self._ws_handler, '127.0.0.1', port):
+                        self.ws_port = port
+                        found = True
+                        print(f'WS: WebSocket listening on port {self.ws_port}')
+                        self.ws_ready.set()
+                        await asyncio.Future() # Run forever
+                except OSError:
+                    if i < max_attempts - 1: continue
+                except Exception as e:
+                    print(f"WS Port Error: {e}")
+                    break
+            
+            if not found:
+                print(f"WS Error: Could not find free port for WebSocket server.")
+                self.ws_ready.set()
 
-        print(f'WS: WebSocket listening on port {self.ws_port}')
         try:
-            self.ws_loop.run_until_complete(start_ws())
+            self.ws_loop.run_until_complete(ws_main())
         except asyncio.CancelledError:
             pass
         except Exception as e:
             print(f'WS Loop Error: {e}')
+        finally:
+            self.ws_ready.set()
 
     async def _ws_handler(self, websocket):
+        # Path filtering to prevent connection to/from other applications
+        # Newer websockets versions store the path in websocket.request.path
+        try:
+            path = getattr(websocket, 'path', None)
+            if path is None and hasattr(websocket, 'request'):
+                path = websocket.request.path
+        except Exception:
+            path = None
+
+        if path != "/better_planetside":
+            server_log(f"WS CONNECTION REJECTED: Invalid path {path}")
+            await websocket.close(1008, "Invalid Path")
+            return
+
         self.ws_clients.add(websocket)
         try:
             with self._state_lock:

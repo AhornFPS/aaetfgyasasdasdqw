@@ -1254,9 +1254,14 @@ class QtOverlay(QWidget):
             except:
                 pass
 
-        # Trigger the next one immediately (Parallel/Pooled)
-        # Use singleShot to avoid infinite recursion / stack overflow
-        QTimer.singleShot(0, self.process_next_event)
+        # 4. Handle Next Event
+        # If queue is enabled, we wait for the duration of this event before processing the next.
+        # This ensures serial playback for normal events.
+        # Hitmarkers skip this queue entirely (handled in add_event_to_queue).
+        
+        # We add a 100ms buffer to ensure clean transitions
+        wait_time = max(100, int(duration) + 100)
+        self.queue_timer.start(wait_time)
 
     def finish_current_event(self):
         self.current_event_key = None
@@ -2236,14 +2241,14 @@ class QtOverlay(QWidget):
         if self.gui_ref:
             obs_cfg = self.gui_ref.config.get("obs_service", {
                 "enabled": True,
-                "port": 8000,
-                "ws_port": 6789
+                "port": 31337,
+                "ws_port": 31338
             })
-            h_port = obs_cfg.get("port", 8000)
-            w_port = obs_cfg.get("ws_port", 6789)
+            h_port = obs_cfg.get("port", 31337)
+            w_port = obs_cfg.get("ws_port", 31338)
         else:
-            h_port = 8000
-            w_port = 6789
+            h_port = 31337
+            w_port = 31338
 
         if self.server and self.server.is_running:
             same_ports = (self.server.http_port == h_port and self.server.ws_port == w_port)
@@ -2254,9 +2259,9 @@ class QtOverlay(QWidget):
 
         try:
             self.server = OverlayServer(http_port=h_port, ws_port=w_port)
-            self.server.start()
-            print(f"OBS SERVICE: Started on port {h_port} (WS: {w_port})")
-            self.load_web_overlay(h_port)
+            actual_h_port, actual_w_port = self.server.start()
+            print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
+            self.load_web_overlay(actual_h_port)
         except Exception as e:
             print(f"OBS SERVICE ERROR: Could not start server: {e}")
 

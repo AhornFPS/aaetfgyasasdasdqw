@@ -12,7 +12,7 @@
     wsUrl() {
       const cfg = window.OVERLAY_CONFIG || {};
       const port = Number(cfg.wsPort || 6789);
-      return `ws://localhost:${port}`;
+      return `ws://127.0.0.1:${port}/better_planetside`;
     }
 
     connect() {

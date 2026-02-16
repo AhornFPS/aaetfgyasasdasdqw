@@ -69,7 +69,14 @@ echo Installing application dependencies...
 pip install -r requirements.txt
 
 REM ---------------------------------------------------------
-REM 3. BUILD
+REM 3. PREPARE ASSETS
+REM ---------------------------------------------------------
+
+echo Converting icons...
+python convert_icon.py
+
+REM ---------------------------------------------------------
+REM 4. BUILD
 REM ---------------------------------------------------------
 
 REM Clean previous builds
@@ -86,6 +93,7 @@ REM 4. PACKAGE
 REM ---------------------------------------------------------
 
 set "ZIP_NAME=Better-Planetside-Windows-v!NEW_VERSION!.zip"
+set "INSTALLER_SCRIPT=installer_script.iss"
 
 echo.
 echo Packaging into %ZIP_NAME%...
@@ -97,7 +105,33 @@ REM Create ZIP archive
 powershell -Command "Compress-Archive -Path 'dist\Better Planetside' -DestinationPath '!ZIP_NAME!'"
 
 REM ---------------------------------------------------------
-REM 5. CLEANUP
+REM 5. INSTALLER (Inno Setup)
+REM ---------------------------------------------------------
+
+echo.
+echo === Building Installer ===
+
+REM Check for Inno Setup compiler in common locations
+set "ISCC=ISCC.exe"
+where !ISCC! >nul 2>&1
+if errorlevel 1 (
+    if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
+        set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    ) else if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
+        set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
+    ) else (
+        echo WARNING: Inno Setup compiler (ISCC.exe) not found.
+        echo Skipping installer creation. Please install Inno Setup 6 to build installers.
+        goto :cleanup
+    )
+)
+
+echo Using Inno Setup compiler: "!ISCC!"
+"!ISCC!" /DNEW_VERSION=!NEW_VERSION! "!INSTALLER_SCRIPT!"
+
+:cleanup
+REM ---------------------------------------------------------
+REM 6. CLEANUP
 REM ---------------------------------------------------------
 
 echo Cleaning up build artifacts...
