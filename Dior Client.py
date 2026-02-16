@@ -260,7 +260,8 @@ sys.excepthook = log_exception
 
 # Global Constants
 CONFIG_FILE = "config.json"
-CONFIG_SCHEMA_VERSION = 2
+CONFIG_SCHEMA_VERSION = 4
+LEGACY_UPDATE_REPO = "AhornFPS/Better-Planetside"
 DEFAULT_UPDATE_REPO = "cedric12354/Better-Planetside"
 
 class DiorClientGUI:
@@ -2481,6 +2482,41 @@ class DiorClientGUI:
             changed = self._migrate_heal_event_names_in_config(config_obj) or changed
             current = 2
 
+        # v2 -> v3: ensure updates section has required defaults.
+        if current < 3:
+            updates_cfg = config_obj.get("updates")
+            if not isinstance(updates_cfg, dict):
+                updates_cfg = {}
+                config_obj["updates"] = updates_cfg
+                changed = True
+
+            repo_raw = str(updates_cfg.get("repo", "")).strip()
+            if (not repo_raw) or (repo_raw.lower() == LEGACY_UPDATE_REPO.lower()):
+                updates_cfg["repo"] = DEFAULT_UPDATE_REPO
+                changed = True
+
+            channel_raw = str(updates_cfg.get("channel", "")).strip().lower()
+            if not channel_raw:
+                updates_cfg["channel"] = "stable"
+                changed = True
+
+            current = 3
+
+        # v3 -> v4: move updater checks back to the release repository.
+        if current < 4:
+            updates_cfg = config_obj.get("updates")
+            if not isinstance(updates_cfg, dict):
+                updates_cfg = {}
+                config_obj["updates"] = updates_cfg
+                changed = True
+
+            repo_raw = str(updates_cfg.get("repo", "")).strip()
+            if (not repo_raw) or (repo_raw.lower() == LEGACY_UPDATE_REPO.lower()):
+                updates_cfg["repo"] = DEFAULT_UPDATE_REPO
+                changed = True
+
+            current = 4
+
         if current != int(config_obj.get("config_schema_version", 0) or 0):
             config_obj["config_schema_version"] = current
             changed = True
@@ -4469,6 +4505,15 @@ class DiorClientGUI:
     def _build_release_updater(self):
         updates_cfg = self.config.get("updates", {})
         repo_raw = str(updates_cfg.get("repo", DEFAULT_UPDATE_REPO)).strip()
+        if repo_raw.lower() == LEGACY_UPDATE_REPO.lower():
+            repo_raw = DEFAULT_UPDATE_REPO
+            try:
+                if isinstance(updates_cfg, dict):
+                    updates_cfg["repo"] = repo_raw
+                    self.config["updates"] = updates_cfg
+                    self.save_config()
+            except Exception:
+                pass
         if "/" not in repo_raw:
             repo_raw = DEFAULT_UPDATE_REPO
 
@@ -4761,11 +4806,15 @@ class DiorClientGUI:
     [string]$LaunchExe,
     [string]$LaunchArg0,
     [string]$SuccessPath,
-    [string]$UpdatedVersion
+    [string]$UpdatedVersion,
+    [string]$WaitTimeoutSec = "120"
     )
 
     $ErrorActionPreference = "Stop"
     $baseDir = Split-Path -Parent $PendingPath
+    if (-not $baseDir) { $baseDir = $env:TEMP }
+    New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
+
     $logPath = Join-Path $baseDir "apply_update.log"
     function Write-UpdateLog([string]$msg) {
         try {
@@ -4775,12 +4824,25 @@ class DiorClientGUI:
     }
     trap {
         Write-UpdateLog ("ERROR: " + $_.Exception.Message)
-        break
+        exit 1
     }
-    Write-UpdateLog ("START asset=" + $AssetPath + " target=" + $TargetDir)
+
+    $timeoutSec = 120
+    try {
+        $timeoutSec = [Math]::Max(15, [int]$WaitTimeoutSec)
+    } catch {}
+
+    Write-UpdateLog ("START asset=" + $AssetPath + " target=" + $TargetDir + " timeout=" + $timeoutSec)
 
     if ($PidToWait) {
+        $deadline = (Get-Date).AddSeconds($timeoutSec)
         while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
+            if ((Get-Date) -ge $deadline) {
+                Write-UpdateLog ("WARN: Timeout waiting for pid " + $PidToWait + ". Forcing stop.")
+                try { Stop-Process -Id ([int]$PidToWait) -Force -ErrorAction SilentlyContinue } catch {}
+                Start-Sleep -Milliseconds 800
+                break
+            }
             Start-Sleep -Milliseconds 350
         }
     }
@@ -4790,12 +4852,7 @@ class DiorClientGUI:
     }
 
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    # Never run replacements while current directory is inside the install folder.
-    if ($baseDir -and (Test-Path -LiteralPath $baseDir)) {
-        Set-Location -LiteralPath $baseDir
-    } else {
-        Set-Location -LiteralPath $env:TEMP
-    }
+    Set-Location -LiteralPath $baseDir
     $workDir = Join-Path $baseDir ("apply_" + $timestamp)
     $extractDir = Join-Path $workDir "extract"
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
@@ -4823,7 +4880,15 @@ class DiorClientGUI:
     if (Test-Path -Path $TargetDir -PathType Leaf) {
         # File replacement (onefile)
         $backupFile = "$TargetDir._backup_$timestamp"
-        $newFile = Join-Path $extractDir (Split-Path -Leaf $TargetDir)
+        $targetName = Split-Path -Leaf $TargetDir
+        $newFile = Join-Path $sourceDir $targetName
+        if (!(Test-Path -LiteralPath $newFile)) {
+            $match = Get-ChildItem -Path $extractDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $targetName } | Select-Object -First 1
+            if ($match) { $newFile = $match.FullName }
+        }
+        if (!(Test-Path -LiteralPath $newFile)) {
+            throw "Updated file not found in package: $targetName"
+        }
 
         Move-Item -LiteralPath $TargetDir -Destination $backupFile -Force
         try {
@@ -4833,7 +4898,7 @@ class DiorClientGUI:
             Remove-Item -LiteralPath $backupFile -Force -ErrorAction SilentlyContinue
         } catch {
             if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Force }
-            Move-Item -LiteralPath $backupFile -Destination $TargetDir -Force
+            if (Test-Path -LiteralPath $backupFile) { Move-Item -LiteralPath $backupFile -Destination $TargetDir -Force }
             throw
         }
     } else {
@@ -4845,15 +4910,23 @@ class DiorClientGUI:
             Copy-Item -Path $_.FullName -Destination $newDir -Recurse -Force
         }
 
-        Move-Item -LiteralPath $TargetDir -Destination $backupDir -Force
+        $hadBackup = $false
+        if (Test-Path -LiteralPath $TargetDir) {
+            Move-Item -LiteralPath $TargetDir -Destination $backupDir -Force
+            $hadBackup = $true
+        }
         try {
             Move-Item -LiteralPath $newDir -Destination $TargetDir -Force
             if (Test-Path -LiteralPath $PendingPath) { Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue }
             # Success: Clean up backup
-            Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            if ($hadBackup) {
+                Remove-Item -LiteralPath $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
         } catch {
             if (Test-Path -LiteralPath $TargetDir) { Remove-Item -LiteralPath $TargetDir -Recurse -Force }
-            Move-Item -LiteralPath $backupDir -Destination $TargetDir -Force
+            if ($hadBackup -and (Test-Path -LiteralPath $backupDir)) {
+                Move-Item -LiteralPath $backupDir -Destination $TargetDir -Force
+            }
             throw
         }
     }
@@ -4899,20 +4972,51 @@ LAUNCH_EXE="${5:-}"
 LAUNCH_ARG0="${6:-}"
 SUCCESS_PATH="${7:-}"
 UPDATED_VERSION="${8:-}"
+WAIT_TIMEOUT_SEC="${9:-120}"
+
+base_dir="$(dirname "$PENDING_PATH")"
+if [[ -z "$base_dir" || "$base_dir" == "." ]]; then
+  base_dir="/tmp"
+fi
+mkdir -p "$base_dir" || true
+log_path="${base_dir}/apply_update.log"
+log() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$log_path"
+}
+on_err() {
+  log "ERROR line=$1 cmd=$2"
+  exit 1
+}
+trap 'on_err "$LINENO" "$BASH_COMMAND"' ERR
+
+if ! [[ "$WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]]; then
+  WAIT_TIMEOUT_SEC=120
+fi
+if (( WAIT_TIMEOUT_SEC < 15 )); then
+  WAIT_TIMEOUT_SEC=15
+fi
+log "START asset=$ASSET_PATH target=$TARGET_DIR timeout=$WAIT_TIMEOUT_SEC"
 
 if [[ -n "$PID_TO_WAIT" ]]; then
+  end_ts=$(( $(date +%s) + WAIT_TIMEOUT_SEC ))
   while kill -0 "$PID_TO_WAIT" 2>/dev/null; do
+    if (( $(date +%s) >= end_ts )); then
+      log "WARN timeout waiting for pid $PID_TO_WAIT; forcing stop"
+      kill "$PID_TO_WAIT" 2>/dev/null || true
+      sleep 1
+      kill -9 "$PID_TO_WAIT" 2>/dev/null || true
+      break
+    fi
     sleep 0.35
   done
 fi
 
 if [[ ! -f "$ASSET_PATH" ]]; then
-  echo "Asset not found: $ASSET_PATH" >&2
+  log "ERROR asset not found: $ASSET_PATH"
   exit 2
 fi
 
 timestamp="$(date +%Y%m%d_%H%M%S)"
-base_dir="$(dirname "$PENDING_PATH")"
 work_dir="${base_dir}/apply_${timestamp}"
 extract_dir="${work_dir}/extract"
 mkdir -p "$extract_dir"
@@ -4922,7 +5026,7 @@ case "${ASSET_PATH,,}" in
     if command -v unzip >/dev/null 2>&1; then
       unzip -oq "$ASSET_PATH" -d "$extract_dir"
     else
-      echo "unzip is required to apply zip updates" >&2
+      log "ERROR unzip required for zip updates"
       exit 3
     fi
     ;;
@@ -4935,7 +5039,7 @@ case "${ASSET_PATH,,}" in
     chmod +x "$extract_dir/$(basename "$TARGET_DIR")"
     ;;
   *)
-    echo "Unsupported staged asset format: $ASSET_PATH" >&2
+    log "ERROR unsupported staged asset format: $ASSET_PATH"
     exit 4
     ;;
 esac
@@ -4961,25 +5065,29 @@ fi
 if [[ -f "$TARGET_DIR" ]]; then
     # File replacement (onefile / AppImage)
     backup_file="${TARGET_DIR}._backup_${timestamp}"
-    new_file="$source_dir/$(basename "$TARGET_DIR")"
-    
-    # Safety: if new_file is somehow a directory (e.g. faulty source_dir), 
+    target_name="$(basename "$TARGET_DIR")"
+    new_file="$source_dir/$target_name"
+
+    # Safety: if new_file is somehow a directory (e.g. faulty source_dir),
     # look for the binary inside it if it has the same name.
-    if [[ -d "$new_file" ]]; then
-        if [[ -f "$new_file/$(basename "$TARGET_DIR")" ]]; then
-            new_file="$new_file/$(basename "$TARGET_DIR")"
+    if [[ -d "$new_file" && -f "$new_file/$target_name" ]]; then
+        new_file="$new_file/$target_name"
+    fi
+    if [[ ! -f "$new_file" ]]; then
+        found_file="$(find "$extract_dir" -type f -name "$target_name" | head -n 1 || true)"
+        if [[ -n "$found_file" ]]; then
+            new_file="$found_file"
         fi
     fi
-
     if [[ ! -f "$new_file" ]]; then
-        echo "Error: New binary not found at $new_file" >&2
+        log "ERROR new binary not found for target: $target_name"
         exit 7
     fi
 
     mv "$TARGET_DIR" "$backup_file"
     if cp -a "$new_file" "$TARGET_DIR"; then
         rm -f "$PENDING_PATH" || true
-        # Success: Clean up this backup immediately
+        # Success: clean up this backup immediately
         rm -f "$backup_file" || true
     else
         mv "$backup_file" "$TARGET_DIR"
@@ -4990,18 +5098,24 @@ else
     new_dir="${TARGET_DIR}._new_${timestamp}"
     backup_dir="${TARGET_DIR}._backup_${timestamp}"
     mkdir -p "$new_dir"
-    
-    # Use rsync style copy if available, otherwise cp -a
+
     cp -a "$source_dir"/. "$new_dir"/
 
-    mv "$TARGET_DIR" "$backup_dir"
+    had_backup=0
+    if [[ -d "$TARGET_DIR" ]]; then
+      mv "$TARGET_DIR" "$backup_dir"
+      had_backup=1
+    fi
     if mv "$new_dir" "$TARGET_DIR"; then
       rm -f "$PENDING_PATH" || true
-      # Success: Clean up the old directory backup
-      rm -rf "$backup_dir" || true
+      if (( had_backup == 1 )); then
+        rm -rf "$backup_dir" || true
+      fi
     else
       rm -rf "$new_dir" || true
-      mv "$backup_dir" "$TARGET_DIR"
+      if (( had_backup == 1 )) && [[ -d "$backup_dir" ]]; then
+        mv "$backup_dir" "$TARGET_DIR"
+      fi
       exit 5
     fi
 fi
@@ -5026,6 +5140,8 @@ if [[ -n "$LAUNCH_EXE" ]]; then
     nohup "$LAUNCH_EXE" >/dev/null 2>&1 &
   fi
 fi
+
+log "DONE"
 '''
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script)
@@ -5050,6 +5166,14 @@ fi
         scripts_dir = os.path.join(updates_dir, "scripts")
         os.makedirs(scripts_dir, exist_ok=True)
 
+        updates_cfg = self.config.get("updates", {}) if isinstance(self.config, dict) else {}
+        try:
+            wait_timeout_sec = int(updates_cfg.get("apply_wait_timeout_sec", 120) or 120)
+        except Exception:
+            wait_timeout_sec = 120
+        wait_timeout_sec = max(15, min(wait_timeout_sec, 1800))
+        apply_log_path = os.path.join(updates_dir, "apply_update.log")
+
         try:
             if IS_WINDOWS:
                 script_path = os.path.join(scripts_dir, "apply_update.ps1")
@@ -5069,6 +5193,7 @@ fi
                     launch_arg0,
                     success_path,
                     updated_version,
+                    str(wait_timeout_sec),
                 ]
                 creation_flags = 0x00000008 | 0x00000200
                 subprocess.Popen(cmd, creationflags=creation_flags, cwd=scripts_dir)
@@ -5086,6 +5211,7 @@ fi
                     launch_arg0,
                     success_path,
                     updated_version,
+                    str(wait_timeout_sec),
                 ]
                 subprocess.Popen(
                     cmd,
@@ -5102,6 +5228,8 @@ fi
             )
             return
 
+        self.add_log(f"UPDATE: External updater script: {script_path}")
+        self.add_log(f"UPDATE: Apply log path: {apply_log_path}")
         self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
         QTimer.singleShot(150, self.qt_app.quit)
 

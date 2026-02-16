@@ -151,6 +151,10 @@ Schema migrations are applied automatically on startup (for example event-name r
 - The updater supports `manifest.json` release assets with platform-specific **patch** and **full** packages.
 - Downloaded updates are staged under the user config directory in `updates/staging/` with checksum verification.
 - Staged updates can be applied via **apply-on-restart** with rollback to a backup folder if swap fails.
+- Apply scripts are written to user-writable paths:
+  - Windows: `%APPDATA%\BetterPlanetside\updates\scripts\apply_update.ps1`
+  - Linux: `$XDG_CONFIG_HOME/BetterPlanetside/updates/scripts/apply_update.sh` (fallback: `~/.config/BetterPlanetside/updates/scripts/apply_update.sh`)
+- Apply logs are written to `updates/apply_update.log` in that same user config directory.
 - A release manifest template is included in `update_manifest.example.json`.
 - Current auto-apply expects archive artifacts (`.zip` on Windows, `.zip`/`.tar.gz` on Linux).
 
