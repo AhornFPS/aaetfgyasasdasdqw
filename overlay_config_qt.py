@@ -1085,8 +1085,10 @@ class OverlayConfigWindow(QWidget):
         self.cross_path = QLineEdit()
         img_layout.addWidget(self.cross_path)
 
-        self.btn_browse_cross = QPushButton("Browse")
+        self.btn_browse_cross = QPushButton("...")
         self.btn_browse_cross.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_browse_cross.setFixedWidth(40)
+        self.btn_browse_cross.setStyleSheet("padding: 2px;")
         img_layout.addWidget(self.btn_browse_cross)
         layout.addLayout(img_layout)
 
@@ -1214,7 +1216,7 @@ class OverlayConfigWindow(QWidget):
 
         self.btn_browse_streak_img = QPushButton("...")
         self.btn_browse_streak_img.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_browse_streak_img.setFixedWidth(30)
+        self.btn_browse_streak_img.setFixedWidth(40)
         self.btn_browse_streak_img.setStyleSheet(
             "QPushButton { background-color: #333; color: white; border: 1px solid #555; padding: 2px; outline: none; }"
             "QPushButton:hover { border: 1px solid #00f2ff; }"
@@ -1263,7 +1265,7 @@ class OverlayConfigWindow(QWidget):
 
             btn_browse = QPushButton("...")
             btn_browse.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn_browse.setFixedWidth(30)
+            btn_browse.setFixedWidth(40)
             btn_browse.setStyleSheet(
                 "QPushButton { background-color: #333; color: white; border: 1px solid #555; padding: 2px; outline: none; }"
                 "QPushButton:hover { border: 1px solid #00f2ff; }"
@@ -1629,6 +1631,7 @@ class OverlayConfigWindow(QWidget):
         self.btn_browse_hs_icon = QPushButton("...")
         self.btn_browse_hs_icon.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_browse_hs_icon.setFixedWidth(40)
+        self.btn_browse_hs_icon.setStyleSheet("padding: 2px;")
 
         hs_h.addWidget(self.ent_hs_icon)
         hs_h.addWidget(self.btn_browse_hs_icon)
