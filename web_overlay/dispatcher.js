@@ -50,7 +50,7 @@
     if (!glowActive) {
       card.classList.add("no-glow");
     } else if (data.glow_color) {
-      card.style.filter = `drop-shadow(0 0 10px ${data.glow_color}) drop-shadow(0 0 5px ${data.glow_color})`;
+      card.style.filter = `drop-shadow(0 0 8px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 10px ${data.glow_color}) drop-shadow(0 0 5px ${data.glow_color})`;
     }
     card.style.position = "absolute";
     card.style.width = `${Number(data.box_width || 600)}px`;
