@@ -134,7 +134,14 @@ class DiorMainHub(QMainWindow):
         self.controller = controller
         self.setWindowTitle(f"Better Planetside v{VERSION}")
         self.setWindowIcon(QIcon(get_asset_path("BetterPlannetsideIcon.png")))
-        self.resize(1500, 850)
+        # Default size
+        default_w, default_h = 1500, 850
+        
+        # Load last size from config
+        saved_size = self.controller.config.get("window_size", {})
+        w = saved_size.get("width", default_w)
+        h = saved_size.get("height", default_h)
+        self.resize(w, h)
 
         # Central Widget
         central_widget = QWidget()
@@ -193,6 +200,24 @@ class DiorMainHub(QMainWindow):
 
         # Set start page
         self.nav_list.setCurrentRow(0)
+
+    def closeEvent(self, event):
+        """Save window size on close."""
+        size = self.size()
+        if "window_size" not in self.controller.config:
+            self.controller.config["window_size"] = {}
+        
+        self.controller.config["window_size"]["width"] = size.width()
+        self.controller.config["window_size"]["height"] = size.height()
+        
+        # Persist to disk
+        try:
+             self.controller.save_config()
+        except Exception as e:
+             print(f"Error saving window size: {e}")
+             
+        # Call super closeEvent
+        super().closeEvent(event)
         
     def on_nav_change(self, index):
         # Index 1 = LAUNCHER

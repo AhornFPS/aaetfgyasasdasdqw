@@ -424,7 +424,17 @@ class OverlayConfigWindow(QWidget):
         super().__init__()
         self.controller = controller
         self.setObjectName("Overlay")
-        self.resize(1150, 780)
+        # Default size
+        default_w, default_h = 1150, 780
+        
+        # Load last size if controller is available
+        if self.controller:
+            saved_size = self.controller.config.get("overlay_config_size", {})
+            w = saved_size.get("width", default_w)
+            h = saved_size.get("height", default_h)
+            self.resize(w, h)
+        else:
+            self.resize(default_w, default_h)
 
         # Load Stylesheet directly here
         self.setStyleSheet(OVERLAY_STYLE)
@@ -1065,6 +1075,23 @@ class OverlayConfigWindow(QWidget):
 
         edit_layout.addLayout(editor_split)
         layout.addWidget(edit_box, 0)
+
+    def closeEvent(self, event):
+        """Save window size on close."""
+        if self.controller:
+            size = self.size()
+            if "overlay_config_size" not in self.controller.config:
+                self.controller.config["overlay_config_size"] = {}
+            
+            self.controller.config["overlay_config_size"]["width"] = size.width()
+            self.controller.config["overlay_config_size"]["height"] = size.height()
+            
+            try:
+                self.controller.save_config()
+            except Exception as e:
+                print(f"Error saving overlay config size: {e}")
+        
+        super().closeEvent(event)
 
     def select_event(self, event_name):
         self.current_event = event_name
