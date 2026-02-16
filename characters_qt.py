@@ -377,14 +377,6 @@ class CharacterWidget(QWidget):
 
     # --- DIRECTIVE LOGIC ---
 
-    def fetch_directives(self, char_id):
-        """Startet den Thread zum Laden der Directives."""
-        self.directive_table.setRowCount(0)
-        self.add_log("Fetch: Loading Directives...")
-        
-        t = threading.Thread(target=self._fetch_thread, args=(char_id,), daemon=True)
-        t.start()
-
     def _fetch_thread(self, char_id):
         url = f"https://census.daybreakgames.com/s:ahornstream/get/ps2:v2/characters_directive_tier?character_id={char_id}&c:limit=500&c:join=type:directive%5Eon:directive_tree_id%5Eto:directive_tree_id&c:lang=en"
         try:

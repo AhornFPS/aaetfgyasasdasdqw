@@ -252,10 +252,6 @@ except ImportError:
     HAS_SOUND = False
     print("WARNING: 'pygame' missing. Sounds will not be played.")
 
-def get_short_name(path):
-    """Returns only the filename without the full path"""
-    return os.path.basename(path) if path else "No file selected"
-
 sys.excepthook = log_exception
 
 # Global Constants
@@ -3712,32 +3708,6 @@ class DiorClientGUI:
 
         self.add_log("SYS: Overlay configuration synchronized.")
 
-    def prepare_stats_for_qt(self, char_data):
-        """Formats API data for the characters_qt window."""
-        c = char_data.get('custom_stats', {})
-        return {
-            'name': c.get('name', '-'),
-            'fac_short': {"1": "VS", "2": "NC", "3": "TR", "4": "NSO"}.get(char_data.get('faction_id'), "-"),
-            'server': c.get('server', '-'),
-            'outfit': c.get('outfit', '-'),
-            'rank': c.get('rank', '-'),
-            'time_played': c.get('time_played', '-'),
-            'lt_kills': c.get('lt_kills', '0'),
-            'lt_deaths': c.get('lt_deaths', '0'),
-            'lt_kd': c.get('lt_kd', '0.00'),
-            'lt_kpm': c.get('lt_kpm', '0.00'),
-            'lt_kph': c.get('lt_kph', '0.00'),
-            'lt_spm': c.get('lt_spm', '0.00'),
-            'lt_score': c.get('lt_score', '0'),
-            'm30_kills': c.get('m30_kills', '0'),
-            'm30_deaths': c.get('m30_deaths', '0'),
-            'm30_kd': c.get('m30_kd', '0.00'),
-            'm30_kpm': c.get('m30_kpm', '0.00'),
-            'm30_kph': c.get('m30_kph', '0.00'),
-            'm30_spm': c.get('m30_spm', '0.00'),
-            'm30_score': c.get('m30_score', '0')
-        }
-
     def change_server_logic(self, world_id):
         self.current_world_id = world_id
         self.add_log(f"FILTER UPDATE: Now showing World ID {world_id}")
@@ -3791,17 +3761,6 @@ class DiorClientGUI:
                 print(f"Monitor Error: {e}")
 
             time.sleep(4)
-
-    def start_path_edit(self):
-        """Enables click mode for the knife line"""
-        if self.overlay_win:
-            # 1. Turn on path mode in overlay
-            self.overlay_win.path_edit_active = True
-            # 2. Disable mouse passthrough so clicks are registered
-            self.overlay_win.set_mouse_passthrough(False)
-            # 3. Clear old path for new recording
-            self.overlay_win.custom_path = []
-            self.add_log("PATH-EDIT: Click now around the skull. Finish with 'SAVE STREAK'.")
 
     def start_path_record(self):
         if not self.overlay_win: return
@@ -3899,47 +3858,6 @@ class DiorClientGUI:
         # Force immediate live update so UI and web overlay match right away.
         self.update_crosshair_from_qt()
 
-    def apply_crosshair_settings(self):
-        try:
-            # 1. Read path
-            new_file = self.ent_cross_path.get()
-
-            # 2. Read active status (Checkbox)
-            if hasattr(self, 'crosshair_active_var'):
-                is_active = self.crosshair_active_var.get()
-            else:
-                is_active = True
-
-            # 3. Update config
-            if "crosshair" not in self.config:
-                self.config["crosshair"] = {}
-
-            # Save user preference (Checkbox status)
-            self.config["crosshair"]["file"] = new_file
-            self.config["crosshair"]["active"] = is_active
-
-            current_size = self.config["crosshair"].get("size", 32)
-            self.config["crosshair"]["size"] = current_size
-
-            # Permanently save
-            self.save_config()
-            self.add_log(f"SYSTEM: Crosshair configuration updated.")
-
-            # --- LOGIK-FIX: Sichtbarkeit ---
-            # Wir zeigen es nur an, wenn der User es will (is_active) UND das Spiel läuft.
-            # (Ausnahme: Edit-Modus, aber das regelt das Overlay selbst, wenn wir False senden)
-            game_running = getattr(self, 'ps2_running', False)
-            should_show = is_active and game_running
-
-            # Live-Update an das Qt-Fenster senden
-            if self.overlay_win:
-                full_path = get_asset_path(new_file)
-                self.overlay_win.update_crosshair(full_path, current_size, should_show)
-
-        except Exception as e:
-            self.add_log(f"Error saving crosshair: {e}")
-            traceback.print_exc()
-
     def save_crosshair_settings_qt(self):
         """Reads UI values from crosshair tab, saves to config and updates overlay."""
         ui = self.ovl_config_win
@@ -3980,37 +3898,6 @@ class DiorClientGUI:
 
             # Send update command to overlay
             self.overlay_win.update_crosshair(full_path, size_val, should_show)
-
-    def get_time_diff_str(self, past_date_str, mode="login"):
-        if not past_date_str or past_date_str == "Unknown":
-            return "Unknown"
-        try:
-            from datetime import datetime
-            # API returns dates like "2026-01-15 07:14:15"
-            # Try to parse standard format
-            try:
-                past_date = datetime.strptime(past_date_str, '%Y-%m-%d %H:%M:%S')
-            except:
-                # Fallback if milliseconds are present
-                past_date = datetime.strptime(past_date_str.split(".")[0], '%Y-%m-%d %H:%M:%S')
-
-            now = datetime.now()
-            diff = now - past_date
-
-            # 12h format with AM/PM
-            pretty_date = past_date.strftime('%Y-%m-%d %I:%M%p MEZ')
-
-            if mode == "login":
-                days = diff.days
-                hours = diff.seconds // 3600
-                return f"{pretty_date} ({days}d {hours}h)"
-            else:
-                years = diff.days // 365
-                months = (diff.days % 365) // 30
-                return f"{pretty_date} ({years}Y {months}M)"
-        except Exception as e:
-            print(f"Time error: {e}")
-            return past_date_str
 
     def load_item_db(self, filepath):
         """Loads the weapon database from assets folder"""
@@ -4123,13 +4010,6 @@ class DiorClientGUI:
         self._startup_config_status = load_source
 
         return default_conf
-
-
-    def save_overlay_config(self):
-        """Wrapper so old calls still work in code"""
-        self.save_config()
-        self.add_log("Settings saved in config.json.")
-
 
 
     # --- UI & NAVIGATION ---
@@ -4350,12 +4230,6 @@ class DiorClientGUI:
                 self.add_log(f"ERR: Critical Save Error: {e}")
             else:
                 print(f"ERR: Critical Save Error: {e}")
-
-    def destroy_overlay_window(self):
-        if self.overlay_win:
-            self.overlay_win.hide()
-        self.overlay_running = False
-        self.add_log("Overlay: disabled.")
 
     def create_overlay_window(self):
         if self.overlay_win:
@@ -4580,79 +4454,6 @@ class DiorClientGUI:
                 self.save_twitch_config()
             else:
                 self.save_event_config_from_qt()
-
-    def load_event_ui_data(self, event_type):
-        """Loads config data of an event into the Qt-UI fields"""
-        if not event_type: return
-
-        data = self.config.get("events", {}).get(event_type, {})
-        ui = self.ovl_config_win
-
-        def is_valid_asset(name):
-            return name and isinstance(name, str) and "No file selected" not in name
-
-        # Fill fields
-        ui.combo_evt_img.clear()
-        img_data = data.get("img", "")
-        if isinstance(img_data, list):
-            for item in img_data:
-                if is_valid_asset(str(item)):
-                    ui.combo_evt_img.addItem(str(item))
-            if ui.combo_evt_img.count() > 0:
-                ui.combo_evt_img.setCurrentIndex(0)
-        elif is_valid_asset(str(img_data)):
-            ui.combo_evt_img.addItem(str(img_data))
-            ui.combo_evt_img.setCurrentIndex(0)
-        
-        ui.combo_evt_snd.clear()
-        snd_data = data.get("snd", "")
-        if isinstance(snd_data, list):
-            for item in snd_data:
-                if is_valid_asset(str(item)):
-                    ui.combo_evt_snd.addItem(str(item))
-            if ui.combo_evt_snd.count() > 0:
-                ui.combo_evt_snd.setCurrentIndex(0)
-        elif is_valid_asset(str(snd_data)):
-            ui.combo_evt_snd.addItem(str(snd_data))
-            ui.combo_evt_snd.setCurrentIndex(0)
-        ui.ent_evt_duration.setText(str(data.get("duration", 3000)))
-
-        # Set Sliders
-        v_scale = data.get("scale", 1.0)
-        if v_scale > 5.0: v_scale = 1.0
-        ui.slider_evt_scale.setValue(int(v_scale * 100))
-        if hasattr(ui, "lbl_scale_val"):
-            ui.lbl_scale_val.setText(f"{v_scale:.2f}")
-
-        v_vol = data.get("volume", 1.0)
-        if v_vol > 1.0: v_vol /= 100.0
-        vol_p = int(v_vol * 100)
-        ui.slider_evt_vol.setValue(vol_p)
-        if hasattr(ui, "lbl_vol_val"):
-            ui.lbl_vol_val.setText(f"{vol_p}%")
-
-        if hasattr(ui, "check_play_duplicate"):
-            ui.check_play_duplicate.setChecked(bool(data.get("play_duplicate", True)))
-        if hasattr(ui, "check_evt_impact"):
-            ui.check_evt_impact.setChecked(bool(data.get("impact", False)))
-
-        # Update label
-        ui.lbl_editing.setText(f"EDITING: {event_type}")
-
-        # --- FIX: UPDATE PREVIEW IN CONFIG WINDOW ---
-        # We build the full path so the label finds the image
-        current_img = ui.combo_evt_img.currentText().strip()
-        if current_img:
-            full_path = get_asset_path(current_img)
-            ui.update_preview_image(full_path)
-        else:
-            ui.update_preview_image(None)
-
-        # If we are in edit mode: Move preview in overlay
-        if getattr(self, "is_hud_editing", False) and self.overlay_win:
-            ax = int(data.get("x", 100) * self.overlay_win.ui_scale)
-            ay = int(data.get("y", 200) * self.overlay_win.ui_scale)
-            self.overlay_win.safe_move(self.overlay_win.event_preview_label, ax, ay)
 
     def save_event_ui_data(self):
         """Saves the event, even if fields are empty (Reset)."""
@@ -5314,19 +5115,6 @@ class DiorClientGUI:
             self.add_log("UI: Positions saved & edit finished.")
 
 
-    def on_tab_changed(self):
-        """If tab is changed while Edit is on -> adjust Edit area"""
-        if getattr(self, "is_hud_editing", False):
-            # We briefly end Edit mode and restart it for the new tab
-            self.toggle_hud_edit_mode()  # Off
-            self.root.after(200, self.toggle_hud_edit_mode)  # On (in new tab)
-
-    def update_stats_widget_position(self):
-        # Handled by loop, serves only as dummy or trigger for immediate refresh
-        self.refresh_ingame_overlay()
-
-
-
     def _get_random_slot(self):
         import random
         # If list doesn't exist yet
@@ -5519,21 +5307,6 @@ class DiorClientGUI:
 
             self.root.after(50, lambda: self.animate_fade_in(step + 1))
 
-    def handle_sub_click(self, item):
-        self.add_log(f"NAV: Switching to {item}...")
-        self.current_sub_tab = item  # Sets name (e.g. "Weapon stats" or "Overview")
-        self.show_characters()  # Rebuilds the page
-        if hasattr(self, 'sub_menu_frame'):
-            self.sub_menu_frame.place_forget()
-
-    def show_sub_menu(self, event):
-        # Position menu
-        self.sub_menu_frame.place(x=50, y=140, relwidth=0.88)
-        # Start animation
-        self.animate_fade_in()
-
-    # FILE: Dior Client.py
-
     def update_live_graph(self):
         """Calculates current stats every second and triggers dashboard update."""
         try:
@@ -5627,9 +5400,6 @@ class DiorClientGUI:
             if self.is_game_focused() or is_test or is_editing:
                 self.overlay_win.update_stats_display(s_obj)
 
-    def hide_sub_menu(self, event):
-        self.root.after(1000, self.check_mouse_leave)
-
     def check_mouse_leave(self):
         x, y = self.root.winfo_pointerxy()
         widget = self.root.winfo_containing(x, y)
@@ -5684,35 +5454,6 @@ class DiorClientGUI:
             self.root.after(50, lambda: self.animate_api_light(canvas, light_id, color_type, step + 0.1))
         except:
             pass  # Stops when tab is changed
-
-    def show_launcher(self):
-        self.clear_content()
-        self.current_tab = "launcher"
-
-        # Check if object exists (Safety check)
-        if hasattr(self, 'launcher_win'):
-            # Optional: Update path info in footer
-            path_info = f"TARGET_PATH: {self.ps2_dir if self.ps2_dir else 'NOT_FOUND'}"
-            self.launcher_win.lbl_info.setText(f"STATUS: SYSTEM_READY | {path_info}")
-
-            self.launcher_win.show()
-            self.launcher_win.activateWindow()
-            self.launcher_win.raise_()
-        else:
-            self.add_log("ERROR: Launcher window not initialized.")
-
-
-
-    def show_settings(self):
-        self.clear_content()
-        self.current_tab = "settings"
-
-        # Load current data into the Qt window
-        self.settings_win.load_config(self.config, self.ps2_dir)
-
-        self.settings_win.show()
-        self.settings_win.raise_()
-
 
     def show_characters(self):
         self.clear_content()
