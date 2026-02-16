@@ -22,6 +22,8 @@
   let scifiEnabled = true;
   let overlayVisible = true;
   let crosshairRing = null;
+  let statsCard = null;
+  let lastStatsSignature = "";
 
   function isStartupReplay() {
     return performance.now() - startupTime < startupQuietMs;
@@ -168,9 +170,40 @@
     return evType === "headshot" || evType === "death";
   }
 
+  function buildStatsSignature(data) {
+    return JSON.stringify({
+      html: String(data.html || ""),
+      tx: Number(data.tx || 0),
+      ty: Number(data.ty || 0),
+      glow: data.glow !== false,
+      glowColor: String(data.glow_color || "")
+    });
+  }
+
+  function positionStatsCard(card, data) {
+    const x = Number(data.x || 0);
+    const y = Number(data.y || 0);
+    const tx = Number(data.tx || 0);
+    const ty = Number(data.ty || 0);
+    const boxWidth = Number(data.box_width || 600);
+    const boxHeight = Number(data.box_height || 60);
+    setPos(
+      card,
+      {
+        x: x + (boxWidth / 2) + tx,
+        y: y + (boxHeight / 2) + ty
+      },
+      true,
+      false
+    );
+  }
+
   function updateStats(data) {
-    const textOffsetX = Number(data.tx || 0);
-    const textOffsetY = Number(data.ty || 0);
+    const signature = buildStatsSignature(data);
+    if (statsCard && signature === lastStatsSignature) {
+      positionStatsCard(statsCard, data);
+      return;
+    }
 
     const card = document.createElement("div");
     card.className = "stats-card";
@@ -190,8 +223,6 @@
     const content = document.createElement("div");
     content.className = "stats-content";
     content.style.position = "relative";
-    content.style.left = `${textOffsetX}px`;
-    content.style.top = `${textOffsetY}px`;
     content.style.whiteSpace = "nowrap";
     if (!glowActive) {
       content.style.textShadow = "1px 1px 2px rgba(0,0,0,0.9)";
@@ -204,9 +235,10 @@
     content.innerHTML = data.html || "";
     card.appendChild(content);
 
-    statsLayer.innerHTML = "";
-    statsLayer.appendChild(card);
-    setPos(card, data, false, false);
+    statsLayer.replaceChildren(card);
+    statsCard = card;
+    lastStatsSignature = signature;
+    positionStatsCard(card, data);
 
     activateSystem("stats");
     setTelemetry("COMBAT METRICS SYNCHRONIZED");
@@ -218,6 +250,8 @@
 
   function clearStats() {
     statsLayer.innerHTML = "";
+    statsCard = null;
+    lastStatsSignature = "";
   }
 
   function applyFeedContainer(data) {

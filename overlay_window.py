@@ -1486,6 +1486,10 @@ class QtOverlay(QWidget):
 
                     if "stats" in targets:
                         self.stats_bg_label.setStyleSheet(hl_style)
+                        min_w = self.s(1100)
+                        min_h = self.s(130)
+                        if self.stats_bg_label.width() < min_w or self.stats_bg_label.height() < min_h:
+                            self.stats_bg_label.setFixedSize(min_w, min_h)
                         self.stats_bg_label.show()
                         self.stats_text_label.hide()
 
@@ -1541,6 +1545,10 @@ class QtOverlay(QWidget):
 
             if "stats" in targets:
                 self.stats_bg_label.setStyleSheet(hl_style)
+                min_w = self.s(1100)
+                min_h = self.s(130)
+                if self.stats_bg_label.width() < min_w or self.stats_bg_label.height() < min_h:
+                    self.stats_bg_label.setFixedSize(min_w, min_h)
                 self.stats_bg_label.show()
                 self.stats_text_label.hide()
 
@@ -1962,6 +1970,14 @@ class QtOverlay(QWidget):
         tx_off, ty_off = 0, 0
         st_glow = True
         box_w, box_h = int(self.s(600)), int(self.s(60))
+        editing_stats = bool(self.edit_mode and "stats" in getattr(self, "active_edit_targets", []))
+        if editing_stats:
+            # Match web stats anchoring to the larger drag frame used in edit mode.
+            box_w, box_h = int(self.s(1100)), int(self.s(130))
+            live_w = int(self.stats_bg_label.width())
+            live_h = int(self.stats_bg_label.height())
+            if live_w > 0 and live_h > 0:
+                box_w, box_h = live_w, live_h
         if self.gui_ref:
             conf = self.gui_ref.config.get("stats_widget", {})
             st_x = conf.get("x", 50)

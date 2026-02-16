@@ -4904,6 +4904,10 @@ class DiorClientGUI:
                 # THROTTLE LOGIC: Only update once per second, except in Edit/Test mode
                 now = time.time()
                 should_update_stats = True
+
+                # Keep stats static while moving in edit mode to avoid visual flicker.
+                if stats_editing:
+                    should_update_stats = False
                 
                 if mode_gameplay and not (stats_editing or stats_test_active or debug_active):
                     if (now - self.stats_last_refresh_time) < 1.0:
@@ -5177,9 +5181,10 @@ class DiorClientGUI:
                 self.overlay_win.stats_bg_label.show()
 
                 # Force fixed drag frame size for stats (text-only web renderer).
-                w = int(600 * self.overlay_win.ui_scale)  # Make slightly wider for long text
-                h = int(60 * self.overlay_win.ui_scale)
+                w = int(1100 * self.overlay_win.ui_scale)
+                h = int(130 * self.overlay_win.ui_scale)
                 self.overlay_win.stats_bg_label.setFixedSize(w, h)
+                self.update_stats_position_safe()
 
                 # Start loop (uses DUMMY_STATS_HTML now, so no jumping!)
                 self.refresh_ingame_overlay()
@@ -5586,7 +5591,7 @@ class DiorClientGUI:
             is_test = getattr(self, "is_stats_test", False) or getattr(self, "debug_overlay_active", False)
             is_editing = self.is_hud_editing and ("stats" in getattr(self, "current_edit_targets", []))
             
-            if self.is_game_focused() or is_test or is_editing:
+            if (self.is_game_focused() or is_test) and not is_editing:
                 self.overlay_win.update_stats_display(s_obj)
 
     def check_mouse_leave(self):
