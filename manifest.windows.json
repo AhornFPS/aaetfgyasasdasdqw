@@ -1,15 +1,15 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "min_supported": "",
   "assets": [
     {
       "channel": "stable",
       "platform": "windows",
       "kind": "full",
-      "name": "Better-Planetside-Windows-v1.1.3.zip",
-      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.3/Better-Planetside-Windows-v1.1.3.zip",
-      "sha256": "41f41ca692e9bf7def68cf07546f386a1e9f2f4c209afe98ace189d576e09342",
-      "size": 248428978
+      "name": "Better-Planetside-Windows-v1.1.4.zip",
+      "url": "https://github.com/cedric12354/Better-Planetside/releases/download/v1.1.4/Better-Planetside-Windows-v1.1.4.zip",
+      "sha256": "ae39cc2b814494c0176f523d6a3b27bd226f2b0f20cc32f667e6bf81ee9e491c",
+      "size": 248431540
     }
   ]
 }
