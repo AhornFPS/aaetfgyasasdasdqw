@@ -4834,6 +4834,51 @@ class DiorClientGUI:
 
     Write-UpdateLog ("START asset=" + $AssetPath + " target=" + $TargetDir + " timeout=" + $timeoutSec)
 
+    function Test-IsAdmin {
+        try {
+            $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+            return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        } catch {
+            return $false
+        }
+    }
+
+    function Is-ProtectedTarget([string]$path) {
+        if (-not $path) { return $false }
+        try {
+            $full = [System.IO.Path]::GetFullPath($path)
+        } catch {
+            $full = $path
+        }
+        $prefixes = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432) | Where-Object { $_ }
+        foreach ($prefix in $prefixes) {
+            if ($full.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+        return $false
+    }
+
+    if ((Is-ProtectedTarget $TargetDir) -and (-not (Test-IsAdmin))) {
+        Write-UpdateLog "INFO: Target is in Program Files. Relaunching elevated updater."
+        try {
+            $argList = @(
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy", "Bypass",
+                "-File", $PSCommandPath,
+                $PidToWait, $AssetPath, $TargetDir, $PendingPath, $LaunchExe, $LaunchArg0, $SuccessPath, $UpdatedVersion, $WaitTimeoutSec
+            )
+            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argList -WindowStyle Hidden | Out-Null
+            Write-UpdateLog "INFO: Elevated updater started."
+            exit 0
+        } catch {
+            Write-UpdateLog ("ERROR: Elevation failed: " + $_.Exception.Message)
+            throw
+        }
+    }
+
     if ($PidToWait) {
         $deadline = (Get-Date).AddSeconds($timeoutSec)
         while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
@@ -5165,6 +5210,16 @@ log "DONE"
         updates_dir = os.path.join(getattr(self, "user_data_dir", get_user_data_dir()), "updates")
         scripts_dir = os.path.join(updates_dir, "scripts")
         os.makedirs(scripts_dir, exist_ok=True)
+        launcher_log_path = os.path.join(updates_dir, "apply_launcher.log")
+
+        def _write_launcher_log(msg):
+            try:
+                os.makedirs(updates_dir, exist_ok=True)
+                with open(launcher_log_path, "a", encoding="utf-8") as lf:
+                    ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+                    lf.write(f"{ts} {msg}\n")
+            except Exception:
+                pass
 
         updates_cfg = self.config.get("updates", {}) if isinstance(self.config, dict) else {}
         try:
@@ -5173,6 +5228,11 @@ log "DONE"
             wait_timeout_sec = 120
         wait_timeout_sec = max(15, min(wait_timeout_sec, 1800))
         apply_log_path = os.path.join(updates_dir, "apply_update.log")
+        host_log_path = os.path.join(updates_dir, "apply_host.log")
+
+        _write_launcher_log(
+            f"schedule_start asset={asset_path} target={install_root} pending={pending_path} timeout={wait_timeout_sec}"
+        )
 
         try:
             if IS_WINDOWS:
@@ -5181,6 +5241,7 @@ log "DONE"
                 cmd = [
                     "powershell.exe",
                     "-NoProfile",
+                    "-NonInteractive",
                     "-ExecutionPolicy",
                     "Bypass",
                     "-File",
@@ -5196,7 +5257,17 @@ log "DONE"
                     str(wait_timeout_sec),
                 ]
                 creation_flags = 0x00000008 | 0x00000200
-                subprocess.Popen(cmd, creationflags=creation_flags, cwd=scripts_dir)
+                host_log_file = open(host_log_path, "ab")
+                try:
+                    proc = subprocess.Popen(
+                        cmd,
+                        creationflags=creation_flags,
+                        cwd=scripts_dir,
+                        stdout=host_log_file,
+                        stderr=host_log_file,
+                    )
+                finally:
+                    host_log_file.close()
             else:
                 script_path = os.path.join(scripts_dir, "apply_update.sh")
                 self._write_linux_apply_script(script_path)
@@ -5213,13 +5284,19 @@ log "DONE"
                     updated_version,
                     str(wait_timeout_sec),
                 ]
-                subprocess.Popen(
-                    cmd,
-                    start_new_session=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+                host_log_file = open(host_log_path, "ab")
+                try:
+                    proc = subprocess.Popen(
+                        cmd,
+                        start_new_session=True,
+                        stdout=host_log_file,
+                        stderr=host_log_file,
+                    )
+                finally:
+                    host_log_file.close()
+            _write_launcher_log(f"schedule_ok pid={getattr(proc, 'pid', '')} script={script_path} cmd={cmd}")
         except Exception as e:
+            _write_launcher_log(f"schedule_error {e}")
             self.add_log(f"UPDATE ERROR: Failed to schedule apply-on-restart: {e}")
             QMessageBox.warning(
                 self.main_hub,
@@ -5230,6 +5307,7 @@ log "DONE"
 
         self.add_log(f"UPDATE: External updater script: {script_path}")
         self.add_log(f"UPDATE: Apply log path: {apply_log_path}")
+        self.add_log(f"UPDATE: Host log path: {host_log_path}")
         self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
         QTimer.singleShot(150, self.qt_app.quit)
 
