@@ -282,6 +282,7 @@ class DiorClientGUI:
         self.currentZone = 0
         self.myWorldID = self.current_world_id
         self.last_kill_time = 0
+        self.last_voice_time = time.time()
         self.last_session_update = 0
         self.stats_last_refresh_time = 0  # To throttle stats updates
         self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
@@ -421,6 +422,8 @@ class DiorClientGUI:
             if v_active and XDO_TOOL:
                 self.add_log("SYS: Auto-Voice active -> Triggering initial permission check...")
                 threading.Thread(target=self._linux_permission_check, daemon=True).start()
+                # Start keepaline loop
+                threading.Thread(target=self._linux_voice_keepalive, daemon=True).start()
 
     def populate_overlay_assets(self):
         """Populates the overlay config comboboxes with all available assets."""
@@ -511,6 +514,26 @@ class DiorClientGUI:
             self.add_log("SYS: Sent permission trigger (Shift_L). Check for OS popups!")
         except Exception as e:
             print(f"Permission Check Fail: {e}")
+
+    def _linux_voice_keepalive(self):
+        """
+        Background loop for Linux: If no voice macro was played for 10 minutes,
+        simulate a F16 keypress once to 'refresh' the OS permission timeout.
+        """
+        if not XDO_TOOL: return
+        
+        while True:
+            time.sleep(60)  # Check every minute
+            now = time.time()
+            # 600 seconds = 10 minutes
+            if now - self.last_voice_time > 600:
+                try:
+                    # F16 is usually harmless and unrecognized by games
+                    subprocess.run([XDO_TOOL, "key", "F16"], check=False)
+                    self.last_voice_time = now # Reset timer
+                    print("DEBUG: Linux Voice Keepalive triggered (F16).")
+                except:
+                    pass
 
     def save_global_event_duration(self):
         """Saves the global event duration."""

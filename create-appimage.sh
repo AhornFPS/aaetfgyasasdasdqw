@@ -62,7 +62,14 @@ EOF
 echo "Creating AppRun script..."
 cat > "$APPDIR/AppRun" <<EOF
 #!/bin/bash
+# Get the directory where the AppRun script is located
 HERE="\$(dirname "\$(readlink -f "\${0}")")"
+
+# Unset Python environment variables to ensure we use the bundled Python
+unset PYTHONPATH
+unset PYTHONHOME
+
+# Run the application
 exec "\${HERE}/usr/bin/$APP_NAME_SLUG/Better Planetside" "\$@"
 EOF
 chmod +x "$APPDIR/AppRun"
