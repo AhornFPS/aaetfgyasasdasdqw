@@ -400,7 +400,7 @@ class DiorClientGUI:
             self.load_item_db(csv_path)
 
         # Stats Timer
-        self.stats_timer = QTimer()
+        self.stats_timer = QTimer(self.main_hub)
         self.stats_timer.timeout.connect(self.update_live_graph)
         self.stats_timer.start(1000)
 
@@ -4653,6 +4653,8 @@ class DiorClientGUI:
         # 2. Killfeed
         if hasattr(self.overlay_win, 'feed_label'):
             self.overlay_win.feed_label.hide()
+        if hasattr(self.overlay_win, 'clear_killfeed'):
+            self.overlay_win.clear_killfeed()
 
         # 3. Killstreak
         if hasattr(self.overlay_win, 'streak_bg_label'):
@@ -4670,6 +4672,14 @@ class DiorClientGUI:
             self.overlay_win.crosshair_label.hide()
         if hasattr(self.overlay_win, 'clear_crosshair_web'):
             self.overlay_win.clear_crosshair_web()
+        
+        # 5. Events / Effects
+        if hasattr(self.overlay_win, 'hide_all_events'):
+            self.overlay_win.hide_all_events()
+        
+        # 6. Hitmarker (Qt specific part if any)
+        if hasattr(self.overlay_win, 'hitmarker_label'):
+            self.overlay_win.hitmarker_label.hide()
 
     def stop_overlay_logic(self):
         """Hides all overlay elements and RESETS all data/counters (e.g. at game exit)"""
@@ -5305,7 +5315,7 @@ class DiorClientGUI:
                 self.add_log("UI: Test finished.")
 
         # 6. Start timer (PyQt6 way)
-        self._streak_test_timer = QTimer()
+        self._streak_test_timer = QTimer(self.main_hub)
         self._streak_test_timer.setSingleShot(True)
         self._streak_test_timer.timeout.connect(reset_action)
         self._streak_test_timer.start(4000)  # 4 seconds

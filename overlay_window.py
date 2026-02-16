@@ -411,7 +411,7 @@ class QtOverlay(QWidget):
         self.event_queue = []
         self.is_showing = False
         self.current_event_key = None # (img, snd)
-        self.queue_timer = QTimer()
+        self.queue_timer = QTimer(self)
         self.queue_timer.setSingleShot(True)
         self.queue_timer.timeout.connect(self.finish_current_event)
 
@@ -1320,6 +1320,9 @@ class QtOverlay(QWidget):
     def hide_all_events(self):
         """Clears queued/active visual events for the web HUD."""
         self.current_event_key = None
+        for lbl in self.img_pool:
+            lbl.hide()
+            lbl._is_busy = False
         self._broadcast_overlay("events_clear", {"ts": int(time.time() * 1000)})
 
     def _hide_image_safe(self):
