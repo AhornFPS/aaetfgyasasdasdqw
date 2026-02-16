@@ -4758,6 +4758,19 @@ class DiorClientGUI:
     )
 
     $ErrorActionPreference = "Stop"
+    $baseDir = Split-Path -Parent $PendingPath
+    $logPath = Join-Path $baseDir "apply_update.log"
+    function Write-UpdateLog([string]$msg) {
+        try {
+            $line = "{0} {1}" -f (Get-Date).ToString("o"), $msg
+            Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+        } catch {}
+    }
+    trap {
+        Write-UpdateLog ("ERROR: " + $_.Exception.Message)
+        break
+    }
+    Write-UpdateLog ("START asset=" + $AssetPath + " target=" + $TargetDir)
 
     if ($PidToWait) {
         while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
@@ -4770,7 +4783,12 @@ class DiorClientGUI:
     }
 
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $baseDir = Split-Path -Parent $PendingPath
+    # Never run replacements while current directory is inside the install folder.
+    if ($baseDir -and (Test-Path -LiteralPath $baseDir)) {
+        Set-Location -LiteralPath $baseDir
+    } else {
+        Set-Location -LiteralPath $env:TEMP
+    }
     $workDir = Join-Path $baseDir ("apply_" + $timestamp)
     $extractDir = Join-Path $workDir "extract"
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
@@ -4845,6 +4863,7 @@ class DiorClientGUI:
             Start-Process -FilePath $LaunchExe
         }
     }
+    Write-UpdateLog "DONE"
     '''
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script)
@@ -4984,7 +5003,7 @@ fi
                 script_path = os.path.join(scripts_dir, "apply_update.ps1")
                 self._write_windows_apply_script(script_path)
                 cmd = [
-                    "powershell",
+                    "powershell.exe",
                     "-NoProfile",
                     "-ExecutionPolicy",
                     "Bypass",
@@ -5000,7 +5019,7 @@ fi
                     updated_version,
                 ]
                 creation_flags = 0x00000008 | 0x00000200
-                subprocess.Popen(cmd, creationflags=creation_flags)
+                subprocess.Popen(cmd, creationflags=creation_flags, cwd=scripts_dir)
             else:
                 script_path = os.path.join(scripts_dir, "apply_update.sh")
                 self._write_linux_apply_script(script_path)
