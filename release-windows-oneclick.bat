@@ -180,8 +180,5 @@ echo Windows assets uploaded and metadata pushed.
 
 echo.
 echo Windows release step finished for !TAG!.
-echo Next on Linux:
-echo   ./release-linux-oneclick.sh
-echo.
-exit /b 0
+
 

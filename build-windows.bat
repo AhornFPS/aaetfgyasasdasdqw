@@ -119,16 +119,21 @@ echo === Building Installer ===
 
 REM Check for Inno Setup compiler in common locations
 set "ISCC=ISCC.exe"
-where !ISCC! >nul 2>&1
+set "ISCC_X86=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+set "ISCC_X64=C:\Program Files\Inno Setup 6\ISCC.exe"
+
+where "!ISCC!" >nul 2>&1
 if errorlevel 1 (
-    if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
-        set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    ) else if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
-        set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
+    if exist "!ISCC_X86!" (
+        set "ISCC=!ISCC_X86!"
     ) else (
-        echo WARNING: Inno Setup compiler (ISCC.exe) not found.
-        echo Skipping installer creation. Please install Inno Setup 6 to build installers.
-        goto :cleanup
+        if exist "!ISCC_X64!" (
+            set "ISCC=!ISCC_X64!"
+        ) else (
+            echo WARNING: Inno Setup compiler (ISCC.exe) not found.
+            echo Skipping installer creation. Please install Inno Setup 6 to build installers.
+            goto :cleanup
+        )
     )
 )
 
