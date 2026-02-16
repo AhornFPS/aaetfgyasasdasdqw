@@ -1070,6 +1070,8 @@ class QtOverlay(QWidget):
         payload["ty"] = int(self.s(conf.get("ty", 0)))
         payload["scale"] = 1.0
         payload["padding"] = int(self.s(15))
+        payload["glow"] = bool(conf.get("glow", True))
+        payload["glow_color"] = conf.get("glow_color", "#00f2ff")
         self._last_stats_payload = payload
         self._stats_web_visible = True
         self._broadcast_overlay("stats", payload)
@@ -1904,17 +1906,13 @@ class QtOverlay(QWidget):
         label_col = cfg.get("label_color", "#00f2ff")
         val_col = cfg.get("value_color", "#ffffff")
         
-        # Base Style
-        # Match killfeed text styling for consistent sharpness.
-        if bool(cfg.get("glow", True)):
-            shadow_css = "text-shadow: 1px 1px 2px #000, 0 0 6px rgba(0, 242, 255, 0.72), 0 0 12px rgba(0, 242, 255, 0.38);"
-        else:
-            shadow_css = "text-shadow: 1px 1px 2px #000;"
+        # Base style intentionally does NOT set text-shadow.
+        # Glow color/shadow is applied by the web renderer so color picker updates
+        # can be reflected immediately without rebuilding the HTML string.
         style_base = (
             f"font-family: 'Black Ops One', sans-serif; "
             f"font-size: {f_size}px; "
             f"color: {label_col}; "
-            f"{shadow_css} "
             f"white-space: nowrap;"
         )
         

@@ -194,9 +194,12 @@
     content.style.top = `${textOffsetY}px`;
     content.style.whiteSpace = "nowrap";
     if (!glowActive) {
-      content.classList.add("no-glow");
+      content.style.textShadow = "1px 1px 2px rgba(0,0,0,0.9)";
     } else if (data.glow_color) {
-      content.style.textShadow = `0 0 10px ${data.glow_color}, 0 0 24px ${data.glow_color}`;
+      content.style.textShadow =
+        `1px 1px 2px rgba(0,0,0,0.9), 0 0 10px ${data.glow_color}, 0 0 24px ${data.glow_color}`;
+    } else {
+      content.style.textShadow = "1px 1px 2px rgba(0,0,0,0.9)";
     }
     content.innerHTML = data.html || "";
     card.appendChild(content);
