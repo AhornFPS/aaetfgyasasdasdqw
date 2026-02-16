@@ -8,6 +8,7 @@ REM 3) Upload Windows assets to release repo
 REM 4) Commit/push version + manifests to code repo
 
 set "RELEASE_REPO=cedric12354/Better-Planetside"
+set "CODE_REPO_URL=https://github.com/AhornFPS/Better-Planetside"
 set "CHANNEL=stable"
 set "MIN_SUPPORTED="
 set "WINDOWS_PATCH_PATH="
@@ -18,6 +19,12 @@ set "AUTO_CREATE_RELEASE=1"
 if "%~1"=="" goto args_done
 if /I "%~1"=="--release-repo" (
     set "RELEASE_REPO=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--code-repo-url" (
+    set "CODE_REPO_URL=%~2"
     shift
     shift
     goto parse_args
@@ -62,6 +69,7 @@ echo Usage: release-windows-oneclick.bat [options]
 echo.
 echo Options:
 echo   --release-repo OWNER/REPO   Default: cedric12354/Better-Planetside
+echo   --code-repo-url URL         Default: https://github.com/AhornFPS/Better-Planetside
 echo   --channel NAME              Default: stable
 echo   --min-supported VERSION     Optional manifest min_supported
 echo   --patch PATH                Optional Windows patch zip path
@@ -86,6 +94,7 @@ where gh >nul 2>&1 || (echo ERROR: gh CLI not found in PATH.& exit /b 1)
 
 echo === Windows One-Click Release ===
 echo Repo: !RELEASE_REPO!
+echo Code repo: !CODE_REPO_URL!
 echo.
 
 set "NON_INTERACTIVE=1"
@@ -194,8 +203,18 @@ if errorlevel 1 (
     echo No staged changes to commit.
 )
 
-echo Pushing current branch...
-git push
+for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do set "CURRENT_BRANCH=%%b"
+if not defined CURRENT_BRANCH (
+    echo ERROR: Could not determine current git branch.
+    exit /b 1
+)
+if /I "!CURRENT_BRANCH!"=="HEAD" (
+    echo ERROR: Detached HEAD detected. Checkout a branch before pushing.
+    exit /b 1
+)
+
+echo Pushing !CURRENT_BRANCH! to !CODE_REPO_URL!...
+git push "!CODE_REPO_URL!" "HEAD:!CURRENT_BRANCH!"
 if errorlevel 1 (
     echo ERROR: git push failed.
     exit /b 1

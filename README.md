@@ -82,10 +82,11 @@ Include Windows artifacts in a combined manifest and upload directly to a GitHub
 
 ### Release Automation (Windows -> Linux)
 
-Windows step (build, upload Windows assets, commit/push `manifest.windows.json`):
+Windows step (build, upload Windows assets, commit/push `version.py` + manifests to `https://github.com/AhornFPS/Better-Planetside` by default):
 ```bat
 release-windows-oneclick.bat --patch Better-Planetside-1.1.0-to-1.2.0.patch.zip --patch-from 1.1.0
 ```
+Use `--code-repo-url` to override the metadata push target if needed.
 
 Linux step (pull, build/upload Linux assets, publish combined `manifest.json`):
 ```bash
