@@ -138,7 +138,7 @@ if [[ -z "$TAG" ]]; then
     TAG="v${VERSION}"
 fi
 OUTPUT_NAME="Better_Planetside-v${VERSION}-x86_64.AppImage"
-LINUX_TAR="dist/Better-Planetside-Linux-v${VERSION}.tar.gz"
+LINUX_TAR="Better-Planetside-Linux-v${VERSION}.tar.gz"
 MANIFEST_PATH="manifest.json"
 BASE_URL="https://github.com/${RELEASE_REPO}/releases/download/${TAG}"
 
@@ -247,8 +247,16 @@ for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
 done
 "${manifest_cmd[@]}"
 
-# 12. Cleanup AppDir
+# 12. Cleanup
+echo "Cleaning up build artifacts..."
 rm -rf "$APPDIR"
+rm -rf build dist build_env
+# Remove temporary imported windows manifest if it's not the main one
+for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
+    if [[ "$import_manifest" != "$MANIFEST_PATH" ]]; then
+        rm -f "$import_manifest"
+    fi
+done
 
 # 13. Optional upload
 if [[ "$UPLOAD_RELEASE" == "1" ]]; then
