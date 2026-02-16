@@ -424,7 +424,7 @@ class OverlayConfigWindow(QWidget):
         super().__init__()
         self.controller = controller
         self.setObjectName("Overlay")
-        self.resize(1150, 850)
+        self.resize(1150, 780)
 
         # Load Stylesheet directly here
         self.setStyleSheet(OVERLAY_STYLE)
@@ -488,7 +488,13 @@ class OverlayConfigWindow(QWidget):
     # --- TAB SETUP METHODS ---
 
     def setup_identity_tab(self):
-        layout = QVBoxLayout(self.tab_ident)
+        tab_layout = QVBoxLayout(self.tab_ident)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(20)
 
@@ -574,6 +580,9 @@ class OverlayConfigWindow(QWidget):
         layout.addStretch()  # Push everything up
         layout.addWidget(debug_group)
         layout.addWidget(master_box)
+        
+        scroll.setWidget(content)
+        tab_layout.addWidget(scroll)
 
     def toggle_sub_container(self, widget):
         """Universelle Funktion zum Auf/Zuklappen von Untermenüs."""
@@ -1522,7 +1531,13 @@ class OverlayConfigWindow(QWidget):
         layout.addWidget(scroll)
 
     def setup_stats_tab(self):
-        layout = QVBoxLayout(self.tab_stats)
+        tab_layout = QVBoxLayout(self.tab_stats)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
@@ -1660,10 +1675,19 @@ class OverlayConfigWindow(QWidget):
         btn_box.addWidget(self.btn_save_stats)
 
         layout.addLayout(btn_box)
+        
+        scroll.setWidget(content)
+        tab_layout.addWidget(scroll)
         layout.addStretch()
 
     def setup_feed_tab(self):
-        layout = QVBoxLayout(self.tab_feed)
+        tab_layout = QVBoxLayout(self.tab_feed)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
@@ -1783,9 +1807,18 @@ class OverlayConfigWindow(QWidget):
 
         layout.addLayout(btn_box)
         layout.addStretch()
+        
+        scroll.setWidget(content)
+        tab_layout.addWidget(scroll)
 
     def setup_voice_tab(self):
-        layout = QVBoxLayout(self.tab_voice)
+        tab_layout = QVBoxLayout(self.tab_voice)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -1869,10 +1902,18 @@ class OverlayConfigWindow(QWidget):
         layout.addWidget(self.btn_save_voice, alignment=Qt.AlignmentFlag.AlignCenter)
 
         layout.addStretch()
+        
+        scroll.setWidget(content)
+        tab_layout.addWidget(scroll)
 
     def setup_twitch_tab(self):
-        """Erstellt das UI für die Twitch Chat Einstellungen."""
-        layout = QVBoxLayout(self.tab_twitch)
+        tab_layout = QVBoxLayout(self.tab_twitch)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -2115,6 +2156,9 @@ class OverlayConfigWindow(QWidget):
 
         layout.addLayout(btn_box)
         layout.addStretch()
+        
+        scroll.setWidget(content)
+        tab_layout.addWidget(scroll)
 
 
 

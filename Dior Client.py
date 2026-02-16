@@ -134,7 +134,7 @@ class DiorMainHub(QMainWindow):
         self.controller = controller
         self.setWindowTitle(f"Better Planetside v{VERSION}")
         self.setWindowIcon(QIcon(get_asset_path("BetterPlannetsideIcon.png")))
-        self.resize(1600, 900)
+        self.resize(1500, 850)
 
         # Central Widget
         central_widget = QWidget()
