@@ -86,12 +86,73 @@ def build_asset_entry(
     return entry
 
 
+def load_imported_assets(manifest_path: str, base_url: str = "") -> List[Dict]:
+    if not os.path.isfile(manifest_path):
+        raise FileNotFoundError(f"Imported manifest not found: {manifest_path}")
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assets = data.get("assets", [])
+    if not isinstance(assets, list):
+        raise ValueError(f"Imported manifest has invalid assets array: {manifest_path}")
+
+    out: List[Dict] = []
+    for entry in assets:
+        if not isinstance(entry, dict):
+            continue
+
+        channel = str(entry.get("channel", "stable")).strip() or "stable"
+        platform = str(entry.get("platform", "")).strip().lower()
+        kind = str(entry.get("kind", "full")).strip().lower()
+        name = str(entry.get("name", "")).strip()
+        sha = str(entry.get("sha256", "")).strip().lower()
+        size_val = entry.get("size", 0)
+        from_version = str(entry.get("from_version", "")).strip()
+
+        if kind not in ("full", "patch"):
+            continue
+        if not platform or not name:
+            continue
+
+        try:
+            size = int(size_val or 0)
+        except (TypeError, ValueError):
+            size = 0
+
+        if base_url:
+            url = f"{base_url.rstrip('/')}/{name}"
+        else:
+            url = str(entry.get("url", "")).strip() or name
+
+        asset_obj = {
+            "channel": channel,
+            "platform": platform,
+            "kind": kind,
+            "name": name,
+            "url": url,
+            "sha256": sha,
+            "size": size,
+        }
+        if kind == "patch" and from_version:
+            asset_obj["from_version"] = from_version
+        out.append(asset_obj)
+
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate updater manifest with SHA256 checksums.")
     parser.add_argument("--version", required=True, help="Target release version, e.g. 1.2.0")
     parser.add_argument("--min-supported", default="", help="Minimum version eligible for patch updates.")
     parser.add_argument("--base-url", default="", help="Optional base download URL for asset links.")
     parser.add_argument("--output", default="manifest.json", help="Output manifest path.")
+    parser.add_argument(
+        "--import-manifest",
+        action="append",
+        default=[],
+        help="Import assets from an existing manifest JSON (can be used multiple times).",
+    )
     parser.add_argument(
         "--asset",
         action="append",
@@ -100,20 +161,40 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.asset:
-        raise ValueError("At least one --asset entry is required.")
+    if not args.asset and not args.import_manifest:
+        raise ValueError("At least one --asset or --import-manifest entry is required.")
 
     assets: List[Dict] = []
+    seen_keys = set()
+
+    def add_asset(entry: Dict):
+        key = (
+            str(entry.get("channel", "")).strip().lower(),
+            str(entry.get("platform", "")).strip().lower(),
+            str(entry.get("kind", "")).strip().lower(),
+            str(entry.get("name", "")).strip(),
+            str(entry.get("from_version", "")).strip(),
+        )
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        assets.append(entry)
+
+    for import_path in args.import_manifest:
+        imported_assets = load_imported_assets(import_path, base_url=args.base_url)
+        for imported in imported_assets:
+            add_asset(imported)
+
     for spec in args.asset:
         channel, platform, kind, file_path, from_version = parse_asset_spec(spec)
-        assets.append(
+        add_asset(
             build_asset_entry(
-                channel=channel,
-                platform=platform,
-                kind=kind,
-                file_path=file_path,
-                from_version=from_version,
-                base_url=args.base_url,
+            channel=channel,
+            platform=platform,
+            kind=kind,
+            file_path=file_path,
+            from_version=from_version,
+            base_url=args.base_url,
             )
         )
 

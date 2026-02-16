@@ -426,6 +426,7 @@ class DiorClientGUI:
 
         # 7. SHOW
         self.main_hub.show()
+        QTimer.singleShot(900, self._prompt_update_success_if_available)
         QTimer.singleShot(1200, self._prompt_apply_staged_update_if_available)
 
         # 8. BACKGROUND THREADS
@@ -4615,6 +4616,41 @@ class DiorClientGUI:
         base = getattr(self, "user_data_dir", get_user_data_dir())
         return os.path.join(base, "updates", "pending_update.json")
 
+    def _get_update_success_path(self):
+        base = getattr(self, "user_data_dir", get_user_data_dir())
+        return os.path.join(base, "updates", "last_update_success.json")
+
+    def _read_update_success_marker(self):
+        success_path = self._get_update_success_path()
+        if not os.path.exists(success_path):
+            return None
+        try:
+            with open(success_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            return None
+        return None
+
+    def _prompt_update_success_if_available(self):
+        success_path = self._get_update_success_path()
+        data = self._read_update_success_marker()
+        if not data:
+            return
+
+        ver = str(data.get("version", "")).strip() or VERSION
+        self.add_log(f"UPDATE: Apply completed successfully -> {ver}")
+        QMessageBox.information(
+            self.main_hub,
+            "Update Complete",
+            f"Congratulations, update to version {ver} finished.",
+        )
+        try:
+            os.remove(success_path)
+        except Exception:
+            pass
+
     def _read_pending_update(self):
         pending_path = self._get_pending_update_path()
         if not os.path.exists(pending_path):
@@ -4673,7 +4709,9 @@ class DiorClientGUI:
     [string]$TargetDir,
     [string]$PendingPath,
     [string]$LaunchExe,
-    [string]$LaunchArg0
+    [string]$LaunchArg0,
+    [string]$SuccessPath,
+    [string]$UpdatedVersion
 )
 
 $ErrorActionPreference = "Stop"
@@ -4718,6 +4756,14 @@ Move-Item -Path $TargetDir -Destination $backupDir -Force
 try {
     Move-Item -Path $newDir -Destination $TargetDir -Force
     Remove-Item -LiteralPath $PendingPath -Force -ErrorAction SilentlyContinue
+    if ($SuccessPath) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $SuccessPath) -Force | Out-Null
+        $successObj = @{
+            version = $UpdatedVersion
+            timestamp = (Get-Date).ToString("o")
+        }
+        $successObj | ConvertTo-Json | Set-Content -Path $SuccessPath -Encoding UTF8
+    }
 } catch {
     if (Test-Path -LiteralPath $TargetDir) {
         Remove-Item -LiteralPath $TargetDir -Recurse -Force
@@ -4747,6 +4793,8 @@ TARGET_DIR="${3:-}"
 PENDING_PATH="${4:-}"
 LAUNCH_EXE="${5:-}"
 LAUNCH_ARG0="${6:-}"
+SUCCESS_PATH="${7:-}"
+UPDATED_VERSION="${8:-}"
 
 if [[ -n "$PID_TO_WAIT" ]]; then
   while kill -0 "$PID_TO_WAIT" 2>/dev/null; do
@@ -4798,6 +4846,11 @@ cp -a "$source_dir"/. "$new_dir"/
 mv "$TARGET_DIR" "$backup_dir"
 if mv "$new_dir" "$TARGET_DIR"; then
   rm -f "$PENDING_PATH" || true
+  if [[ -n "$SUCCESS_PATH" ]]; then
+    mkdir -p "$(dirname "$SUCCESS_PATH")" || true
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '{\n  "version": "%s",\n  "timestamp": "%s"\n}\n' "$UPDATED_VERSION" "$ts" > "$SUCCESS_PATH" || true
+  fi
 else
   rm -rf "$TARGET_DIR" || true
   mv "$backup_dir" "$TARGET_DIR"
@@ -4820,6 +4873,8 @@ fi
         asset = pending_data.get("asset", {}) if isinstance(pending_data, dict) else {}
         asset_path = str(asset.get("local_path", "")).strip() if isinstance(asset, dict) else ""
         pending_path = self._get_pending_update_path()
+        success_path = self._get_update_success_path()
+        updated_version = str(pending_data.get("latest_version", "")).strip() if isinstance(pending_data, dict) else ""
         if not asset_path or not os.path.exists(asset_path):
             QMessageBox.warning(
                 self.main_hub,
@@ -4850,6 +4905,8 @@ fi
                     pending_path,
                     launch_exe,
                     launch_arg0,
+                    success_path,
+                    updated_version,
                 ]
                 creation_flags = 0x00000008 | 0x00000200
                 subprocess.Popen(cmd, creationflags=creation_flags)
@@ -4865,6 +4922,8 @@ fi
                     pending_path,
                     launch_exe,
                     launch_arg0,
+                    success_path,
+                    updated_version,
                 ]
                 subprocess.Popen(
                     cmd,
