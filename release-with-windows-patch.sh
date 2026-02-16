@@ -26,12 +26,12 @@ usage() {
 Usage: ./release-with-windows-patch.sh [options]
 
 Required:
-  --tag TAG                     Release tag (e.g. v1.2.0)
   --windows-full PATH           Windows full ZIP path
   --windows-patch PATH          Windows patch ZIP path
   --windows-patch-from VERSION  Patch source version (e.g. 1.1.0)
 
 Optional:
+  --tag TAG                     Release tag (default: v<version.py>)
   --release-repo OWNER/REPO     Default: ${RELEASE_REPO}
   --channel NAME                Default: ${CHANNEL}
   --min-supported VERSION       Manifest min_supported value
@@ -89,10 +89,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$TAG" || -z "$WINDOWS_FULL" || -z "$WINDOWS_PATCH" || -z "$WINDOWS_PATCH_FROM" ]]; then
+if [[ -z "$WINDOWS_FULL" || -z "$WINDOWS_PATCH" || -z "$WINDOWS_PATCH_FROM" ]]; then
   echo "ERROR: Missing required arguments."
   usage
   exit 1
+fi
+
+if [[ -z "$TAG" ]]; then
+  if [[ ! -f "version.py" ]]; then
+    echo "ERROR: version.py not found and --tag not provided."
+    exit 1
+  fi
+  VERSION="$(grep -oP 'VERSION = "\K[0-9]+\.[0-9]+\.[0-9]+' version.py || true)"
+  if [[ -z "$VERSION" ]]; then
+    echo "ERROR: Could not read VERSION from version.py. Provide --tag."
+    exit 1
+  fi
+  TAG="v${VERSION}"
 fi
 
 if [[ ! -f "$WINDOWS_FULL" ]]; then
@@ -105,13 +118,13 @@ if [[ ! -f "$WINDOWS_PATCH" ]]; then
   exit 1
 fi
 
-if [[ ! -x "./create-appimage.sh" && ! -f "./create-appimage.sh" ]]; then
+if [[ ! -f "./create-appimage.sh" ]]; then
   echo "ERROR: ./create-appimage.sh not found."
   exit 1
 fi
 
 cmd=(
-  ./create-appimage.sh
+  bash ./create-appimage.sh
   --release-repo "$RELEASE_REPO"
   --channel "$CHANNEL"
   --tag "$TAG"
@@ -132,4 +145,3 @@ fi
 echo "Running combined release upload..."
 "${cmd[@]}"
 echo "Done."
-

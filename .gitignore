@@ -31,3 +31,6 @@ venv/
 
 # Binaries
 *.exe
+Better-Planetside-*.zip
+Better_Planetside-v*-x86_64.AppImage
+dist/Better-Planetside-Linux-v*.tar.gz

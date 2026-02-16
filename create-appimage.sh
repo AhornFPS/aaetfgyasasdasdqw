@@ -16,6 +16,7 @@ TAG="${TAG:-}"
 WINDOWS_FULL_ASSET="${WINDOWS_FULL_ASSET:-}"
 WINDOWS_PATCH_ASSET="${WINDOWS_PATCH_ASSET:-}"
 WINDOWS_PATCH_FROM="${WINDOWS_PATCH_FROM:-}"
+IMPORT_MANIFESTS=()
 UPLOAD_RELEASE="${UPLOAD_RELEASE:-0}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
@@ -33,6 +34,7 @@ Options:
   --windows-full PATH           Include Windows full ZIP in manifest/upload
   --windows-patch PATH          Include Windows patch ZIP in manifest/upload
   --windows-patch-from VERSION  from_version for --windows-patch
+  --import-manifest PATH        Import assets from existing manifest (repeatable)
   --upload-release              Upload AppImage, tar.gz and manifest via gh
   --skip-build                  Skip build-linux.sh and package current dist output
   --help                        Show this help
@@ -73,6 +75,10 @@ while [[ $# -gt 0 ]]; do
             WINDOWS_PATCH_FROM="$2"
             shift 2
             ;;
+        --import-manifest)
+            IMPORT_MANIFESTS+=("$2")
+            shift 2
+            ;;
         --upload-release)
             UPLOAD_RELEASE=1
             shift
@@ -107,6 +113,13 @@ if [[ -n "$WINDOWS_PATCH_ASSET" && ! -f "$WINDOWS_PATCH_ASSET" ]]; then
     echo "ERROR: Windows patch asset not found: $WINDOWS_PATCH_ASSET"
     exit 1
 fi
+
+for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
+    if [[ ! -f "$import_manifest" ]]; then
+        echo "ERROR: Import manifest not found: $import_manifest"
+        exit 1
+    fi
+done
 
 echo "=== Creating Linux release artifacts for $APP_NAME ==="
 
@@ -211,6 +224,9 @@ fi
 if [[ -n "$WINDOWS_PATCH_ASSET" ]]; then
     manifest_cmd+=(--asset "${CHANNEL},windows,patch,${WINDOWS_PATCH_ASSET},${WINDOWS_PATCH_FROM}")
 fi
+for import_manifest in "${IMPORT_MANIFESTS[@]}"; do
+    manifest_cmd+=(--import-manifest "$import_manifest")
+done
 "${manifest_cmd[@]}"
 
 # 12. Cleanup AppDir
