@@ -4820,8 +4820,14 @@ class DiorClientGUI:
         try {
             $line = "{0} {1}" -f (Get-Date).ToString("o"), $msg
             Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+            Write-Host $line
         } catch {}
     }
+    try {
+        if ($Host -and $Host.UI -and $Host.UI.RawUI) {
+            $Host.UI.RawUI.WindowTitle = "Better Planetside Updater"
+        }
+    } catch {}
     trap {
         try {
             $errMsg = ""
@@ -4897,7 +4903,7 @@ class DiorClientGUI:
                 $argParts += "-LaunchArg0 " + (Quote-Arg $LaunchArg0)
             }
             $argLine = [string]::Join(" ", $argParts)
-            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -WindowStyle Hidden | Out-Null
+            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -WindowStyle Normal | Out-Null
             Write-UpdateLog "INFO: Elevated updater started."
             exit 0
         } catch {
@@ -5292,8 +5298,8 @@ log "DONE"
                     updated_version,
                     str(wait_timeout_sec),
                 ]
-                # CREATE_NO_WINDOW keeps it headless but avoids DETACHED_PROCESS quirks.
-                creation_flags = 0x08000000
+                # CREATE_NEW_CONSOLE provides visible feedback during updates.
+                creation_flags = 0x00000010
                 host_log_file = open(host_log_path, "ab")
                 try:
                     proc = subprocess.Popen(
@@ -5348,6 +5354,7 @@ log "DONE"
         self.add_log(f"UPDATE: External updater script: {script_path}")
         self.add_log(f"UPDATE: Apply log path: {apply_log_path}")
         self.add_log(f"UPDATE: Host log path: {host_log_path}")
+        self.add_log("UPDATE: Updater console window should now be visible until completion.")
         self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
         QTimer.singleShot(150, self.qt_app.quit)
 
