@@ -5,6 +5,7 @@ import math
 import time
 import re
 import json
+from collections import deque
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from overlay_server import OverlayServer
@@ -410,18 +411,31 @@ class QtOverlay(QWidget):
         self.redraw_timer.start(1000)
 
         # Queue Logic
-        self.event_queue = []
+        self.event_queue = deque()
         self.is_showing = False
         self.current_event_key = None # (img, snd)
         self.queue_timer = QTimer(self)
         self.queue_timer.setSingleShot(True)
         self.queue_timer.timeout.connect(self.finish_current_event)
+        self.max_event_queue_len = 48
+        self.max_event_backlog_ms = 10000
+        self._queue_drop_count = 0
 
         # Initial queue setting (fallback)
         self._target_pw_sink = None  # PipeWire sink name for audio routing
         self.queue_enabled = True
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
             self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
+            try:
+                raw_max_len = int(self.gui_ref.config.get("event_queue_max_len", 48))
+                self.max_event_queue_len = max(10, min(200, raw_max_len))
+            except Exception:
+                self.max_event_queue_len = 48
+            try:
+                raw_backlog = int(self.gui_ref.config.get("event_queue_max_backlog_ms", 10000))
+                self.max_event_backlog_ms = max(2000, min(60000, raw_backlog))
+            except Exception:
+                self.max_event_backlog_ms = 10000
             
             # Init Audio Device
             dev_name = self.gui_ref.config.get("audio_device", "Default")
@@ -1133,6 +1147,37 @@ class QtOverlay(QWidget):
         
         threading.Thread(target=_do_move, daemon=True).start()
 
+    @staticmethod
+    def _queue_entry_wait_ms(queue_item):
+        try:
+            return max(100, int(queue_item[2]) + 100)
+        except Exception:
+            return 250
+
+    def _trim_event_queue(self):
+        dropped = 0
+
+        while len(self.event_queue) > self.max_event_queue_len:
+            self.event_queue.popleft()
+            dropped += 1
+
+        queued_ms = 0
+        for item in self.event_queue:
+            queued_ms += self._queue_entry_wait_ms(item)
+
+        # Keep at least one pending item to avoid dropping every burst completely.
+        while len(self.event_queue) > 1 and queued_ms > self.max_event_backlog_ms:
+            oldest = self.event_queue.popleft()
+            queued_ms -= self._queue_entry_wait_ms(oldest)
+            dropped += 1
+
+        if dropped > 0:
+            self._queue_drop_count += dropped
+            if self.gui_ref and hasattr(self.gui_ref, "add_log") and self._queue_drop_count % 10 == 0:
+                self.gui_ref.add_log(
+                    f"OVERLAY: Event queue overflow, dropped {self._queue_drop_count} old event(s) to keep HUD realtime."
+                )
+
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False, play_duplicate=True, event_name=""):
         # Master Toggle Check
         if self.gui_ref:
@@ -1141,10 +1186,17 @@ class QtOverlay(QWidget):
                 return
 
         # --- CASE A: HITMARKER (Immediate & Parallel) ---
+        event_name_norm = str(event_name or "").strip().lower()
+        hitmarker_names = {"hitmarker", "headshot hitmarker"}
+        is_hitmarker_event = bool(is_hitmarker) or (event_name_norm in hitmarker_names)
 
         master_vol = self.get_master_volume()
 
-        if is_hitmarker:
+        if is_hitmarker_event:
+            # Visual first to keep hitmarkers responsive even under audio load.
+            if img_path and os.path.exists(img_path):
+                self.show_hitmarker(img_path, duration, x, y, scale, event_name=event_name)
+
             if sound_path:
                 try:
                     if 'pygame' in sys.modules:
@@ -1154,9 +1206,6 @@ class QtOverlay(QWidget):
                         self._ensure_audio_routing()
                 except:
                     pass
-
-            if img_path and os.path.exists(img_path):
-                self.show_hitmarker(img_path, duration, x, y, scale, event_name=event_name)
 
             return
 
@@ -1222,6 +1271,7 @@ class QtOverlay(QWidget):
                         return
 
         self.event_queue.append((img_path, sound_path, duration, x, y, scale, volume, event_name))
+        self._trim_event_queue()
 
         if not self.is_showing:
             self.process_next_event()
@@ -1268,7 +1318,7 @@ class QtOverlay(QWidget):
 
         self.is_showing = True
         # Unpack volume from the tuple
-        img_path, sound_path, duration, x, y, scale, event_vol, event_name = self.event_queue.pop(0)
+        img_path, sound_path, duration, x, y, scale, event_vol, event_name = self.event_queue.popleft()
         
         # Store key for duplicate checking (prefer name if set)
         self.current_event_key = event_name if event_name else (img_path, sound_path)

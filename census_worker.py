@@ -295,6 +295,8 @@ class CensusWorker:
                                 self.c.current_character_id = c_id
                                 self.c.last_tracked_id = c_id
                                 self.c.current_selected_char_name = name
+                                if hasattr(self.c, "_ensure_session_stats_entry"):
+                                    self.c._ensure_session_stats_entry(c_id, name=name)
                                 from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
                                 if hasattr(self.c, 'ovl_config_win'):
                                     QMetaObject.invokeMethod(self.c.ovl_config_win.char_combo, "setCurrentText",
@@ -737,6 +739,8 @@ class CensusWorker:
                     self.c.current_character_id = char_id
                     self.c.last_tracked_id = char_id
                     self.c.current_selected_char_name = name
+                    if hasattr(self.c, "_ensure_session_stats_entry"):
+                        self.c._ensure_session_stats_entry(char_id, name=name)
 
                     # Update GUI dropdown safely
                     from PyQt6.QtCore import QMetaObject, Qt, Q_ARG

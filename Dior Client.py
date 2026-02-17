@@ -717,11 +717,51 @@ class DiorClientGUI:
 
         my_id = str(getattr(self, "current_character_id", "") or "").strip()
         if my_id:
-            stats_obj = self.session_stats.get(my_id)
+            stats_obj = self._ensure_session_stats_entry(my_id)
             if isinstance(stats_obj, dict) and len(stats_obj) > 0:
                 return stats_obj, False
 
         return {}, True
+
+    def _ensure_session_stats_entry(self, cid, name=None):
+        """Ensure an active character always has a concrete stats object (not debug placeholder)."""
+        cid = str(cid or "").strip()
+        if not cid:
+            return {}
+
+        existing = self.session_stats.get(cid)
+        if isinstance(existing, dict) and len(existing) > 0:
+            if name and (not existing.get("name") or existing.get("name") == "Searching..."):
+                existing["name"] = name
+            return existing
+
+        resolved_name = name
+        if not resolved_name:
+            resolved_name = self.name_cache.get(cid, "")
+        if not resolved_name:
+            for n, saved_id in getattr(self, "char_data", {}).items():
+                if str(saved_id) == cid:
+                    resolved_name = n
+                    break
+        if not resolved_name:
+            resolved_name = "Searching..."
+
+        now = time.time()
+        base_world = str(getattr(self, "current_world_id", "0") or "0")
+        obj = {
+            "id": cid,
+            "name": resolved_name,
+            "faction": "NSO",
+            "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
+            "dhs": 0, "dhs_eligible": 0,
+            "revives_received": 0,
+            "start": now,
+            "acc_t": 0,
+            "last_kill_time": now,
+            "world_id": base_world
+        }
+        self.session_stats[cid] = obj
+        return obj
 
     def update_stats_position_safe(self):
         """Calculates the position of the Stats widget safely and consistently."""
@@ -2062,6 +2102,12 @@ class DiorClientGUI:
         self.current_character_id = cid
         self.last_tracked_id = cid
         self.current_selected_char_name = name
+        if cid:
+            self._ensure_session_stats_entry(cid, name=name)
+            # Force immediate repaint so old/dummy stats are replaced right after switch.
+            self.stats_last_refresh_time = 0
+            self.update_session_time()
+            self.refresh_ingame_overlay()
 
         self.add_log(f"SYS: Tracking active for: {name}")
 
@@ -5961,8 +6007,8 @@ log "DONE"
 
 
 
-    def hide_overlay_temporary(self):
-        """Hides all overlay elements without deleting data (e.g. for Alt-Tab)"""
+    def hide_overlay_temporary(self, clear_feed=False):
+        """Hides all overlay elements; optionally clears killfeed for hard resets."""
         if not self.overlay_win: return
 
         # 1. Stats Widget
@@ -5975,7 +6021,7 @@ log "DONE"
         # 2. Killfeed
         if hasattr(self.overlay_win, 'feed_label'):
             self.overlay_win.feed_label.hide()
-        if hasattr(self.overlay_win, 'clear_killfeed'):
+        if clear_feed and hasattr(self.overlay_win, 'clear_killfeed'):
             self.overlay_win.clear_killfeed()
 
         # 3. Killstreak
@@ -6008,7 +6054,7 @@ log "DONE"
         """Hides all overlay elements and RESETS all data/counters (e.g. at game exit)"""
 
         # Hide everything first
-        self.hide_overlay_temporary()
+        self.hide_overlay_temporary(clear_feed=True)
         self._set_crosshair_recoil_level(0.0)
 
         # Then clear killfeed text (hard reset)
@@ -6899,7 +6945,7 @@ log "DONE"
         if not self.current_character_id: return
         
         # We need the session object
-        s_obj = self.session_stats.get(self.current_character_id)
+        s_obj = self._ensure_session_stats_entry(self.current_character_id)
         if not s_obj: return
 
         # If overlay is running, update display
