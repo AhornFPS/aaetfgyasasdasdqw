@@ -261,7 +261,7 @@ class CensusWorker:
                     if payload_world == "17": payload_world = "1"
                     if payload_world == "13": payload_world = "10"
 
-                    # DUPLIKAT FILTER (Improved)
+                    # DUPLICATE FILTER (Improved)
                     if e_name == "GainExperience":
                         uid = f"EXP_{p.get('timestamp')}_{p.get('character_id')}_{p.get('experience_id')}_{p.get('other_id')}"
                     elif e_name == "Death":
@@ -673,7 +673,7 @@ class CensusWorker:
                     if killer_id == my_id:
                         self.c.trigger_overlay_event("Suicide")
                     else:
-                        # --- NEU: Headshot Death Check ---
+                        # --- NEW: Headshot Death Check ---
                         if is_hs:
                             self._trigger_subset_event("Death", "Headshot Death")
                         else:
@@ -791,7 +791,7 @@ class CensusWorker:
                 self.c.was_revived = True
                 self.c.is_dead = False
                 self.is_dead_state = False
-                self.c.is_tk_death = False  # Wiederbelebt -> Kein TK-Status mehr nötig
+                self.c.is_tk_death = False  # Revived -> No more TK status needed
                 
                 # Do NOT restore streak (as we no longer delete it on death!)
                 # We only update the display if it was hidden.
@@ -880,7 +880,7 @@ class CensusWorker:
                 if entry.get("gunner_matched"):
                     continue
 
-                # LOGIK: Der Angreifer (Attacker) im Death-Event muss unser Gunner sein
+                # LOGIC: The attacker in the death event must be our gunner
                 if d_p.get("attacker_character_id") == gunner_id:
                     # Optional: Time check (Kill should be close to the XP event, +/- 10 sec)
                     # Often not necessary here, as recent_deaths is short anyway.
@@ -889,7 +889,7 @@ class CensusWorker:
                     match_entry = entry
                     break
 
-        # 2. ERFOLG
+        # 2. SUCCESS
         if match_entry:
             self.c.add_log(f"DEBUG: Gunner kill found! (Retries left: {retries})")
             self._emit_gunner_killfeed(match_entry["payload"])

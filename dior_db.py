@@ -25,7 +25,7 @@ class DatabaseHandler:
         conn.close()
 
     def load_my_chars(self):
-        """Lädt eigene Charaktere für das Dropdown."""
+        """Loads own characters for the dropdown."""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute("SELECT name, character_id FROM my_chars")
@@ -34,7 +34,7 @@ class DatabaseHandler:
         return data
 
     def load_player_cache(self):
-        """Lädt den Namens-Cache für den Killfeed."""
+        """Loads the name cache for the killfeed."""
         try:
             conn = sqlite3.connect(self.db_name)
             conn.row_factory = sqlite3.Row
@@ -43,7 +43,7 @@ class DatabaseHandler:
             rows = cursor.fetchall()
             conn.close()
 
-            # Gibt zwei Dictionaries zurück: Names und Outfits
+            # Returns two dictionaries: Names and Outfits
             names = {row['character_id']: row['name'] for row in rows}
             outfits = {row['character_id']: row['outfit_tag'] for row in rows}
             return names, outfits
@@ -52,12 +52,12 @@ class DatabaseHandler:
             return {}, {}
 
     def save_char_to_db(self, cid, name, world_id, faction_id=0, rank=0, tag=""):
-        """Speichert einen Charakter (Thread-Safe, da neue Connection)."""
+        """Saves a character (Thread-safe, as it uses a new connection)."""
         conn = sqlite3.connect(self.db_name)
         conn.execute(
             "INSERT OR REPLACE INTO player_cache (character_id, name, faction_id, battle_rank, outfit_tag, world_id) VALUES (?, ?, ?, ?, ?, ?)",
             (cid, name, faction_id, rank, tag, world_id))
-        # Auch in "My Chars" speichern (fürs Tracking)
+        # Also save to "My Chars" (for tracking)
         conn.execute("INSERT OR REPLACE INTO my_chars (name, character_id) VALUES (?, ?)", (name, cid))
         conn.commit()
         conn.close()

@@ -256,7 +256,7 @@ class TabStreaming(QWidget):
 
         # --- HEADLINE ---
         head = QLabel("OBS STUDIO INTEGRATION")
-        # Nutzt deinen existierenden Style für Header
+        # Uses your existing style for headers
         head.setObjectName("Header")
         head.setStyleSheet("font-size: 22px; margin-bottom: 10px;")
         layout.addWidget(head)
@@ -325,7 +325,7 @@ class TabStreaming(QWidget):
 
         self.btn_copy = QPushButton("COPY URL")
         self.btn_copy.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # Nutzt deinen Button-Style, aber mit spezifischen Farben
+        # Uses your button style, but with specific colors
         self.btn_copy.setStyleSheet("""
             QPushButton { background-color: #004400; color: #00ff00; border: 1px solid #006600; font-weight: bold; padding: 8px; outline: none; }
             QPushButton:hover { background-color: #006600; color: white; border: 1px solid #00ff00; }
@@ -405,13 +405,13 @@ class TabStreaming(QWidget):
         clipboard = QApplication.clipboard()
         clipboard.setText(self.lbl_url.text())
 
-        # Feedback Animation (Text ändern)
+        # Feedback Animation (Change text)
         orig_text = self.lbl_url.text()
         self.lbl_url.setText("COPIED!")
         self.lbl_url.setStyleSheet("color: #00f2ff; font-family: 'Consolas'; font-size: 18px; font-weight: bold;")
 
-        # Timer um Text zurückzusetzen (nutzt QTimer.singleShot)
-        from PyQt6.QtCore import QTimer  # Import falls lokal nötig, sonst oben
+        # Timer to reset text (uses QTimer.singleShot)
+        from PyQt6.QtCore import QTimer  # Import if valid locally, else above
         QTimer.singleShot(1500, lambda: self._reset_label(orig_text))
 
     def _reset_label(self, text):
@@ -481,13 +481,13 @@ class OverlayConfigWindow(QWidget):
         self.setup_voice_tab()
         self.tabs.addTab(self.tab_voice, " VOICE MACROS ")
 
-        # --- TAB 7: TWITCH CHAT (NEU) ---
+        # --- TAB 7: TWITCH CHAT (NEW) ---
         self.tab_twitch = QWidget()
         self.setup_twitch_tab()
-        self.tabs.addTab(self.tab_twitch, " TWITCH CHAT ")  # Neuer Tab ganz rechts
+        self.tabs.addTab(self.tab_twitch, " TWITCH CHAT ")  # New tab on the far right
 
-        # --- [NEU] TAB 8: STREAMING / OBS ---
-        # Hier nutzen wir die neue Klasse statt einer setup_Methode
+        # --- [NEW] TAB 8: STREAMING / OBS ---
+        # Here we use the new class instead of a setup method
         self.tab_streaming = TabStreaming(self)
         self.tabs.addTab(self.tab_streaming, " OBS / STREAM ")
 
@@ -609,7 +609,7 @@ class OverlayConfigWindow(QWidget):
         tab_layout.addWidget(scroll)
 
     def toggle_sub_container(self, widget):
-        """Universelle Funktion zum Auf/Zuklappen von Untermenüs."""
+        """Universal function to expand/collapse submenus."""
         is_visible = widget.isVisible()
         widget.setVisible(not is_visible)
 
@@ -722,14 +722,14 @@ class OverlayConfigWindow(QWidget):
         master_row.addStretch()
         layout.addLayout(master_row)
 
-        # --- DEFINITION DER DROPDOWNS ---
+        # --- DEFINITION OF DROPDOWNS ---
         # Heal milestones intentionally limited to configured subset values.
         self.EXPANDABLE_EVENTS = {
             "Heal": [
                 "Heal 50", "Heal 250", "Heal 500", "Heal 1000", "Heal 5000"
             ],
             "Revive Given": [
-                # WICHTIG: Die Namen müssen mit "Revive Given" anfangen!
+                # IMPORTANT: The names must start with "Revive Given"!
                 "Revive Given 5", "Revive Given 10", "Revive Given 25", "Revive Given 50",
                 "Revive Given 100", "Revive Given 500"
             ],
@@ -739,23 +739,23 @@ class OverlayConfigWindow(QWidget):
             "Repair": [
                 "Repair 50", "Repair 250", "Repair 500", "Repair 1000", "Repair 5000"
             ],
-            # NEU: Kill Subset
+            # NEW: Kill Subset
             "Kill": [
                 "Kill Infil", "Kill Light Assault", "Kill Medic", "Kill Engineer", "Kill Heavy", "Kill MAX"
             ],
-            # NEU: Death Subset
+            # NEW: Death Subset
             "Death": [
                 "Headshot Death",
                 "Get RoadKilled"
             ],
-            # NEU: Vehicle Destruction Subset (Renamed from Vehicle Kill)
+            # NEW: Vehicle Destruction Subset (Renamed from Vehicle Kill)
             "Vehicle Destruction": [
                 "Kill Flash", "Kill Sunderer", "Kill Lightning", "Kill Magrider", "Kill Vanguard", "Kill Prowler",
                 "Kill Scythe", "Kill Reaver", "Kill Mosquito", "Kill Liberator", "Kill Galaxy", "Kill Valkyrie",
                 "Kill Harasser", "Kill Ant", "Kill Colossus", "Kill Javelin", "Kill Dervish", "Kill Chimera",
                 "Kill Corsair"
             ],
-            # NEU: Gunner Vehicle Destruction Subset
+            # NEW: Gunner Vehicle Destruction Subset
             "Gunner Vehicle Destruction": [
                 "Gunner Kill Flash", "Gunner Kill Sunderer", "Gunner Kill Lightning", "Gunner Kill Magrider",
                 "Gunner Kill Vanguard", "Gunner Kill Prowler", "Gunner Kill Scythe", "Gunner Kill Reaver",

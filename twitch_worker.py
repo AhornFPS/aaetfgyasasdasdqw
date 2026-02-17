@@ -1,7 +1,7 @@
 import socket
 import threading
 import time
-import random # Für zufällige justinfan Nummer
+import random # For random justinfan number
 import requests
 import os
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -13,7 +13,7 @@ except ImportError:
     # Fallback for standalone testing
     BASE_DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Cache Ordner Pfad (Creation moved to EmoteManager init)
+# Cache folder path (Creation moved to EmoteManager init)
 CACHE_DIR = os.path.join(BASE_DATA_DIR, "_emote_cache")
 
 
@@ -35,14 +35,14 @@ class EmoteManager:
             except Exception as e:
                 print(f"TWITCH: Could not create cache dir {CACHE_DIR}: {e}")
 
-        # Wir mappen den Emote-Code (z.B. "KEKW") auf den lokalen Dateipfad
+        # We map the emote code (e.g. "KEKW") to the local file path
         self.emote_files = {}
         self.emote_urls = {}
 
     def load_all_emotes(self, channel_name):
         print(f"TWITCH: Loading community emotes for {channel_name}...")
         try:
-            # 1. User ID für den Kanal holen (wird für BTTV/FFZ/7TV benötigt)
+            # 1. Get User ID for the channel (needed for BTTV/FFZ/7TV)
             user_data = fetch_json(f"https://api.ivr.fi/v2/twitch/user?login={channel_name}")
             if not user_data:
                 print("TWITCH: Could not fetch User ID. Skipping channel emotes.")
@@ -50,7 +50,7 @@ class EmoteManager:
             else:
                 user_id = user_data[0]['id']
 
-            # --- 2. 7TV (Die wichtigste Quelle) ---
+            # --- 2. 7TV (The most important source) ---
             if user_id:
                 self._load_7tv(f"https://7tv.io/v3/users/twitch/{user_id}")
             self._load_7tv("https://7tv.io/v3/emote-sets/global")
@@ -61,7 +61,7 @@ class EmoteManager:
             self._load_bttv("https://api.betterttv.net/3/cached/emotes/global")
 
             # --- 4. FrankerFacez (FFZ) ---
-            # FFZ enthält oft die klassischen Twitch-Emotes (Kappa, LUL) in ihrem Global-Set!
+            # FFZ often contains the classic Twitch emotes (Kappa, LUL) in its Global Set!
             if user_id:
                 self._load_ffz(f"https://api.frankerfacez.com/v1/room/id/{user_id}")
             self._load_ffz("https://api.frankerfacez.com/v1/set/global")
@@ -93,21 +93,21 @@ class EmoteManager:
 
                 target_file = None
 
-                # WICHTIG: Wir bevorzugen GIF für Animationen, da Qt das besser kann als WebP
-                # Wir suchen von hinten (höchste Qualität) nach vorne
+                # IMPORTANT: We prefer GIF for animations, as Qt handles it better than WebP
+                # We search from back (highest quality) to front
                 for f in reversed(files):
                     if f['format'] == 'GIF':
                         target_file = f['name']
                         break
 
-                # Wenn kein GIF, dann WebP (aber nicht AVIF!)
+                # If no GIF, then WebP (but not AVIF!)
                 if not target_file:
                     for f in reversed(files):
                         if f['format'] == 'WEBP':
                             target_file = f['name']
                             break
 
-                # Fallback: Irgendein Format, das nicht AVIF ist
+                # Fallback: Any format that is not AVIF
                 if not target_file:
                     for f in files:
                         if f['format'] not in ['AVIF']:
@@ -124,7 +124,7 @@ class EmoteManager:
         if not data: return
         items = data if isinstance(data, list) else data.get('channelEmotes', []) + data.get('sharedEmotes', [])
         for e in items:
-            # BTTV liefert GIFs (id/2x oder id/3x)
+            # BTTV provides GIFs (id/2x or id/3x)
             self.emote_urls[e['code']] = f"https://cdn.betterttv.net/emote/{e['id']}/2x"
 
     def _load_ffz(self, url):
@@ -139,23 +139,23 @@ class EmoteManager:
 
 
     def get_emote_html(self, code):
-        """Lädt Bild herunter, speichert es auf Disk und gibt <img> Tag zurück."""
+        """Downloads image, saves it to disk and returns <img> tag."""
         if code not in self.emote_urls:
             return None
 
-        # Dateiname säubern
+        # Clean filename
         safe_code = "".join([c for c in code if c.isalnum() or c in ('_', '-')])
 
-        # 1. Check: Ist der Pfad bereits in unserem Laufzeit-Dictionary?
+        # 1. Check: Is the path already in our runtime dictionary?
         if code in self.emote_files:
             filepath = self.emote_files[code]
             if os.path.exists(filepath):
-                # FIX: IMMER Absoluter Pfad + Forward Slashes
+                # FIX: ALWAYS Absolute Path + Forward Slashes
                 abs_path = os.path.abspath(filepath).replace("\\", "/")
-                # Wir nutzen ein Custom-Prefix 'emote://', um Qt zu zwingen, NICHT auf der Festplatte zu suchen
+                # We use a custom prefix 'emote://' to force Qt NOT to search on the disk
                 return f'<img src="emote://{abs_path}">'
 
-        # 2. Check: Falls nicht im Dictionary, schau manuell im Ordner nach (z.B. nach Neustart)
+        # 2. Check: If not in dictionary, check manually in folder (e.g. after restart)
         for ext in ['gif', 'webp', 'png']:
             test_path = os.path.join(CACHE_DIR, f"{safe_code}.{ext}")
             if os.path.exists(test_path):
@@ -163,7 +163,7 @@ class EmoteManager:
                 abs_path = os.path.abspath(test_path).replace("\\", "/")
                 return f'<img src="emote://{abs_path}">'
 
-        # 3. Download: Falls gar nicht vorhanden
+        # 3. Download: If not present at all
         url = self.emote_urls[code]
         try:
             r = requests.get(url, timeout=3)
@@ -183,7 +183,7 @@ class EmoteManager:
 
                 self.emote_files[code] = filepath
 
-                # FIX: Auch beim ersten Download absoluten Pfad erzwingen
+                # FIX: Force absolute path even on first download
                 abs_path = os.path.abspath(filepath).replace("\\", "/")
                 return f'<img src="emote://{abs_path}">'
         except Exception:
@@ -244,10 +244,10 @@ class TwitchWorker(QObject):
                 self.sock.connect(('irc.chat.twitch.tv', 6667))
                 self.sock.settimeout(None)
 
-                # Zufällige justinfan ID um Kollisionen zu vermeiden
+                # Random justinfan ID to avoid collisions
                 nick = f"justinfan{random.randint(10000, 99999)}"
 
-                # WICHTIG: Jede Zeile MUSS mit \r\n enden!
+                # IMPORTANT: Every line MUST end with \r\n!
                 self.sock.send(f"CAP REQ :twitch.tv/tags twitch.tv/commands\r\n".encode('utf-8'))
                 self.sock.send(f"PASS oauth:kappa\r\n".encode('utf-8'))
                 self.sock.send(f"NICK {nick}\r\n".encode('utf-8'))
@@ -264,12 +264,12 @@ class TwitchWorker(QObject):
                             break
 
                         buffer += data
-                        while '\r\n' in buffer:  # IRC nutzt \r\n als Trenner
+                        while '\r\n' in buffer:  # IRC uses \r\n as separator
                             line, buffer = buffer.split('\r\n', 1)
                             if not line: continue
 
                             if line.startswith('PING'):
-                                # Twitch will ein PONG mit dem gleichen Token zurück
+                                # Twitch wants a PONG with the same token back
                                 self.sock.send(f"PONG {line.split()[1]}\r\n".encode('utf-8'))
                                 continue
 
@@ -280,19 +280,19 @@ class TwitchWorker(QObject):
                                     tag_part, line = line[1:].split(" ", 1)
                                     tags = dict(item.split("=") for item in tag_part.split(";") if "=" in item)
 
-                                # Extraktion von User und Nachricht
+                                # Extraction of user and message
                                 parts = line.split(":", 2)
                                 if len(parts) > 2:
-                                    # Der Login-Name (kleingeschrieben)
+                                    # The Login Name (lowercase)
                                     raw_user = parts[1].split("!")[0].lower()
                                     raw_msg = parts[2].strip()
 
-                                    # Display Name (mit Groß/Kleinschreibung aus den Tags)
+                                    # Display Name (with case sensitivity from tags)
                                     display_name = tags.get("display-name", raw_user)
                                     user_color = tags.get("color", "#00f2ff")
                                     if not user_color: user_color = "#00f2ff"
 
-                                    # --- IGNORE CHECK (Login-Name prüfen ist sicherer) ---
+                                    # --- IGNORE CHECK (Checking Login Name is safer) ---
                                     if raw_user in self.ignore_list:
                                         continue
                                     
@@ -300,10 +300,10 @@ class TwitchWorker(QObject):
                                     if self.ignore_special and raw_msg.startswith("!"):
                                         continue
 
-                                    # 1. Nachricht in HTML umwandeln
+                                    # 1. Convert message to HTML
                                     html = self.emote_mgr.parse_message(raw_msg)
 
-                                    # 2. Signal an die GUI
+                                    # 2. Signal to GUI
                                     self.new_message.emit(display_name, html, user_color)
 
                     except socket.timeout:

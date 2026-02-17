@@ -7,9 +7,9 @@ import os
 from ps2_settings_editor import PS2SettingsEditor
 
 
-# --- SIGNALE ---
+# --- SIGNALS ---
 class LauncherSignals(QObject):
-    # Sendet 'high' oder 'low' an das Hauptprogramm
+    # Sends 'high' or 'low' to the main program
     launch_requested = pyqtSignal(str)
 
 
@@ -78,17 +78,17 @@ class ProfileCard(QFrame):
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(15)
 
-        # Sektion (z.B. [ VEHICLE ])
+        # Section (e.g. [ VEHICLE ])
         lbl_sub = QLabel(f"[ {subtitle} ]")
         lbl_sub.setStyleSheet(f"color: {color}; font-weight: bold; font-family: 'Consolas';")
         layout.addWidget(lbl_sub)
 
-        # Titel
+        # Title
         lbl_title = QLabel(title)
         lbl_title.setObjectName("ProfileTitle")
         layout.addWidget(lbl_title)
 
-        # Beschreibung
+        # Description
         lbl_desc = QLabel(desc)
         lbl_desc.setObjectName("Description")
         lbl_desc.setWordWrap(True)
@@ -127,12 +127,12 @@ class LauncherWidget(QWidget):
         self.setWindowTitle("Dior Client - Launcher")
         self.resize(1100, 650)
 
-        # WICHTIG: Stylesheet anwenden
+        # IMPORTANT: Apply stylesheet
         self.setStyleSheet(LAUNCHER_STYLE)
 
         self.signals = LauncherSignals()
 
-        # Layout direkt auf self (Korrekt!)
+        # Apply layout directly to self (Correct!)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(50, 50, 50, 50)
         main_layout.setSpacing(30)
@@ -211,10 +211,10 @@ class LauncherWidget(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Style ist jetzt in __init__, aber schadet hier nicht:
+    # Style is now in __init__, but doesn't hurt here:
     app.setStyleSheet(LAUNCHER_STYLE)
 
-    # KORREKTUR: Klassenname angepasst (war LauncherWindow)
+    # CORRECTION: Class name adapted (was LauncherWindow)
     launcher = LauncherWidget()
     launcher.show()
     sys.exit(app.exec())

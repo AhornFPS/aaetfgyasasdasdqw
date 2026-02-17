@@ -6,12 +6,12 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, pyqtSlot
 
 
-# --- SIGNALE ---
+# --- SIGNALS ---
 class CharacterSignals(QObject):
-    # Von GUI -> Logik (Triggert run_search)
+    # From GUI -> Logic (Triggers run_search)
     search_requested = pyqtSignal(str)
 
-    # Von Logik -> GUI (Triggert process_search_results_qt)
+    # From Logic -> GUI (Triggers process_search_results_qt)
     search_finished = pyqtSignal(dict, list)
 
 
@@ -138,22 +138,22 @@ class CharacterWidget(QWidget):
         self.resize(1000, 900)
 
 
-        # WICHTIG: Stylesheet anwenden
+        # IMPORTANT: Apply stylesheet
         self.setStyleSheet(CHAR_STYLE)
 
-        # Signale initialisieren
+        # Initialize signals
         self.signals = CharacterSignals()
 
-        # Instanzattribute
+        # Instance attributes
         self.info_labels = {}
         self.stats_ui = {}
         self.weapon_table = QTableWidget(0, 4)
 
-        # Layout direkt auf self anwenden
+        # Apply layout directly to self
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- 1. TITEL & SUCHE ---
+        # --- 1. TITLE & SEARCH ---
         header_layout = QHBoxLayout()
         self.lbl_title = QLabel("CHARACTER ANALYSIS")
         self.lbl_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00f2ff;")
@@ -250,14 +250,14 @@ class CharacterWidget(QWidget):
 
     def setup_weapon_tab(self):
         layout = QVBoxLayout(self.weapon_tab)
-        # NEUE SPALTEN: KPM, K/D, ACC, HSR, VEHICLE KILLS, VEHICLE KPM, TIME
+        # NEW COLUMNS: KPM, K/D, ACC, HSR, VEHICLE KILLS, VEHICLE KPM, TIME
         headers = ["WEAPON", "KILLS", "KPM", "K/D", "ACC %", "HSR %", "V.KILLS", "V.KPM", "TIME"]
         self.weapon_table.setColumnCount(len(headers))
         self.weapon_table.setHorizontalHeaderLabels(headers)
         
         h = self.weapon_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        # Alle anderen spalten an Inhalt anpassen
+        # Adjust all other columns to content
         for i in range(1, len(headers)):
             h.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
             
@@ -266,7 +266,7 @@ class CharacterWidget(QWidget):
 
     def setup_directive_tab(self):
         layout = QVBoxLayout(self.directive_tab)
-        # Tabelle konfigurieren
+        # Configure table
         self.directive_table.setHorizontalHeaderLabels(["DIRECTIVE LINE", "CURRENT TIER", "STATUS"])
         
         h = self.directive_table.horizontalHeader()
@@ -285,20 +285,20 @@ class CharacterWidget(QWidget):
         name = self.search_input.text().strip()
         if not name: return
 
-        # 1. UI Feedback: Feld leeren & Logs
+        # 1. UI Feedback: Clear field & Logs
         self.search_input.clear()
         self.add_log(f"UPLINK: Requesting data for Character '{name}'...")
 
-        # 2. Stats auf "SEARCHING..." setzen
+        # 2. Set Stats to "SEARCHING..."
         for lbl in self.info_labels.values(): lbl.setText("...")
         for lbl in self.stats_ui.values(): lbl.setText("...")
         self.weapon_table.setRowCount(0)
 
-        # 3. Signal an Dior Client.py senden
+        # 3. Send Signal to Dior Client.py
         self.signals.search_requested.emit(name)
 
     def update_overview(self, c_stats):
-        # Stammdaten
+        # Master Data
         for label_name, key in [("Name:", 'name'), ("Faction:", 'fac_short'), ("Server:", 'server'),
                                 ("Outfit:", 'outfit'), ("Rank:", 'rank'), ("Time Played:", 'time_played')]:
             if label_name in self.info_labels:
@@ -322,7 +322,7 @@ class CharacterWidget(QWidget):
             row = self.weapon_table.rowCount()
             self.weapon_table.insertRow(row)
             
-            # DATEN HOLEN
+            # FETCH DATA
             kills = w.get('kills', 0)
             deaths = w.get('deaths', 0)
             shots = w.get('shots', 0)
@@ -331,7 +331,7 @@ class CharacterWidget(QWidget):
             vkills = w.get('vkills', 0)
             play_time = w.get('time', 0)  # Sekunden
             
-            # BERECHNUNGEN
+            # CALCULATIONS
             acc = (hits / shots * 100) if shots > 0 else 0.0
             hsr = (hs / kills * 100) if kills > 0 else 0.0
             kd = kills / max(1, deaths)
@@ -345,13 +345,13 @@ class CharacterWidget(QWidget):
             rem_min = int((play_time % 3600) // 60)
             time_str = f"{hours}h {rem_min}m"
 
-            # IN TABELLE SCHREIBEN
+            # WRITE TO TABLE
             # 0: WEAPON, 1: KILLS, 2: KPM, 3: K/D, 4: ACC %, 5: HSR %, 6: V.KILLS, 7: V.KPM, 8: TIME
             
             self.weapon_table.setItem(row, 0, QTableWidgetItem(w.get('name', '?')))
             
             item_kills = QTableWidgetItem(f"{kills:,}")
-            item_kills.setData(Qt.ItemDataRole.DisplayRole, kills) # Sortierbar machen
+            item_kills.setData(Qt.ItemDataRole.DisplayRole, kills) # Make sortable
             self.weapon_table.setItem(row, 1, item_kills)
             
             self.weapon_table.setItem(row, 2, QTableWidgetItem(f"{kpm:.2f}"))
@@ -366,7 +366,7 @@ class CharacterWidget(QWidget):
             self.weapon_table.setItem(row, 7, QTableWidgetItem(f"{vkpm:.2f}"))
             
             item_time = QTableWidgetItem(time_str)
-            item_time.setData(Qt.ItemDataRole.UserRole, play_time) # Für Sortierung (müsste man Custom Sorter bauen, aber UserRole hilft evtl)
+            item_time.setData(Qt.ItemDataRole.UserRole, play_time) # For sorting (would need custom sorter, but UserRole might help)
             self.weapon_table.setItem(row, 8, item_time)
 
         self.weapon_table.setSortingEnabled(True)
@@ -383,7 +383,7 @@ class CharacterWidget(QWidget):
             r = requests.get(url, timeout=10)
             data = r.json()
             
-            # Auf Hauptthread updaten
+            # Update on main thread
             from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
             QMetaObject.invokeMethod(self, "update_directive_table", 
                                      Qt.ConnectionType.QueuedConnection,
@@ -394,7 +394,7 @@ class CharacterWidget(QWidget):
 
    # @pyqtSignal(list)
     def update_directive_table(self, data_list):
-        """Wird vom Thread aufgerufen, wenn Daten da sind."""
+        """Called by the thread when data is available."""
         self.directive_table.setRowCount(0)
         self.directive_table.setSortingEnabled(False)
 
@@ -402,24 +402,24 @@ class CharacterWidget(QWidget):
             tree_id = item.get("directive_tree_id")
             tier_id = item.get("directive_tier_id", "0")
             
-            # 1. Namen auflösen (Lokal)
+            # 1. Resolve names (Local)
             dir_info = self.directives_db.get(tree_id, {})
             name = dir_info.get("name", f"Unknown ({tree_id})")
             
             # 2. Tier Name via Join (API Payload)
-            # Da wir c:join nutzen, ist 'directive_tree_id_join_directive' im Payload
-            # ABER: characters_directive_tier gibt nur TIER ID.
-            # Der Join in der URL 'type:directive^on:directive_tree_id^to:directive_tree_id' 
-            # ist etwas tricky, da er auf 'directive' joint, nicht 'directive_tier'.
-            # Wir schauen mal was wir bekommen.
-            # Fallback: Tier ID anzeigen
+            # Since we use c:join, 'directive_tree_id_join_directive' is in the payload
+            # BUT: characters_directive_tier only returns TIER ID.
+            # The join in the URL 'type:directive^on:directive_tree_id^to:directive_tree_id'
+            # is a bit tricky, as it joins on 'directive', not 'directive_tier'.
+            # Let's see what we get.
+            # Fallback: Show Tier ID
             
             tier_val = int(tier_id)
-            # Einfache Mapping-Logik für Standard Directives (1=Bronze, 2=Silver, 3=Gold, 4=Aurax)
-            # Manche haben aber andere IDs. Wir nehmen einfach die ID als Indikator.
+            # Simple mapping logic for standard directives (1=Bronze, 2=Silver, 3=Gold, 4=Aurax)
+            # Some have different IDs. We simply use the ID as indicator.
             
-            # Status berechnen (Progress)
-            # Die API gibt oft auch 'current_directive_tier' zurück.
+            # Calculate Status (Progress)
+            # The API often returns 'current_directive_tier' as well.
             
             row = self.directive_table.rowCount()
             self.directive_table.insertRow(row)
@@ -432,7 +432,7 @@ class CharacterWidget(QWidget):
             tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.directive_table.setItem(row, 1, tier_item)
             
-            # Status (API liefert oft completion date)
+            # Status (API often provides completion date)
             ts = item.get("completion_time", "0")
             status = "Completed" if ts != "0" else "In Progress"
             
@@ -450,7 +450,7 @@ class CharacterWidget(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Stylesheet wird jetzt in __init__ geladen, aber für Standalone Test:
-    win = CharacterWidget()  # Name korrigiert
+    # Stylesheet is now loaded in __init__, but for standalone test:
+    win = CharacterWidget()  # Name corrected
     win.show()
     sys.exit(app.exec())
