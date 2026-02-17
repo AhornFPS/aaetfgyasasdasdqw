@@ -5121,8 +5121,11 @@ class DiorClientGUI:
     if (Test-Path -Path $workDir) { Remove-Item -Path $workDir -Recurse -Force -ErrorAction SilentlyContinue }
     $oneDayAgo = (Get-Date).AddDays(-1)
     Get-ChildItem -Path $baseDir -Filter "apply_*" -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    if (Test-Path -Path (Join-Path $baseDir "staging")) {
-        Get-ChildItem -Path (Join-Path $baseDir "staging") -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo.AddDays(-1) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $stagingRoot = Join-Path $baseDir "staging"
+    if (Test-Path -Path $stagingRoot) {
+        Get-ChildItem -Path $stagingRoot -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if ($SuccessPath) {
@@ -5424,7 +5427,7 @@ fi
 rm -rf "$work_dir" || true
 find "$base_dir" -maxdepth 1 -name "apply_*" -type d -mtime +1 -exec rm -rf {} + || true
 if [[ -d "$base_dir/staging" ]]; then
-    find "$base_dir/staging" -maxdepth 1 -type d -mtime +2 -exec rm -rf {} + || true
+    find "$base_dir/staging" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
 fi
 
 if [[ -n "$SUCCESS_PATH" ]]; then

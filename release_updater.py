@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -339,6 +340,29 @@ class ReleaseUpdater:
                         )
             self._emit_progress(progress_cb, {"phase": "download", "downloaded": downloaded, "total": total_size})
 
+    def _prune_staging_dirs(self, keep_versions: Optional[set] = None):
+        staging_root = os.path.join(self.user_data_dir, "updates", "staging")
+        if not os.path.isdir(staging_root):
+            return
+
+        keep = {str(v).strip() for v in (keep_versions or set()) if str(v).strip()}
+        try:
+            entries = os.listdir(staging_root)
+        except Exception:
+            return
+
+        for name in entries:
+            full = os.path.join(staging_root, name)
+            if name in keep:
+                continue
+            try:
+                if os.path.isdir(full):
+                    shutil.rmtree(full, ignore_errors=True)
+                else:
+                    os.remove(full)
+            except Exception:
+                pass
+
     def stage_update(self, update: UpdateInfo, progress_cb: Optional[Callable[[Dict], None]] = None) -> Dict[str, str]:
         if not update or not update.asset:
             raise RuntimeError("No downloadable update asset available.")
@@ -349,6 +373,12 @@ class ReleaseUpdater:
             "staging",
             update.latest_version,
         )
+        self._prune_staging_dirs(keep_versions={update.latest_version})
+        if os.path.isdir(stage_dir):
+            try:
+                shutil.rmtree(stage_dir, ignore_errors=True)
+            except Exception:
+                pass
         os.makedirs(stage_dir, exist_ok=True)
 
         asset_path = os.path.join(stage_dir, update.asset.name)
