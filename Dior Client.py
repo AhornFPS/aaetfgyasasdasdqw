@@ -4879,8 +4879,18 @@ class DiorClientGUI:
                 "-NonInteractive",
                 "-ExecutionPolicy", "Bypass",
                 "-File", $PSCommandPath,
-                $PidToWait, $AssetPath, $TargetDir, $PendingPath, $LaunchExe, $LaunchArg0, $SuccessPath, $UpdatedVersion, $WaitTimeoutSec
+                "-PidToWait", $PidToWait,
+                "-AssetPath", $AssetPath,
+                "-TargetDir", $TargetDir,
+                "-PendingPath", $PendingPath,
+                "-LaunchExe", $LaunchExe,
+                "-SuccessPath", $SuccessPath,
+                "-UpdatedVersion", $UpdatedVersion,
+                "-WaitTimeoutSec", $WaitTimeoutSec
             )
+            if ($LaunchArg0) {
+                $argList += @("-LaunchArg0", $LaunchArg0)
+            }
             Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argList -WindowStyle Hidden | Out-Null
             Write-UpdateLog "INFO: Elevated updater started."
             exit 0
