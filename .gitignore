@@ -41,5 +41,7 @@ manifest.windows.json
 manifest.linux.json
 *.manifest.json
 BetterPlanetside-Installer-v*.exe
+Better-Planetside-Installer-v*.exe
 Better-Planetside-Windows-v*.zip
 Better-Planetside-Linux-v*.tar.gz
+release_payload/

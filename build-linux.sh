@@ -49,7 +49,10 @@ pip install -r requirements.txt
 
 # Clean previous builds
 echo "Cleaning previous builds..."
-rm -rf build dist "Better Planetside.spec.backup"
+rm -rf build dist release_payload "Better Planetside.spec.backup"
+
+echo "Generating sanitized release config..."
+python generate_release_config.py --source config.json --output release_payload/config.json
 
 # Build with PyInstaller
 echo "Building executable..."
