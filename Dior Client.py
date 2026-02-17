@@ -4874,24 +4874,30 @@ class DiorClientGUI:
     if ((Is-ProtectedTarget $TargetDir) -and (-not (Test-IsAdmin))) {
         Write-UpdateLog "INFO: Target is in Program Files. Relaunching elevated updater."
         try {
-            $argList = @(
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy", "Bypass",
-                "-File", $PSCommandPath,
-                "-PidToWait", $PidToWait,
-                "-AssetPath", $AssetPath,
-                "-TargetDir", $TargetDir,
-                "-PendingPath", $PendingPath,
-                "-LaunchExe", $LaunchExe,
-                "-SuccessPath", $SuccessPath,
-                "-UpdatedVersion", $UpdatedVersion,
-                "-WaitTimeoutSec", $WaitTimeoutSec
-            )
-            if ($LaunchArg0) {
-                $argList += @("-LaunchArg0", $LaunchArg0)
+            function Quote-Arg([string]$value) {
+                if ($null -eq $value) { return '""' }
+                $escaped = $value.Replace('"', '`"')
+                return '"' + $escaped + '"'
             }
-            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argList -WindowStyle Hidden | Out-Null
+
+            $argParts = @()
+            $argParts += "-NoProfile"
+            $argParts += "-NonInteractive"
+            $argParts += "-ExecutionPolicy Bypass"
+            $argParts += "-File " + (Quote-Arg $PSCommandPath)
+            $argParts += "-PidToWait " + (Quote-Arg $PidToWait)
+            $argParts += "-AssetPath " + (Quote-Arg $AssetPath)
+            $argParts += "-TargetDir " + (Quote-Arg $TargetDir)
+            $argParts += "-PendingPath " + (Quote-Arg $PendingPath)
+            $argParts += "-LaunchExe " + (Quote-Arg $LaunchExe)
+            $argParts += "-SuccessPath " + (Quote-Arg $SuccessPath)
+            $argParts += "-UpdatedVersion " + (Quote-Arg $UpdatedVersion)
+            $argParts += "-WaitTimeoutSec " + (Quote-Arg $WaitTimeoutSec)
+            if ($LaunchArg0) {
+                $argParts += "-LaunchArg0 " + (Quote-Arg $LaunchArg0)
+            }
+            $argLine = [string]::Join(" ", $argParts)
+            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -WindowStyle Hidden | Out-Null
             Write-UpdateLog "INFO: Elevated updater started."
             exit 0
         } catch {
