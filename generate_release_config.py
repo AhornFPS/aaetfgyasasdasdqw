@@ -21,6 +21,7 @@ EXCLUDED_TOP_LEVEL_KEYS = {
     "audio_device",
     "obs_service",
     "scifi_overlay_active",
+    "auto_voice",
 }
 
 

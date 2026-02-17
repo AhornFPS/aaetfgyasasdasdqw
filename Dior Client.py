@@ -3493,7 +3493,7 @@ class DiorClientGUI:
             ui.check_master.blockSignals(False)
             self.config["overlay_master_active"] = master_state
 
-            scifi_state = bool(self.config.get("scifi_overlay_active", True))
+            scifi_state = bool(self.config.get("scifi_overlay_active", False))
             if hasattr(ui, "btn_toggle_scifi"):
                 ui.btn_toggle_scifi.blockSignals(True)
                 ui.btn_toggle_scifi.setChecked(scifi_state)
@@ -4174,8 +4174,13 @@ class DiorClientGUI:
                     base[k] = v
             return base
 
-        # 1. Define paths (config always stored in per-user data directory)
-        self.user_data_dir = get_user_data_dir()
+        # 1. Define paths
+        # Script/dev mode should use local config next to the script.
+        # Frozen release builds should keep using per-user config storage.
+        if getattr(sys, "frozen", False):
+            self.user_data_dir = get_user_data_dir()
+        else:
+            self.user_data_dir = self.BASE_DIR
         user_config_path = os.path.join(self.user_data_dir, "config.json")
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
         template_path = resource_path("config.json")
@@ -4187,7 +4192,7 @@ class DiorClientGUI:
             "config_schema_version": CONFIG_SCHEMA_VERSION,
             "ps2_path": "",
             "overlay_master_active": True,
-            "scifi_overlay_active": True,
+            "scifi_overlay_active": False,
             "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False, "ads_fire_expand": True},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
