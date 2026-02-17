@@ -2,8 +2,9 @@ import hashlib
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import requests
 
@@ -294,17 +295,51 @@ class ReleaseUpdater:
                 h.update(chunk)
         return h.hexdigest()
 
-    def _download_to_file(self, url: str, out_path: str):
+    def _emit_progress(self, progress_cb: Optional[Callable[[Dict], None]], payload: Dict):
+        if not progress_cb:
+            return
+        try:
+            progress_cb(payload)
+        except Exception:
+            pass
+
+    def _download_to_file(self, url: str, out_path: str, progress_cb: Optional[Callable[[Dict], None]] = None):
         with requests.get(url, headers=self._headers(), timeout=self.timeout_sec, stream=True) as response:
             if response.status_code >= 400:
                 raise RuntimeError(f"HTTP {response.status_code} while downloading {url}")
+            try:
+                total_size = int(response.headers.get("Content-Length", "0") or 0)
+            except Exception:
+                total_size = 0
+            downloaded = 0
+            last_emit_ts = 0.0
+            last_percent = -1
+            self._emit_progress(progress_cb, {"phase": "download", "downloaded": 0, "total": total_size})
             with open(out_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=1024 * 256):
                     if not chunk:
                         continue
                     f.write(chunk)
+                    downloaded += len(chunk)
+                    now = time.monotonic()
+                    if total_size > 0:
+                        percent = int((downloaded * 100) / max(total_size, 1))
+                        if percent != last_percent and (percent >= 100 or (now - last_emit_ts) >= 0.08):
+                            last_percent = percent
+                            last_emit_ts = now
+                            self._emit_progress(
+                                progress_cb,
+                                {"phase": "download", "downloaded": downloaded, "total": total_size},
+                            )
+                    elif (now - last_emit_ts) >= 0.25:
+                        last_emit_ts = now
+                        self._emit_progress(
+                            progress_cb,
+                            {"phase": "download", "downloaded": downloaded, "total": 0},
+                        )
+            self._emit_progress(progress_cb, {"phase": "download", "downloaded": downloaded, "total": total_size})
 
-    def stage_update(self, update: UpdateInfo) -> Dict[str, str]:
+    def stage_update(self, update: UpdateInfo, progress_cb: Optional[Callable[[Dict], None]] = None) -> Dict[str, str]:
         if not update or not update.asset:
             raise RuntimeError("No downloadable update asset available.")
 
@@ -317,10 +352,11 @@ class ReleaseUpdater:
         os.makedirs(stage_dir, exist_ok=True)
 
         asset_path = os.path.join(stage_dir, update.asset.name)
-        self._download_to_file(update.asset.url, asset_path)
+        self._download_to_file(update.asset.url, asset_path, progress_cb=progress_cb)
 
         expected_sha = str(update.asset.sha256 or "").strip().lower()
         if expected_sha:
+            self._emit_progress(progress_cb, {"phase": "verify"})
             actual_sha = self._hash_file(asset_path)
             if actual_sha != expected_sha:
                 raise RuntimeError(

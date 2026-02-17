@@ -77,7 +77,7 @@ from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QMainWindow, QListWidget, QStackedWidget, QGraphicsDropShadowEffect,
-    QColorDialog, QFileDialog, QMessageBox # <--- Added QMessageBox
+    QColorDialog, QFileDialog, QMessageBox, QProgressDialog # <--- Added QMessageBox
 )
 from PyQt6.QtGui import (
     QPixmap,
@@ -129,6 +129,7 @@ class WorkerSignals(QObject):
     request_server_switch = pyqtSignal(str, str)
     # Updater callbacks (Thread-Safe)
     update_check_finished = pyqtSignal(object, str)
+    update_download_progress = pyqtSignal(object)
     update_download_finished = pyqtSignal(object, object, str)
 
 
@@ -277,6 +278,8 @@ class DiorClientGUI:
         self._update_check_in_progress = False
         self._update_download_in_progress = False
         self._latest_update_info = None
+        self._update_download_progress_dialog = None
+        self._update_apply_progress_dialog = None
         self.release_updater = self._build_release_updater()
         self.char_data = self.db.load_my_chars()
 
@@ -302,6 +305,7 @@ class DiorClientGUI:
         self.worker_signals.game_status_changed.connect(self.handle_game_status_change)
         self.worker_signals.request_server_switch.connect(self.switch_server)
         self.worker_signals.update_check_finished.connect(self._finish_update_check_qt)
+        self.worker_signals.update_download_progress.connect(self._update_download_progress_qt)
         self.worker_signals.update_download_finished.connect(self._finish_update_download_qt)
 
         # Tracking Variables
@@ -4531,6 +4535,81 @@ class DiorClientGUI:
             token=token,
         )
 
+    def _show_update_download_progress_dialog(self, update_info):
+        self._close_update_download_progress_dialog()
+        label = "Downloading update package..."
+        if update_info and getattr(update_info, "asset", None):
+            label = f"Downloading {update_info.asset.name}..."
+
+        dlg = QProgressDialog(label, None, 0, 100, self.main_hub)
+        dlg.setWindowTitle("Updating Better Planetside")
+        dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        dlg.setMinimumDuration(0)
+        dlg.setValue(0)
+        dlg.setCancelButton(None)
+        dlg.show()
+        self._update_download_progress_dialog = dlg
+
+    def _close_update_download_progress_dialog(self):
+        dlg = getattr(self, "_update_download_progress_dialog", None)
+        if not dlg:
+            return
+        try:
+            dlg.close()
+            dlg.deleteLater()
+        except Exception:
+            pass
+        self._update_download_progress_dialog = None
+
+    def _update_download_progress_qt(self, payload):
+        dlg = getattr(self, "_update_download_progress_dialog", None)
+        if not dlg:
+            return
+        if not isinstance(payload, dict):
+            return
+
+        phase = str(payload.get("phase", "download")).strip().lower()
+        if phase == "verify":
+            dlg.setRange(0, 0)
+            dlg.setLabelText("Verifying update package integrity...")
+            return
+
+        downloaded = int(payload.get("downloaded", 0) or 0)
+        total = int(payload.get("total", 0) or 0)
+        downloaded_mb = downloaded / (1024.0 * 1024.0)
+        if total > 0:
+            total_mb = total / (1024.0 * 1024.0)
+            percent = max(0, min(100, int((downloaded * 100) / max(total, 1))))
+            dlg.setRange(0, 100)
+            dlg.setValue(percent)
+            dlg.setLabelText(f"Downloading update... {percent}% ({downloaded_mb:.1f} / {total_mb:.1f} MB)")
+        else:
+            dlg.setRange(0, 0)
+            dlg.setLabelText(f"Downloading update... ({downloaded_mb:.1f} MB)")
+
+    def _show_apply_progress_dialog(self, version):
+        try:
+            if self._update_apply_progress_dialog:
+                self._update_apply_progress_dialog.close()
+                self._update_apply_progress_dialog.deleteLater()
+        except Exception:
+            pass
+        self._update_apply_progress_dialog = QProgressDialog(
+            f"Installing update {version} and restarting...",
+            None,
+            0,
+            0,
+            self.main_hub,
+        )
+        self._update_apply_progress_dialog.setWindowTitle("Updating Better Planetside")
+        self._update_apply_progress_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._update_apply_progress_dialog.setAutoClose(False)
+        self._update_apply_progress_dialog.setAutoReset(False)
+        self._update_apply_progress_dialog.setCancelButton(None)
+        self._update_apply_progress_dialog.show()
+
     def check_for_updates_qt(self):
         """Manual updater entry point from Settings UI."""
         if not getattr(sys, "frozen", False):
@@ -4625,12 +4704,16 @@ class DiorClientGUI:
 
         self._update_download_in_progress = True
         self.add_log("UPDATE: Downloading update package...")
+        self._show_update_download_progress_dialog(update_info)
 
         def worker():
             result = None
             error = ""
             try:
-                result = self.release_updater.stage_update(update_info)
+                def progress_cb(payload):
+                    self.worker_signals.update_download_progress.emit(payload)
+
+                result = self.release_updater.stage_update(update_info, progress_cb=progress_cb)
             except Exception as e:
                 error = str(e)
             self.worker_signals.update_download_finished.emit(update_info, result, error)
@@ -4639,6 +4722,7 @@ class DiorClientGUI:
 
     def _finish_update_download_qt(self, update_info, result, error_msg):
         self._update_download_in_progress = False
+        self._close_update_download_progress_dialog()
 
         if error_msg:
             self.add_log(f"UPDATE ERROR: {error_msg}")
@@ -4903,7 +4987,7 @@ class DiorClientGUI:
                 $argParts += "-LaunchArg0 " + (Quote-Arg $LaunchArg0)
             }
             $argLine = [string]::Join(" ", $argParts)
-            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -WindowStyle Normal | Out-Null
+            Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argLine -WindowStyle Hidden | Out-Null
             Write-UpdateLog "INFO: Elevated updater started."
             exit 0
         } catch {
@@ -5298,8 +5382,8 @@ log "DONE"
                     updated_version,
                     str(wait_timeout_sec),
                 ]
-                # CREATE_NEW_CONSOLE provides visible feedback during updates.
-                creation_flags = 0x00000010
+                # CREATE_NO_WINDOW keeps the updater headless; UI feedback is shown in-app.
+                creation_flags = 0x08000000
                 host_log_file = open(host_log_path, "ab")
                 try:
                     proc = subprocess.Popen(
@@ -5354,9 +5438,10 @@ log "DONE"
         self.add_log(f"UPDATE: External updater script: {script_path}")
         self.add_log(f"UPDATE: Apply log path: {apply_log_path}")
         self.add_log(f"UPDATE: Host log path: {host_log_path}")
-        self.add_log("UPDATE: Updater console window should now be visible until completion.")
+        self._show_apply_progress_dialog(updated_version)
+        self.add_log("UPDATE: Applying update in background...")
         self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
-        QTimer.singleShot(150, self.qt_app.quit)
+        QTimer.singleShot(700, self.qt_app.quit)
 
     def create_overlay_window(self):
         if self.overlay_win:
