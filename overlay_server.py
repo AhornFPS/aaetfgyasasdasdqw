@@ -121,6 +121,10 @@ class AssetHTTPHandler(BaseHTTPRequestHandler):
                 if ext in ('.png', '.jpg', '.jpeg'): ctype = 'image/png' if ext == '.png' else 'image/jpeg'
                 elif ext == '.gif': ctype = 'image/gif'
                 elif ext in ('.mp3', '.wav', '.ogg'): ctype = 'audio/mpeg' if ext == '.mp3' else f'audio/{ext[1:]}'
+                elif ext == '.ttf': ctype = 'font/ttf'
+                elif ext == '.otf': ctype = 'font/otf'
+                elif ext == '.woff': ctype = 'font/woff'
+                elif ext == '.woff2': ctype = 'font/woff2'
                 
                 return self._send_file(candidate, ctype)
 

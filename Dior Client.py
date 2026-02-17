@@ -107,19 +107,6 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 # Instruct Qt to look in the subfolder for plugins
 QCoreApplication.addLibraryPath(os.path.join(basedir, 'imageformats'))
 
-DUMMY_STATS_TEMPLATE = """
-<div style="font-family: 'Black Ops One', sans-serif; font-weight: bold; color: #00f2ff; 
-            text-align: center; font-size: {f_size}px; white-space: nowrap;">
-    KD: <span style="color: #00ff00;">3.50</span> &nbsp;&nbsp;
-    K: <span style="color: white;">42</span> &nbsp;&nbsp;
-    D: <span style="color: white;">12</span> &nbsp;&nbsp;
-    HSR: <span style="color: #ffcc00;">45%</span> &nbsp;&nbsp;
-    KPM: <span style="color: #ffcc00;">1.2</span> &nbsp;&nbsp;
-    <span style="color: #aaa;">TIME: 01:23</span>
-</div>
-"""
-
-
 class WorkerSignals(QObject):
     # Signal: Success (True/False), Name, Error Message
     add_char_finished = pyqtSignal(bool, str, str)
@@ -720,6 +707,22 @@ class DiorClientGUI:
         except Exception as e:
             print(f"DB Count Error: {e}")
 
+    def _resolve_overlay_stats_payload(self, force_placeholder=False):
+        """
+        Returns (stats_obj, is_dummy) for overlay rendering.
+        Priority: real stats if available, otherwise shared placeholder.
+        """
+        if force_placeholder:
+            return {}, True
+
+        my_id = str(getattr(self, "current_character_id", "") or "").strip()
+        if my_id:
+            stats_obj = self.session_stats.get(my_id)
+            if isinstance(stats_obj, dict) and len(stats_obj) > 0:
+                return stats_obj, False
+
+        return {}, True
+
     def update_stats_position_safe(self):
         """Calculates the position of the Stats widget safely and consistently."""
         if not self.overlay_win: return
@@ -1258,7 +1261,8 @@ class DiorClientGUI:
                 # Without this, normal throttle can skip the initial push.
                 self.stats_last_refresh_time = 0
                 try:
-                    self.overlay_win.update_stats_display({}, is_dummy=True)
+                    stats_obj, is_dummy = self._resolve_overlay_stats_payload()
+                    self.overlay_win.update_stats_display(stats_obj, is_dummy=is_dummy)
                     self.update_stats_position_safe()
                 except Exception:
                     pass
@@ -3493,7 +3497,7 @@ class DiorClientGUI:
             ui.check_master.blockSignals(False)
             self.config["overlay_master_active"] = master_state
 
-            scifi_state = bool(self.config.get("scifi_overlay_active", True))
+            scifi_state = bool(self.config.get("scifi_overlay_active", False))
             if hasattr(ui, "btn_toggle_scifi"):
                 ui.btn_toggle_scifi.blockSignals(True)
                 ui.btn_toggle_scifi.setChecked(scifi_state)
@@ -3647,6 +3651,10 @@ class DiorClientGUI:
         ui.slider_st_ty.blockSignals(True)
         ui.slider_st_ty.setValue(st_conf.get("ty", 0))
         ui.slider_st_ty.blockSignals(False)
+        if hasattr(ui, "lbl_st_tx_val"):
+            ui.lbl_st_tx_val.setText(str(int(st_conf.get("tx", 0))))
+        if hasattr(ui, "lbl_st_ty_val"):
+            ui.lbl_st_ty_val.setText(str(int(st_conf.get("ty", 0))))
 
         # NEW: Font Size (Stats) - Dropdown Support
         ui.combo_st_font.blockSignals(True)
@@ -4174,8 +4182,13 @@ class DiorClientGUI:
                     base[k] = v
             return base
 
-        # 1. Define paths (config always stored in per-user data directory)
-        self.user_data_dir = get_user_data_dir()
+        # 1. Define paths
+        # Script/dev mode should use local config next to the script.
+        # Frozen release builds should keep using per-user config storage.
+        if getattr(sys, "frozen", False):
+            self.user_data_dir = get_user_data_dir()
+        else:
+            self.user_data_dir = self.BASE_DIR
         user_config_path = os.path.join(self.user_data_dir, "config.json")
         backup_config_path = user_config_path.replace("config.json", "config_backup.json")
         template_path = resource_path("config.json")
@@ -4187,7 +4200,7 @@ class DiorClientGUI:
             "config_schema_version": CONFIG_SCHEMA_VERSION,
             "ps2_path": "",
             "overlay_master_active": True,
-            "scifi_overlay_active": True,
+            "scifi_overlay_active": False,
             "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False, "ads_fire_expand": True},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
@@ -5121,8 +5134,11 @@ class DiorClientGUI:
     if (Test-Path -Path $workDir) { Remove-Item -Path $workDir -Recurse -Force -ErrorAction SilentlyContinue }
     $oneDayAgo = (Get-Date).AddDays(-1)
     Get-ChildItem -Path $baseDir -Filter "apply_*" -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    if (Test-Path -Path (Join-Path $baseDir "staging")) {
-        Get-ChildItem -Path (Join-Path $baseDir "staging") -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo.AddDays(-1) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $stagingRoot = Join-Path $baseDir "staging"
+    if (Test-Path -Path $stagingRoot) {
+        Get-ChildItem -Path $stagingRoot -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if ($SuccessPath) {
@@ -5424,7 +5440,7 @@ fi
 rm -rf "$work_dir" || true
 find "$base_dir" -maxdepth 1 -name "apply_*" -type d -mtime +1 -exec rm -rf {} + || true
 if [[ -d "$base_dir/staging" ]]; then
-    find "$base_dir/staging" -maxdepth 1 -type d -mtime +2 -exec rm -rf {} + || true
+    find "$base_dir/staging" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true
 fi
 
 if [[ -n "$SUCCESS_PATH" ]]; then
@@ -6224,13 +6240,10 @@ log "DONE"
                     if debug_just_enabled:
                         self.stats_last_refresh_time = 0
                     self.stats_last_refresh_time = now
-                    # Actual stats calculation
-                    my_id = self.current_character_id
-                    s = self.session_stats.get(my_id, {}) if my_id else {}
-                    
-                    # USE CENTRAL LOGIC in overlay window (Fixes Flickering & Toggles)
-                    is_preview = stats_test_active or debug_active or (stats_editing and not game_running)
-                    self.overlay_win.update_stats_display(s, is_dummy=is_preview)
+                    stats_obj, is_dummy = self._resolve_overlay_stats_payload(
+                        force_placeholder=stats_test_active
+                    )
+                    self.overlay_win.update_stats_display(stats_obj, is_dummy=is_dummy)
                     
                     self.overlay_win.stats_bg_label.show()
                     self.overlay_win.stats_text_label.show()
@@ -6478,18 +6491,16 @@ log "DONE"
 
             # A) STATS WIDGET (KD display)
             if "stats" in targets:
-                # Force immediate update with constant dummy
-                # This makes it immediately visible and colorful
-                stats_cfg_raw = self.config.get("stats_widget", {})
-                stats_cfg = stats_cfg_raw if isinstance(stats_cfg_raw, dict) else {}
-                f_size = stats_cfg.get("font_size", 22)
-                self.overlay_win.set_stats_html(DUMMY_STATS_TEMPLATE.format(f_size=f_size))
+                # Keep stats source identical to normal/debug mode:
+                # real stats if available, otherwise shared placeholder.
+                stats_obj, is_dummy = self._resolve_overlay_stats_payload()
+                self.overlay_win.update_stats_display(stats_obj, is_dummy=is_dummy)
 
                 self.overlay_win.stats_bg_label.show()
 
-                # Force fixed drag frame size for stats (text-only web renderer).
-                w = int(1100 * self.overlay_win.ui_scale)
-                h = int(130 * self.overlay_win.ui_scale)
+                # Keep drag frame close to actual stats footprint for consistent edge behavior.
+                w = int(450 * self.overlay_win.ui_scale)
+                h = int(60 * self.overlay_win.ui_scale)
                 self.overlay_win.stats_bg_label.setFixedSize(w, h)
                 self.update_stats_position_safe()
 

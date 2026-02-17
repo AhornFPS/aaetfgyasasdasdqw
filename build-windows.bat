@@ -75,6 +75,13 @@ REM ---------------------------------------------------------
 echo Converting icons...
 python convert_icon.py
 
+echo Generating sanitized release config...
+python generate_release_config.py --source config.json --output release_payload\config.json
+if errorlevel 1 (
+    echo ERROR: Failed to generate release config.
+    exit /b 1
+)
+
 REM ---------------------------------------------------------
 REM 4. BUILD
 REM ---------------------------------------------------------
@@ -145,6 +152,7 @@ echo Cleaning up build artifacts...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 if exist "build_env" rmdir /s /q "build_env"
+if exist "release_payload" rmdir /s /q "release_payload"
 
 echo.
 echo === Build Complete ===

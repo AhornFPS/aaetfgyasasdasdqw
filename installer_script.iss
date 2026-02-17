@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputDir=.
-OutputBaseFilename=BetterPlanetside-Installer-v{#MyAppVersion}
+OutputBaseFilename=Better-Planetside-Installer-v{#MyAppVersion}
 SetupIconFile=assets\Images\BetterPlannetsideIcon.ico
 Compression=lzma
 SolidCompression=yes

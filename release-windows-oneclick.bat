@@ -113,7 +113,7 @@ if not defined VERSION (
 
 set "TAG=v!VERSION!"
 set "ZIP_NAME=Better-Planetside-Windows-v!VERSION!.zip"
-set "INSTALLER_NAME=BetterPlanetside-Installer-v!VERSION!.exe"
+set "INSTALLER_NAME=Better-Planetside-Installer-v!VERSION!.exe"
 set "HAS_INSTALLER=0"
 set "BASE_URL=https://github.com/!RELEASE_REPO!/releases/download/!TAG!"
 set "MS_ARG="

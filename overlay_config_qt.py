@@ -1629,15 +1629,25 @@ class OverlayConfigWindow(QWidget):
         st_layout.addWidget(lbl_adj)
         adj_grid = QGridLayout()
 
-        adj_grid.addWidget(QLabel("Text X:"), 0, 0)
+        adj_grid.addWidget(QLabel("Text X (0=center):"), 0, 0)
         self.slider_st_tx = QSlider(Qt.Orientation.Horizontal)
         self.slider_st_tx.setRange(-200, 200)
         adj_grid.addWidget(self.slider_st_tx, 0, 1)
+        self.lbl_st_tx_val = QLabel("0")
+        self.lbl_st_tx_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
+        self.lbl_st_tx_val.setFixedWidth(40)
+        self.slider_st_tx.valueChanged.connect(lambda val: self.lbl_st_tx_val.setText(str(int(val))))
+        adj_grid.addWidget(self.lbl_st_tx_val, 0, 2)
 
-        adj_grid.addWidget(QLabel("Text Y:"), 1, 0)
+        adj_grid.addWidget(QLabel("Text Y (0=center):"), 1, 0)
         self.slider_st_ty = QSlider(Qt.Orientation.Horizontal)
         self.slider_st_ty.setRange(-200, 200)
         adj_grid.addWidget(self.slider_st_ty, 1, 1)
+        self.lbl_st_ty_val = QLabel("0")
+        self.lbl_st_ty_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
+        self.lbl_st_ty_val.setFixedWidth(40)
+        self.slider_st_ty.valueChanged.connect(lambda val: self.lbl_st_ty_val.setText(str(int(val))))
+        adj_grid.addWidget(self.lbl_st_ty_val, 1, 2)
 
         st_layout.addLayout(adj_grid)
 
