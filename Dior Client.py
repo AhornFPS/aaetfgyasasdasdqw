@@ -5249,8 +5249,17 @@ log "DONE"
             if IS_WINDOWS:
                 script_path = os.path.join(scripts_dir, "apply_update.ps1")
                 self._write_windows_apply_script(script_path)
-                cmd = [
+                powershell_exe = os.path.join(
+                    os.environ.get("SystemRoot", r"C:\Windows"),
+                    "System32",
+                    "WindowsPowerShell",
+                    "v1.0",
                     "powershell.exe",
+                )
+                if not os.path.exists(powershell_exe):
+                    powershell_exe = "powershell.exe"
+                cmd = [
+                    powershell_exe,
                     "-NoProfile",
                     "-NonInteractive",
                     "-ExecutionPolicy",
@@ -5267,7 +5276,8 @@ log "DONE"
                     updated_version,
                     str(wait_timeout_sec),
                 ]
-                creation_flags = 0x00000008 | 0x00000200
+                # CREATE_NO_WINDOW keeps it headless but avoids DETACHED_PROCESS quirks.
+                creation_flags = 0x08000000
                 host_log_file = open(host_log_path, "ab")
                 try:
                     proc = subprocess.Popen(
@@ -5279,6 +5289,9 @@ log "DONE"
                     )
                 finally:
                     host_log_file.close()
+                time.sleep(0.6)
+                early_rc = proc.poll()
+                _write_launcher_log(f"schedule_probe pid={getattr(proc, 'pid', '')} rc={early_rc}")
             else:
                 script_path = os.path.join(scripts_dir, "apply_update.sh")
                 self._write_linux_apply_script(script_path)
