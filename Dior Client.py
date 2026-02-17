@@ -4891,6 +4891,7 @@ class DiorClientGUI:
     [string]$LaunchArg0,
     [string]$SuccessPath,
     [string]$UpdatedVersion,
+    [string]$StatusPath = "",
     [string]$WaitTimeoutSec = "120"
     )
 
@@ -4904,7 +4905,21 @@ class DiorClientGUI:
         try {
             $line = "{0} {1}" -f (Get-Date).ToString("o"), $msg
             Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
-            Write-Host $line
+        } catch {}
+    }
+    function Set-UpdateState([string]$phase, [int]$percent, [string]$message, [bool]$done = $false, [string]$error = "") {
+        if (-not $StatusPath) { return }
+        try {
+            $obj = @{
+                phase = $phase
+                percent = [Math]::Max(0, [Math]::Min(100, $percent))
+                message = $message
+                done = $done
+                error = $error
+                timestamp = (Get-Date).ToString("o")
+            }
+            $json = $obj | ConvertTo-Json -Depth 4
+            Set-Content -LiteralPath $StatusPath -Value $json -Encoding UTF8
         } catch {}
     }
     try {
@@ -4924,6 +4939,7 @@ class DiorClientGUI:
             }
             $line = "{0} ERROR: {1}" -f (Get-Date).ToString("o"), $errMsg
             Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+            Set-UpdateState "error" 100 "Update failed." $true $errMsg
         } catch {}
         exit 1
     }
@@ -4934,6 +4950,7 @@ class DiorClientGUI:
     } catch {}
 
     Write-UpdateLog ("START asset=" + $AssetPath + " target=" + $TargetDir + " timeout=" + $timeoutSec)
+    Set-UpdateState "start" 5 "Starting updater..."
 
     function Test-IsAdmin {
         try {
@@ -4963,6 +4980,7 @@ class DiorClientGUI:
 
     if ((Is-ProtectedTarget $TargetDir) -and (-not (Test-IsAdmin))) {
         Write-UpdateLog "INFO: Target is in Program Files. Relaunching elevated updater."
+        Set-UpdateState "elevating" 10 "Requesting administrator permission..."
         try {
             function Quote-Arg([string]$value) {
                 if ($null -eq $value) { return '""' }
@@ -4982,6 +5000,7 @@ class DiorClientGUI:
             $argParts += "-LaunchExe " + (Quote-Arg $LaunchExe)
             $argParts += "-SuccessPath " + (Quote-Arg $SuccessPath)
             $argParts += "-UpdatedVersion " + (Quote-Arg $UpdatedVersion)
+            $argParts += "-StatusPath " + (Quote-Arg $StatusPath)
             $argParts += "-WaitTimeoutSec " + (Quote-Arg $WaitTimeoutSec)
             if ($LaunchArg0) {
                 $argParts += "-LaunchArg0 " + (Quote-Arg $LaunchArg0)
@@ -4997,6 +5016,7 @@ class DiorClientGUI:
     }
 
     if ($PidToWait) {
+        Set-UpdateState "waiting" 15 "Waiting for app to close..."
         $deadline = (Get-Date).AddSeconds($timeoutSec)
         while (Get-Process -Id ([int]$PidToWait) -ErrorAction SilentlyContinue) {
             if ((Get-Date) -ge $deadline) {
@@ -5020,6 +5040,7 @@ class DiorClientGUI:
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
 
     $assetLower = $AssetPath.ToLowerInvariant()
+    Set-UpdateState "extract" 35 "Extracting update package..."
     if ($assetLower.EndsWith(".zip")) {
         Expand-Archive -Path $AssetPath -DestinationPath $extractDir -Force
     } elseif ($assetLower.EndsWith(".exe")) {
@@ -5040,6 +5061,7 @@ class DiorClientGUI:
 
     # Determine if TARGET_DIR is a file or directory
     if (Test-Path -Path $TargetDir -PathType Leaf) {
+        Set-UpdateState "replace" 70 "Replacing application files..."
         # File replacement (onefile)
         $backupFile = "$TargetDir._backup_$timestamp"
         $targetName = Split-Path -Leaf $TargetDir
@@ -5064,6 +5086,7 @@ class DiorClientGUI:
             throw
         }
     } else {
+        Set-UpdateState "replace" 70 "Replacing application files..."
         # Directory replacement (onedir)
         $newDir = "$TargetDir._new_$timestamp"
         $backupDir = "$TargetDir._backup_$timestamp"
@@ -5094,6 +5117,7 @@ class DiorClientGUI:
     }
 
     # General cleanup
+    Set-UpdateState "cleanup" 90 "Cleaning temporary files..."
     if (Test-Path -Path $workDir) { Remove-Item -Path $workDir -Recurse -Force -ErrorAction SilentlyContinue }
     $oneDayAgo = (Get-Date).AddDays(-1)
     Get-ChildItem -Path $baseDir -Filter "apply_*" -Directory | Where-Object { $_.CreationTime -lt $oneDayAgo } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -5111,14 +5135,128 @@ class DiorClientGUI:
     }
 
     if ($LaunchExe) {
+        Set-UpdateState "restart" 98 "Restarting Better Planetside..."
         if ($LaunchArg0) {
             Start-Process -FilePath $LaunchExe -ArgumentList @($LaunchArg0)
         } else {
             Start-Process -FilePath $LaunchExe
         }
     }
+    Set-UpdateState "done" 100 "Update completed." $true ""
     Write-UpdateLog "DONE"
     '''
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script)
+
+    def _write_windows_progress_ui_script(self, script_path):
+        script = r'''param(
+    [string]$StatusPath
+    )
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    [System.Windows.Forms.Application]::EnableVisualStyles()
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Better Planetside Update"
+    $form.StartPosition = "CenterScreen"
+    $form.Width = 540
+    $form.Height = 180
+    $form.FormBorderStyle = "FixedDialog"
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    $form.TopMost = $true
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Left = 20
+    $label.Top = 20
+    $label.Width = 495
+    $label.Height = 24
+    $label.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $label.Text = "Preparing update..."
+    [void]$form.Controls.Add($label)
+
+    $bar = New-Object System.Windows.Forms.ProgressBar
+    $bar.Left = 20
+    $bar.Top = 56
+    $bar.Width = 495
+    $bar.Height = 24
+    $bar.Style = "Continuous"
+    $bar.Minimum = 0
+    $bar.Maximum = 100
+    $bar.Value = 0
+    [void]$form.Controls.Add($bar)
+
+    $detail = New-Object System.Windows.Forms.Label
+    $detail.Left = 20
+    $detail.Top = 94
+    $detail.Width = 495
+    $detail.Height = 40
+    $detail.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+    $detail.ForeColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    $detail.Text = "Please keep this window open. The app will restart automatically."
+    [void]$form.Controls.Add($detail)
+
+    $script:started = Get-Date
+    $script:lastMessage = ""
+    $script:lastPhase = ""
+
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+        if ($StatusPath -and (Test-Path -LiteralPath $StatusPath)) {
+            try {
+                $raw = Get-Content -LiteralPath $StatusPath -Raw -ErrorAction Stop
+                if ($raw) {
+                    $state = $raw | ConvertFrom-Json
+                    $msg = [string]$state.message
+                    if (-not $msg) { $msg = "Updating..." }
+                    if ($msg -ne $script:lastMessage) {
+                        $label.Text = $msg
+                        $script:lastMessage = $msg
+                    }
+
+                    $pct = -1
+                    try { $pct = [int]$state.percent } catch { $pct = -1 }
+                    if ($pct -ge 0) {
+                        if ($bar.Style -ne "Continuous") { $bar.Style = "Continuous" }
+                        $bar.Value = [Math]::Max(0, [Math]::Min(100, $pct))
+                    } else {
+                        if ($bar.Style -ne "Marquee") { $bar.Style = "Marquee" }
+                    }
+
+                    $phase = [string]$state.phase
+                    if ($state.error) {
+                        $detail.Text = [string]$state.error
+                    } elseif ($phase -and $phase -ne $script:lastPhase) {
+                        $detail.Text = ("Phase: " + $phase)
+                        $script:lastPhase = $phase
+                    }
+
+                    if ($state.done -eq $true) {
+                        if ($bar.Style -ne "Continuous") { $bar.Style = "Continuous" }
+                        $bar.Value = 100
+                        Start-Sleep -Milliseconds 650
+                        $form.Close()
+                    }
+                }
+            } catch {}
+        }
+
+        if (((Get-Date) - $script:started).TotalMinutes -ge 30) {
+            $form.Close()
+        }
+    })
+
+    $form.Add_Shown({
+        try { $timer.Start() } catch {}
+    })
+    $form.Add_FormClosing({
+        try { $timer.Stop() } catch {}
+    })
+
+    [void]$form.ShowDialog()
+'''
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script)
 
@@ -5346,6 +5484,23 @@ log "DONE"
         wait_timeout_sec = max(15, min(wait_timeout_sec, 1800))
         apply_log_path = os.path.join(updates_dir, "apply_update.log")
         host_log_path = os.path.join(updates_dir, "apply_host.log")
+        status_path = os.path.join(updates_dir, "apply_status.json")
+
+        try:
+            with open(status_path, "w", encoding="utf-8") as sf:
+                json.dump(
+                    {
+                        "phase": "schedule",
+                        "percent": 1,
+                        "message": "Preparing updater...",
+                        "done": False,
+                        "error": "",
+                    },
+                    sf,
+                    indent=2,
+                )
+        except Exception:
+            pass
 
         _write_launcher_log(
             f"schedule_start asset={asset_path} target={install_root} pending={pending_path} timeout={wait_timeout_sec}"
@@ -5364,6 +5519,32 @@ log "DONE"
                 )
                 if not os.path.exists(powershell_exe):
                     powershell_exe = "powershell.exe"
+                progress_script_path = os.path.join(scripts_dir, "apply_progress_ui.ps1")
+                self._write_windows_progress_ui_script(progress_script_path)
+                ui_cmd = [
+                    powershell_exe,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-STA",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-File",
+                    progress_script_path,
+                    status_path,
+                ]
+                try:
+                    subprocess.Popen(
+                        ui_cmd,
+                        creationflags=0x08000000,
+                        cwd=scripts_dir,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    _write_launcher_log(f"schedule_ui script={progress_script_path}")
+                except Exception as ui_e:
+                    _write_launcher_log(f"schedule_ui_error {ui_e}")
                 cmd = [
                     powershell_exe,
                     "-NoProfile",
@@ -5380,6 +5561,7 @@ log "DONE"
                     launch_arg0,
                     success_path,
                     updated_version,
+                    status_path,
                     str(wait_timeout_sec),
                 ]
                 # CREATE_NO_WINDOW keeps the updater headless; UI feedback is shown in-app.
@@ -5436,8 +5618,10 @@ log "DONE"
             return
 
         self.add_log(f"UPDATE: External updater script: {script_path}")
+        self.add_log(f"UPDATE: External updater UI script: {os.path.join(scripts_dir, 'apply_progress_ui.ps1')}")
         self.add_log(f"UPDATE: Apply log path: {apply_log_path}")
         self.add_log(f"UPDATE: Host log path: {host_log_path}")
+        self.add_log(f"UPDATE: Status path: {status_path}")
         self._show_apply_progress_dialog(updated_version)
         self.add_log("UPDATE: Applying update in background...")
         self.add_log("UPDATE: Apply-on-restart scheduled. Closing now...")
