@@ -717,7 +717,7 @@ class DiorClientGUI:
 
         my_id = str(getattr(self, "current_character_id", "") or "").strip()
         if my_id:
-            stats_obj = self._ensure_session_stats_entry(my_id)
+            stats_obj = self.session_stats.get(my_id)
             if isinstance(stats_obj, dict) and len(stats_obj) > 0:
                 return stats_obj, False
 
@@ -2103,8 +2103,7 @@ class DiorClientGUI:
         self.last_tracked_id = cid
         self.current_selected_char_name = name
         if cid:
-            self._ensure_session_stats_entry(cid, name=name)
-            # Force immediate repaint so old/dummy stats are replaced right after switch.
+            # Force immediate repaint so active-session data (if present) is shown right away.
             self.stats_last_refresh_time = 0
             self.update_session_time()
             self.refresh_ingame_overlay()
@@ -4480,6 +4479,15 @@ class DiorClientGUI:
 
         self.add_log(f"SYSTEM: Dashboard filter set to {name} (ID: {new_id}).")
 
+        # Preserve the currently tracked character session so auto world-switch on login
+        # does not blank the stats overlay.
+        active_char_id = str(getattr(self, "current_character_id", "") or "").strip()
+        preserved_active_session = None
+        if active_char_id:
+            candidate = self.session_stats.get(active_char_id)
+            if isinstance(candidate, dict) and len(candidate) > 0:
+                preserved_active_session = dict(candidate)
+
         # 1. Update variables
         self.current_server_name = name
         self.current_world_id = str(new_id)
@@ -4499,6 +4507,9 @@ class DiorClientGUI:
         # 4. DATA RESET (So new server starts at 0)
         self.pop_history = [0] * 100
         self.session_stats = {}
+        if preserved_active_session and active_char_id:
+            preserved_active_session["world_id"] = self.current_world_id
+            self.session_stats[active_char_id] = preserved_active_session
         self.active_players = {}
         self.live_stats = {"VS": 0, "NC": 0, "TR": 0, "NSO": 0, "Total": 0}
 
@@ -4516,6 +4527,11 @@ class DiorClientGUI:
                 # Fallback if name differs slightly
                 cb.setCurrentText(name)
             cb.blockSignals(False)
+
+        # Push preserved active stats back into the overlay immediately.
+        self.stats_last_refresh_time = 0
+        self.update_session_time()
+        self.refresh_ingame_overlay()
 
     def get_server_name_by_id(self, world_id):
         """Searches for the display name of the server based on the World ID"""
@@ -6945,7 +6961,7 @@ log "DONE"
         if not self.current_character_id: return
         
         # We need the session object
-        s_obj = self._ensure_session_stats_entry(self.current_character_id)
+        s_obj = self.session_stats.get(self.current_character_id)
         if not s_obj: return
 
         # If overlay is running, update display
