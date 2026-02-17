@@ -4823,7 +4823,18 @@ class DiorClientGUI:
         } catch {}
     }
     trap {
-        Write-UpdateLog ("ERROR: " + $_.Exception.Message)
+        try {
+            $errMsg = ""
+            if ($PSItem -and $PSItem.Exception) {
+                $errMsg = $PSItem.Exception.Message
+            } elseif ($_ -and $_.Exception) {
+                $errMsg = $_.Exception.Message
+            } else {
+                $errMsg = "Unhandled PowerShell error in updater script."
+            }
+            $line = "{0} ERROR: {1}" -f (Get-Date).ToString("o"), $errMsg
+            Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+        } catch {}
         exit 1
     }
 
