@@ -157,7 +157,7 @@ class ChatMessageWidget(QWidget):
         )
 
     def _apply_height_callback(self, height):
-        """Wird aufgerufen, sobald JavaScript die Höhe berechnet hat."""
+        """Called as soon as JavaScript has calculated the height."""
         if height:
             new_h = int(height) + 10  # Small buffer
             self.setFixedHeight(new_h)
@@ -283,7 +283,7 @@ class QtOverlay(QWidget):
         # GC-Timer: Every 2 minutes we check for "garbage"
         self.gc_timer = QTimer(self)
         self.gc_timer.timeout.connect(self.run_garbage_collection)
-        self.gc_timer.start(120000)  # 120.000 ms = 2 Minuten
+        self.gc_timer.start(120000)  # 120,000 ms = 2 minutes
 
         # 1. WINDOW CONFIGURATION
         # On Linux/Proton, ToolTip windows have the highest priority
@@ -452,7 +452,7 @@ class QtOverlay(QWidget):
         self.twitch_drag_cover = QWidget(self)
         self.twitch_drag_cover.setObjectName("twitch_drag_cover")
         self.twitch_drag_cover.hide()
-        # WICHTIG: Kein WA_TransparentForMouseEvents hier, damit es Klicks fängt!
+        # IMPORTANT: No WA_TransparentForMouseEvents here, so it catches clicks!
 
         self.server = None
         self.start_server()
@@ -784,7 +784,7 @@ class QtOverlay(QWidget):
             if path in self.cache_usage_timestamps:
                 del self.cache_usage_timestamps[path]
 
-        self.gui_ref.add_log(f"GC: {len(to_remove)} ungenutzte Ressourcen aus RAM gelöscht.")
+        self.gui_ref.add_log(f"GC: {len(to_remove)} unused resources cleared from RAM.")
 
     def notify_chat_moved(self, x, y):
         # Send signal to controller

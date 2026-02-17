@@ -744,7 +744,7 @@ class DiorClientGUI:
 
         # 3. Calculate text position relative to it
 
-        # Größen erzwingen (Wichtig!)
+        # Force sizes (Important!)
         self.overlay_win.stats_bg_label.adjustSize()
         self.overlay_win.stats_text_label.adjustSize()
 
@@ -860,17 +860,17 @@ class DiorClientGUI:
                 if streak_active:
                     self.update_streak_display()
 
-                # WICHTIG: Kein manuelles .show() für Stats hier!
-                # Wir überlassen das komplett dem Loop.
+                # IMPORTANT: No manual .show() for Stats here!
+                # We leave that entirely to the loop.
 
-                # Loop sofort triggern
+                # Trigger loop immediately
                 self.refresh_ingame_overlay()
 
     def on_game_stopped(self):
-        """Wird aufgerufen, wenn PS2 beendet wurde."""
+        """Called when PS2 has been terminated."""
         self.add_log("MONITOR: PlanetSide 2 geschlossen.")
 
-        # Logik stoppen
+        # Stop logic
         self.stop_overlay_logic()
 
         if self.overlay_win:
@@ -1014,7 +1014,7 @@ class DiorClientGUI:
         if hasattr(self, 'twitch_worker') and self.twitch_worker:
             self.twitch_worker.ignore_special = checked
 
-    # --- CROSSHAIR LOGIK (NEU) ---
+    # --- CROSSHAIR LOGIC (NEW) ---
     def browse_crosshair_qt(self):
         """Select file, copy and set text field."""
         from PyQt6.QtWidgets import QFileDialog
@@ -1212,7 +1212,7 @@ class DiorClientGUI:
         QMessageBox.information(ui, "Success", f"Layout successfully applied to {count} events!")
 
     def process_search_results_qt(self, stats, weapons):
-        """Wird im Haupt-Thread aufgerufen, wenn der Worker fertig ist."""
+        """Called in the main thread when the worker is finished."""
         try:
             self.add_log("DASHBOARD: Rendering Character Data...")
             self.char_win.update_overview(stats)
@@ -1477,7 +1477,7 @@ class DiorClientGUI:
         self.safe_connect(ui.btn_edit_streak.clicked, self.toggle_hud_edit_mode)
         self.safe_connect(ui.btn_test_streak.clicked, self.test_streak_visuals)
 
-        # Knive On/Off
+        # Knife On/Off
         self.safe_connect(ui.btn_toggle_knives.clicked, self.toggle_knife_visibility)
 
         # ---------------------------------------------------------
@@ -1627,7 +1627,7 @@ class DiorClientGUI:
 
         # TEST MSG Button
         self.safe_connect(ui.btn_test_twitch.clicked, self.trigger_twitch_test)
-        #allways on
+        # Always on
         self.safe_connect(ui.btn_twitch_always.toggled, self.toggle_twitch_always)
 
         # Ignore special (!)
@@ -1966,7 +1966,7 @@ class DiorClientGUI:
         ui.btn_add_char.setText("...")
         ui.char_input.setEnabled(False)
 
-        # Thread starten
+        # Start thread
         threading.Thread(target=self._add_char_worker, args=(name,), daemon=True).start()
 
     def _add_char_worker(self, name):
@@ -1999,7 +1999,7 @@ class DiorClientGUI:
         except Exception as e:
             error_msg = f"API Error: {e}"
 
-        # Signal senden
+        # Send signal
         self.worker_signals.add_char_finished.emit(success, real_name, error_msg)
 
     def finalize_add_char_slot(self, success, real_name, error_msg):
@@ -2414,7 +2414,7 @@ class DiorClientGUI:
         self.save_config()
         self.add_log("SYS: Global event configuration saved.")
 
-        # Optional: Direktes Feedback im Overlay (Test)
+        # Optional: Direct Feedback in Overlay (Test)
         # self.trigger_overlay_event(event_name)
 
     # =========================================================
@@ -3119,17 +3119,17 @@ class DiorClientGUI:
                 "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
             )
 
-        # Speichern & Overlay updaten
+        # Save & Update Overlay
         self.save_streak_settings_from_qt()
 
     def save_streak_settings_from_qt(self):
         """
-        Liest Killstreak-Settings aus der GUI, sichert den Live-Pfad
-        und bewahrt versteckte Einstellungen (Bold/Shadow).
+        Reads killstreak settings from the GUI, saves the live path
+        and preserves hidden settings (bold/shadow).
         """
         s_ui = self.ovl_config_win
 
-        # 1. Config Initialisieren
+        # 1. Initialize Config
         if "streak" not in self.config: self.config["streak"] = {}
         current_conf = self.config["streak"]
 
@@ -3228,7 +3228,7 @@ class DiorClientGUI:
             "tx": s_ui.slider_st_tx.value(),
             "ty": s_ui.slider_st_ty.value(),
             
-            # Position behalten
+            # Keep position
             "x": current_st_conf.get("x", 50),
             "y": current_st_conf.get("y", 500),
 
@@ -3981,12 +3981,12 @@ class DiorClientGUI:
 
                     if is_now_running:
                         print("MONITOR: Game detected -> Sending START signal")
-                        # STATT QTIMER: Signal senden!
+                        # INSTEAD OF QTIMER: Send signal!
                         self.worker_signals.game_status_changed.emit(True)
                     else:
                         if self.ps2_running is not None:
                             print("MONITOR: Game gone -> Sending STOP signal")
-                        # STATT QTIMER: Signal senden!
+                        # INSTEAD OF QTIMER: Send signal!
                         self.worker_signals.game_status_changed.emit(False)
 
             except Exception as e:
@@ -4268,7 +4268,7 @@ class DiorClientGUI:
         # Save path for save_config
         self.config_path = user_config_path
 
-        # Status speichern, um ihn später im Log anzuzeigen (da add_log hier evtl. noch nicht geht)
+        # Save status to display later in log (since add_log might not work here yet)
         self._startup_config_status = load_source
 
         # Persist schema-migrated config immediately for deterministic next startup.
@@ -4454,7 +4454,7 @@ class DiorClientGUI:
             if idx >= 0:
                 cb.setCurrentIndex(idx)
             else:
-                # Fallback falls Name leicht abweicht
+                # Fallback if name differs slightly
                 cb.setCurrentText(name)
             cb.blockSignals(False)
 

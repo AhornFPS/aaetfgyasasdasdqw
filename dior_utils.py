@@ -28,7 +28,7 @@ def get_user_data_dir():
         return fallback
 
 # ---------------------------------------------------------
-# 1. BASE_DIR: Hier liegen Configs, Logs und die DB
+# 1. BASE_DIR: Configs, logs, and the DB are located here
 # ---------------------------------------------------------
 # Robust detection: Check for PyInstaller flag OR AppImage environment variables
 IS_PACKAGED = getattr(sys, 'frozen', False) or 'APPDIR' in os.environ
@@ -47,7 +47,7 @@ if sys.stdout:
     sys.stdout.flush()
 
 # ---------------------------------------------------------
-# 2. ASSETS_DIR: Hier liegen Bilder und Sounds (Read-Only)
+# 2. ASSETS_DIR: Images and sounds are located here (Read-Only)
 # ---------------------------------------------------------
 if hasattr(sys, '_MEIPASS'):
     ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
@@ -69,17 +69,17 @@ except Exception:
 
 
 # ---------------------------------------------------------
-# 3. ASSET PATH: Hier liegen Bilder und Sounds
+# 3. ASSET PATH: Images and sounds are located here
 # ---------------------------------------------------------
 def get_asset_path(filename):
     """
-    Findet Ressourcen zuverlässig, egal ob Development oder PyInstaller EXE.
+    Reliably finds resources, whether in development or PyInstaller EXE.
     Intelligent routing to 'Images' or 'Sounds' subfolders.
     """
     if not filename:
         return ""
 
-    # Pfadbereinigung
+    # Path cleaning
     filename = filename.replace("assets/", "").replace("assets\\", "")
     filename = filename.replace("Images/", "").replace("Images\\", "")
     filename = filename.replace("Sounds/", "").replace("Sounds\\", "")
@@ -101,25 +101,25 @@ def get_asset_path(filename):
 
 
 # ---------------------------------------------------------
-# 3. HELPER FUNKTIONEN
+# 3. HELPER FUNCTIONS
 # ---------------------------------------------------------
 def clean_path(path_str):
-    """Entfernt 'No file selected' und leere Pfade, gibt nur Dateinamen zurück."""
+    """Removes 'No file selected' and empty paths, returns only filenames."""
     if not path_str or "No file selected" in path_str:
         return ""
     return os.path.basename(path_str)
 
 
 def log_exception(exc_type, exc_value, exc_traceback):
-    """Globaler Error-Handler für Log-Dateien."""
+    """Global error handler for log files."""
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    # Fehler in Datei schreiben
+    # Write error to file
     error_file = os.path.join(BASE_DIR, "crash_log.txt")
     with open(error_file, "a") as f:
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
 
-    # Fehler auch in Konsole ausgeben
+    # Output error to console as well
     sys.__excepthook__(exc_type, exc_value, exc_traceback)

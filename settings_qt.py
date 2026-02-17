@@ -123,8 +123,8 @@ QSlider::handle:horizontal:hover {
 
 
 class SettingsSignals(QObject):
-    save_requested = pyqtSignal(dict)  # Sendet die Config-Daten an Main
-    browse_ps2_requested = pyqtSignal()  # Trigger für Folder-Dialog
+    save_requested = pyqtSignal(dict)  # Send config data to Main
+    browse_ps2_requested = pyqtSignal()  # Trigger for folder dialog
     browse_bg_requested = pyqtSignal()  # Trigger for Background-Dialog
     clear_bg_requested = pyqtSignal()   # Trigger for Background Reset
     check_updates_requested = pyqtSignal()  # Trigger for release update checks
@@ -196,12 +196,12 @@ class SettingsWidget(QWidget):
         self.lbl_vol_val.setStyleSheet("color: #00f2ff; font-weight: bold; font-family: Consolas;")
         self.lbl_vol_val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        # --- WICHTIG: AUTOMATISCHES SPEICHERN ---
+        # --- IMPORTANT: AUTO-SAVE ---
 
-        # 1. Visuelles Update beim Ziehen (ändert nur Text)
+        # 1. Visual update while dragging (only changes text)
         self.slider_vol.valueChanged.connect(self.update_volume_label)
 
-        # 2. Speichern beim Loslassen (Performance!)
+        # 2. Save on release (Performance!)
         self.slider_vol.sliderReleased.connect(self.request_save)
 
         vol_row.addWidget(self.slider_vol)
@@ -274,13 +274,13 @@ class SettingsWidget(QWidget):
 
         main_layout.addWidget(self.ui_group)
 
-        # Spacer nach unten
+        # Spacer at the bottom
         main_layout.addStretch()
 
         # --- SAVE BUTTON (Manual) ---
         self.btn_save = QPushButton("SAVE SETTINGS", objectName="SaveBtn")
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Auch der Button nutzt jetzt die zentrale request_save Methode
+        # The button now also uses the central request_save method
         self.btn_save.clicked.connect(self.request_save)
         main_layout.addWidget(self.btn_save)
 
@@ -339,15 +339,15 @@ class SettingsWidget(QWidget):
             print(f"Audio Enum Error: {e}")
 
     def load_config(self, config_data, ps2_dir):
-        """Füllt die Felder mit den aktuellen Werten."""
-        # 1. Pfad
+        """Fills the fields with the current values."""
+        # 1. Path
         self.lbl_ps2_path.setText(ps2_dir if ps2_dir else "NOT_FOUND (Please Browse)")
 
         # 2. Audio Volume
         vol = config_data.get("audio_volume", 50)
 
-        # --- WICHTIG: Signale blockieren beim Laden ---
-        # Verhindert, dass das Setzen des Wertes ein "Speichern"-Event auslöst
+        # --- IMPORTANT: Block signals during load ---
+        # Prevents setting the value from triggering a "Save" event
         self.slider_vol.blockSignals(True)
         self.slider_vol.setValue(int(vol))
         self.slider_vol.blockSignals(False)
@@ -373,17 +373,17 @@ class SettingsWidget(QWidget):
             self.lbl_bg_name.setText("None")
 
     def update_volume_label(self, val):
-        """Nur für die Optik beim Ziehen."""
+        """Only for optics while dragging."""
         self.lbl_vol_val.setText(f"{val}%")
 
     def request_save(self):
-        """Sammelt Daten und sendet sie an Main (zum Speichern)."""
+        """Collects data and sends it to Main (to save)."""
         data = {
             "audio_volume": self.slider_vol.value(),
             "audio_device": self.combo_audio_device.currentText(),
             "main_background_path": self.lbl_bg_name.text() if self.lbl_bg_name.text() != "None" else ""
         }
-        # Signal senden
+        # Send signal
         self.signals.save_requested.emit(data)
 
 

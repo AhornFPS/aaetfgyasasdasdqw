@@ -206,7 +206,7 @@ class TelemetryGraph(QWidget):
             val = int(max_val * (i / steps))
             y_pos = h - (val / max_val * h)
 
-            # Linie
+            # Line
             painter.setPen(grid_pen)
             painter.drawLine(0, int(y_pos), w, int(y_pos))
 
@@ -308,8 +308,8 @@ class FactionBox(QFrame):
 
         layout.addWidget(self.table)
 
-        # --- SORTIER STATUS ---
-        # Standard: Spalte 1 (Kills)
+        # --- SORTING STATUS ---
+        # Default: Column 1 (Kills)
         self.current_sort_col = 1
         self.current_sort_asc = False
         self.last_player_data = []
@@ -441,7 +441,7 @@ class DashboardWidget(QWidget):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
 
-        # --- HEADER (Titel & Server Dropdown) ---
+        # --- HEADER (Title & Server Dropdown) ---
         header_container = QWidget()
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
