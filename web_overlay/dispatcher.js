@@ -185,7 +185,7 @@
     const y = Number(data.y || 0);
     const tx = Number(data.tx || 0);
     const ty = Number(data.ty || 0);
-    const boxWidth = Number(data.box_width || 600);
+    const boxWidth = Number(data.box_width || 450);
     const boxHeight = Number(data.box_height || 60);
     setPos(
       card,
