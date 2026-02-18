@@ -3,7 +3,6 @@ import json
 import time
 import threading
 import os
-from time import sleep
 
 import websockets
 import requests  # Important for faction check during login

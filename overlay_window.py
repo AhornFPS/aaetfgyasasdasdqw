@@ -3,7 +3,7 @@ import os
 import ctypes
 import math
 import time
-import re
+
 import json
 from collections import deque
 from PyQt6.QtWebEngineWidgets import QWebEngineView

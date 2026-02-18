@@ -66,29 +66,21 @@ import characters_qt
 import settings_qt
 import overlay_config_qt
 from discord_presence import DiscordPresenceManager
-from census_worker import CensusWorker, PS2_DETECTION
-from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
+from census_worker import CensusWorker
+from overlay_window import QtOverlay
 from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS, get_user_data_dir
 from dior_db import DatabaseHandler
 from twitch_worker import TwitchWorker
 from release_updater import ReleaseUpdater
-import sys
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtWebEngineCore import QWebEngineSettings
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QMainWindow, QListWidget, QStackedWidget, QGraphicsDropShadowEffect,
+    QApplication, QWidget, QHBoxLayout,
+    QMainWindow, QListWidget, QStackedWidget,
     QColorDialog, QFileDialog, QMessageBox, QProgressDialog # <--- Added QMessageBox
 )
 from PyQt6.QtGui import (
     QPixmap,
     QColor,
-    QPainter,
-    QPen,
-    QBrush,
-    QTransform,
-    QMovie,
     QFontDatabase,
     QIcon
 )
@@ -97,8 +89,6 @@ from PyQt6.QtCore import (
     pyqtSignal,
     QObject,
     QTimer,
-    QPoint,
-    QSize,
     QThread
 )
 
@@ -2709,7 +2699,6 @@ class DiorClientGUI:
     @staticmethod
     def _validate_slot_name(name):
         """Returns (cleaned_name, error_msg). error_msg is None if valid."""
-        import re
         INVALID_CHARS = r'\/:*?"<>|'
         RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL',
                           'COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9',
