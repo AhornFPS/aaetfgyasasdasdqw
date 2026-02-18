@@ -79,8 +79,8 @@ body.scifi-off #crosshair-layer .crosshair-ring {
 }
 
 body.scifi-off #crosshair-layer .crosshair-ring.recoil-active {
-  border-color: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
 }
 
 body.overlay-hidden #fx-backdrop,
@@ -418,8 +418,8 @@ body.overlay-hidden #hud-root {
 }
 
 #crosshair-layer .crosshair-ring.recoil-active {
-  border-color: rgba(255, 154, 42, 0.95);
-  box-shadow: 0 0 13px rgba(255, 154, 42, 0.82);
+  border-color: rgba(0, 242, 255, 0.86);
+  box-shadow: 0 0 7px rgba(0, 242, 255, 0.55);
   opacity: 1;
 }
 
