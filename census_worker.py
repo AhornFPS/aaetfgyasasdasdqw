@@ -74,6 +74,7 @@ class CensusWorker:
         self.recent_deaths_lock = threading.Lock()
         self.recent_deaths_lock = threading.Lock()
         self.vehicle_gunner_kill_map, self.vehicle_destruction_map = self._load_vehicle_kill_maps()
+        self.facility_map = self._load_facility_map()
 
         # --- SUPPORT TRACKING (MOVED HERE) ---
         self.support_streaks = {
@@ -117,6 +118,36 @@ class CensusWorker:
                     destruction_map[exp_id] = vehicle_part
 
         return gunner_map, destruction_map
+
+    def _load_facility_map(self):
+        facility_map = {}
+        path = get_asset_path("bases.json")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            self.c.add_log(f"ERR: Failed to load bases.json: {e}")
+            return facility_map
+
+        if not isinstance(data, dict):
+            self.c.add_log("ERR: bases.json has invalid format (expected object)")
+            return facility_map
+
+        for facility_id, facility_info in data.items():
+            fid = str(facility_id).strip()
+            if not fid:
+                continue
+
+            name = ""
+            if isinstance(facility_info, dict):
+                name = str(facility_info.get("name", "")).strip()
+            elif isinstance(facility_info, str):
+                name = facility_info.strip()
+
+            if name:
+                facility_map[fid] = name
+
+        return facility_map
 
     def start(self):
         def run_loop():
@@ -201,7 +232,8 @@ class CensusWorker:
                 "start": time.time(),
                 "acc_t": 0, # Accumulated time in seconds
                 "last_kill_time": time.time(),
-                "world_id": str(world_id)
+                "world_id": str(world_id),
+                "last_seen_base": ""
             }
         else:
             # EXISTING ENTRY
@@ -213,6 +245,8 @@ class CensusWorker:
 
             if obj["faction"] == "NSO" and current_faction_name != "NSO":
                 obj["faction"] = current_faction_name
+            if "last_seen_base" not in obj:
+                obj["last_seen_base"] = ""
 
         return self.c.session_stats[cid]
 
@@ -229,7 +263,10 @@ class CensusWorker:
                     msg = {
                         "service": "event", "action": "subscribe",
                         "characters": ["all"], "worlds": ["all"],
-                        "eventNames": ["Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent"]
+                        "eventNames": [
+                            "Death", "GainExperience", "PlayerLogin", "PlayerLogout", "MetagameEvent",
+                            "PlayerFacilityCapture", "PlayerFacilityDefend"
+                        ]
                     }
                     await websocket.send(json.dumps(msg))
                     self.c.add_log("Websocket: GLOBAL MONITORING ACTIVE (All Servers)")
@@ -268,6 +305,11 @@ class CensusWorker:
                         uid = f"DTH_{p.get('timestamp')}_{p.get('character_id')}_{p.get('attacker_character_id')}_{p.get('attacker_weapon_id')}"
                     elif e_name == "MetagameEvent":
                         uid = f"MTG_{p.get('timestamp')}_{p.get('world_id')}_{p.get('metagame_event_id')}_{p.get('metagame_event_state_name')}"
+                    elif e_name in ("PlayerFacilityCapture", "PlayerFacilityDefend"):
+                        uid = (
+                            f"FAC_{e_name}_{p.get('timestamp')}_{p.get('character_id')}_{p.get('facility_id')}"
+                            f"_{p.get('world_id')}_{p.get('zone_id')}"
+                        )
                     else:
                         uid = f"{e_name}_{p.get('timestamp')}_{p.get('character_id', '0')}_{p.get('attacker_character_id', '0')}"
 
@@ -316,6 +358,9 @@ class CensusWorker:
                                     self._get_stat_obj(c_id, "0", payload_world)
                                     self.c.add_log(f"TIMER: Session started for {name} (at Login)")
 
+                                if hasattr(self.c, "update_discord_presence"):
+                                    self.c.update_discord_presence()
+
                                 def trigger_login_event(cid_val):
                                     try:
                                         u = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
@@ -331,11 +376,14 @@ class CensusWorker:
                                 break
                     elif e_name == "PlayerLogout":
                         cid = p.get("character_id")
+                        current_cid = str(getattr(self.c, "current_character_id", "") or "")
+                        last_tracked = str(getattr(self.c, "last_tracked_id", "") or "")
+                        is_active_logout = bool(cid) and (cid == current_cid or cid == last_tracked)
                         
                         # Fix: Remove from active counting immediately
                         if cid in self.c.active_players:
                             del self.c.active_players[cid]
-                        if cid == self.c.current_character_id:
+                        if cid == current_cid:
                             # Pause Timer
                             if cid in self.c.session_stats:
                                 s_obj = self.c.session_stats[cid]
@@ -347,6 +395,8 @@ class CensusWorker:
                             
                             self.c.current_character_id = ""
                             self.c.add_log("AUTO-TRACK: Logged out.")
+                        if is_active_logout and hasattr(self.c, "clear_discord_presence"):
+                            self.c.clear_discord_presence()
 
                     # 2. SERVER FILTER / PLAYER TRACKING (only track XP events and only the active side, other can be ignored)
                     track_id = p.get("character_id")   # or p.get("attacker_character_id")
@@ -366,6 +416,8 @@ class CensusWorker:
                         self._handle_experience(p, get_stat_obj)
                     elif e_name == "MetagameEvent":
                         self._handle_metagame(p)
+                    elif e_name in ("PlayerFacilityCapture", "PlayerFacilityDefend"):
+                        self._handle_facility_event(p)
 
             except Exception as e:
                 self.c.add_log(f"Processor Error: {e}")
@@ -1039,6 +1091,31 @@ class CensusWorker:
                 </div>"""
 
         self.c.overlay_win.signals.killfeed_entry.emit(msg)
+
+    def _handle_facility_event(self, p):
+        char_id = str(p.get("character_id", "")).strip()
+        facility_id = str(p.get("facility_id", "")).strip()
+
+        if not char_id or char_id == "0" or not facility_id:
+            return
+
+        world_id = str(p.get("world_id", "0"))
+        if world_id == "17":
+            world_id = "1"
+        if world_id == "13":
+            world_id = "10"
+
+        s_obj = self._get_stat_obj(char_id, "0", world_id)
+        s_obj["world_id"] = world_id
+        s_obj["last_seen_base"] = self.facility_map.get(facility_id, f"Facility {facility_id}")
+
+
+        if char_id not in self.c.name_cache:
+            self.c.id_queue.put(char_id)
+
+        if char_id == str(getattr(self.c, "current_character_id", "") or ""):
+            if hasattr(self.c, "update_discord_presence"):
+                self.c.update_discord_presence()
 
     def _handle_metagame(self, p):
         state = p.get("metagame_event_state_name")

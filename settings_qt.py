@@ -274,6 +274,32 @@ class SettingsWidget(QWidget):
 
         main_layout.addWidget(self.ui_group)
 
+        # --- GROUP 4: DISCORD ---
+        self.discord_group = QFrame(objectName="Group")
+        discord_layout = QVBoxLayout(self.discord_group)
+        discord_layout.setContentsMargins(15, 15, 15, 15)
+
+        discord_layout.addWidget(QLabel("> DISCORD INTEGRATION", objectName="GroupTitle"))
+        discord_layout.addWidget(
+            QLabel("Share your current character, server, and last seen base in Discord Rich Presence.",
+                   objectName="InfoText")
+        )
+
+        discord_row = QHBoxLayout()
+        discord_row.addWidget(QLabel("Discord Rich Presence:", styleSheet="color: #aaa;"))
+
+        self.btn_discord_presence = QPushButton(objectName="ActionBtn")
+        self.btn_discord_presence.setCheckable(True)
+        self.btn_discord_presence.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_discord_presence.toggled.connect(self.on_discord_presence_toggled)
+        self.update_discord_presence_button(False)
+
+        discord_row.addStretch()
+        discord_row.addWidget(self.btn_discord_presence)
+        discord_layout.addLayout(discord_row)
+
+        main_layout.addWidget(self.discord_group)
+
         # Spacer at the bottom
         main_layout.addStretch()
 
@@ -372,6 +398,31 @@ class SettingsWidget(QWidget):
         else:
             self.lbl_bg_name.setText("None")
 
+        # 5. Discord Rich Presence
+        discord_active = bool(config_data.get("discord_presence_active", False))
+        self.btn_discord_presence.blockSignals(True)
+        self.btn_discord_presence.setChecked(discord_active)
+        self.btn_discord_presence.blockSignals(False)
+        self.update_discord_presence_button(discord_active)
+
+    def update_discord_presence_button(self, active):
+        if active:
+            self.btn_discord_presence.setText("ENABLED")
+            self.btn_discord_presence.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_discord_presence.setText("DISABLED")
+            self.btn_discord_presence.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_discord_presence_toggled(self, active):
+        self.update_discord_presence_button(bool(active))
+        self.request_save()
+
     def update_volume_label(self, val):
         """Only for optics while dragging."""
         self.lbl_vol_val.setText(f"{val}%")
@@ -381,7 +432,8 @@ class SettingsWidget(QWidget):
         data = {
             "audio_volume": self.slider_vol.value(),
             "audio_device": self.combo_audio_device.currentText(),
-            "main_background_path": self.lbl_bg_name.text() if self.lbl_bg_name.text() != "None" else ""
+            "main_background_path": self.lbl_bg_name.text() if self.lbl_bg_name.text() != "None" else "",
+            "discord_presence_active": bool(self.btn_discord_presence.isChecked())
         }
         # Send signal
         self.signals.save_requested.emit(data)

@@ -6,3 +6,4 @@ Pillow
 pydirectinput
 pygame
 python-dotenv
+pypresence

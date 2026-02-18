@@ -3,6 +3,7 @@ import os
 import sys
 import ctypes
 import copy
+import atexit
 from version import VERSION
 
 
@@ -64,6 +65,7 @@ import launcher_qt
 import characters_qt
 import settings_qt
 import overlay_config_qt
+from discord_presence import DiscordPresenceManager
 from census_worker import CensusWorker, PS2_DETECTION
 from overlay_window import QtOverlay, PathDrawingLayer, OverlaySignals
 from dior_utils import BASE_DIR, ASSETS_DIR, IMAGES_DIR, SOUNDS_DIR, CROSSHAIR_DIR, DB_PATH, get_asset_path, log_exception, clean_path, IS_WINDOWS, get_user_data_dir
@@ -195,6 +197,12 @@ class DiorMainHub(QMainWindow):
 
     def closeEvent(self, event):
         """Save window size on close."""
+        try:
+            if hasattr(self.controller, "shutdown_runtime_workers"):
+                self.controller.shutdown_runtime_workers()
+        except Exception:
+            pass
+
         size = self.size()
         if "window_size" not in self.controller.config:
             self.controller.config["window_size"] = {}
@@ -280,6 +288,7 @@ class DiorClientGUI:
         self.last_tracked_id = ""
         self.is_hud_editing = False
         self.overlay_win = None
+        self.discord_presence = None
 
         self.server_map = {
             "Wainwright (EU)": "10", "Osprey (US)": "1",
@@ -418,6 +427,11 @@ class DiorClientGUI:
 
         # 7. SHOW
         self.main_hub.show()
+        self.discord_presence = DiscordPresenceManager(log_func=self.add_log)
+        if bool(self.config.get("discord_presence_active", False)):
+            self.discord_presence.start()
+        self.qt_app.aboutToQuit.connect(self.shutdown_runtime_workers)
+        atexit.register(self.shutdown_runtime_workers)
         if getattr(sys, "frozen", False):
             QTimer.singleShot(900, self._prompt_update_success_if_available)
             QTimer.singleShot(1200, self._prompt_apply_staged_update_if_available)
@@ -733,6 +747,8 @@ class DiorClientGUI:
         if isinstance(existing, dict) and len(existing) > 0:
             if name and (not existing.get("name") or existing.get("name") == "Searching..."):
                 existing["name"] = name
+            if "last_seen_base" not in existing:
+                existing["last_seen_base"] = ""
             return existing
 
         resolved_name = name
@@ -758,7 +774,8 @@ class DiorClientGUI:
             "start": now,
             "acc_t": 0,
             "last_kill_time": now,
-            "world_id": base_world
+            "world_id": base_world,
+            "last_seen_base": ""
         }
         self.session_stats[cid] = obj
         return obj
@@ -849,9 +866,30 @@ class DiorClientGUI:
             # Usually handled by immediate signals, but for the Save button:
             self.config["main_background_path"] = data["main_background_path"]
 
+        # Save Discord Presence setting
+        if "discord_presence_active" in data:
+            desired = bool(data["discord_presence_active"])
+            previous = bool(self.config.get("discord_presence_active", False))
+            self.config["discord_presence_active"] = desired
+
+            if self.discord_presence is None:
+                self.discord_presence = DiscordPresenceManager(log_func=self.add_log)
+
+            if desired:
+                self.discord_presence.start()
+                self.update_discord_presence()
+            else:
+                self.discord_presence.close()
+
+            if desired != previous:
+                self.add_log(f"DISCORD: Rich Presence {'enabled' if desired else 'disabled'}.")
+
         # Save to disk
         self.save_config()
-        self.add_log(f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')}, BG: {data.get('main_background_path', 'N/A')})")
+        self.add_log(
+            f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')}, "
+            f"BG: {data.get('main_background_path', 'N/A')}, Discord RPC: {'ON' if bool(data.get('discord_presence_active', self.config.get('discord_presence_active', False))) else 'OFF'})"
+        )
 
     def clean_path(self, path_str):
         """Removes 'No file selected' and empty paths."""
@@ -912,6 +950,7 @@ class DiorClientGUI:
     def on_game_stopped(self):
         """Called when PS2 has been terminated."""
         self.add_log("MONITOR: PlanetSide 2 geschlossen.")
+        self.clear_discord_presence()
 
         # Stop logic
         self.stop_overlay_logic()
@@ -2107,6 +2146,7 @@ class DiorClientGUI:
             self.stats_last_refresh_time = 0
             self.update_session_time()
             self.refresh_ingame_overlay()
+            self.update_discord_presence()
 
         self.add_log(f"SYS: Tracking active for: {name}")
 
@@ -2143,6 +2183,7 @@ class DiorClientGUI:
             # --- FIX: Stop Tracking ---
             self.current_character_id = ""
             self.current_selected_char_name = ""
+            self.clear_discord_presence()
             self.add_log("SYS: No characters remaining. Tracking stopped.")
         else:
             ui.char_combo.addItems(names)
@@ -4251,6 +4292,7 @@ class DiorClientGUI:
             "streak": {"img": "KS_Counter.png", "active": True},
             "stats_widget": {"active": True},
             "killfeed": {"active": True},
+            "discord_presence_active": False,
             "updates": {
                 "repo": DEFAULT_UPDATE_REPO,
                 "channel": "stable",
@@ -4532,6 +4574,7 @@ class DiorClientGUI:
         self.stats_last_refresh_time = 0
         self.update_session_time()
         self.refresh_ingame_overlay()
+        self.update_discord_presence()
 
     def get_server_name_by_id(self, world_id):
         """Searches for the display name of the server based on the World ID"""
@@ -6948,6 +6991,8 @@ log "DONE"
             if now - getattr(self, 'last_session_update', 0) >= 10:
                 self.update_session_time()
                 self.last_session_update = now
+            
+            self.update_discord_presence()
 
             # 3. UI UPDATE
             if hasattr(self, 'main_hub') and self.main_hub.stack.currentIndex() == 0:
@@ -6973,6 +7018,53 @@ log "DONE"
             
             if (self.is_game_focused() or is_test) and not is_editing:
                 self.overlay_win.update_stats_display(s_obj)
+
+    def update_discord_presence(self):
+        manager = getattr(self, "discord_presence", None)
+        if manager is None:
+            return
+        if not bool(getattr(self, "ps2_running", False)):
+            self.clear_discord_presence()
+            return
+        if not bool(self.config.get("discord_presence_active", False)):
+            self.clear_discord_presence()
+            return
+
+        char_id = str(getattr(self, "current_character_id", "") or "").strip()
+        if not char_id:
+            self.clear_discord_presence()
+            return
+
+        stats_obj = self.session_stats.get(char_id)
+        if not isinstance(stats_obj, dict) or not stats_obj:
+            self.clear_discord_presence()
+            return
+
+        if float(stats_obj.get("start", 0) or 0) <= 0:
+            self.clear_discord_presence()
+            return
+
+        char_name = (stats_obj.get("name") or "").strip()
+        if not char_name or char_name == "Searching...":
+            char_name = str(getattr(self, "current_selected_char_name", "") or "").strip()
+        if not char_name:
+            char_name = self.name_cache.get(char_id, "Unknown")
+
+        world_id = str(stats_obj.get("world_id", self.current_world_id))
+        server_name = self.get_server_name_by_id(world_id)
+
+        base_name = (stats_obj.get("last_seen_base") or "").strip()
+        manager.update_presence(char_name, server_name, base_name)
+
+    def clear_discord_presence(self):
+        manager = getattr(self, "discord_presence", None)
+        if manager is not None:
+            manager.clear_presence()
+
+    def shutdown_runtime_workers(self):
+        manager = getattr(self, "discord_presence", None)
+        if manager is not None:
+            manager.close()
 
     def check_mouse_leave(self):
         x, y = self.root.winfo_pointerxy()
