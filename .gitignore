@@ -1,6 +1,7 @@
 # IDE & System
 .idea/
 .vscode/
+.overlay-next/
 *.swp
 .DS_Store
 
