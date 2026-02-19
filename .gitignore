@@ -1,7 +1,6 @@
 # IDE & System
 .idea/
 .vscode/
-.overlay-next/
 *.swp
 .DS_Store
 
@@ -13,6 +12,8 @@ dist/
 build/
 AppDir/
 
+# Overlay test in Rust
+overlay-next/
 
 # Lokale Daten & Datenbanken (Deine Liste)
 .env
