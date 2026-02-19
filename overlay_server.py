@@ -190,6 +190,8 @@ class OverlayServer:
 
         self._state_lock = threading.Lock()
         self._state_cache = {}
+        self._pending_by_category = {}
+        self._flush_task = None
 
     def start(self):
         if self.is_running:
@@ -237,6 +239,9 @@ class OverlayServer:
                 self.ws_loop.call_soon_threadsafe(lambda: None)
             except Exception:
                 pass
+        with self._state_lock:
+            self._pending_by_category.clear()
+        self._flush_task = None
 
     def _run_http(self):
         HTTPServer.allow_reuse_address = True
@@ -347,11 +352,32 @@ class OverlayServer:
 
         with self._state_lock:
             self._state_cache[category] = payload
+            # Coalesce by category: keep only newest payload per category.
+            self._pending_by_category[category] = payload
 
         if not self.is_running or not self.ws_loop or not self.ws_clients:
             return
 
-        asyncio.run_coroutine_threadsafe(self._ws_broadcast(payload), self.ws_loop)
+        try:
+            self.ws_loop.call_soon_threadsafe(self._schedule_flush)
+        except Exception:
+            pass
+
+    def _schedule_flush(self):
+        if self._flush_task and not self._flush_task.done():
+            return
+        self._flush_task = asyncio.create_task(self._flush_pending_broadcasts())
+
+    async def _flush_pending_broadcasts(self):
+        while True:
+            with self._state_lock:
+                if not self._pending_by_category:
+                    break
+                pending_payloads = list(self._pending_by_category.values())
+                self._pending_by_category.clear()
+
+            for payload in pending_payloads:
+                await self._ws_broadcast(payload)
 
     async def _ws_broadcast(self, message):
         if self.ws_clients:

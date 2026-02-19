@@ -21,7 +21,6 @@
   let telemetryWarnTimer = null;
   let scifiEnabled = true;
   let overlayVisible = true;
-  let crosshairRing = null;
   let statsCard = null;
   let lastStatsSignature = "";
 
@@ -325,7 +324,6 @@
 
   function updateCrosshair(data) {
     crosshairLayer.innerHTML = "";
-    crosshairRing = null;
     if (!data.enabled || !data.filename) {
       return;
     }
@@ -341,21 +339,6 @@
       crosshairLayer.appendChild(core);
     }
 
-    const expandEnabled = data.expand_enabled !== false;
-    if (expandEnabled) {
-      const ring = document.createElement("div");
-      ring.className = "crosshair-ring";
-      setPos(ring, data, true, false);
-      crosshairLayer.appendChild(ring);
-      crosshairRing = ring;
-      const initialLevel = Number(data.recoil_level);
-      if (Number.isFinite(initialLevel)) {
-        setCrosshairRecoil({ level: initialLevel });
-      } else {
-        setCrosshairRecoil({ active: Boolean(data.recoil_active) });
-      }
-    }
-
     const img = document.createElement("img");
     img.className = "crosshair";
     img.src = assetUrl(data.filename);
@@ -369,24 +352,6 @@
     crosshairLayer.appendChild(img);
 
     activateSystem("crosshair");
-  }
-
-  function setCrosshairRecoil(data) {
-    if (!crosshairRing) {
-      return;
-    }
-    let level = Number.NaN;
-    if (data && data.level !== undefined) {
-      level = Number(data.level);
-    }
-    if (!Number.isFinite(level)) {
-      level = Boolean(data && data.active) ? 1.0 : 0.0;
-    }
-    const clamped = Math.max(0, Math.min(1, level));
-    crosshairRing.style.setProperty("--recoil-level", clamped.toFixed(4));
-    const active = clamped > 0.001;
-    crosshairRing.classList.toggle("recoil-active", active);
-    crosshairRing.classList.toggle("recoil-tracking", active);
   }
 
   function renderStreak(data) {
@@ -526,7 +491,6 @@
     stats_clear: clearStats,
     streak: renderStreak,
     crosshair: updateCrosshair,
-    crosshair_recoil: setCrosshairRecoil,
     event: (data) => pushEvent(eventsLayer, data, "event"),
     hitmarker: (data) => pushEvent(hitmarkerLayer, data, data.event_type || "hitmarker"),
     events_clear: clearEvents,

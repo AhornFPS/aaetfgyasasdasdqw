@@ -1227,16 +1227,6 @@ class OverlayConfigWindow(QWidget):
         self.btn_toggle_cross_shadow.setCheckable(True)
         layout.addWidget(self.btn_toggle_cross_shadow)
 
-        self.btn_toggle_cross_expand = QPushButton("ADS+FIRE EXPANSION: ON")
-        self.btn_toggle_cross_expand.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_toggle_cross_expand.setCheckable(True)
-        self.btn_toggle_cross_expand.setChecked(True)
-        self.btn_toggle_cross_expand.setToolTip(
-            "If enabled: crosshair ring expands while ADS+fire is held.\n"
-            "Order-gated: hold RMB first, then hold LMB."
-        )
-        layout.addWidget(self.btn_toggle_cross_expand)
-
         # --- NEW EDITOR BUTTON ---
         self.btn_open_editor = QPushButton("CROSSHAIR EDITOR")
         self.btn_open_editor.setFocusPolicy(Qt.FocusPolicy.NoFocus)

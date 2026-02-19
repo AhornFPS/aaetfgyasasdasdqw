@@ -271,7 +271,6 @@ class QtOverlay(QWidget):
         self._last_stats_payload = None
         self._stats_web_visible = False
         self._last_streak_payload = None
-        self._last_crosshair_recoil_level = 0.0
         self._web_overlay_visible = True
 
         # --- CACHE DICTIONARY (NEW) ---
@@ -417,8 +416,8 @@ class QtOverlay(QWidget):
         self.queue_timer = QTimer(self)
         self.queue_timer.setSingleShot(True)
         self.queue_timer.timeout.connect(self.finish_current_event)
-        self.max_event_queue_len = 48
-        self.max_event_backlog_ms = 10000
+        self.max_event_queue_len = 0
+        self.max_event_backlog_ms = 0
         self._queue_drop_count = 0
 
         # Initial queue setting (fallback)
@@ -426,16 +425,9 @@ class QtOverlay(QWidget):
         self.queue_enabled = True
         if self.gui_ref and hasattr(self.gui_ref, 'config'):
             self.queue_enabled = self.gui_ref.config.get("event_queue_active", True)
-            try:
-                raw_max_len = int(self.gui_ref.config.get("event_queue_max_len", 48))
-                self.max_event_queue_len = max(10, min(200, raw_max_len))
-            except Exception:
-                self.max_event_queue_len = 48
-            try:
-                raw_backlog = int(self.gui_ref.config.get("event_queue_max_backlog_ms", 10000))
-                self.max_event_backlog_ms = max(2000, min(60000, raw_backlog))
-            except Exception:
-                self.max_event_backlog_ms = 10000
+            # Queue trimming is intentionally disabled to allow long backlogs.
+            self.max_event_queue_len = 0
+            self.max_event_backlog_ms = 0
             
             # Init Audio Device
             dev_name = self.gui_ref.config.get("audio_device", "Default")
@@ -1097,18 +1089,7 @@ class QtOverlay(QWidget):
         self._broadcast_overlay("stats_clear", {"ts": int(time.time() * 1000)})
 
     def clear_crosshair_web(self):
-        self.set_crosshair_recoil_level(0.0)
         self._broadcast_overlay("crosshair", {"enabled": False, "x": 0, "y": 0})
-
-    def set_crosshair_recoil_active(self, active):
-        self.set_crosshair_recoil_level(1.0 if bool(active) else 0.0)
-
-    def set_crosshair_recoil_level(self, level):
-        level = max(0.0, min(1.0, float(level)))
-        if abs(level - float(self._last_crosshair_recoil_level)) < 0.002:
-            return
-        self._last_crosshair_recoil_level = level
-        self._broadcast_overlay("crosshair_recoil", {"active": level > 0.001, "level": level})
 
     def clear_streak_web(self):
         """Specifically hides the streak on the web HUD."""
@@ -1155,28 +1136,8 @@ class QtOverlay(QWidget):
             return 250
 
     def _trim_event_queue(self):
-        dropped = 0
-
-        while len(self.event_queue) > self.max_event_queue_len:
-            self.event_queue.popleft()
-            dropped += 1
-
-        queued_ms = 0
-        for item in self.event_queue:
-            queued_ms += self._queue_entry_wait_ms(item)
-
-        # Keep at least one pending item to avoid dropping every burst completely.
-        while len(self.event_queue) > 1 and queued_ms > self.max_event_backlog_ms:
-            oldest = self.event_queue.popleft()
-            queued_ms -= self._queue_entry_wait_ms(oldest)
-            dropped += 1
-
-        if dropped > 0:
-            self._queue_drop_count += dropped
-            if self.gui_ref and hasattr(self.gui_ref, "add_log") and self._queue_drop_count % 10 == 0:
-                self.gui_ref.add_log(
-                    f"OVERLAY: Event queue overflow, dropped {self._queue_drop_count} old event(s) to keep HUD realtime."
-                )
+        # Intentionally disabled: queue should not drop old events.
+        return
 
     def add_event_to_queue(self, img_path, sound_path, duration, x, y, scale=1.0, volume=1.0, is_hitmarker=False, play_duplicate=True, event_name=""):
         # Master Toggle Check
@@ -2296,7 +2257,6 @@ class QtOverlay(QWidget):
             self.crosshair_label.hide()
 
         if editing_crosshair:
-            self.set_crosshair_recoil_level(0.0)
             self._broadcast_overlay("crosshair", {
                 "enabled": False,
                 "x": int(tx),
@@ -2305,7 +2265,6 @@ class QtOverlay(QWidget):
             return
 
         if (not enabled and not self.edit_mode) or not path or not os.path.exists(path):
-            self.set_crosshair_recoil_level(0.0)
             self._broadcast_overlay("crosshair", {
                 "enabled": False,
                 "x": int(tx),
@@ -2321,10 +2280,7 @@ class QtOverlay(QWidget):
             "size": int(size),
             "scale": float(self.ui_scale),
             "shadow": bool(crosshair_cfg.get("shadow", False)),
-            "expand_enabled": bool(crosshair_cfg.get("ads_fire_expand", True)),
             "ui_scale": float(self.ui_scale),
-            "recoil_active": bool(self._last_crosshair_recoil_level > 0.001),
-            "recoil_level": float(self._last_crosshair_recoil_level),
         })
 
     def update_twitch_visibility(self, enabled):
