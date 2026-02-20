@@ -271,6 +271,10 @@ class QtOverlay(QWidget):
         self._last_stats_payload = None
         self._stats_web_visible = False
         self._last_streak_payload = None
+        self._streak_web_visible = False
+        self._last_crosshair_payload = None
+        self._feed_web_has_items = False
+        self._events_web_cleared = False
         self._web_overlay_visible = True
 
         # --- CACHE DICTIONARY (NEW) ---
@@ -1019,6 +1023,12 @@ class QtOverlay(QWidget):
 
     def _broadcast_overlay(self, category, payload):
         if hasattr(self, "server") and self.server:
+            # Track whether there are active transient visuals on the web HUD.
+            if str(category) in {"event", "hitmarker"}:
+                self._events_web_cleared = False
+            if isinstance(payload, dict) and "ts_source_ms" not in payload:
+                payload = dict(payload)
+                payload["ts_source_ms"] = int(time.time() * 1000)
             self.server.broadcast(category, payload)
 
     def set_scifi_mode_enabled(self, enabled):
@@ -1089,12 +1099,36 @@ class QtOverlay(QWidget):
         self._broadcast_overlay("stats_clear", {"ts": int(time.time() * 1000)})
 
     def clear_crosshair_web(self):
-        self._broadcast_overlay("crosshair", {"enabled": False, "x": 0, "y": 0})
+        payload = {"enabled": False, "x": 0, "y": 0}
+        if payload != self._last_crosshair_payload:
+            self._last_crosshair_payload = payload
+            self._broadcast_overlay("crosshair", payload)
+
+    def _broadcast_crosshair(self, payload):
+        safe_payload = dict(payload or {})
+        if safe_payload == self._last_crosshair_payload:
+            return
+        self._last_crosshair_payload = safe_payload
+        self._broadcast_overlay("crosshair", safe_payload)
 
     def clear_streak_web(self):
         """Specifically hides the streak on the web HUD."""
         self._last_streak_payload = None
+        if not self._streak_web_visible:
+            return
+        self._streak_web_visible = False
         self._broadcast_overlay("streak", {"visible": False})
+
+    def _broadcast_streak(self, payload):
+        safe_payload = dict(payload or {})
+        if not bool(safe_payload.get("visible", False)):
+            self.clear_streak_web()
+            return
+        if self._streak_web_visible and safe_payload == self._last_streak_payload:
+            return
+        self._last_streak_payload = safe_payload
+        self._streak_web_visible = True
+        self._broadcast_overlay("streak", safe_payload)
 
     def _broadcast_streak_position_px(self, x_px, y_px):
         if not self._last_streak_payload:
@@ -1102,8 +1136,7 @@ class QtOverlay(QWidget):
         payload = dict(self._last_streak_payload)
         payload["x"] = int(x_px)
         payload["y"] = int(y_px)
-        self._last_streak_payload = payload
-        self._broadcast_overlay("streak", payload)
+        self._broadcast_streak(payload)
 
     # --- QUEUE & DISPLAY LOGIC ---
     def _ensure_audio_routing(self):
@@ -1361,7 +1394,9 @@ class QtOverlay(QWidget):
         for lbl in self.img_pool:
             lbl.hide()
             lbl._is_busy = False
-        self._broadcast_overlay("events_clear", {"ts": int(time.time() * 1000)})
+        if not self._events_web_cleared:
+            self._broadcast_overlay("events_clear", {"ts": int(time.time() * 1000)})
+            self._events_web_cleared = True
 
     def _hide_image_safe(self):
         """Legacy helper for a single hide call (now targets all)."""
@@ -1816,6 +1851,7 @@ class QtOverlay(QWidget):
         # We now store the UN-SCALED message
         self.feed_messages.insert(0, html_msg)
         self.feed_messages = self.feed_messages[:6]
+        self._feed_web_has_items = len(self.feed_messages) > 0
         self.update_killfeed_ui()
         
         # Broadcast (unscaled for server)
@@ -1857,6 +1893,9 @@ class QtOverlay(QWidget):
 
     def clear_killfeed(self):
         self.feed_messages = []
+        if not self._feed_web_has_items:
+            return
+        self._feed_web_has_items = False
         self._broadcast_overlay("feed_clear", {"ts": int(time.time() * 1000)})
 
     def update_killfeed_pos(self):
@@ -2025,15 +2064,12 @@ class QtOverlay(QWidget):
 
     def draw_streak_ui(self, img_path, count, factions, cfg, slot_map):
         if (not cfg.get("active", True) and not self.edit_mode) or (count <= 0 and not self.edit_mode):
-            # Throttle: Only broadcast 'hidden' once.
-            if self._last_streak_payload is not None:
-                self._last_streak_payload = None
-                self._broadcast_overlay("streak", {"visible": False})
+            # Broadcast hidden state only once.
+            self.clear_streak_web()
             return
 
         if not img_path or not os.path.exists(img_path):
-            self._last_streak_payload = None
-            self._broadcast_overlay("streak", {"visible": False})
+            self.clear_streak_web()
             return
 
         cnt = count if count > 0 else 10
@@ -2165,12 +2201,11 @@ class QtOverlay(QWidget):
         }
         if getattr(self, "path_edit_active", False):
             self._last_streak_payload = payload
-            self._broadcast_overlay("streak", {"visible": False})
+            self.clear_streak_web()
             self.path_layer.raise_()
             return
 
-        self._last_streak_payload = payload
-        self._broadcast_overlay("streak", payload)
+        self._broadcast_streak(payload)
         if getattr(self, "path_edit_active", False):
             self.path_layer.raise_()
 
@@ -2257,7 +2292,7 @@ class QtOverlay(QWidget):
             self.crosshair_label.hide()
 
         if editing_crosshair:
-            self._broadcast_overlay("crosshair", {
+            self._broadcast_crosshair({
                 "enabled": False,
                 "x": int(tx),
                 "y": int(ty),
@@ -2265,14 +2300,14 @@ class QtOverlay(QWidget):
             return
 
         if (not enabled and not self.edit_mode) or not path or not os.path.exists(path):
-            self._broadcast_overlay("crosshair", {
+            self._broadcast_crosshair({
                 "enabled": False,
                 "x": int(tx),
                 "y": int(ty),
             })
             return
 
-        self._broadcast_overlay("crosshair", {
+        self._broadcast_crosshair({
             "enabled": True,
             "filename": self._asset_filename(path),
             "x": int(tx),
@@ -2318,6 +2353,17 @@ class QtOverlay(QWidget):
         if self.server and self.server.is_running:
             same_ports = (self.server.http_port == h_port and self.server.ws_port == w_port)
             if same_ports:
+                if self.gui_ref and hasattr(self.gui_ref, "config"):
+                    self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
+                    self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
+                    self.server.set_ws_batching_v2(bool(self.gui_ref.config.get("overlay_ws_batching_v2", False)))
+                    self.server.set_trace_export(bool(self.gui_ref.config.get("overlay_trace_export", False)))
+                    self.server.set_event_pipeline_v2(bool(self.gui_ref.config.get("event_pipeline_v2", True)))
+                    self.server.set_js_scheduler_v2(bool(self.gui_ref.config.get("js_scheduler_v2", True)))
+                    self.server.set_event_pipeline_tuning(
+                        dedupe_window_ms=int(self.gui_ref.config.get("overlay_dedupe_window_ms", 120)),
+                        max_transient_pending=int(self.gui_ref.config.get("overlay_transient_max_pending", 2048)),
+                    )
                 self.load_web_overlay(h_port)
                 if self.gui_ref:
                     self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
@@ -2327,6 +2373,18 @@ class QtOverlay(QWidget):
 
         try:
             self.server = OverlayServer(http_port=h_port, ws_port=w_port)
+            self._last_crosshair_payload = None
+            if self.gui_ref and hasattr(self.gui_ref, "config"):
+                self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
+                self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
+                self.server.set_ws_batching_v2(bool(self.gui_ref.config.get("overlay_ws_batching_v2", False)))
+                self.server.set_trace_export(bool(self.gui_ref.config.get("overlay_trace_export", False)))
+                self.server.set_event_pipeline_v2(bool(self.gui_ref.config.get("event_pipeline_v2", True)))
+                self.server.set_js_scheduler_v2(bool(self.gui_ref.config.get("js_scheduler_v2", True)))
+                self.server.set_event_pipeline_tuning(
+                    dedupe_window_ms=int(self.gui_ref.config.get("overlay_dedupe_window_ms", 120)),
+                    max_transient_pending=int(self.gui_ref.config.get("overlay_transient_max_pending", 2048)),
+                )
             actual_h_port, actual_w_port = self.server.start()
             print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
             self.load_web_overlay(actual_h_port)

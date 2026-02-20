@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QPushButton, QFrame, QSlider, QComboBox, QSizePolicy)
+                             QLabel, QPushButton, QFrame, QSlider, QComboBox, QSizePolicy, QSpinBox, QScrollArea)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 
 # --- STYLING ---
@@ -134,14 +134,30 @@ class SettingsWidget(QWidget):
     def __init__(self, controller=None):
         super().__init__()
         self.controller = controller
+        self.is_dev_environment = not bool(getattr(sys, "frozen", False))
         self.setObjectName("Settings")
         self.setStyleSheet(SETTING_STYLE)
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.signals = SettingsSignals()
 
-        # Layout Setup
-        main_layout = QVBoxLayout()
-        self.setLayout(main_layout)
+        # Layout Setup: keep settings content scrollable so page growth
+        # does not force a larger minimum size for the whole app window.
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        root_layout.addWidget(scroll)
+
+        content = QWidget()
+        scroll.setWidget(content)
+
+        main_layout = QVBoxLayout(content)
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(40, 40, 40, 40)
 
@@ -300,6 +316,174 @@ class SettingsWidget(QWidget):
 
         main_layout.addWidget(self.discord_group)
 
+        # --- GROUP 5: OVERLAY RUNTIME ---
+        self.runtime_group = QFrame(objectName="Group")
+        runtime_layout = QVBoxLayout(self.runtime_group)
+        runtime_layout.setContentsMargins(15, 15, 15, 15)
+        runtime_layout.addWidget(QLabel("> OVERLAY RUNTIME", objectName="GroupTitle"))
+        runtime_layout.addWidget(QLabel("Choose which overlay renderer should be active.", objectName="InfoText"))
+
+        runtime_row = QHBoxLayout()
+        runtime_row.addWidget(QLabel("Overlay Backend:", styleSheet="color: #aaa;"))
+        self.combo_overlay_backend = QComboBox()
+        self.combo_overlay_backend.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.combo_overlay_backend.setStyleSheet("""
+            QComboBox {
+                background-color: #111;
+                border: 1px solid #444;
+                color: #eee;
+                padding: 6px;
+                border-radius: 3px;
+                min-width: 170px;
+            }
+            QComboBox:focus {
+                border: 1px solid #00f2ff;
+                background-color: #000;
+            }
+            QComboBox::drop-down { border: 0px; }
+            QComboBox QAbstractItemView {
+                background-color: #111;
+                color: #eee;
+                border: 1px solid #333;
+                selection-background-color: #00f2ff;
+                selection-color: #000;
+            }
+        """)
+        self.combo_overlay_backend.addItem("Legacy (Qt/Web)", "legacy")
+        self.combo_overlay_backend.addItem("Tauri Spike", "tauri")
+        self.combo_overlay_backend.currentIndexChanged.connect(self.request_save)
+        runtime_row.addStretch()
+        runtime_row.addWidget(self.combo_overlay_backend)
+        runtime_layout.addLayout(runtime_row)
+        main_layout.addWidget(self.runtime_group)
+
+        # --- GROUP 6: DEV TOOLS (SOURCE ONLY) ---
+        self.dev_group = QFrame(objectName="Group")
+        dev_layout = QVBoxLayout(self.dev_group)
+        dev_layout.setContentsMargins(15, 15, 15, 15)
+
+        dev_layout.addWidget(QLabel("> DEVELOPER TOOLS", objectName="GroupTitle"))
+        dev_layout.addWidget(QLabel("Source-mode diagnostics for overlay development.", objectName="InfoText"))
+
+        dev_row = QHBoxLayout()
+        dev_row.addWidget(QLabel("Overlay Perf Debug HUD:", styleSheet="color: #aaa;"))
+
+        self.btn_overlay_perf_debug = QPushButton(objectName="ActionBtn")
+        self.btn_overlay_perf_debug.setCheckable(True)
+        self.btn_overlay_perf_debug.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_overlay_perf_debug.toggled.connect(self.on_overlay_perf_debug_toggled)
+        self.update_overlay_perf_debug_button(False)
+
+        dev_row.addStretch()
+        dev_row.addWidget(self.btn_overlay_perf_debug)
+        dev_layout.addLayout(dev_row)
+
+        batch_row = QHBoxLayout()
+        batch_row.addWidget(QLabel("WS Batch Mode (v2):", styleSheet="color: #aaa;"))
+        self.btn_ws_batching_v2 = QPushButton(objectName="ActionBtn")
+        self.btn_ws_batching_v2.setCheckable(True)
+        self.btn_ws_batching_v2.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ws_batching_v2.toggled.connect(self.on_ws_batching_toggled)
+        self.update_ws_batching_button(False)
+        batch_row.addStretch()
+        batch_row.addWidget(self.btn_ws_batching_v2)
+        dev_layout.addLayout(batch_row)
+
+        trace_row = QHBoxLayout()
+        trace_row.addWidget(QLabel("Event Trace Export (JSONL):", styleSheet="color: #aaa;"))
+        self.btn_overlay_trace_export = QPushButton(objectName="ActionBtn")
+        self.btn_overlay_trace_export.setCheckable(True)
+        self.btn_overlay_trace_export.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_overlay_trace_export.toggled.connect(self.on_trace_export_toggled)
+        self.update_trace_export_button(False)
+        trace_row.addStretch()
+        trace_row.addWidget(self.btn_overlay_trace_export)
+        dev_layout.addLayout(trace_row)
+
+        pipeline_row = QHBoxLayout()
+        pipeline_row.addWidget(QLabel("Event Pipeline v2:", styleSheet="color: #aaa;"))
+        self.btn_event_pipeline_v2 = QPushButton(objectName="ActionBtn")
+        self.btn_event_pipeline_v2.setCheckable(True)
+        self.btn_event_pipeline_v2.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_event_pipeline_v2.toggled.connect(self.on_event_pipeline_toggled)
+        self.update_event_pipeline_button(True)
+        pipeline_row.addStretch()
+        pipeline_row.addWidget(self.btn_event_pipeline_v2)
+        dev_layout.addLayout(pipeline_row)
+
+        scheduler_row = QHBoxLayout()
+        scheduler_row.addWidget(QLabel("JS Scheduler v2:", styleSheet="color: #aaa;"))
+        self.btn_js_scheduler_v2 = QPushButton(objectName="ActionBtn")
+        self.btn_js_scheduler_v2.setCheckable(True)
+        self.btn_js_scheduler_v2.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_js_scheduler_v2.toggled.connect(self.on_js_scheduler_toggled)
+        self.update_js_scheduler_button(True)
+        scheduler_row.addStretch()
+        scheduler_row.addWidget(self.btn_js_scheduler_v2)
+        dev_layout.addLayout(scheduler_row)
+
+        fps_row = QHBoxLayout()
+        fps_row.addWidget(QLabel("Overlay Flush FPS:", styleSheet="color: #aaa;"))
+        self.combo_overlay_fps = QComboBox()
+        self.combo_overlay_fps.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.combo_overlay_fps.setStyleSheet("""
+            QComboBox {
+                background-color: #111;
+                border: 1px solid #444;
+                color: #eee;
+                padding: 6px;
+                border-radius: 3px;
+                min-width: 90px;
+            }
+            QComboBox:focus {
+                border: 1px solid #00f2ff;
+                background-color: #000;
+            }
+            QComboBox::drop-down {
+                border: 0px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #111;
+                color: #eee;
+                border: 1px solid #333;
+                selection-background-color: #00f2ff;
+                selection-color: #000;
+            }
+        """)
+        for fps in (30, 60, 90, 120, 144, 165, 240):
+            self.combo_overlay_fps.addItem(str(fps))
+        self.combo_overlay_fps.currentIndexChanged.connect(self.request_save)
+        fps_row.addStretch()
+        fps_row.addWidget(self.combo_overlay_fps)
+        dev_layout.addLayout(fps_row)
+
+        dedupe_row = QHBoxLayout()
+        dedupe_row.addWidget(QLabel("Event Dedupe Window (ms):", styleSheet="color: #aaa;"))
+        self.spin_overlay_dedupe_ms = QSpinBox()
+        self.spin_overlay_dedupe_ms.setRange(0, 5000)
+        self.spin_overlay_dedupe_ms.setSingleStep(10)
+        self.spin_overlay_dedupe_ms.setValue(120)
+        self.spin_overlay_dedupe_ms.setStyleSheet("QSpinBox { background-color: #111; border: 1px solid #444; color: #eee; padding: 6px; border-radius: 3px; }")
+        self.spin_overlay_dedupe_ms.valueChanged.connect(self.request_save)
+        dedupe_row.addStretch()
+        dedupe_row.addWidget(self.spin_overlay_dedupe_ms)
+        dev_layout.addLayout(dedupe_row)
+
+        transient_row = QHBoxLayout()
+        transient_row.addWidget(QLabel("Transient Queue Cap:", styleSheet="color: #aaa;"))
+        self.spin_overlay_transient_cap = QSpinBox()
+        self.spin_overlay_transient_cap.setRange(64, 20000)
+        self.spin_overlay_transient_cap.setSingleStep(64)
+        self.spin_overlay_transient_cap.setValue(2048)
+        self.spin_overlay_transient_cap.setStyleSheet("QSpinBox { background-color: #111; border: 1px solid #444; color: #eee; padding: 6px; border-radius: 3px; }")
+        self.spin_overlay_transient_cap.valueChanged.connect(self.request_save)
+        transient_row.addStretch()
+        transient_row.addWidget(self.spin_overlay_transient_cap)
+        dev_layout.addLayout(transient_row)
+
+        main_layout.addWidget(self.dev_group)
+        self.dev_group.setVisible(self.is_dev_environment)
+
         # Spacer at the bottom
         main_layout.addStretch()
 
@@ -405,6 +589,68 @@ class SettingsWidget(QWidget):
         self.btn_discord_presence.blockSignals(False)
         self.update_discord_presence_button(discord_active)
 
+        # 6. Overlay perf debug (dev only)
+        overlay_backend = str(config_data.get("overlay_backend", "legacy") or "legacy").strip().lower()
+        self.combo_overlay_backend.blockSignals(True)
+        idx_backend = self.combo_overlay_backend.findData(overlay_backend)
+        if idx_backend < 0:
+            idx_backend = self.combo_overlay_backend.findData("legacy")
+        if idx_backend < 0:
+            idx_backend = 0
+        self.combo_overlay_backend.setCurrentIndex(idx_backend)
+        self.combo_overlay_backend.blockSignals(False)
+
+        # 7. Overlay perf debug (dev only)
+        overlay_perf_debug = bool(config_data.get("overlay_perf_debug", False))
+        self.btn_overlay_perf_debug.blockSignals(True)
+        self.btn_overlay_perf_debug.setChecked(overlay_perf_debug)
+        self.btn_overlay_perf_debug.blockSignals(False)
+        self.update_overlay_perf_debug_button(overlay_perf_debug)
+
+        ws_batching = bool(config_data.get("overlay_ws_batching_v2", False))
+        self.btn_ws_batching_v2.blockSignals(True)
+        self.btn_ws_batching_v2.setChecked(ws_batching)
+        self.btn_ws_batching_v2.blockSignals(False)
+        self.update_ws_batching_button(ws_batching)
+
+        trace_export = bool(config_data.get("overlay_trace_export", False))
+        self.btn_overlay_trace_export.blockSignals(True)
+        self.btn_overlay_trace_export.setChecked(trace_export)
+        self.btn_overlay_trace_export.blockSignals(False)
+        self.update_trace_export_button(trace_export)
+
+        event_pipeline_v2 = bool(config_data.get("event_pipeline_v2", True))
+        self.btn_event_pipeline_v2.blockSignals(True)
+        self.btn_event_pipeline_v2.setChecked(event_pipeline_v2)
+        self.btn_event_pipeline_v2.blockSignals(False)
+        self.update_event_pipeline_button(event_pipeline_v2)
+
+        js_scheduler_v2 = bool(config_data.get("js_scheduler_v2", True))
+        self.btn_js_scheduler_v2.blockSignals(True)
+        self.btn_js_scheduler_v2.setChecked(js_scheduler_v2)
+        self.btn_js_scheduler_v2.blockSignals(False)
+        self.update_js_scheduler_button(js_scheduler_v2)
+
+        # 8. Overlay flush FPS (dev only)
+        overlay_flush_fps = int(config_data.get("overlay_flush_fps", 120) or 120)
+        self.combo_overlay_fps.blockSignals(True)
+        idx = self.combo_overlay_fps.findText(str(overlay_flush_fps))
+        if idx < 0:
+            self.combo_overlay_fps.setCurrentText("120")
+        else:
+            self.combo_overlay_fps.setCurrentIndex(idx)
+        self.combo_overlay_fps.blockSignals(False)
+
+        dedupe_ms = int(config_data.get("overlay_dedupe_window_ms", 120) or 120)
+        self.spin_overlay_dedupe_ms.blockSignals(True)
+        self.spin_overlay_dedupe_ms.setValue(max(0, min(5000, dedupe_ms)))
+        self.spin_overlay_dedupe_ms.blockSignals(False)
+
+        transient_cap = int(config_data.get("overlay_transient_max_pending", 2048) or 2048)
+        self.spin_overlay_transient_cap.blockSignals(True)
+        self.spin_overlay_transient_cap.setValue(max(64, min(20000, transient_cap)))
+        self.spin_overlay_transient_cap.blockSignals(False)
+
     def update_discord_presence_button(self, active):
         if active:
             self.btn_discord_presence.setText("ENABLED")
@@ -423,6 +669,96 @@ class SettingsWidget(QWidget):
         self.update_discord_presence_button(bool(active))
         self.request_save()
 
+    def update_overlay_perf_debug_button(self, active):
+        if active:
+            self.btn_overlay_perf_debug.setText("ENABLED")
+            self.btn_overlay_perf_debug.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_overlay_perf_debug.setText("DISABLED")
+            self.btn_overlay_perf_debug.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_overlay_perf_debug_toggled(self, active):
+        self.update_overlay_perf_debug_button(bool(active))
+        self.request_save()
+
+    def update_ws_batching_button(self, active):
+        if active:
+            self.btn_ws_batching_v2.setText("ENABLED")
+            self.btn_ws_batching_v2.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_ws_batching_v2.setText("DISABLED")
+            self.btn_ws_batching_v2.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_ws_batching_toggled(self, active):
+        self.update_ws_batching_button(bool(active))
+        self.request_save()
+
+    def update_trace_export_button(self, active):
+        if active:
+            self.btn_overlay_trace_export.setText("ENABLED")
+            self.btn_overlay_trace_export.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_overlay_trace_export.setText("DISABLED")
+            self.btn_overlay_trace_export.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_trace_export_toggled(self, active):
+        self.update_trace_export_button(bool(active))
+        self.request_save()
+
+    def update_event_pipeline_button(self, active):
+        if active:
+            self.btn_event_pipeline_v2.setText("ENABLED")
+            self.btn_event_pipeline_v2.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_event_pipeline_v2.setText("DISABLED")
+            self.btn_event_pipeline_v2.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_event_pipeline_toggled(self, active):
+        self.update_event_pipeline_button(bool(active))
+        self.request_save()
+
+    def update_js_scheduler_button(self, active):
+        if active:
+            self.btn_js_scheduler_v2.setText("ENABLED")
+            self.btn_js_scheduler_v2.setStyleSheet(
+                "QPushButton { background-color: #004400; color: white; font-weight: bold; border: 1px solid #006600; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #005500; border: 1px solid #00ff00; }"
+            )
+        else:
+            self.btn_js_scheduler_v2.setText("DISABLED")
+            self.btn_js_scheduler_v2.setStyleSheet(
+                "QPushButton { background-color: #440000; color: #ffcccc; font-weight: bold; border: 1px solid #660000; padding: 10px 20px; border-radius: 6px; }"
+                "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
+            )
+
+    def on_js_scheduler_toggled(self, active):
+        self.update_js_scheduler_button(bool(active))
+        self.request_save()
+
     def update_volume_label(self, val):
         """Only for optics while dragging."""
         self.lbl_vol_val.setText(f"{val}%")
@@ -433,8 +769,25 @@ class SettingsWidget(QWidget):
             "audio_volume": self.slider_vol.value(),
             "audio_device": self.combo_audio_device.currentText(),
             "main_background_path": self.lbl_bg_name.text() if self.lbl_bg_name.text() != "None" else "",
-            "discord_presence_active": bool(self.btn_discord_presence.isChecked())
+            "discord_presence_active": bool(self.btn_discord_presence.isChecked()),
         }
+        if self.is_dev_environment:
+            data["overlay_perf_debug"] = bool(self.btn_overlay_perf_debug.isChecked())
+            backend_data = self.combo_overlay_backend.currentData()
+            data["overlay_backend"] = backend_data if backend_data else "legacy"
+            try:
+                data["overlay_flush_fps"] = int(self.combo_overlay_fps.currentText())
+            except Exception:
+                data["overlay_flush_fps"] = 120
+            data["overlay_dedupe_window_ms"] = int(self.spin_overlay_dedupe_ms.value())
+            data["overlay_transient_max_pending"] = int(self.spin_overlay_transient_cap.value())
+            data["overlay_ws_batching_v2"] = bool(self.btn_ws_batching_v2.isChecked())
+            data["overlay_trace_export"] = bool(self.btn_overlay_trace_export.isChecked())
+            data["event_pipeline_v2"] = bool(self.btn_event_pipeline_v2.isChecked())
+            data["js_scheduler_v2"] = bool(self.btn_js_scheduler_v2.isChecked())
+        else:
+            backend_data = self.combo_overlay_backend.currentData()
+            data["overlay_backend"] = backend_data if backend_data else "legacy"
         # Send signal
         self.signals.save_requested.emit(data)
 

@@ -26,7 +26,24 @@
       this.ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
-          this.onMessage(payload);
+          const rxMs = performance.now();
+          if (payload && payload.kind === "batch" && Array.isArray(payload.events)) {
+            payload.events.forEach((msg, idx) => {
+              if (msg && typeof msg === "object") {
+                msg.__perf_ws_rx_ms = rxMs;
+                msg.__from_batch = true;
+                msg.__batch_index = idx;
+                msg.__batch_size = payload.events.length;
+              }
+              this.onMessage(msg);
+            });
+          } else {
+            if (payload && typeof payload === "object") {
+              payload.__perf_ws_rx_ms = rxMs;
+              payload.__from_batch = false;
+            }
+            this.onMessage(payload);
+          }
         } catch (_) {
           // Ignore malformed payloads.
         }

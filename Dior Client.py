@@ -278,6 +278,7 @@ class DiorClientGUI:
         self.last_tracked_id = ""
         self.is_hud_editing = False
         self.overlay_win = None
+        self.tauri_overlay_proc = None
         self.discord_presence = None
 
         self.server_map = {
@@ -420,6 +421,8 @@ class DiorClientGUI:
         self.discord_presence = DiscordPresenceManager(log_func=self.add_log)
         if bool(self.config.get("discord_presence_active", False)):
             self.discord_presence.start()
+        # Apply selected overlay backend runtime on startup.
+        QTimer.singleShot(1200, self.apply_overlay_backend_runtime)
         self.qt_app.aboutToQuit.connect(self.shutdown_runtime_workers)
         atexit.register(self.shutdown_runtime_workers)
         if getattr(sys, "frozen", False):
@@ -452,6 +455,8 @@ class DiorClientGUI:
         self._streak_test_timer = None
         self._streak_backup = None
         self._event_test_token = 0
+        self._event_test_deadline_ms = 0
+        self._event_test_end_timer = None
         self.is_event_test = False
         self.is_stats_test = False
         self.is_feed_test = False
@@ -824,6 +829,17 @@ class DiorClientGUI:
     def update_main_config_from_settings(self, data):
         """Receives cleaned data from settings_qt."""
 
+        if "overlay_backend" in data:
+            requested_backend = str(data.get("overlay_backend", "legacy") or "legacy").strip().lower()
+            if requested_backend not in {"legacy", "tauri"}:
+                requested_backend = "legacy"
+            prev_backend = self.current_overlay_backend()
+            self.config["overlay_backend"] = requested_backend
+            self.config["tauri_overlay_autostart"] = (requested_backend == "tauri")
+            if requested_backend != prev_backend:
+                self.apply_overlay_backend_runtime()
+                self.add_log(f"SYS: Overlay backend switched to {requested_backend.upper()}.")
+
         # Save Audio Volume
         if "audio_volume" in data:
             vol = data["audio_volume"]
@@ -866,11 +882,134 @@ class DiorClientGUI:
             if desired != previous:
                 self.add_log(f"DISCORD: Rich Presence {'enabled' if desired else 'disabled'}.")
 
+        # Save overlay perf debug setting
+        if "overlay_perf_debug" in data:
+            perf_debug = bool(data["overlay_perf_debug"])
+            previous_perf_debug = bool(self.config.get("overlay_perf_debug", False))
+            self.config["overlay_perf_debug"] = perf_debug
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_perf_debug"):
+                    self.overlay_win.server.set_perf_debug(perf_debug)
+
+            if perf_debug != previous_perf_debug:
+                self.add_log(f"SYS: Overlay Perf Debug {'enabled' if perf_debug else 'disabled'}.")
+
+        # Save overlay flush FPS setting
+        if "overlay_flush_fps" in data:
+            try:
+                flush_fps = int(data["overlay_flush_fps"])
+            except Exception:
+                flush_fps = 120
+            flush_fps = max(15, min(240, flush_fps))
+            previous_fps = int(self.config.get("overlay_flush_fps", 120))
+            self.config["overlay_flush_fps"] = flush_fps
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_target_fps"):
+                    self.overlay_win.server.set_target_fps(flush_fps)
+
+            if flush_fps != previous_fps:
+                self.add_log(f"SYS: Overlay Flush FPS set to {flush_fps}.")
+
+        # Save dedupe window tuning (dev/advanced)
+        if "overlay_dedupe_window_ms" in data:
+            try:
+                dedupe_window_ms = int(data["overlay_dedupe_window_ms"])
+            except Exception:
+                dedupe_window_ms = 120
+            dedupe_window_ms = max(0, min(5000, dedupe_window_ms))
+            self.config["overlay_dedupe_window_ms"] = dedupe_window_ms
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_event_pipeline_tuning"):
+                    self.overlay_win.server.set_event_pipeline_tuning(
+                        dedupe_window_ms=dedupe_window_ms,
+                        max_transient_pending=int(self.config.get("overlay_transient_max_pending", 2048)),
+                    )
+
+        # Save transient queue cap tuning (dev/advanced)
+        if "overlay_transient_max_pending" in data:
+            try:
+                transient_cap = int(data["overlay_transient_max_pending"])
+            except Exception:
+                transient_cap = 2048
+            transient_cap = max(64, min(20000, transient_cap))
+            self.config["overlay_transient_max_pending"] = transient_cap
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_event_pipeline_tuning"):
+                    self.overlay_win.server.set_event_pipeline_tuning(
+                        dedupe_window_ms=int(self.config.get("overlay_dedupe_window_ms", 120)),
+                        max_transient_pending=transient_cap,
+                    )
+
+        # Save websocket batching mode (v2 envelope)
+        if "overlay_ws_batching_v2" in data:
+            ws_batching_v2 = bool(data["overlay_ws_batching_v2"])
+            prev_ws_batching_v2 = bool(self.config.get("overlay_ws_batching_v2", False))
+            self.config["overlay_ws_batching_v2"] = ws_batching_v2
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_ws_batching_v2"):
+                    self.overlay_win.server.set_ws_batching_v2(ws_batching_v2)
+
+            if ws_batching_v2 != prev_ws_batching_v2:
+                self.add_log(f"SYS: WS batching v2 {'enabled' if ws_batching_v2 else 'disabled'}.")
+
+        # Save trace export mode (JSONL event stream)
+        if "overlay_trace_export" in data:
+            overlay_trace_export = bool(data["overlay_trace_export"])
+            prev_overlay_trace_export = bool(self.config.get("overlay_trace_export", False))
+            self.config["overlay_trace_export"] = overlay_trace_export
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_trace_export"):
+                    self.overlay_win.server.set_trace_export(overlay_trace_export)
+
+            if overlay_trace_export != prev_overlay_trace_export:
+                self.add_log(f"SYS: Event trace export {'enabled' if overlay_trace_export else 'disabled'}.")
+
+        # Save event pipeline mode (v2 queueing path)
+        if "event_pipeline_v2" in data:
+            event_pipeline_v2 = bool(data["event_pipeline_v2"])
+            prev_event_pipeline_v2 = bool(self.config.get("event_pipeline_v2", True))
+            self.config["event_pipeline_v2"] = event_pipeline_v2
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_event_pipeline_v2"):
+                    self.overlay_win.server.set_event_pipeline_v2(event_pipeline_v2)
+
+            if event_pipeline_v2 != prev_event_pipeline_v2:
+                self.add_log(f"SYS: Event Pipeline v2 {'enabled' if event_pipeline_v2 else 'disabled'}.")
+
+        # Save JS scheduler mode (v2 frame scheduler path)
+        if "js_scheduler_v2" in data:
+            js_scheduler_v2 = bool(data["js_scheduler_v2"])
+            prev_js_scheduler_v2 = bool(self.config.get("js_scheduler_v2", True))
+            self.config["js_scheduler_v2"] = js_scheduler_v2
+
+            if self.overlay_win and hasattr(self.overlay_win, "server") and self.overlay_win.server:
+                if hasattr(self.overlay_win.server, "set_js_scheduler_v2"):
+                    self.overlay_win.server.set_js_scheduler_v2(js_scheduler_v2)
+
+            if js_scheduler_v2 != prev_js_scheduler_v2:
+                self.add_log(f"SYS: JS Scheduler v2 {'enabled' if js_scheduler_v2 else 'disabled'}.")
+
         # Save to disk
         self.save_config()
         self.add_log(
             f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')}, "
-            f"BG: {data.get('main_background_path', 'N/A')}, Discord RPC: {'ON' if bool(data.get('discord_presence_active', self.config.get('discord_presence_active', False))) else 'OFF'})"
+            f"BG: {data.get('main_background_path', 'N/A')}, Discord RPC: {'ON' if bool(data.get('discord_presence_active', self.config.get('discord_presence_active', False))) else 'OFF'}, "
+            f"Backend: {self.current_overlay_backend().upper()}, "
+            f"Perf Debug: {'ON' if bool(self.config.get('overlay_perf_debug', False)) else 'OFF'}, "
+            f"Flush FPS: {int(self.config.get('overlay_flush_fps', 120))}, "
+            f"Dedupe: {int(self.config.get('overlay_dedupe_window_ms', 120))}ms, "
+            f"Transient Cap: {int(self.config.get('overlay_transient_max_pending', 2048))}, "
+            f"WS Batch: {'ON' if bool(self.config.get('overlay_ws_batching_v2', False)) else 'OFF'}, "
+            f"Trace Export: {'ON' if bool(self.config.get('overlay_trace_export', False)) else 'OFF'}, "
+            f"Pipe v2: {'ON' if bool(self.config.get('event_pipeline_v2', True)) else 'OFF'}, "
+            f"JS v2: {'ON' if bool(self.config.get('js_scheduler_v2', True)) else 'OFF'})"
         )
 
     def clean_path(self, path_str):
@@ -3381,6 +3520,42 @@ class DiorClientGUI:
 
         return max(100, int(dur))
 
+    def _arm_event_test_window(self, duration_ms):
+        """Keeps event test mode alive long enough for queued test clicks to finish."""
+        now_ms = int(time.time() * 1000)
+        budget_ms = max(200, int(duration_ms) + 250)
+        current_deadline = int(getattr(self, "_event_test_deadline_ms", 0))
+
+        if current_deadline > now_ms:
+            # Extend existing window for additional queued click(s).
+            new_deadline = current_deadline + budget_ms
+        else:
+            new_deadline = now_ms + budget_ms
+
+        self._event_test_deadline_ms = new_deadline
+
+        if not getattr(self, "_event_test_end_timer", None):
+            self._event_test_end_timer = QTimer(self.main_hub)
+            self._event_test_end_timer.setSingleShot(True)
+            self._event_test_end_timer.timeout.connect(self._finalize_event_test_if_due)
+
+        delay_ms = max(50, new_deadline - now_ms)
+        self._event_test_end_timer.start(delay_ms)
+
+    def _finalize_event_test_if_due(self):
+        now_ms = int(time.time() * 1000)
+        deadline = int(getattr(self, "_event_test_deadline_ms", 0))
+        if deadline > now_ms:
+            # Deadline extended while timer was running; re-arm.
+            if self._event_test_end_timer:
+                self._event_test_end_timer.start(max(50, deadline - now_ms))
+            return
+
+        if self.is_event_test:
+            self._set_overlay_test_mode(None)
+            self.refresh_ingame_overlay()
+        self.add_log("SYS: Event test finished.")
+
     def test_event_visuals(self, event_type):
         """Runs an isolated event preview that is not cut off by gameplay checks."""
         if not self.overlay_win:
@@ -3395,21 +3570,12 @@ class DiorClientGUI:
         self._set_overlay_test_mode("event")
         duration_ms = self._get_event_duration_ms(etype)
         self._event_test_token += 1
-        token = self._event_test_token
 
         self.add_log(f"SYS: Testing event '{etype}' ({duration_ms}ms).")
-        self.trigger_overlay_event(etype)
+        # Force duplicate playback in tests so repeated clicks always enqueue.
+        self.trigger_overlay_event(etype, force_play_duplicate=True)
         self.refresh_ingame_overlay()
-
-        def end_event_test():
-            if token != self._event_test_token:
-                return
-            if self.is_event_test:
-                self._set_overlay_test_mode(None)
-                self.refresh_ingame_overlay()
-            self.add_log(f"SYS: Event test finished ({etype}).")
-
-        QTimer.singleShot(duration_ms + 200, end_event_test)
+        self._arm_event_test_window(duration_ms)
 
     def test_killfeed_visuals(self):
         """Starts a robust multi-entry preview for the killfeed."""
@@ -4231,6 +4397,16 @@ class DiorClientGUI:
             "ps2_path": "",
             "overlay_master_active": True,
             "scifi_overlay_active": False,
+            "overlay_perf_debug": False,
+            "overlay_flush_fps": 120,
+            "overlay_dedupe_window_ms": 120,
+            "overlay_transient_max_pending": 2048,
+            "overlay_ws_batching_v2": False,
+            "overlay_trace_export": False,
+            "event_pipeline_v2": True,
+            "js_scheduler_v2": True,
+            "overlay_backend": "legacy",
+            "tauri_overlay_autostart": False,
             "crosshair": {"file": "crosshair.png", "size": 32, "active": True, "shadow": False},
             "events": {},
             "streak": {"img": "KS_Counter.png", "active": True},
@@ -4302,6 +4478,13 @@ class DiorClientGUI:
                     load_source = "RESET"
         # 6. MERGING (Deep Mix defaults with loaded)
         deep_merge(default_conf, loaded_conf)
+
+        # 6b. Backward compatibility for early Tauri toggle key.
+        if "overlay_backend" not in loaded_conf:
+            if bool(default_conf.get("tauri_overlay_autostart", False)):
+                default_conf["overlay_backend"] = "tauri"
+            else:
+                default_conf["overlay_backend"] = "legacy"
 
         # 7. Run config schema migrations.
         schema_changed, schema_from, schema_to = self._apply_config_schema_migrations(default_conf)
@@ -5701,7 +5884,7 @@ log "DONE"
             self.add_log("Overlay: activated.")
 
 
-    def trigger_overlay_event(self, event_type):
+    def trigger_overlay_event(self, event_type, force_play_duplicate=False):
         """
         Triggers image/sound in the overlay.
         Now called finished and ready by CensusWorker (including milestones).
@@ -5792,6 +5975,8 @@ log "DONE"
         # 5. TRIGGER
         is_hitmarker = (event_type.lower() in ["hitmarker", "headshot hitmarker"])
         play_duplicate = event_data.get("play_duplicate", True)
+        if force_play_duplicate:
+            play_duplicate = True
 
         if img_path or sound_path:
             self.overlay_win.signals.show_image.emit(
@@ -6148,7 +6333,10 @@ log "DONE"
         if should_render and not IS_WINDOWS and self.overlay_win:
             self.overlay_win.raise_()
         if self.overlay_win and hasattr(self.overlay_win, "set_web_overlay_visibility"):
-            self.overlay_win.set_web_overlay_visibility(should_render)
+            if self.current_overlay_backend() == "tauri":
+                self.overlay_win.set_web_overlay_visibility(False)
+            else:
+                self.overlay_win.set_web_overlay_visibility(should_render)
 
         # ELEMENT CONTROL
         # ---------------------------------------------------------
@@ -6911,10 +7099,127 @@ log "DONE"
         if manager is not None:
             manager.clear_presence()
 
+    def _tauri_spike_root(self):
+        return os.path.join(self.BASE_DIR, "overlay-next", "tauri-spike")
+
+    def _tauri_spike_src_tauri_dir(self):
+        return os.path.join(self._tauri_spike_root(), "src-tauri")
+
+    def _tauri_spike_binary_candidates(self):
+        exe_name = "tauri-spike-overlay.exe" if IS_WINDOWS else "tauri-spike-overlay"
+        src_tauri = self._tauri_spike_src_tauri_dir()
+        candidates = [
+            os.path.join(src_tauri, "target", "release", exe_name),
+            os.path.join(src_tauri, "target", "debug", exe_name),
+        ]
+        return [p for p in candidates if os.path.exists(p)]
+
+    def current_overlay_backend(self):
+        backend = str(self.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
+        if backend not in {"legacy", "tauri"}:
+            backend = "legacy"
+        return backend
+
+    def apply_overlay_backend_runtime(self):
+        backend = self.current_overlay_backend()
+        use_tauri = backend == "tauri"
+        self.config["tauri_overlay_autostart"] = bool(use_tauri)
+
+        try:
+            if self.overlay_win:
+                self.overlay_win.start_server()
+                if hasattr(self.overlay_win, "set_web_overlay_visibility"):
+                    self.overlay_win.set_web_overlay_visibility(not use_tauri)
+                if use_tauri:
+                    self.overlay_win.hide()
+                else:
+                    self.overlay_win.showFullScreen()
+                    self.overlay_win.raise_()
+        except Exception as e:
+            self.add_log(f"WARN: Overlay backend apply warning: {e}")
+
+        if use_tauri:
+            self.start_tauri_overlay_if_enabled(force=True)
+        else:
+            self.stop_tauri_overlay_process()
+
+    def start_tauri_overlay_if_enabled(self, force=False):
+        if (not force) and (not bool(self.config.get("tauri_overlay_autostart", False))):
+            return
+
+        proc = getattr(self, "tauri_overlay_proc", None)
+        if proc is not None and proc.poll() is None:
+            return
+        self.tauri_overlay_proc = None
+
+        binary_candidates = self._tauri_spike_binary_candidates()
+        cmd = None
+        cwd = None
+
+        if binary_candidates:
+            cmd = [binary_candidates[0]]
+            cwd = os.path.dirname(binary_candidates[0])
+        elif not getattr(sys, "frozen", False):
+            src_tauri = self._tauri_spike_src_tauri_dir()
+            if not os.path.isdir(src_tauri):
+                self.add_log(f"WARN: Tauri spike folder not found: {src_tauri}")
+                return
+            cmd = ["cargo", "tauri", "dev", "--", "--no-watch"]
+            cwd = src_tauri
+        else:
+            self.add_log("WARN: Tauri overlay binary not found in packaged mode.")
+            return
+
+        try:
+            creation_flags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+            proc = subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creation_flags,
+            )
+            self.tauri_overlay_proc = proc
+            mode = "binary" if binary_candidates else "cargo-dev"
+            self.add_log(f"SYS: Tauri overlay started ({mode}).")
+        except FileNotFoundError:
+            self.add_log("ERR: Could not start Tauri overlay (missing cargo/runtime).")
+        except Exception as e:
+            self.add_log(f"ERR: Tauri overlay start failed: {e}")
+
+    def stop_tauri_overlay_process(self):
+        proc = getattr(self, "tauri_overlay_proc", None)
+        if not proc:
+            return
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=4)
+                except Exception:
+                    if IS_WINDOWS:
+                        try:
+                            subprocess.run(
+                                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                                check=False,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+        finally:
+            self.tauri_overlay_proc = None
+
     def shutdown_runtime_workers(self):
         manager = getattr(self, "discord_presence", None)
         if manager is not None:
             manager.close()
+        self.stop_tauri_overlay_process()
 
     def check_mouse_leave(self):
         x, y = self.root.winfo_pointerxy()

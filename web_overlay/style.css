@@ -331,6 +331,29 @@ body.overlay-hidden #hud-root {
   letter-spacing: 0.06em;
 }
 
+#perf-hud {
+  position: fixed;
+  left: 22px;
+  bottom: 20px;
+  z-index: 100;
+  min-width: 260px;
+  max-width: 520px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 242, 255, 0.35);
+  background: rgba(1, 12, 18, 0.72);
+  color: rgba(214, 248, 255, 0.92);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 5px rgba(0, 242, 255, 0.46);
+  white-space: pre-wrap;
+  display: none;
+}
+
+body.perf-debug #perf-hud {
+  display: block;
+}
+
 #streak-layer {
   z-index: 3;
 }

@@ -12,8 +12,16 @@ dist/
 build/
 AppDir/
 
-# Overlay test in Rust
-overlay-next/
+# Tauri/Rust overlay project (keep source, ignore build outputs)
+overlay-next/tauri-spike/src-tauri/target/
+overlay-next/tauri-spike/src-tauri/target-*/
+overlay-next/tauri-spike/src-tauri/.cargo/
+overlay-next/tauri-spike/src-tauri/*.pdb
+overlay-next/tauri-spike/src-tauri/*.ilk
+overlay-next/tauri-spike/src-tauri/*.exp
+overlay-next/tauri-spike/src-tauri/*.lib
+overlay-next/tauri-spike/src-tauri/*.dll
+overlay-next/tauri-spike/src-tauri/*.exe
 
 # Lokale Daten & Datenbanken (Deine Liste)
 .env
