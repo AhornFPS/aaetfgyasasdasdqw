@@ -10,6 +10,7 @@ const assetUrlCache = new Map();
 const assetImageCache = new Map(); // filename -> HTMLImageElement
 const preloadInFlight = new Set();
 const observedAssets = new Set();
+const observedAssetOrder = [];
 let assetCacheHits = 0;
 let assetCacheMisses = 0;
 let overlayMode = false;
@@ -21,7 +22,6 @@ const wsState = document.getElementById("ws-state");
 const eventCountEl = document.getElementById("event-count");
 const lastCategoryEl = document.getElementById("last-category");
 const logEl = document.getElementById("log");
-const exitOverlayModeBtn = document.getElementById("exit-overlay-mode");
 const toggleOverlayModeBtn = document.getElementById("toggle-overlay-mode");
 const toggleLegacyOverlayBtn = document.getElementById("toggle-legacy-overlay");
 const toggleBtn = document.getElementById("toggle-click");
@@ -49,13 +49,7 @@ const lastSnapshotPathEl = document.getElementById("last-snapshot-path");
 const assetCacheStatsEl = document.getElementById("asset-cache-stats");
 const nativeOverlayEl = document.getElementById("native-overlay");
 
-const STATIC_HOT_ASSETS = [
-  "crosshair.png",
-  "KS_Counter.png",
-  "hitmarker.png",
-  "headshot.png",
-  "death.png",
-];
+const MAX_ASSET_CACHE = 50;
 
 let overlayVisible = false;
 let scifiEnabled = true;
@@ -331,6 +325,7 @@ async function preloadAsset(filename) {
   const name = basenameOf(filename);
   if (!name) return false;
   if (assetImageCache.has(name)) return true;
+  if (assetImageCache.size >= MAX_ASSET_CACHE) return false;
   if (preloadInFlight.has(name)) return false;
   preloadInFlight.add(name);
   try {
@@ -355,9 +350,7 @@ async function preloadAsset(filename) {
 }
 
 async function preloadHotAssets() {
-  const candidates = new Set(STATIC_HOT_ASSETS);
-  for (const name of observedAssets) candidates.add(name);
-  const list = Array.from(candidates);
+  const list = observedAssetOrder.slice(0, MAX_ASSET_CACHE);
   let loaded = 0;
   for (const name of list) {
     // eslint-disable-next-line no-await-in-loop
@@ -906,7 +899,10 @@ function renderEventCard(evt, stageEl) {
   }
 
   const assetName = pickAssetFilename(data);
-  if (assetName) observedAssets.add(assetName);
+  if (assetName && !observedAssets.has(assetName)) {
+    observedAssets.add(assetName);
+    observedAssetOrder.push(assetName);
+  }
   if (assetName) {
     const cached = assetImageCache.get(assetName);
     if (cached) {
@@ -1081,25 +1077,33 @@ async function saveLatencySnapshot() {
   }
 }
 
-toggleBtn.addEventListener("click", async () => {
-  await setClickthrough(!clickThrough);
-});
-toggleOverlayModeBtn.addEventListener("click", async () => {
-  await setOverlayMode(!overlayMode);
-});
-toggleLegacyOverlayBtn.addEventListener("click", async () => {
-  await setLegacyOverlaySuppressed(!suppressLegacyOverlay);
-});
-exitOverlayModeBtn.addEventListener("click", async () => {
-  await setOverlayMode(false);
-});
-saveSnapshotBtn.addEventListener("click", async () => {
-  await saveLatencySnapshot();
-});
-preloadAssetsBtn.addEventListener("click", async () => {
-  await preloadHotAssets();
-});
-copySnapshotPathBtn.addEventListener("click", async () => {
+if (toggleBtn) {
+  toggleBtn.addEventListener("click", async () => {
+    await setClickthrough(!clickThrough);
+  });
+}
+if (toggleOverlayModeBtn) {
+  toggleOverlayModeBtn.addEventListener("click", async () => {
+    await setOverlayMode(!overlayMode);
+  });
+}
+if (toggleLegacyOverlayBtn) {
+  toggleLegacyOverlayBtn.addEventListener("click", async () => {
+    await setLegacyOverlaySuppressed(!suppressLegacyOverlay);
+  });
+}
+if (saveSnapshotBtn) {
+  saveSnapshotBtn.addEventListener("click", async () => {
+    await saveLatencySnapshot();
+  });
+}
+if (preloadAssetsBtn) {
+  preloadAssetsBtn.addEventListener("click", async () => {
+    await preloadHotAssets();
+  });
+}
+if (copySnapshotPathBtn) {
+  copySnapshotPathBtn.addEventListener("click", async () => {
   if (!lastSnapshotPath) {
     appendLog("[snapshot] no saved path yet", "bad");
     return;
@@ -1110,9 +1114,11 @@ copySnapshotPathBtn.addEventListener("click", async () => {
   } catch (err) {
     appendLog(`[snapshot] copy failed: ${String(err)}`, "bad");
   }
-});
+  });
+}
 
-clearBtn.addEventListener("click", () => {
+if (clearBtn) {
+  clearBtn.addEventListener("click", () => {
   logEl.innerHTML = "";
   if (eventStageEl) eventStageEl.innerHTML = "";
   if (feedLayerEl) feedLayerEl.innerHTML = "";
@@ -1137,8 +1143,10 @@ clearBtn.addEventListener("click", () => {
   assetCacheMisses = 0;
   assetImageCache.clear();
   observedAssets.clear();
+  observedAssetOrder.length = 0;
   updateAssetCacheStatsUi();
-});
+  });
+}
 
 setClickthrough(false);
 applyOverlayVisibility(false);
