@@ -47,6 +47,7 @@ const telemetryLeftEl = document.getElementById("telemetry-left");
 const telemetryRightEl = document.getElementById("telemetry-right");
 const lastSnapshotPathEl = document.getElementById("last-snapshot-path");
 const assetCacheStatsEl = document.getElementById("asset-cache-stats");
+const nativeOverlayEl = document.getElementById("native-overlay");
 
 const STATIC_HOT_ASSETS = [
   "crosshair.png",
@@ -56,7 +57,7 @@ const STATIC_HOT_ASSETS = [
   "death.png",
 ];
 
-let overlayVisible = true;
+let overlayVisible = false;
 let scifiEnabled = true;
 let suppressLegacyOverlay = false;
 let wsConnectedAtMs = 0;
@@ -115,6 +116,25 @@ function inStartupQuietPeriod() {
 function setTelemetry(text) {
   if (!scifiEnabled || !telemetryLeftEl || !text) return;
   telemetryLeftEl.textContent = text;
+}
+
+function applyOverlayVisibility(visible) {
+  overlayVisible = Boolean(visible);
+  if (!overlayVisible) {
+    clearEventsLayer();
+    if (feedLayerEl) feedLayerEl.innerHTML = "";
+    if (streakLayerEl) streakLayerEl.innerHTML = "";
+    if (burstLayerEl) burstLayerEl.innerHTML = "";
+    if (impactWaveEl) impactWaveEl.classList.remove("active");
+    if (headshotFlashEl) headshotFlashEl.classList.remove("active");
+  }
+  if (feedLayerEl) feedLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (statsLayerEl) statsLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (streakLayerEl) streakLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (eventsLayerEl) eventsLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (crosshairLayerEl) crosshairLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (nativeOverlayEl) nativeOverlayEl.style.visibility = overlayVisible ? "visible" : "hidden";
 }
 
 function activateSystem(name, warn = false) {
@@ -404,9 +424,12 @@ function appendFeed(data) {
   applyFeedConfig(data);
   const item = document.createElement("div");
   item.className = "overlay-feed-item";
-  item.innerHTML = data.html || "";
+  const content = document.createElement("div");
+  content.className = "overlay-feed-content";
+  content.innerHTML = data.html || "";
+  item.appendChild(content);
 
-  const imgs = item.querySelectorAll("img");
+  const imgs = content.querySelectorAll("img");
   imgs.forEach((img) => {
     const src = img.getAttribute("src") || "";
     img.src = assetUrl(src);
@@ -591,11 +614,13 @@ function pushTransientEvent(layerEl, data, fallbackType) {
     }
     if (!evType.includes("hitmarker")) {
       target.classList.toggle("no-glow", !glowEnabled);
+      applyEventGlow(target, evType, glowEnabled, glowColor, glitchEnabled);
     }
   } else {
     target.classList.add("event-item", evClass);
     if (!evType.includes("hitmarker")) {
       target.classList.toggle("no-glow", !glowEnabled);
+      applyEventGlow(target, evType, glowEnabled, glowColor, glitchEnabled);
     }
     layerEl.appendChild(target);
     if (glitchEnabled) pulseEventGlitch(layerEl, target, data, warn, glowColor);
@@ -627,7 +652,7 @@ function pushTransientEvent(layerEl, data, fallbackType) {
   if (shouldTriggerImpact(data, evType)) {
     const cx = Number(data.x || 0) + Number(data.width || 220) / 2;
     const cy = Number(data.y || 0) + Number(data.height || 220) / 2;
-    triggerImpact(evType, cx, cy, { glowEnabled, glowColor });
+    triggerImpact(evType, cx, cy, { glowEnabled, glowColor, glitchEnabled });
     if (glitchEnabled) spawnGlitch(cx, cy, warn, glowColor);
   } else if (evType.includes("hitmarker")) {
     const cx = Number(data.x || 0) + Number(data.width || 220) / 2;
@@ -635,6 +660,27 @@ function pushTransientEvent(layerEl, data, fallbackType) {
     spawnBurst(cx, cy, warn);
   }
   activateSystem(evType.includes("hitmarker") ? "event" : "event", warn);
+}
+
+function applyEventGlow(target, evType, glowEnabled, glowColor, glitchEnabled) {
+  if (!target) return;
+  const kind = String(evType || "").toLowerCase();
+  if (kind.includes("hitmarker")) return;
+  if (!glowEnabled) {
+    target.style.filter = "";
+    return;
+  }
+  // Keep glitch filter behavior untouched when glitch impact is active.
+  if (glitchEnabled) {
+    target.style.filter = "";
+    return;
+  }
+  const useColor = glowColor || (
+    kind.includes("headshot") || kind.includes("death")
+      ? "rgba(255, 70, 70, 0.78)"
+      : "rgba(0, 242, 255, 0.62)"
+  );
+  target.style.filter = `drop-shadow(0 0 8px ${useColor})`;
 }
 
 function shouldTriggerImpact(data, evType) {
@@ -684,6 +730,7 @@ function triggerImpact(evType, x, y, options = null) {
   const ty = Number.isFinite(Number(y)) ? Number(y) : window.innerHeight / 2;
   const glowEnabled = !options || options.glowEnabled !== false;
   const glowColor = options && typeof options.glowColor === "string" ? options.glowColor : "";
+  const glitchEnabled = !!(options && options.glitchEnabled);
   if (kind.includes("hitmarker")) {
     if (impactWaveEl) {
       impactWaveEl.classList.remove("active");
@@ -693,7 +740,7 @@ function triggerImpact(evType, x, y, options = null) {
     return;
   }
   if (kind.includes("headshot")) {
-    if (headshotFlashEl) {
+    if (!glitchEnabled && headshotFlashEl) {
       headshotFlashEl.classList.remove("active");
       void headshotFlashEl.offsetWidth;
       headshotFlashEl.classList.add("active");
@@ -701,18 +748,22 @@ function triggerImpact(evType, x, y, options = null) {
     return;
   }
   if (impactWaveEl) {
-    if (glowEnabled && glowColor) {
-      const c0 = rgbaFromHex(glowColor, 0.28);
-      const c1 = rgbaFromHex(glowColor, 0.0);
-      if (c0 && c1) {
-        impactWaveEl.style.background = `radial-gradient(circle at center, ${c0}, ${c1} 52%)`;
+    if (!glitchEnabled) {
+      if (glowEnabled && glowColor) {
+        const c0 = rgbaFromHex(glowColor, 0.28);
+        const c1 = rgbaFromHex(glowColor, 0.0);
+        if (c0 && c1) {
+          impactWaveEl.style.background = `radial-gradient(circle at center, ${c0}, ${c1} 52%)`;
+        }
+      } else {
+        impactWaveEl.style.background = "";
       }
+      impactWaveEl.classList.remove("active");
+      void impactWaveEl.offsetWidth;
+      impactWaveEl.classList.add("active");
     } else {
-      impactWaveEl.style.background = "";
+      impactWaveEl.classList.remove("active");
     }
-    impactWaveEl.classList.remove("active");
-    void impactWaveEl.offsetWidth;
-    impactWaveEl.classList.add("active");
   }
   // No red screen flash for normal events.
   spawnGlitch(tx, ty, kind === "death", glowEnabled ? glowColor : "");
@@ -744,24 +795,13 @@ function dispatchNativeEvent(evt) {
   else if (category === "events_clear") clearEventsLayer();
   else if (category === "scifi_mode") setSciFiMode(data);
   else if (category === "overlay_visibility") {
-    if (suppressLegacyOverlay) {
+    const target = String((data && data.target) || "").toLowerCase();
+    // When legacy overlay is suppressed, ignore generic legacy visibility
+    // broadcasts but still honor explicit tauri-targeted visibility.
+    if (suppressLegacyOverlay && target !== "tauri") {
       return;
     }
-    overlayVisible = !(data && data.visible === false);
-    if (!overlayVisible) {
-      clearEventsLayer();
-      if (feedLayerEl) feedLayerEl.innerHTML = "";
-      if (streakLayerEl) streakLayerEl.innerHTML = "";
-      if (burstLayerEl) burstLayerEl.innerHTML = "";
-      if (impactWaveEl) impactWaveEl.classList.remove("active");
-      if (headshotFlashEl) headshotFlashEl.classList.remove("active");
-    }
-    if (feedLayerEl) feedLayerEl.style.display = overlayVisible ? "block" : "none";
-    if (statsLayerEl) statsLayerEl.style.display = overlayVisible ? "block" : "none";
-    if (streakLayerEl) streakLayerEl.style.display = overlayVisible ? "block" : "none";
-    if (eventsLayerEl) eventsLayerEl.style.display = overlayVisible ? "block" : "none";
-    if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = overlayVisible ? "block" : "none";
-    if (crosshairLayerEl) crosshairLayerEl.style.display = overlayVisible ? "block" : "none";
+    applyOverlayVisibility(!(data && data.visible === false));
   }
 }
 
@@ -801,15 +841,6 @@ async function setLegacyOverlaySuppressed(enabled) {
       suppressLegacyOverlay = enabled;
       updateLegacyToggleLabel();
       appendLog(`[overlay] legacy mode ${enabled ? "OFF" : "ON"} via ${base}`, "ok");
-      if (enabled) {
-        overlayVisible = true;
-        if (feedLayerEl) feedLayerEl.style.display = "block";
-        if (statsLayerEl) statsLayerEl.style.display = "block";
-        if (streakLayerEl) streakLayerEl.style.display = "block";
-        if (eventsLayerEl) eventsLayerEl.style.display = "block";
-        if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = "block";
-        if (crosshairLayerEl) crosshairLayerEl.style.display = "block";
-      }
       ok = true;
       break;
     } catch {
@@ -906,7 +937,6 @@ function wsCandidates() {
   const urls = [];
   for (const p of ports) {
     urls.push(`ws://127.0.0.1:${p}/better_planetside`);
-    urls.push(`ws://127.0.0.1:${p}/events`);
   }
   return urls;
 }
@@ -1111,6 +1141,7 @@ clearBtn.addEventListener("click", () => {
 });
 
 setClickthrough(false);
+applyOverlayVisibility(false);
 connectWs();
 updateAssetCacheStatsUi();
 updateLegacyToggleLabel();

@@ -275,7 +275,9 @@ class QtOverlay(QWidget):
         self._last_crosshair_payload = None
         self._feed_web_has_items = False
         self._events_web_cleared = False
-        self._web_overlay_visible = True
+        # Start as hidden from web-overlay perspective so first "show" state
+        # is always broadcast explicitly to the browser client.
+        self._web_overlay_visible = False
 
         # --- CACHE DICTIONARY (NEW) ---
         # Here we store all loaded images
@@ -2353,6 +2355,10 @@ class QtOverlay(QWidget):
         if self.server and self.server.is_running:
             same_ports = (self.server.http_port == h_port and self.server.ws_port == w_port)
             if same_ports:
+                use_tauri_backend = False
+                if self.gui_ref and hasattr(self.gui_ref, "config"):
+                    backend = str(self.gui_ref.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
+                    use_tauri_backend = backend == "tauri"
                 if self.gui_ref and hasattr(self.gui_ref, "config"):
                     self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
                     self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
@@ -2364,16 +2370,21 @@ class QtOverlay(QWidget):
                         dedupe_window_ms=int(self.gui_ref.config.get("overlay_dedupe_window_ms", 120)),
                         max_transient_pending=int(self.gui_ref.config.get("overlay_transient_max_pending", 2048)),
                     )
-                self.load_web_overlay(h_port)
+                if not use_tauri_backend:
+                    self.load_web_overlay(h_port)
                 if self.gui_ref:
                     self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
-                self.set_web_overlay_visibility(True)
+                self.set_web_overlay_visibility(not use_tauri_backend)
                 return
             self.stop_server()
 
         try:
             self.server = OverlayServer(http_port=h_port, ws_port=w_port)
             self._last_crosshair_payload = None
+            use_tauri_backend = False
+            if self.gui_ref and hasattr(self.gui_ref, "config"):
+                backend = str(self.gui_ref.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
+                use_tauri_backend = backend == "tauri"
             if self.gui_ref and hasattr(self.gui_ref, "config"):
                 self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
                 self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
@@ -2387,10 +2398,11 @@ class QtOverlay(QWidget):
                 )
             actual_h_port, actual_w_port = self.server.start()
             print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
-            self.load_web_overlay(actual_h_port)
+            if not use_tauri_backend:
+                self.load_web_overlay(actual_h_port)
             if self.gui_ref:
                 self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
-            self.set_web_overlay_visibility(True)
+            self.set_web_overlay_visibility(not use_tauri_backend)
         except Exception as e:
             print(f"OBS SERVICE ERROR: Could not start server: {e}")
 

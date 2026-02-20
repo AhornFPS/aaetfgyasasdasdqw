@@ -1042,11 +1042,15 @@ class DiorClientGUI:
 
         if master_active:
             self.add_log("MONITOR: Master Switch is ON -> Starting Overlay.")
+            use_tauri_backend = self.current_overlay_backend() == "tauri"
 
             if self.overlay_win:
-                # Show window
-                self.overlay_win.showFullScreen()
-                self.overlay_win.raise_()
+                # Only show the legacy Qt/Web overlay window in legacy mode.
+                if not use_tauri_backend:
+                    self.overlay_win.showFullScreen()
+                    self.overlay_win.raise_()
+                else:
+                    self.overlay_win.hide()
 
                 # Crosshair
                 self.update_crosshair_from_qt()
@@ -1422,6 +1426,7 @@ class DiorClientGUI:
         """Force overlay rendering without the game running."""
         ui = self.ovl_config_win
         self.debug_overlay_active = checked
+        use_tauri_backend = self.current_overlay_backend() == "tauri"
 
         if checked:
             ui.btn_debug_overlay.setText("DEBUG OVERLAY: ON")
@@ -1431,8 +1436,11 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #006600; }"
             )
             if self.overlay_win:
-                self.overlay_win.showFullScreen()
-                self.overlay_win.raise_()
+                if not use_tauri_backend:
+                    self.overlay_win.showFullScreen()
+                    self.overlay_win.raise_()
+                else:
+                    self.overlay_win.hide()
                 # Force first-frame stats render in debug mode.
                 # Without this, normal throttle can skip the initial push.
                 self.stats_last_refresh_time = 0
@@ -3570,11 +3578,18 @@ class DiorClientGUI:
         self._set_overlay_test_mode("event")
         duration_ms = self._get_event_duration_ms(etype)
         self._event_test_token += 1
+        token = self._event_test_token
 
         self.add_log(f"SYS: Testing event '{etype}' ({duration_ms}ms).")
-        # Force duplicate playback in tests so repeated clicks always enqueue.
-        self.trigger_overlay_event(etype, force_play_duplicate=True)
+        # First push visibility state, then trigger the event to avoid race
+        # where the effect is emitted before the overlay has switched to test-visible.
         self.refresh_ingame_overlay()
+        def _fire_test_event():
+            if token != getattr(self, "_event_test_token", 0):
+                return
+            # Force duplicate playback in tests so repeated clicks always enqueue.
+            self.trigger_overlay_event(etype, force_play_duplicate=True)
+        QTimer.singleShot(60, _fire_test_event)
         self._arm_event_test_window(duration_ms)
 
     def test_killfeed_visuals(self):
@@ -5979,6 +5994,17 @@ log "DONE"
             play_duplicate = True
 
         if img_path or sound_path:
+            # Tauri test events can race with visibility updates when debug mode is off.
+            # Push explicit tauri visibility before emitting the test effect.
+            if getattr(self, "is_event_test", False) and self.current_overlay_backend() == "tauri":
+                try:
+                    if hasattr(self.overlay_win, "_broadcast_overlay"):
+                        self.overlay_win._broadcast_overlay(
+                            "overlay_visibility",
+                            {"visible": True, "target": "tauri"},
+                        )
+                except Exception:
+                    pass
             self.overlay_win.signals.show_image.emit(
                 img_path, sound_path, dur, abs_x, abs_y, scale, volume, is_hitmarker, play_duplicate, event_type
             )
@@ -6335,7 +6361,19 @@ log "DONE"
         if self.overlay_win and hasattr(self.overlay_win, "set_web_overlay_visibility"):
             if self.current_overlay_backend() == "tauri":
                 self.overlay_win.set_web_overlay_visibility(False)
+                # Tauri runtime visibility is separate from legacy web visibility.
+                # Re-broadcast continuously so newly connected Tauri WS clients
+                # always receive current visibility state after startup handoff.
+                try:
+                    if hasattr(self.overlay_win, "_broadcast_overlay"):
+                        self.overlay_win._broadcast_overlay(
+                            "overlay_visibility",
+                            {"visible": bool(should_render), "target": "tauri"},
+                        )
+                except Exception:
+                    pass
             else:
+                self._tauri_overlay_last_visible = None
                 self.overlay_win.set_web_overlay_visibility(should_render)
 
         # ELEMENT CONTROL
@@ -7124,10 +7162,21 @@ log "DONE"
         backend = self.current_overlay_backend()
         use_tauri = backend == "tauri"
         self.config["tauri_overlay_autostart"] = bool(use_tauri)
+        # Force visibility state re-broadcast after backend transitions.
+        self._tauri_overlay_last_visible = None
 
         try:
             if self.overlay_win:
                 self.overlay_win.start_server()
+                if getattr(self.overlay_win, "server", None):
+                    # Keep legacy web overlay suppressed while Tauri is active,
+                    # and always restore to auto when returning to legacy.
+                    try:
+                        self.overlay_win.server.set_dev_overlay_visibility_mode(
+                            "hide" if use_tauri else "auto"
+                        )
+                    except Exception:
+                        pass
                 if hasattr(self.overlay_win, "set_web_overlay_visibility"):
                     self.overlay_win.set_web_overlay_visibility(not use_tauri)
                 if use_tauri:
@@ -7152,19 +7201,25 @@ log "DONE"
             return
         self.tauri_overlay_proc = None
 
-        binary_candidates = self._tauri_spike_binary_candidates()
+        # In development we always launch via cargo so we don't accidentally run
+        # a stale prebuilt target binary. In packaged mode we use bundled binaries.
+        use_packaged_binary = bool(getattr(sys, "frozen", False))
+        binary_candidates = self._tauri_spike_binary_candidates() if use_packaged_binary else []
         cmd = None
         cwd = None
+        log_handle = None
 
         if binary_candidates:
             cmd = [binary_candidates[0]]
             cwd = os.path.dirname(binary_candidates[0])
-        elif not getattr(sys, "frozen", False):
+        elif not use_packaged_binary:
             src_tauri = self._tauri_spike_src_tauri_dir()
             if not os.path.isdir(src_tauri):
                 self.add_log(f"WARN: Tauri spike folder not found: {src_tauri}")
                 return
-            cmd = ["cargo", "tauri", "dev", "--", "--no-watch"]
+            # Launch directly via cargo run (same core command used under tauri dev)
+            # to avoid dev-watcher lock contention and CLI forwarding quirks.
+            cmd = ["cargo", "run", "--no-default-features", "--"]
             cwd = src_tauri
         else:
             self.add_log("WARN: Tauri overlay binary not found in packaged mode.")
@@ -7172,19 +7227,42 @@ log "DONE"
 
         try:
             creation_flags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+            if not binary_candidates:
+                log_path = os.path.join(self.BASE_DIR, "tauri_overlay_dev.log")
+                log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
+                log_handle.write(
+                    f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] starting: {' '.join(cmd)}\n"
+                )
             proc = subprocess.Popen(
                 cmd,
                 cwd=cwd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=(log_handle if log_handle else subprocess.DEVNULL),
+                stderr=(log_handle if log_handle else subprocess.DEVNULL),
                 creationflags=creation_flags,
             )
             self.tauri_overlay_proc = proc
-            mode = "binary" if binary_candidates else "cargo-dev"
+            self.tauri_overlay_log_handle = log_handle
+            # New Tauri process starts with hidden UI; force first visibility
+            # event to be sent on next refresh tick.
+            self._tauri_overlay_last_visible = None
+            mode = "binary" if binary_candidates else "cargo-run"
             self.add_log(f"SYS: Tauri overlay started ({mode}).")
+            if not binary_candidates:
+                self.add_log(f"SYS: Tauri dev log: {os.path.join(self.BASE_DIR, 'tauri_overlay_dev.log')}")
+                QTimer.singleShot(2500, self._check_tauri_overlay_start_health)
         except FileNotFoundError:
+            if log_handle:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
             self.add_log("ERR: Could not start Tauri overlay (missing cargo/runtime).")
         except Exception as e:
+            if log_handle:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
             self.add_log(f"ERR: Tauri overlay start failed: {e}")
 
     def stop_tauri_overlay_process(self):
@@ -7214,6 +7292,24 @@ log "DONE"
                             pass
         finally:
             self.tauri_overlay_proc = None
+            h = getattr(self, "tauri_overlay_log_handle", None)
+            if h:
+                try:
+                    h.flush()
+                    h.close()
+                except Exception:
+                    pass
+            self.tauri_overlay_log_handle = None
+
+    def _check_tauri_overlay_start_health(self):
+        proc = getattr(self, "tauri_overlay_proc", None)
+        if not proc:
+            return
+        rc = proc.poll()
+        if rc is None:
+            return
+        self.add_log(f"ERR: Tauri overlay process exited early (code {rc}).")
+        self.add_log(f"ERR: See log file: {os.path.join(self.BASE_DIR, 'tauri_overlay_dev.log')}")
 
     def shutdown_runtime_workers(self):
         manager = getattr(self, "discord_presence", None)

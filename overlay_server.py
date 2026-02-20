@@ -516,11 +516,19 @@ class OverlayServer:
 
         # Dev override for legacy overlay visibility while keeping pipeline active.
         if str(category or "").strip().lower() == "overlay_visibility":
+            target = str(payload_data.get("target", "") or "").strip().lower()
+            # Dev legacy visibility override must not affect Tauri-targeted
+            # visibility events, otherwise Tauri can be forced hidden forever.
+            if target == "tauri":
+                target = "tauri"
+            else:
+                target = "legacy"
             mode = str(self._dev_overlay_visibility_mode or "auto")
-            if mode == "hide":
-                payload_data["visible"] = False
-            elif mode == "show":
-                payload_data["visible"] = True
+            if target == "legacy":
+                if mode == "hide":
+                    payload_data["visible"] = False
+                elif mode == "show":
+                    payload_data["visible"] = True
 
         payload_data.setdefault("ts_source_ms", now_ms)
         payload_data["ts_server_rx_ms"] = now_ms
