@@ -7924,20 +7924,21 @@ log "DONE"
                 }
 
                 # --- STEP 3: SECOND API QUERY (WEAPONS) ---
-                # We get ONLY weapon stats, but up to 5000 entries
-                # This bypasses the default resolve limit
+                # 1. Fetch Faction Stats (Kills, Vehicle Kills)
                 url_wep = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/characters_weapon_stat_by_faction?character_id={char_id}&c:limit=5000"
                 r_wep = requests.get(url_wep, timeout=30).json()
-                
                 w_stats_list = r_wep.get('characters_weapon_stat_by_faction_list', [])
+
+                # 2. Fetch Global Stats (Time, Shots, Hits, Headshots)
+                url_global = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/characters_weapon_stat?character_id={char_id}&c:limit=5000"
+                r_global_w = requests.get(url_global, timeout=30).json()
+                w_global_list = r_global_w.get('characters_weapon_stat_list', [])
 
                 weapon_list = []
                 temp_w = {}
 
-                for entry in w_stats_list:
-                    i_id = entry.get('item_id')
-                    if not i_id or i_id == "0": continue
-                    
+                # Create definitions
+                def get_w(i_id):
                     if i_id not in temp_w:
                         db_info = self.item_db.get(i_id, {"name": f"Unknown ({i_id})"})
                         temp_w[i_id] = {
@@ -7946,24 +7947,43 @@ log "DONE"
                             'shots': 0, 'hits': 0, 'hs': 0, 
                             'vkills': 0, 'time': 0
                         }
+                    return temp_w[i_id]
 
+                # Parse Faction Stats (Kills + Vehicle Kills)
+                for entry in w_stats_list:
+                    i_id = entry.get('item_id')
+                    if not i_id or i_id == "0": continue
+                    wep = get_w(i_id)
+                    
                     total_val = int(entry.get('value_vs', 0)) + int(entry.get('value_nc', 0)) + int(entry.get('value_tr', 0))
                     s_name = entry.get('stat_name')
                     
                     if s_name == 'weapon_kills':
-                        temp_w[i_id]['kills'] += total_val
+                        wep['kills'] += total_val
                     elif s_name == 'weapon_vehicle_kills':
-                        temp_w[i_id]['vkills'] += total_val
-                    elif s_name == 'weapon_deaths':
-                        temp_w[i_id]['deaths'] += total_val
-                    elif s_name == 'weapon_fire_count':
-                        temp_w[i_id]['shots'] += total_val
-                    elif s_name == 'weapon_hit_count':
-                        temp_w[i_id]['hits'] += total_val
+                        wep['vkills'] += total_val
                     elif s_name == 'weapon_headshots':
-                        temp_w[i_id]['hs'] += total_val
+                        wep['hs'] += total_val # Fallback, usually global
+
+                # Parse Global Stats (Time, Shots, Hits, Headshots)
+                for entry in w_global_list:
+                    i_id = entry.get('item_id')
+                    if not i_id or i_id == "0": continue
+                    wep = get_w(i_id)
+                    
+                    val = int(entry.get('value', 0))
+                    s_name = entry.get('stat_name')
+                    
+                    if s_name == 'weapon_deaths':
+                        wep['deaths'] += val
+                    elif s_name == 'weapon_fire_count':
+                        wep['shots'] += val
+                    elif s_name == 'weapon_hit_count':
+                        wep['hits'] += val
+                    elif s_name == 'weapon_headshots':
+                        wep['hs'] = val # Overwrite fallback with exact global value
                     elif s_name == 'weapon_play_time':
-                        temp_w[i_id]['time'] += total_val
+                        wep['time'] += val
 
                 # Only show weapons with at least 1 kill OR 1 death (optional)
                 weapon_list = sorted([w for w in temp_w.values() if w['kills'] > 0 or w['deaths'] > 0],

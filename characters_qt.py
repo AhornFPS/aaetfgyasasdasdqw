@@ -129,6 +129,18 @@ QPushButton#ActionBtn:hover {
 }
 """
 
+class NumericTableWidgetItem(QTableWidgetItem):
+    """Sorts QTableWidgetItems intelligently by number if available via DataRole, else strings."""
+    def __lt__(self, other):
+        my_val = self.data(Qt.ItemDataRole.UserRole)
+        other_val = other.data(Qt.ItemDataRole.UserRole)
+        if my_val is not None and other_val is not None:
+            try:
+                return float(my_val) < float(other_val)
+            except ValueError:
+                pass
+        return super().__lt__(other)
+
 
 class CharacterWidget(QWidget):
     def __init__(self, controller=None):
@@ -350,23 +362,36 @@ class CharacterWidget(QWidget):
             
             self.weapon_table.setItem(row, 0, QTableWidgetItem(w.get('name', '?')))
             
-            item_kills = QTableWidgetItem(f"{kills:,}")
-            item_kills.setData(Qt.ItemDataRole.DisplayRole, kills) # Make sortable
+            item_kills = NumericTableWidgetItem(f"{kills:,}")
+            item_kills.setData(Qt.ItemDataRole.UserRole, kills)
             self.weapon_table.setItem(row, 1, item_kills)
             
-            self.weapon_table.setItem(row, 2, QTableWidgetItem(f"{kpm:.2f}"))
-            self.weapon_table.setItem(row, 3, QTableWidgetItem(f"{kd:.2f}"))
-            self.weapon_table.setItem(row, 4, QTableWidgetItem(f"{acc:.1f}%"))
-            self.weapon_table.setItem(row, 5, QTableWidgetItem(f"{hsr:.1f}%"))
+            item_kpm = NumericTableWidgetItem(f"{kpm:.2f}")
+            item_kpm.setData(Qt.ItemDataRole.UserRole, kpm)
+            self.weapon_table.setItem(row, 2, item_kpm)
+
+            item_kd = NumericTableWidgetItem(f"{kd:.2f}")
+            item_kd.setData(Qt.ItemDataRole.UserRole, kd)
+            self.weapon_table.setItem(row, 3, item_kd)
+
+            item_acc = NumericTableWidgetItem(f"{acc:.1f}%")
+            item_acc.setData(Qt.ItemDataRole.UserRole, acc)
+            self.weapon_table.setItem(row, 4, item_acc)
+
+            item_hsr = NumericTableWidgetItem(f"{hsr:.1f}%")
+            item_hsr.setData(Qt.ItemDataRole.UserRole, hsr)
+            self.weapon_table.setItem(row, 5, item_hsr)
             
-            item_vkills = QTableWidgetItem(f"{vkills:,}")
-            item_vkills.setData(Qt.ItemDataRole.DisplayRole, vkills)
+            item_vkills = NumericTableWidgetItem(f"{vkills:,}")
+            item_vkills.setData(Qt.ItemDataRole.UserRole, vkills)
             self.weapon_table.setItem(row, 6, item_vkills)
             
-            self.weapon_table.setItem(row, 7, QTableWidgetItem(f"{vkpm:.2f}"))
+            item_vkpm = NumericTableWidgetItem(f"{vkpm:.2f}")
+            item_vkpm.setData(Qt.ItemDataRole.UserRole, vkpm)
+            self.weapon_table.setItem(row, 7, item_vkpm)
             
-            item_time = QTableWidgetItem(time_str)
-            item_time.setData(Qt.ItemDataRole.UserRole, play_time) # For sorting (would need custom sorter, but UserRole might help)
+            item_time = NumericTableWidgetItem(time_str)
+            item_time.setData(Qt.ItemDataRole.UserRole, play_time)
             self.weapon_table.setItem(row, 8, item_time)
 
         self.weapon_table.setSortingEnabled(True)
