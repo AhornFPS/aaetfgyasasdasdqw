@@ -9,6 +9,8 @@ STATE_TYPES = {
     "feed_config",
     "scifi_mode",
     "overlay_visibility",
+    "twitch_config",
+    "twitch_visibility",
     "perf_debug_mode",
     "perf_target_fps",
     "perf_pipeline_tuning",

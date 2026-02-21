@@ -451,6 +451,9 @@ class QtOverlay(QWidget):
         # --- SINGLE TWITCH BROWSER ---
         self.twitch_browser = DraggableChat(self.chat_container)
         self.twitch_browser.hide()
+        self._twitch_browser_ready = False
+        self._twitch_pending_messages = deque(maxlen=80)
+        self.twitch_browser.loadFinished.connect(self._on_twitch_browser_load_finished)
 
         # Set initial content
         self.chat_hold_time = 15
@@ -827,12 +830,22 @@ class QtOverlay(QWidget):
         if hasattr(self, 'twitch_drag_cover'):
             self.twitch_drag_cover.setGeometry(self.chat_container.geometry())
 
+        self._broadcast_overlay("twitch_config", {
+            "x": int(x),
+            "y": int(y),
+            "width": int(w),
+            "height": int(h),
+            "opacity": int(opacity),
+            "font_size": int(font_size),
+        })
+
         if self.gui_ref:
             enabled = self.gui_ref.config.get("twitch", {}).get("active", True)
             self.update_twitch_visibility(enabled)
 
     def update_twitch_browser_content(self):
         """Initializes or resets the browser content."""
+        self._twitch_browser_ready = False
         template = """
         <html>
         <head>
@@ -904,6 +917,18 @@ class QtOverlay(QWidget):
         self.twitch_browser.setHtml(template, base_url)
         self.twitch_browser.show()
 
+    def _on_twitch_browser_load_finished(self, ok):
+        self._twitch_browser_ready = bool(ok)
+        if not self._twitch_browser_ready:
+            return
+        while self._twitch_pending_messages:
+            user, html_msg, safe_color, f_size, hold_seconds = self._twitch_pending_messages.popleft()
+            js = (
+                f"addMessage({json.dumps(user)}, {json.dumps(html_msg)}, "
+                f"{json.dumps(safe_color)}, {json.dumps(f_size)}, {json.dumps(hold_seconds)})"
+            )
+            self.twitch_browser.page().runJavaScript(js)
+
     def add_twitch_message(self, user, html_msg, color="#00f2ff", is_test=False):
         # 1. Check visibility
         enabled = True
@@ -928,13 +953,37 @@ class QtOverlay(QWidget):
         safe_color = self.get_readable_color(color)
         f_size = getattr(self, 'current_chat_font_size', 12)
 
-        # Inject into JS
-        js = f"addMessage({json.dumps(user)}, {json.dumps(html_msg)}, {json.dumps(safe_color)}, {json.dumps(f_size)}, {json.dumps(self.chat_hold_time)})"
-        self.twitch_browser.page().runJavaScript(js)
+        hold_seconds = int(self.chat_hold_time)
+        if not self._twitch_browser_ready:
+            self._twitch_pending_messages.append((user, html_msg, safe_color, f_size, hold_seconds))
+        else:
+            # Inject into JS
+            js = (
+                f"addMessage({json.dumps(user)}, {json.dumps(html_msg)}, "
+                f"{json.dumps(safe_color)}, {json.dumps(f_size)}, {json.dumps(hold_seconds)})"
+            )
+            self.twitch_browser.page().runJavaScript(js)
 
         # Reset Auto-Hide timer (for the entire container)
-        if self.chat_hold_time > 0:
-            self.auto_hide_timer.start((self.chat_hold_time + 2) * 1000)
+        if hold_seconds > 0:
+            self.auto_hide_timer.start((hold_seconds + 2) * 1000)
+
+        # Mirror Twitch chat into websocket overlay clients (e.g. Tauri).
+        try:
+            geom = self.chat_container.geometry()
+            self._broadcast_overlay("twitch_message", {
+                "user": str(user or ""),
+                "html": str(html_msg or ""),
+                "color": str(safe_color or "#00f2ff"),
+                "font_size": int(f_size),
+                "hold_seconds": int(hold_seconds),
+                "x": int(geom.x()),
+                "y": int(geom.y()),
+                "width": int(geom.width()),
+                "height": int(geom.height()),
+            })
+        except Exception:
+            pass
 
     def get_readable_color(self, hex_color):
         """Checks brightness and brightens dark colors."""
@@ -2337,6 +2386,10 @@ class QtOverlay(QWidget):
             self.chat_container.show()
         else:
             self.chat_container.hide()
+        try:
+            self._broadcast_overlay("twitch_visibility", {"visible": bool(should_show)})
+        except Exception:
+            pass
     # --- SERVER MANAGEMENT ---
     def start_server(self):
         """Starts the local web server for OBS integration."""

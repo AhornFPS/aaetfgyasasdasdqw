@@ -6376,6 +6376,16 @@ log "DONE"
                 self._tauri_overlay_last_visible = None
                 self.overlay_win.set_web_overlay_visibility(should_render)
 
+        # Keep Twitch container visibility synchronized with current runtime state.
+        # Without this heartbeat sync, chat can remain hidden until a manual action
+        # (slider move/toggle) triggers update_twitch_visibility.
+        try:
+            if self.overlay_win and hasattr(self.overlay_win, "update_twitch_visibility"):
+                twitch_active = bool(self.config.get("twitch", {}).get("active", True))
+                self.overlay_win.update_twitch_visibility(twitch_active)
+        except Exception:
+            pass
+
         # ELEMENT CONTROL
         # ---------------------------------------------------------
         if should_render:
@@ -6623,11 +6633,38 @@ log "DONE"
             print(f"DEBUG: Tab Error: {e}")
             return []
 
+    def _reset_move_ui_buttons(self):
+        ui = getattr(self, "ovl_config_win", None)
+        if not ui:
+            return
+        for attr in [
+            "btn_edit_hud",
+            "btn_edit_cross",
+            "btn_edit_streak",
+            "btn_edit_hud_stats",
+            "btn_edit_hud_feed",
+            "btn_edit_twitch",
+        ]:
+            btn = getattr(ui, attr, None)
+            if btn is not None:
+                btn.setText("MOVE UI")
+                btn.setStyleSheet("")
+
     def toggle_hud_edit_mode(self):
         """
         Starts edit mode, shows borders, fills dummy data
         and enables Drag & Drop.
         """
+        # Move/Edit UI is currently implemented only for the legacy Qt overlay.
+        # In Tauri backend mode we must not invoke legacy edit widgets.
+        if self.current_overlay_backend() != "legacy":
+            self.is_hud_editing = False
+            self.current_edit_targets = []
+            self._reset_move_ui_buttons()
+            self.add_log("INFO: MOVE UI is only available in Legacy overlay mode.")
+            self.add_log("INFO: Switch Overlay Backend to Legacy to move elements.")
+            return
+
         if not self.overlay_win:
             self.add_log("ERR: Overlay is not running! Please start overlay first.")
             # Try to start it if master switch is on
@@ -7138,6 +7175,11 @@ log "DONE"
             manager.clear_presence()
 
     def _tauri_spike_root(self):
+        # In packaged mode, bundled assets live under sys._MEIPASS.
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            bundled_root = os.path.join(sys._MEIPASS, "overlay-next", "tauri-spike")
+            if os.path.isdir(bundled_root):
+                return bundled_root
         return os.path.join(self.BASE_DIR, "overlay-next", "tauri-spike")
 
     def _tauri_spike_src_tauri_dir(self):
@@ -7164,6 +7206,17 @@ log "DONE"
         self.config["tauri_overlay_autostart"] = bool(use_tauri)
         # Force visibility state re-broadcast after backend transitions.
         self._tauri_overlay_last_visible = None
+
+        if use_tauri and getattr(self, "is_hud_editing", False):
+            self.is_hud_editing = False
+            self.current_edit_targets = []
+            self._reset_move_ui_buttons()
+            try:
+                if self.overlay_win:
+                    self.overlay_win.clear_edit_frames()
+                    self.overlay_win.set_mouse_passthrough(True)
+            except Exception:
+                pass
 
         try:
             if self.overlay_win:

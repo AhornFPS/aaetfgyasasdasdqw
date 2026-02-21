@@ -69,6 +69,32 @@ echo Installing application dependencies...
 pip install -r requirements.txt
 
 REM ---------------------------------------------------------
+REM 2.5 BUILD TAURI OVERLAY (required for packaged app)
+REM ---------------------------------------------------------
+
+echo.
+echo Building Tauri overlay binary...
+where cargo >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: cargo not found in PATH! Install Rust toolchain first.
+    exit /b 1
+)
+
+pushd "overlay-next\tauri-spike\src-tauri"
+cargo tauri build
+if errorlevel 1 (
+    popd
+    echo ERROR: Tauri build failed.
+    exit /b 1
+)
+popd
+
+if not exist "overlay-next\tauri-spike\src-tauri\target\release\tauri-spike-overlay.exe" (
+    echo ERROR: Built Tauri binary not found at expected path.
+    exit /b 1
+)
+
+REM ---------------------------------------------------------
 REM 3. PREPARE ASSETS
 REM ---------------------------------------------------------
 

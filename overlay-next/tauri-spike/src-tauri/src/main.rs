@@ -41,6 +41,7 @@ fn set_overlay_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> 
     window.set_decorations(false).map_err(|e| e.to_string())?;
     window.set_shadow(false).map_err(|e| e.to_string())?;
     window.set_always_on_top(true).map_err(|e| e.to_string())?;
+    let _ = window.set_skip_taskbar(true);
 
     if enabled {
         if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
@@ -241,6 +242,7 @@ fn main() {
                 let _ = window.set_always_on_top(true);
                 let _ = window.set_decorations(false);
                 let _ = window.set_shadow(false);
+                let _ = window.set_skip_taskbar(true);
                 let _ = window.set_ignore_cursor_events(true);
             }
             Ok(())

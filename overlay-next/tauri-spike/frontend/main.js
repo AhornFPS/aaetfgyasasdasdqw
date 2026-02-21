@@ -36,6 +36,7 @@ const headshotFlashEl = document.getElementById("headshot-flash");
 const feedLayerEl = document.getElementById("feed-layer");
 const statsLayerEl = document.getElementById("stats-layer");
 const streakLayerEl = document.getElementById("streak-layer");
+const twitchLayerEl = document.getElementById("twitch-layer");
 const eventsLayerEl = document.getElementById("events-layer");
 const hitmarkerLayerEl = document.getElementById("hitmarker-layer");
 const crosshairLayerEl = document.getElementById("crosshair-layer");
@@ -53,10 +54,21 @@ const MAX_ASSET_CACHE = 50;
 
 let overlayVisible = false;
 let scifiEnabled = true;
+try {
+  const persistedSciFi = window.localStorage.getItem("tauri_scifi_enabled");
+  if (persistedSciFi === "0") {
+    scifiEnabled = false;
+  } else if (persistedSciFi === "1") {
+    scifiEnabled = true;
+  }
+} catch {}
+document.body.classList.toggle("scifi-off", !scifiEnabled);
 let suppressLegacyOverlay = false;
 let wsConnectedAtMs = 0;
 const STARTUP_QUIET_MS = 1300;
 let feedConfig = { x: 0, y: 0, width: 600, height: 550, max_items: 6 };
+let twitchConfig = { x: 50, y: 300, width: 350, height: 400, opacity: 30, font_size: 12 };
+let twitchVisible = false;
 const activeTransientByKey = new Map();
 const systemPips = {};
 document.querySelectorAll(".sys-pip").forEach((el) => {
@@ -123,12 +135,68 @@ function applyOverlayVisibility(visible) {
     if (headshotFlashEl) headshotFlashEl.classList.remove("active");
   }
   if (feedLayerEl) feedLayerEl.style.display = overlayVisible ? "block" : "none";
+  if (twitchLayerEl) twitchLayerEl.style.display = (overlayVisible && twitchVisible) ? "block" : "none";
   if (statsLayerEl) statsLayerEl.style.display = overlayVisible ? "block" : "none";
   if (streakLayerEl) streakLayerEl.style.display = overlayVisible ? "block" : "none";
   if (eventsLayerEl) eventsLayerEl.style.display = overlayVisible ? "block" : "none";
   if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = overlayVisible ? "block" : "none";
   if (crosshairLayerEl) crosshairLayerEl.style.display = overlayVisible ? "block" : "none";
   if (nativeOverlayEl) nativeOverlayEl.style.visibility = overlayVisible ? "visible" : "hidden";
+}
+
+function applyTwitchConfig(data) {
+  if (!twitchLayerEl || !data) return;
+  twitchConfig = {
+    x: Number(data.x ?? twitchConfig.x ?? 50),
+    y: Number(data.y ?? twitchConfig.y ?? 300),
+    width: Number(data.width ?? twitchConfig.width ?? 350),
+    height: Number(data.height ?? twitchConfig.height ?? 400),
+    opacity: Number(data.opacity ?? twitchConfig.opacity ?? 30),
+    font_size: Number(data.font_size ?? twitchConfig.font_size ?? 12),
+  };
+  twitchLayerEl.style.left = `${twitchConfig.x}px`;
+  twitchLayerEl.style.top = `${twitchConfig.y}px`;
+  twitchLayerEl.style.width = `${twitchConfig.width}px`;
+  twitchLayerEl.style.height = `${twitchConfig.height}px`;
+  const alpha = Math.max(0, Math.min(1, twitchConfig.opacity / 100));
+  twitchLayerEl.style.backgroundColor = `rgba(0, 0, 0, ${alpha})`;
+}
+
+function setTwitchVisibility(data) {
+  twitchVisible = !(data && data.visible === false);
+  if (twitchLayerEl) twitchLayerEl.style.display = (overlayVisible && twitchVisible) ? "block" : "none";
+}
+
+function appendTwitchMessage(data) {
+  if (!twitchLayerEl || !data) return;
+  applyTwitchConfig(data);
+  const row = document.createElement("div");
+  row.className = "overlay-twitch-msg";
+  const user = String(data.user || "");
+  const color = String(data.color || "#00f2ff");
+  const fontSize = Number(data.font_size || twitchConfig.font_size || 12);
+  const html = String(data.html || "");
+  row.style.fontSize = `${fontSize}pt`;
+  row.innerHTML = `<span style="color:${color}; font-weight:900;">${user}:</span> ${html}`;
+  const imgs = row.querySelectorAll("img");
+  imgs.forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    if (src.startsWith("file:///")) return;
+    img.src = assetUrl(src);
+    img.style.maxHeight = "2em";
+    img.style.verticalAlign = "middle";
+  });
+  twitchLayerEl.appendChild(row);
+  while (twitchLayerEl.childElementCount > 50) {
+    twitchLayerEl.removeChild(twitchLayerEl.firstElementChild);
+  }
+  const holdSeconds = Number(data.hold_seconds || 0);
+  if (holdSeconds > 0) {
+    setTimeout(() => {
+      row.classList.add("fade-out");
+      setTimeout(() => row.remove(), 1000);
+    }, holdSeconds * 1000);
+  }
 }
 
 function activateSystem(name, warn = false) {
@@ -420,6 +488,15 @@ function appendFeed(data) {
   const content = document.createElement("div");
   content.className = "overlay-feed-content";
   content.innerHTML = data.html || "";
+
+  // Legacy parity: ensure feed text has the same shadow density even when
+  // upstream HTML omitted text-shadow in inline styles.
+  const textNodes = content.querySelectorAll("div, span");
+  textNodes.forEach((el) => {
+    if (!el.style.textShadow) {
+      el.style.textShadow = "1px 1px 2px #000";
+    }
+  });
   item.appendChild(content);
 
   const imgs = content.querySelectorAll("img");
@@ -764,6 +841,9 @@ function triggerImpact(evType, x, y, options = null) {
 
 function setSciFiMode(data) {
   scifiEnabled = !(data && data.enabled === false);
+  try {
+    window.localStorage.setItem("tauri_scifi_enabled", scifiEnabled ? "1" : "0");
+  } catch {}
   document.body.classList.toggle("scifi-off", !scifiEnabled);
   if (scifiEnabled) {
     setTelemetry("AURAXIS LINK ONLINE");
@@ -774,11 +854,25 @@ function dispatchNativeEvent(evt) {
   const category = String((evt && evt.category) || "").toLowerCase();
   const data = evt && evt.data && typeof evt.data === "object" ? { ...evt.data } : {};
   data.__message = evt || null;
-  if (!overlayVisible && category !== "overlay_visibility") return;
+  const stateWhileHidden = new Set([
+    "overlay_visibility",
+    "scifi_mode",
+    "feed_config",
+    "twitch_config",
+    "twitch_visibility",
+    "stats",
+    "stats_clear",
+    "crosshair",
+    "streak",
+  ]);
+  if (!overlayVisible && !stateWhileHidden.has(category)) return;
 
   if (category === "feed_config") applyFeedConfig(data);
   else if (category === "feed") appendFeed(data);
   else if (category === "feed_clear" && feedLayerEl) feedLayerEl.innerHTML = "";
+  else if (category === "twitch_config") applyTwitchConfig(data);
+  else if (category === "twitch_visibility") setTwitchVisibility(data);
+  else if (category === "twitch_message") appendTwitchMessage(data);
   else if (category === "stats") updateStats(data);
   else if (category === "stats_clear" && statsLayerEl) statsLayerEl.innerHTML = "";
   else if (category === "crosshair") updateCrosshair(data);
@@ -1122,6 +1216,7 @@ if (clearBtn) {
   logEl.innerHTML = "";
   if (eventStageEl) eventStageEl.innerHTML = "";
   if (feedLayerEl) feedLayerEl.innerHTML = "";
+  if (twitchLayerEl) twitchLayerEl.innerHTML = "";
   if (statsLayerEl) statsLayerEl.innerHTML = "";
   if (streakLayerEl) streakLayerEl.innerHTML = "";
   if (crosshairLayerEl) crosshairLayerEl.innerHTML = "";
