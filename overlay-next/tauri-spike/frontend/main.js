@@ -1427,6 +1427,12 @@ function updateLayoutDrag(ev) {
       targetEl.style.top = `${cy}px`;
       targetEl.style.transform = "translate(-50%, -50%)";
       targetEl.style.transformOrigin = "center center";
+      if (item === "crosshair" && crosshairLayerEl) {
+        crosshairLayerEl.querySelectorAll(".overlay-crosshair-core").forEach((shadow) => {
+          shadow.style.left = `${cx}px`;
+          shadow.style.top = `${cy}px`;
+        });
+      }
     } else {
       targetEl.style.left = `${x}px`;
       targetEl.style.top = `${y}px`;
