@@ -2399,21 +2399,6 @@ class QtOverlay(QWidget):
         except Exception:
             pass
 
-    def _handle_tauri_item_moved(self, item, x, y):
-        try:
-            name = str(item or "").strip().lower()
-            if not name:
-                return
-            self.signals.item_moved.emit(f"tauri:{name}", int(x), int(y))
-        except Exception:
-            pass
-
-    def _handle_tauri_layout_edit_mode(self, enabled):
-        try:
-            self.signals.item_moved.emit("tauri:layout_mode", 1 if bool(enabled) else 0, 0)
-        except Exception:
-            pass
-
     # --- SERVER MANAGEMENT ---
     def start_server(self):
         """Starts the local web server for OBS integration."""
@@ -2432,10 +2417,6 @@ class QtOverlay(QWidget):
         if self.server and self.server.is_running:
             same_ports = (self.server.http_port == h_port and self.server.ws_port == w_port)
             if same_ports:
-                use_tauri_backend = False
-                if self.gui_ref and hasattr(self.gui_ref, "config"):
-                    backend = str(self.gui_ref.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
-                    use_tauri_backend = backend == "tauri"
                 if self.gui_ref and hasattr(self.gui_ref, "config"):
                     self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
                     self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
@@ -2447,11 +2428,8 @@ class QtOverlay(QWidget):
                         dedupe_window_ms=int(self.gui_ref.config.get("overlay_dedupe_window_ms", 120)),
                         max_transient_pending=int(self.gui_ref.config.get("overlay_transient_max_pending", 2048)),
                     )
-                self.server.set_item_moved_callback(self._handle_tauri_item_moved)
-                self.server.set_layout_edit_mode_callback(self._handle_tauri_layout_edit_mode)
-                if not use_tauri_backend:
-                    self.load_web_overlay(h_port)
-                    self.set_web_overlay_visibility(True)
+                self.load_web_overlay(h_port)
+                self.set_web_overlay_visibility(True)
                 if self.gui_ref:
                     self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
                 return
@@ -2460,10 +2438,6 @@ class QtOverlay(QWidget):
         try:
             self.server = OverlayServer(http_port=h_port, ws_port=w_port)
             self._last_crosshair_payload = None
-            use_tauri_backend = False
-            if self.gui_ref and hasattr(self.gui_ref, "config"):
-                backend = str(self.gui_ref.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
-                use_tauri_backend = backend == "tauri"
             if self.gui_ref and hasattr(self.gui_ref, "config"):
                 self.server.set_perf_debug(bool(self.gui_ref.config.get("overlay_perf_debug", False)))
                 self.server.set_target_fps(int(self.gui_ref.config.get("overlay_flush_fps", 120)))
@@ -2475,13 +2449,10 @@ class QtOverlay(QWidget):
                     dedupe_window_ms=int(self.gui_ref.config.get("overlay_dedupe_window_ms", 120)),
                     max_transient_pending=int(self.gui_ref.config.get("overlay_transient_max_pending", 2048)),
                 )
-            self.server.set_item_moved_callback(self._handle_tauri_item_moved)
-            self.server.set_layout_edit_mode_callback(self._handle_tauri_layout_edit_mode)
             actual_h_port, actual_w_port = self.server.start()
             print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
-            if not use_tauri_backend:
-                self.load_web_overlay(actual_h_port)
-                self.set_web_overlay_visibility(True)
+            self.load_web_overlay(actual_h_port)
+            self.set_web_overlay_visibility(True)
             if self.gui_ref:
                 self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
         except Exception as e:

@@ -38,3 +38,20 @@
    Compiling tauri-spike-overlay v0.1.0 (D:\Better-Planetside\overlay-next\tauri-spike\src-tauri)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.12s
      Running `target\debug\tauri-spike-overlay.exe`
+
+[2026-02-21 15:31:59] starting: cargo run --no-default-features --
+   Compiling tauri-spike-overlay v0.1.0 (D:\Better-Planetside\overlay-next\tauri-spike\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.88s
+     Running `target\debug\tauri-spike-overlay.exe`
+
+[2026-02-21 18:02:40] starting: cargo run --no-default-features --
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.54s
+     Running `target\debug\tauri-spike-overlay.exe`
+
+[2026-02-21 18:04:17] starting: cargo run --no-default-features --
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running `target\debug\tauri-spike-overlay.exe`
+
+[2026-02-21 18:16:04] starting: cargo run --no-default-features --
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.19s
+     Running `target\debug\tauri-spike-overlay.exe`

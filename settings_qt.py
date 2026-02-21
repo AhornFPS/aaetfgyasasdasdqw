@@ -316,47 +316,6 @@ class SettingsWidget(QWidget):
 
         main_layout.addWidget(self.discord_group)
 
-        # --- GROUP 5: OVERLAY RUNTIME ---
-        self.runtime_group = QFrame(objectName="Group")
-        runtime_layout = QVBoxLayout(self.runtime_group)
-        runtime_layout.setContentsMargins(15, 15, 15, 15)
-        runtime_layout.addWidget(QLabel("> OVERLAY RUNTIME", objectName="GroupTitle"))
-        runtime_layout.addWidget(QLabel("Choose which overlay renderer should be active.", objectName="InfoText"))
-
-        runtime_row = QHBoxLayout()
-        runtime_row.addWidget(QLabel("Overlay Backend:", styleSheet="color: #aaa;"))
-        self.combo_overlay_backend = QComboBox()
-        self.combo_overlay_backend.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.combo_overlay_backend.setStyleSheet("""
-            QComboBox {
-                background-color: #111;
-                border: 1px solid #444;
-                color: #eee;
-                padding: 6px;
-                border-radius: 3px;
-                min-width: 170px;
-            }
-            QComboBox:focus {
-                border: 1px solid #00f2ff;
-                background-color: #000;
-            }
-            QComboBox::drop-down { border: 0px; }
-            QComboBox QAbstractItemView {
-                background-color: #111;
-                color: #eee;
-                border: 1px solid #333;
-                selection-background-color: #00f2ff;
-                selection-color: #000;
-            }
-        """)
-        self.combo_overlay_backend.addItem("Legacy (Qt/Web)", "legacy")
-        self.combo_overlay_backend.addItem("Tauri Spike", "tauri")
-        self.combo_overlay_backend.currentIndexChanged.connect(self.request_save)
-        runtime_row.addStretch()
-        runtime_row.addWidget(self.combo_overlay_backend)
-        runtime_layout.addLayout(runtime_row)
-        main_layout.addWidget(self.runtime_group)
-
         # --- GROUP 6: DEV TOOLS (SOURCE ONLY) ---
         self.dev_group = QFrame(objectName="Group")
         dev_layout = QVBoxLayout(self.dev_group)
@@ -589,18 +548,7 @@ class SettingsWidget(QWidget):
         self.btn_discord_presence.blockSignals(False)
         self.update_discord_presence_button(discord_active)
 
-        # 6. Overlay perf debug (dev only)
-        overlay_backend = str(config_data.get("overlay_backend", "legacy") or "legacy").strip().lower()
-        self.combo_overlay_backend.blockSignals(True)
-        idx_backend = self.combo_overlay_backend.findData(overlay_backend)
-        if idx_backend < 0:
-            idx_backend = self.combo_overlay_backend.findData("legacy")
-        if idx_backend < 0:
-            idx_backend = 0
-        self.combo_overlay_backend.setCurrentIndex(idx_backend)
-        self.combo_overlay_backend.blockSignals(False)
-
-        # 7. Overlay perf debug (dev only)
+        # 6. Overlay perf debug (dev only)        # 7. Overlay perf debug (dev only)
         overlay_perf_debug = bool(config_data.get("overlay_perf_debug", False))
         self.btn_overlay_perf_debug.blockSignals(True)
         self.btn_overlay_perf_debug.setChecked(overlay_perf_debug)
@@ -773,8 +721,6 @@ class SettingsWidget(QWidget):
         }
         if self.is_dev_environment:
             data["overlay_perf_debug"] = bool(self.btn_overlay_perf_debug.isChecked())
-            backend_data = self.combo_overlay_backend.currentData()
-            data["overlay_backend"] = backend_data if backend_data else "legacy"
             try:
                 data["overlay_flush_fps"] = int(self.combo_overlay_fps.currentText())
             except Exception:
@@ -785,9 +731,7 @@ class SettingsWidget(QWidget):
             data["overlay_trace_export"] = bool(self.btn_overlay_trace_export.isChecked())
             data["event_pipeline_v2"] = bool(self.btn_event_pipeline_v2.isChecked())
             data["js_scheduler_v2"] = bool(self.btn_js_scheduler_v2.isChecked())
-        else:
-            backend_data = self.combo_overlay_backend.currentData()
-            data["overlay_backend"] = backend_data if backend_data else "legacy"
+
         # Send signal
         self.signals.save_requested.emit(data)
 

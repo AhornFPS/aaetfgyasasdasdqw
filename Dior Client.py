@@ -287,7 +287,6 @@ class DiorClientGUI:
         self.last_tracked_id = ""
         self.is_hud_editing = False
         self.overlay_win = None
-        self.tauri_overlay_proc = None
         self.discord_presence = None
 
         self.server_map = {
@@ -430,8 +429,8 @@ class DiorClientGUI:
         self.discord_presence = DiscordPresenceManager(log_func=self.add_log)
         if bool(self.config.get("discord_presence_active", False)):
             self.discord_presence.start()
-        # Apply selected overlay backend runtime on startup.
-        QTimer.singleShot(1200, self.apply_overlay_backend_runtime)
+        # Start OBS server
+        QTimer.singleShot(1200, lambda: self.overlay_win.start_server() if self.overlay_win else None)
         self.qt_app.aboutToQuit.connect(self.shutdown_runtime_workers)
         atexit.register(self.shutdown_runtime_workers)
         if getattr(sys, "frozen", False):
@@ -838,16 +837,7 @@ class DiorClientGUI:
     def update_main_config_from_settings(self, data):
         """Receives cleaned data from settings_qt."""
 
-        if "overlay_backend" in data:
-            requested_backend = str(data.get("overlay_backend", "legacy") or "legacy").strip().lower()
-            if requested_backend not in {"legacy", "tauri"}:
-                requested_backend = "legacy"
-            prev_backend = self.current_overlay_backend()
-            self.config["overlay_backend"] = requested_backend
-            self.config["tauri_overlay_autostart"] = (requested_backend == "tauri")
-            if requested_backend != prev_backend:
-                self.apply_overlay_backend_runtime()
-                self.add_log(f"SYS: Overlay backend switched to {requested_backend.upper()}.")
+
 
         # Save Audio Volume
         if "audio_volume" in data:
@@ -1010,7 +1000,6 @@ class DiorClientGUI:
         self.add_log(
             f"SYS: Global settings saved (Vol: {data.get('audio_volume', 'N/A')}%, Dev: {data.get('audio_device', 'N/A')}, "
             f"BG: {data.get('main_background_path', 'N/A')}, Discord RPC: {'ON' if bool(data.get('discord_presence_active', self.config.get('discord_presence_active', False))) else 'OFF'}, "
-            f"Backend: {self.current_overlay_backend().upper()}, "
             f"Perf Debug: {'ON' if bool(self.config.get('overlay_perf_debug', False)) else 'OFF'}, "
             f"Flush FPS: {int(self.config.get('overlay_flush_fps', 120))}, "
             f"Dedupe: {int(self.config.get('overlay_dedupe_window_ms', 120))}ms, "
@@ -1051,15 +1040,9 @@ class DiorClientGUI:
 
         if master_active:
             self.add_log("MONITOR: Master Switch is ON -> Starting Overlay.")
-            use_tauri_backend = self.current_overlay_backend() == "tauri"
-
             if self.overlay_win:
-                # Only show the legacy Qt/Web overlay window in legacy mode.
-                if not use_tauri_backend:
-                    self.overlay_win.showFullScreen()
-                    self.overlay_win.raise_()
-                else:
-                    self.overlay_win.hide()
+                self.overlay_win.showFullScreen()
+                self.overlay_win.raise_()
 
                 # Crosshair
                 self.update_crosshair_from_qt()
@@ -1435,8 +1418,6 @@ class DiorClientGUI:
         """Force overlay rendering without the game running."""
         ui = self.ovl_config_win
         self.debug_overlay_active = checked
-        use_tauri_backend = self.current_overlay_backend() == "tauri"
-
         if checked:
             ui.btn_debug_overlay.setText("DEBUG OVERLAY: ON")
             ui.btn_debug_overlay.setStyleSheet(
@@ -1445,11 +1426,8 @@ class DiorClientGUI:
                 "QPushButton:focus { border: 1px solid #006600; }"
             )
             if self.overlay_win:
-                if not use_tauri_backend:
-                    self.overlay_win.showFullScreen()
-                    self.overlay_win.raise_()
-                else:
-                    self.overlay_win.hide()
+                self.overlay_win.showFullScreen()
+                self.overlay_win.raise_()
                 # Force first-frame stats render in debug mode.
                 # Without this, normal throttle can skip the initial push.
                 self.stats_last_refresh_time = 0
@@ -1890,9 +1868,7 @@ class DiorClientGUI:
 
     def on_overlay_item_moved(self, item_name, x, y):
         """Called when an item in the overlay was moved with the mouse."""
-        raw_name = str(item_name or "")
-        from_tauri = raw_name.startswith("tauri:")
-        name = raw_name.split(":", 1)[1] if from_tauri else raw_name
+        name = str(item_name or "")
 
         try:
             px = int(x)
@@ -1901,14 +1877,6 @@ class DiorClientGUI:
             return
 
         lx, ly = px, py
-        if from_tauri and self.overlay_win:
-            try:
-                scale = float(getattr(self.overlay_win, "ui_scale", 1.0) or 1.0)
-                if scale > 0:
-                    lx = int(round(px / scale))
-                    ly = int(round(py / scale))
-            except Exception:
-                pass
 
         ui = self.ovl_config_win
         changed = False
@@ -4555,10 +4523,7 @@ class DiorClientGUI:
 
         # 6b. Backward compatibility for early Tauri toggle key.
         if "overlay_backend" not in loaded_conf:
-            if bool(default_conf.get("tauri_overlay_autostart", False)):
-                default_conf["overlay_backend"] = "tauri"
-            else:
-                default_conf["overlay_backend"] = "legacy"
+            default_conf["overlay_backend"] = "legacy"
 
         # 7. Run config schema migrations.
         schema_changed, schema_from, schema_to = self._apply_config_schema_migrations(default_conf)
@@ -6053,17 +6018,6 @@ log "DONE"
             play_duplicate = True
 
         if img_path or sound_path:
-            # Tauri test events can race with visibility updates when debug mode is off.
-            # Push explicit tauri visibility before emitting the test effect.
-            if getattr(self, "is_event_test", False) and self.current_overlay_backend() == "tauri":
-                try:
-                    if hasattr(self.overlay_win, "_broadcast_overlay"):
-                        self.overlay_win._broadcast_overlay(
-                            "overlay_visibility",
-                            {"visible": True, "target": "tauri"},
-                        )
-                except Exception:
-                    pass
             self.overlay_win.signals.show_image.emit(
                 img_path, sound_path, dur, abs_x, abs_y, scale, volume, is_hitmarker, play_duplicate, event_type
             )
@@ -6416,29 +6370,13 @@ log "DONE"
             should_render = True
             mode_gameplay = True
         elif twitch_always_on:
-            # We must broadcast visibility = True to Tauri so it can draw chat when game is closed
             should_render = True
 
         # Linux Fix: On Wayland/Linux, we need to periodically raise the window
         if should_render and not IS_WINDOWS and self.overlay_win:
             self.overlay_win.raise_()
         if self.overlay_win and hasattr(self.overlay_win, "set_web_overlay_visibility"):
-            if self.current_overlay_backend() == "tauri":
-                self.overlay_win.set_web_overlay_visibility(False)
-                # Tauri runtime visibility is separate from legacy web visibility.
-                # Re-broadcast continuously so newly connected Tauri WS clients
-                # always receive current visibility state after startup handoff.
-                try:
-                    if hasattr(self.overlay_win, "_broadcast_overlay"):
-                        self.overlay_win._broadcast_overlay(
-                            "overlay_visibility",
-                            {"visible": bool(should_render), "target": "tauri"},
-                        )
-                except Exception:
-                    pass
-            else:
-                self._tauri_overlay_last_visible = None
-                self.overlay_win.set_web_overlay_visibility(should_render)
+            self.overlay_win.set_web_overlay_visibility(should_render)
 
         # Keep Twitch container visibility synchronized with current runtime state.
         # Without this heartbeat sync, chat can remain hidden until a manual action
@@ -6739,160 +6677,7 @@ log "DONE"
             self.is_hud_editing = False
             return
 
-        # Tauri backend: use WS-driven edit mode and native drag in the Tauri overlay.
-        if self.current_overlay_backend() == "tauri":
-            payload = {"enabled": bool(is_editing), "targets": list(targets)}
-            if is_editing:
-                preview = {}
-                try:
-                    ui_scale = float(getattr(self.overlay_win, "ui_scale", 1.0) or 1.0)
-                except Exception:
-                    ui_scale = 1.0
 
-                if "event" in targets:
-                    evt_name = ""
-                    try:
-                        evt_name = self.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
-                    except Exception:
-                        evt_name = ""
-                    ev_cfg = self.config.get("events", {}).get(evt_name, {}) if evt_name else {}
-                    ev_img = clean_path(ev_cfg.get("img", "kill.png"))
-                    ev_scale = float(ev_cfg.get("scale", 1.0) or 1.0) * ui_scale
-                    ev_w = 220
-                    ev_h = 220
-                    ev_path = get_asset_path(ev_img)
-                    try:
-                        from PyQt6.QtGui import QImageReader
-                        if os.path.exists(ev_path):
-                            reader = QImageReader(ev_path)
-                            size = reader.size()
-                            if size.isValid():
-                                ev_w = max(24, int(size.width() * ev_scale))
-                                ev_h = max(24, int(size.height() * ev_scale))
-                    except Exception:
-                        pass
-                    preview["event"] = {
-                        "filename": ev_img,
-                        "x": int(float(ev_cfg.get("x", 100)) * ui_scale),
-                        "y": int(float(ev_cfg.get("y", 100)) * ui_scale),
-                        "width": int(ev_w),
-                        "height": int(ev_h),
-                        "scale": 1.0,
-                    }
-
-                if "stats" in targets:
-                    # Use the same runtime stats pipeline as debug/regular overlay
-                    # so Move UI preview is not a separate placeholder renderer.
-                    try:
-                        if self.overlay_win:
-                            stats_obj, is_dummy = self._resolve_overlay_stats_payload()
-                            self.overlay_win.update_stats_display(stats_obj, is_dummy=is_dummy)
-                            sp = copy.deepcopy(getattr(self.overlay_win, "_last_stats_payload", None))
-                            if isinstance(sp, dict) and sp.get("html"):
-                                preview["stats"] = sp
-                    except Exception:
-                        pass
-
-                if "streak" in targets:
-                    st_cfg_raw = self.config.get("streak", {})
-                    st_cfg = st_cfg_raw if isinstance(st_cfg_raw, dict) else {}
-                    st_img = clean_path(st_cfg.get("img", "KS_Counter.png"))
-                    st_scale = float(st_cfg.get("scale", 1.0) or 1.0) * ui_scale
-                    st_w = int(220 * st_scale)
-                    st_h = int(220 * st_scale)
-                    st_path = get_asset_path(st_img)
-                    try:
-                        from PyQt6.QtGui import QImageReader
-                        if os.path.exists(st_path):
-                            reader = QImageReader(st_path)
-                            size = reader.size()
-                            if size.isValid():
-                                st_w = max(48, int(size.width() * st_scale))
-                                st_h = max(48, int(size.height() * st_scale))
-                    except Exception:
-                        pass
-                    preview["streak"] = {
-                        "bg_filename": st_img,
-                        "bg_width": int(st_w),
-                        "bg_height": int(st_h),
-                        "x": int(float(st_cfg.get("x", 100)) * ui_scale),
-                        "y": int(float(st_cfg.get("y", 100)) * ui_scale),
-                        "count": 10,
-                        "tx": int(float(st_cfg.get("tx", 0)) * ui_scale),
-                        "ty": int(float(st_cfg.get("ty", 0)) * ui_scale),
-                        "font_size": int(float(st_cfg.get("size", 26)) * st_scale),
-                        "color": str(st_cfg.get("color", "#ffffff")),
-                    }
-
-                if "crosshair" in targets:
-                    cr_cfg = self.config.get("crosshair", {})
-                    cr_x = int(float(cr_cfg.get("x", 0)) * ui_scale)
-                    cr_y = int(float(cr_cfg.get("y", 0)) * ui_scale)
-                    if cr_x == 0 and cr_y == 0 and self.overlay_win:
-                        cr_x = self.overlay_win.width() // 2
-                        cr_y = self.overlay_win.height() // 2
-                    preview["crosshair"] = {
-                        "filename": cr_cfg.get("file", "crosshair.png"),
-                        "x": cr_x,
-                        "y": cr_y,
-                        "size": int(float(cr_cfg.get("size", 32)) * ui_scale),
-                        "shadow": bool(cr_cfg.get("shadow", False)),
-                    }
-
-                if "feed" in targets:
-                    kf_cfg = self.config.get("killfeed", {})
-                    kf_f = kf_cfg.get("font_size", 19)
-                    base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {int(kf_f * ui_scale)}px; margin-bottom: 2px; text-align: right;"
-                    line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'
-                    line2 = f'<div style="{base_style}"><span style="color:#00ff00;">ALLY</span> <span style="color:white;">[HS]</span> <span style="color:#ff0000;">TARGET</span></div>'
-                    line3 = f'<div style="{base_style}"><span style="color:#888;">[SKL]</span> <span style="color:#ff4444;">SWEATY</span> (4.2)</div>'
-                    preview["feed"] = {
-                        "html": line1 + line2 + line3,
-                        "x": int(float(kf_cfg.get("x", 50)) * ui_scale),
-                        "y": int(float(kf_cfg.get("y", 200)) * ui_scale),
-                        "width": int(420 * ui_scale),
-                        "height": int(150 * ui_scale),
-                    }
-
-                if "twitch" in targets:
-                    tw_cfg = self.config.get("twitch", {})
-                    preview["twitch"] = {
-                        "x": int(float(tw_cfg.get("x", 50)) * ui_scale),
-                        "y": int(float( tw_cfg.get("y", 50)) * ui_scale),
-                        "width": int(float(tw_cfg.get("width", 350)) * ui_scale),
-                        "height": int(float(tw_cfg.get("height", 400)) * ui_scale),
-                        "opacity": int(tw_cfg.get("opacity", 30)),
-                    }
-
-                if preview:
-                    payload["preview"] = preview
-
-            try:
-                if hasattr(self.overlay_win, "_broadcast_overlay"):
-                    self.overlay_win._broadcast_overlay(
-                        "layout_edit_mode",
-                        payload,
-                    )
-            except Exception:
-                pass
-
-            self.current_edit_targets = targets if is_editing else []
-            if is_editing:
-                self.add_log(f"INFO: Tauri MOVE UI enabled for {', '.join(targets)}.")
-            else:
-                self.add_log("INFO: Tauri MOVE UI disabled.")
-
-            ui = self.ovl_config_win
-            for btn in [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats, ui.btn_edit_hud_feed, ui.btn_edit_twitch]:
-                if is_editing:
-                    btn.setText("STOP EDIT (SAVE)")
-                    btn.setStyleSheet(
-                        "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;"
-                    )
-                else:
-                    btn.setText("MOVE UI")
-                    btn.setStyleSheet("")
-            return
 
         # Buttons for coloring
         btn_list = [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats, ui.btn_edit_hud_feed, ui.btn_edit_twitch]
@@ -7383,201 +7168,10 @@ log "DONE"
         if manager is not None:
             manager.clear_presence()
 
-    def _tauri_spike_root(self):
-        # In packaged mode, bundled assets live under sys._MEIPASS.
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-            bundled_root = os.path.join(sys._MEIPASS, "overlay-next", "tauri-spike")
-            if os.path.isdir(bundled_root):
-                return bundled_root
-        return os.path.join(self.BASE_DIR, "overlay-next", "tauri-spike")
-
-    def _tauri_spike_src_tauri_dir(self):
-        return os.path.join(self._tauri_spike_root(), "src-tauri")
-
-    def _tauri_spike_binary_candidates(self):
-        exe_name = "tauri-spike-overlay.exe" if IS_WINDOWS else "tauri-spike-overlay"
-        src_tauri = self._tauri_spike_src_tauri_dir()
-        candidates = [
-            os.path.join(src_tauri, "target", "release", exe_name),
-            os.path.join(src_tauri, "target", "debug", exe_name),
-        ]
-        return [p for p in candidates if os.path.exists(p)]
-
-    def current_overlay_backend(self):
-        backend = str(self.config.get("overlay_backend", "legacy") or "legacy").strip().lower()
-        if backend not in {"legacy", "tauri"}:
-            backend = "legacy"
-        return backend
-
-    def apply_overlay_backend_runtime(self):
-        backend = self.current_overlay_backend()
-        use_tauri = backend == "tauri"
-        self.config["tauri_overlay_autostart"] = bool(use_tauri)
-        # Force visibility state re-broadcast after backend transitions.
-        self._tauri_overlay_last_visible = None
-
-        if use_tauri and getattr(self, "is_hud_editing", False):
-            self.is_hud_editing = False
-            self.current_edit_targets = []
-            self._reset_move_ui_buttons()
-            try:
-                if self.overlay_win:
-                    self.overlay_win.clear_edit_frames()
-                    self.overlay_win.set_mouse_passthrough(True)
-            except Exception:
-                pass
-
-        try:
-            if self.overlay_win:
-                self.overlay_win.start_server()
-                if getattr(self.overlay_win, "server", None):
-                    # Keep legacy web overlay suppressed while Tauri is active,
-                    # and always restore to auto when returning to legacy.
-                    try:
-                        self.overlay_win.server.set_dev_overlay_visibility_mode(
-                            "hide" if use_tauri else "auto"
-                        )
-                    except Exception:
-                        pass
-                if hasattr(self.overlay_win, "set_web_overlay_visibility"):
-                    self.overlay_win.set_web_overlay_visibility(not use_tauri)
-                if use_tauri:
-                    self.overlay_win.hide()
-                else:
-                    self.overlay_win.showFullScreen()
-                    self.overlay_win.raise_()
-        except Exception as e:
-            self.add_log(f"WARN: Overlay backend apply warning: {e}")
-
-        if use_tauri:
-            self.start_tauri_overlay_if_enabled(force=True)
-        else:
-            self.stop_tauri_overlay_process()
-
-    def start_tauri_overlay_if_enabled(self, force=False):
-        if (not force) and (not bool(self.config.get("tauri_overlay_autostart", False))):
-            return
-
-        proc = getattr(self, "tauri_overlay_proc", None)
-        if proc is not None and proc.poll() is None:
-            return
-        self.tauri_overlay_proc = None
-
-        # In development we always launch via cargo so we don't accidentally run
-        # a stale prebuilt target binary. In packaged mode we use bundled binaries.
-        use_packaged_binary = bool(getattr(sys, "frozen", False))
-        binary_candidates = self._tauri_spike_binary_candidates() if use_packaged_binary else []
-        cmd = None
-        cwd = None
-        log_handle = None
-
-        if binary_candidates:
-            cmd = [binary_candidates[0]]
-            cwd = os.path.dirname(binary_candidates[0])
-        elif not use_packaged_binary:
-            src_tauri = self._tauri_spike_src_tauri_dir()
-            if not os.path.isdir(src_tauri):
-                self.add_log(f"WARN: Tauri spike folder not found: {src_tauri}")
-                return
-            # Launch directly via cargo run (same core command used under tauri dev)
-            # to avoid dev-watcher lock contention and CLI forwarding quirks.
-            cmd = ["cargo", "run", "--no-default-features", "--"]
-            cwd = src_tauri
-        else:
-            self.add_log("WARN: Tauri overlay binary not found in packaged mode.")
-            return
-
-        try:
-            creation_flags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
-            if not binary_candidates:
-                log_path = os.path.join(self.BASE_DIR, "tauri_overlay_dev.log")
-                log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
-                log_handle.write(
-                    f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] starting: {' '.join(cmd)}\n"
-                )
-            proc = subprocess.Popen(
-                cmd,
-                cwd=cwd,
-                stdout=(log_handle if log_handle else subprocess.DEVNULL),
-                stderr=(log_handle if log_handle else subprocess.DEVNULL),
-                creationflags=creation_flags,
-            )
-            self.tauri_overlay_proc = proc
-            self.tauri_overlay_log_handle = log_handle
-            # New Tauri process starts with hidden UI; force first visibility
-            # event to be sent on next refresh tick.
-            self._tauri_overlay_last_visible = None
-            mode = "binary" if binary_candidates else "cargo-run"
-            self.add_log(f"SYS: Tauri overlay started ({mode}).")
-            if not binary_candidates:
-                self.add_log(f"SYS: Tauri dev log: {os.path.join(self.BASE_DIR, 'tauri_overlay_dev.log')}")
-                QTimer.singleShot(2500, self._check_tauri_overlay_start_health)
-        except FileNotFoundError:
-            if log_handle:
-                try:
-                    log_handle.close()
-                except Exception:
-                    pass
-            self.add_log("ERR: Could not start Tauri overlay (missing cargo/runtime).")
-        except Exception as e:
-            if log_handle:
-                try:
-                    log_handle.close()
-                except Exception:
-                    pass
-            self.add_log(f"ERR: Tauri overlay start failed: {e}")
-
-    def stop_tauri_overlay_process(self):
-        proc = getattr(self, "tauri_overlay_proc", None)
-        if not proc:
-            return
-        try:
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=4)
-                except Exception:
-                    if IS_WINDOWS:
-                        try:
-                            subprocess.run(
-                                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                                check=False,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        except Exception:
-                            pass
-                    else:
-                        try:
-                            proc.kill()
-                        except Exception:
-                            pass
-        finally:
-            self.tauri_overlay_proc = None
-            h = getattr(self, "tauri_overlay_log_handle", None)
-            if h:
-                try:
-                    h.flush()
-                    h.close()
-                except Exception:
-                    pass
-            self.tauri_overlay_log_handle = None
-
-    def _check_tauri_overlay_start_health(self):
-        proc = getattr(self, "tauri_overlay_proc", None)
-        if not proc:
-            return
-        rc = proc.poll()
-        if rc is None:
-            return
-        self.add_log(f"ERR: Tauri overlay process exited early (code {rc}).")
-        self.add_log(f"ERR: See log file: {os.path.join(self.BASE_DIR, 'tauri_overlay_dev.log')}")
-
     def shutdown_runtime_workers(self):
         manager = getattr(self, "discord_presence", None)
         if manager is not None:
             manager.close()
-        self.stop_tauri_overlay_process()
 
     def check_mouse_leave(self):
         x, y = self.root.winfo_pointerxy()
