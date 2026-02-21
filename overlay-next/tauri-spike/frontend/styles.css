@@ -16,7 +16,8 @@
   font-display: swap;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -171,13 +172,11 @@ body.layout-edit-mode .layout-edit-hint {
   transform: translate(-50%, -50%) rotate(var(--glitch-rot, 0deg));
   border-left: 2px solid var(--glitch-hi, rgba(0, 242, 255, 0.92));
   border-right: 1px solid var(--glitch-hi, rgba(0, 242, 255, 0.8));
-  background: repeating-linear-gradient(
-    90deg,
-    var(--glitch-mid, rgba(0, 242, 255, 0.42)) 0px,
-    var(--glitch-mid, rgba(0, 242, 255, 0.42)) 3px,
-    rgba(8, 25, 32, 0.0) 3px,
-    rgba(8, 25, 32, 0.0) 6px
-  );
+  background: repeating-linear-gradient(90deg,
+      var(--glitch-mid, rgba(0, 242, 255, 0.42)) 0px,
+      var(--glitch-mid, rgba(0, 242, 255, 0.42)) 3px,
+      rgba(8, 25, 32, 0.0) 3px,
+      rgba(8, 25, 32, 0.0) 6px);
   box-shadow: 0 0 10px var(--glitch-shadow, rgba(0, 242, 255, 0.56));
   mix-blend-mode: screen;
   animation: glitchPop 280ms steps(2, end) forwards;
@@ -186,13 +185,11 @@ body.layout-edit-mode .layout-edit-hint {
 .fx-glitch.warn {
   border-left-color: rgba(255, 96, 96, 0.94);
   border-right-color: rgba(255, 96, 96, 0.82);
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(255, 77, 77, 0.42) 0px,
-    rgba(255, 77, 77, 0.42) 3px,
-    rgba(32, 8, 8, 0.0) 3px,
-    rgba(32, 8, 8, 0.0) 6px
-  );
+  background: repeating-linear-gradient(90deg,
+      rgba(255, 77, 77, 0.42) 0px,
+      rgba(255, 77, 77, 0.42) 3px,
+      rgba(32, 8, 8, 0.0) 3px,
+      rgba(32, 8, 8, 0.0) 6px);
   box-shadow: 0 0 10px rgba(255, 77, 77, 0.62);
 }
 
@@ -213,7 +210,16 @@ body.layout-edit-mode .layout-edit-hint {
   font-weight: 800;
   color: #ffffff;
   text-shadow: 2px 2px 2px #000, 0 0 4px #000;
-  opacity: 1;
+  opacity: 0;
+  transform: translateX(-15px);
+  animation: twitchSlideIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes twitchSlideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .overlay-twitch-msg.fade-out {
@@ -359,7 +365,7 @@ body.scifi-off .overlay-feed-item {
   transform: translate(-50%, -50%);
   font-family: "Black Ops One", "Segoe UI", Tahoma, sans-serif;
   color: #fff;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   z-index: 3;
 }
@@ -438,13 +444,25 @@ body.scifi-off .system-pips {
 }
 
 @keyframes impactWave {
-  0% { opacity: 0.72; transform: scale(0.92); }
-  100% { opacity: 0; transform: scale(1.08); }
+  0% {
+    opacity: 0.72;
+    transform: scale(0.92);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
 }
 
 @keyframes headshotFlash {
-  0% { opacity: 0.8; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0.8;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes feedSlideIn {
@@ -452,6 +470,7 @@ body.scifi-off .system-pips {
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -459,8 +478,13 @@ body.scifi-off .system-pips {
 }
 
 @keyframes markerPop {
-  from { opacity: 0.72; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.72;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fxGlitchImpact {
@@ -469,21 +493,25 @@ body.scifi-off .system-pips {
     opacity: 1;
     translate: 0 0;
   }
+
   20% {
     filter: saturate(1.55) contrast(1.2) brightness(1.2);
     opacity: 0.9;
     translate: -1px 1px;
   }
+
   45% {
     filter: saturate(1.15) contrast(1.15) brightness(1.08);
     opacity: 1;
     translate: 1px -1px;
   }
+
   68% {
     filter: saturate(1.35) contrast(1.2) brightness(1.16);
     opacity: 0.95;
     translate: -1px 0;
   }
+
   100% {
     filter: saturate(1) brightness(1);
     opacity: 1;
@@ -492,17 +520,39 @@ body.scifi-off .system-pips {
 }
 
 @keyframes glitchSliceA {
-  0% { opacity: 0.0; }
-  20% { opacity: 0.85; }
-  55% { opacity: 0.65; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0.0;
+  }
+
+  20% {
+    opacity: 0.85;
+  }
+
+  55% {
+    opacity: 0.65;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes glitchSliceB {
-  0% { opacity: 0.0; }
-  25% { opacity: 0.82; }
-  60% { opacity: 0.6; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0.0;
+  }
+
+  25% {
+    opacity: 0.82;
+  }
+
+  60% {
+    opacity: 0.6;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes burstPop {
@@ -510,6 +560,7 @@ body.scifi-off .system-pips {
     opacity: 1;
     transform: translate(-50%, -50%) scale(0.5);
   }
+
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(2.4);
@@ -517,10 +568,25 @@ body.scifi-off .system-pips {
 }
 
 @keyframes glitchPop {
-  0% { opacity: 0.95; clip-path: inset(0 0 0 0); }
-  35% { opacity: 0.7; clip-path: inset(12% 0 22% 0); }
-  70% { opacity: 0.45; clip-path: inset(38% 0 6% 0); }
-  100% { opacity: 0; clip-path: inset(0 0 0 0); }
+  0% {
+    opacity: 0.95;
+    clip-path: inset(0 0 0 0);
+  }
+
+  35% {
+    opacity: 0.7;
+    clip-path: inset(12% 0 22% 0);
+  }
+
+  70% {
+    opacity: 0.45;
+    clip-path: inset(38% 0 6% 0);
+  }
+
+  100% {
+    opacity: 0;
+    clip-path: inset(0 0 0 0);
+  }
 }
 
 @keyframes knifePop {
@@ -528,20 +594,34 @@ body.scifi-off .system-pips {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.4);
   }
+
   to {
     opacity: 1;
   }
 }
 
 @keyframes streakPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes pipFlash {
-  0% { transform: scale(0.95); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(0.95);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .exit-overlay-mode {
@@ -680,8 +760,13 @@ button:hover {
   flex: 0 0 auto;
 }
 
-.ok { color: var(--ok); }
-.bad { color: var(--bad); }
+.ok {
+  color: var(--ok);
+}
+
+.bad {
+  color: var(--bad);
+}
 
 .path {
   max-width: 250px;

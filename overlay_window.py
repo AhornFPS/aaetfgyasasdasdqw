@@ -146,7 +146,7 @@ class ChatMessageWidget(QWidget):
         self.browser.setHtml(html, base_url)
 
         self.opacity_effect = QGraphicsOpacityEffect(self)
-        self.opacity_effect.setOpacity(1.0)
+        self.opacity_effect.setOpacity(0.0)
         self.setGraphicsEffect(self.opacity_effect)
 
     def _prepare_height(self):
@@ -163,6 +163,14 @@ class ChatMessageWidget(QWidget):
             new_h = int(height) + 10  # Small buffer
             self.setFixedHeight(new_h)
             self.browser.setFixedHeight(new_h)
+
+            # Trigger fade in animation
+            self.fade_in_anim = QPropertyAnimation(self.opacity_effect, b"opacity")
+            self.fade_in_anim.setDuration(300)
+            self.fade_in_anim.setStartValue(0.0)
+            self.fade_in_anim.setEndValue(1.0)
+            self.fade_in_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.fade_in_anim.start()
 
             # ONLY NOW we start the timer for disappearance
             if self.hold_time > 0:

@@ -6396,14 +6396,19 @@ log "DONE"
         mode_gameplay = False  # Separation between "Allowed to render" and "Game is actually running"
 
         # Render if any test or edit is running
+        twitch_always_on = self.config.get("twitch", {}).get("always_on", False)
+        
         if edit_active or any_test_active or path_recording:
             should_render = True
         elif debug_active:
             should_render = True
             mode_gameplay = True
-        elif master_switch and game_running and game_focused:
+        elif master_switch and (game_running and game_focused):
             should_render = True
             mode_gameplay = True
+        elif twitch_always_on:
+            # We must broadcast visibility = True to Tauri so it can draw chat when game is closed
+            should_render = True
 
         # Linux Fix: On Wayland/Linux, we need to periodically raise the window
         if should_render and not IS_WINDOWS and self.overlay_win:
@@ -6748,11 +6753,13 @@ log "DONE"
                     ev_h = 220
                     ev_path = get_asset_path(ev_img)
                     try:
+                        from PyQt6.QtGui import QImageReader
                         if os.path.exists(ev_path):
-                            pm = QPixmap(ev_path)
-                            if not pm.isNull():
-                                ev_w = max(24, int(pm.width() * ev_scale))
-                                ev_h = max(24, int(pm.height() * ev_scale))
+                            reader = QImageReader(ev_path)
+                            size = reader.size()
+                            if size.isValid():
+                                ev_w = max(24, int(size.width() * ev_scale))
+                                ev_h = max(24, int(size.height() * ev_scale))
                     except Exception:
                         pass
                     preview["event"] = {
@@ -6786,11 +6793,13 @@ log "DONE"
                     st_h = int(220 * st_scale)
                     st_path = get_asset_path(st_img)
                     try:
+                        from PyQt6.QtGui import QImageReader
                         if os.path.exists(st_path):
-                            pm = QPixmap(st_path)
-                            if not pm.isNull():
-                                st_w = max(48, int(pm.width() * st_scale))
-                                st_h = max(48, int(pm.height() * st_scale))
+                            reader = QImageReader(st_path)
+                            size = reader.size()
+                            if size.isValid():
+                                st_w = max(48, int(size.width() * st_scale))
+                                st_h = max(48, int(size.height() * st_scale))
                     except Exception:
                         pass
                     preview["streak"] = {
@@ -6804,6 +6813,46 @@ log "DONE"
                         "ty": int(float(st_cfg.get("ty", 0)) * ui_scale),
                         "font_size": int(float(st_cfg.get("size", 26)) * st_scale),
                         "color": str(st_cfg.get("color", "#ffffff")),
+                    }
+
+                if "crosshair" in targets:
+                    cr_cfg = self.config.get("crosshair", {})
+                    cr_x = int(float(cr_cfg.get("x", 0)) * ui_scale)
+                    cr_y = int(float(cr_cfg.get("y", 0)) * ui_scale)
+                    if cr_x == 0 and cr_y == 0 and self.overlay_win:
+                        cr_x = self.overlay_win.width() // 2
+                        cr_y = self.overlay_win.height() // 2
+                    preview["crosshair"] = {
+                        "filename": cr_cfg.get("file", "crosshair.png"),
+                        "x": cr_x,
+                        "y": cr_y,
+                        "size": int(float(cr_cfg.get("size", 32)) * ui_scale),
+                        "shadow": bool(cr_cfg.get("shadow", False)),
+                    }
+
+                if "feed" in targets:
+                    kf_cfg = self.config.get("killfeed", {})
+                    kf_f = kf_cfg.get("font_size", 19)
+                    base_style = f"font-family: 'Black Ops One', sans-serif; font-size: {int(kf_f * ui_scale)}px; margin-bottom: 2px; text-align: right;"
+                    line1 = f'<div style="{base_style}"><span style="color:#00ff00;">YOU</span> <span style="color:white;">[Kill]</span> <span style="color:#ff0000;">ENEMY</span></div>'
+                    line2 = f'<div style="{base_style}"><span style="color:#00ff00;">ALLY</span> <span style="color:white;">[HS]</span> <span style="color:#ff0000;">TARGET</span></div>'
+                    line3 = f'<div style="{base_style}"><span style="color:#888;">[SKL]</span> <span style="color:#ff4444;">SWEATY</span> (4.2)</div>'
+                    preview["feed"] = {
+                        "html": line1 + line2 + line3,
+                        "x": int(float(kf_cfg.get("x", 50)) * ui_scale),
+                        "y": int(float(kf_cfg.get("y", 200)) * ui_scale),
+                        "width": int(420 * ui_scale),
+                        "height": int(150 * ui_scale),
+                    }
+
+                if "twitch" in targets:
+                    tw_cfg = self.config.get("twitch", {})
+                    preview["twitch"] = {
+                        "x": int(float(tw_cfg.get("x", 50)) * ui_scale),
+                        "y": int(float( tw_cfg.get("y", 50)) * ui_scale),
+                        "width": int(float(tw_cfg.get("width", 350)) * ui_scale),
+                        "height": int(float(tw_cfg.get("height", 400)) * ui_scale),
+                        "opacity": int(tw_cfg.get("opacity", 30)),
                     }
 
                 if preview:
