@@ -1881,30 +1881,80 @@ class DiorClientGUI:
 
     def on_overlay_item_moved(self, item_name, x, y):
         """Called when an item in the overlay was moved with the mouse."""
-        if item_name == "twitch":
-            # Update slider without updating the overlay again (prevent loop)
-            ui = self.ovl_config_win
+        raw_name = str(item_name or "")
+        from_tauri = raw_name.startswith("tauri:")
+        name = raw_name.split(":", 1)[1] if from_tauri else raw_name
+
+        try:
+            px = int(x)
+            py = int(y)
+        except Exception:
+            return
+
+        lx, ly = px, py
+        if from_tauri and self.overlay_win:
+            try:
+                scale = float(getattr(self.overlay_win, "ui_scale", 1.0) or 1.0)
+                if scale > 0:
+                    lx = int(round(px / scale))
+                    ly = int(round(py / scale))
+            except Exception:
+                pass
+
+        ui = self.ovl_config_win
+        changed = False
+
+        if name == "twitch":
             ui.slider_twitch_x.blockSignals(True)
             ui.slider_twitch_y.blockSignals(True)
-
-            # Back-calculation of scaling (if you used s())
-            # Since we move absolute pixels in the overlay, we set raw values here.
-            # Caution: If your overlay is scaled, you must divide by the factor here!
-            # Let's assume 1:1 mapping for now:
-            ui.slider_twitch_x.setValue(x)
-            ui.slider_twitch_y.setValue(y)
-
+            ui.slider_twitch_x.setValue(int(lx))
+            ui.slider_twitch_y.setValue(int(ly))
             ui.slider_twitch_x.blockSignals(False)
             ui.slider_twitch_y.blockSignals(False)
-        elif item_name == "stats":
-            ui = self.ovl_config_win
-            if hasattr(ui, "slider_st_x") and hasattr(ui, "slider_st_y"):
-                ui.slider_st_x.blockSignals(True)
-                ui.slider_st_y.blockSignals(True)
-                ui.slider_st_x.setValue(int(x))
-                ui.slider_st_y.setValue(int(y))
-                ui.slider_st_x.blockSignals(False)
-                ui.slider_st_y.blockSignals(False)
+            self.config.setdefault("twitch", {})
+            self.config["twitch"]["x"] = int(lx)
+            self.config["twitch"]["y"] = int(ly)
+            changed = True
+        elif name == "stats":
+            self.config.setdefault("stats_widget", {})
+            self.config["stats_widget"]["x"] = int(lx)
+            self.config["stats_widget"]["y"] = int(ly)
+            changed = True
+        elif name == "feed":
+            self.config.setdefault("killfeed", {})
+            self.config["killfeed"]["x"] = int(lx)
+            self.config["killfeed"]["y"] = int(ly)
+            changed = True
+        elif name == "streak":
+            self.config.setdefault("streak", {})
+            self.config["streak"]["x"] = int(lx)
+            self.config["streak"]["y"] = int(ly)
+            changed = True
+        elif name == "crosshair":
+            self.config.setdefault("crosshair", {})
+            self.config["crosshair"]["x"] = int(lx)
+            self.config["crosshair"]["y"] = int(ly)
+            changed = True
+        elif name == "event":
+            evt = ""
+            try:
+                evt = ui.lbl_editing.text().replace("EDITING: ", "").strip()
+            except Exception:
+                evt = ""
+            if evt and evt in self.config.get("events", {}):
+                self.config["events"][evt]["x"] = int(lx)
+                self.config["events"][evt]["y"] = int(ly)
+                changed = True
+        elif name == "layout_mode":
+            enabled = bool(int(lx))
+            self.is_hud_editing = enabled
+            if not enabled:
+                self.current_edit_targets = []
+                self._reset_move_ui_buttons()
+                self.add_log("INFO: Tauri MOVE UI exited via overlay.")
+
+        if changed:
+            self.save_config()
 
     def trigger_twitch_test(self):
         """Triggers a standard test message to check layout and position."""
@@ -6655,16 +6705,6 @@ log "DONE"
         Starts edit mode, shows borders, fills dummy data
         and enables Drag & Drop.
         """
-        # Move/Edit UI is currently implemented only for the legacy Qt overlay.
-        # In Tauri backend mode we must not invoke legacy edit widgets.
-        if self.current_overlay_backend() != "legacy":
-            self.is_hud_editing = False
-            self.current_edit_targets = []
-            self._reset_move_ui_buttons()
-            self.add_log("INFO: MOVE UI is only available in Legacy overlay mode.")
-            self.add_log("INFO: Switch Overlay Backend to Legacy to move elements.")
-            return
-
         if not self.overlay_win:
             self.add_log("ERR: Overlay is not running! Please start overlay first.")
             # Try to start it if master switch is on
@@ -6683,6 +6723,117 @@ log "DONE"
         if not targets:
             self.add_log("INFO: Please select a tab first.")
             self.is_hud_editing = False
+            return
+
+        # Tauri backend: use WS-driven edit mode and native drag in the Tauri overlay.
+        if self.current_overlay_backend() == "tauri":
+            payload = {"enabled": bool(is_editing), "targets": list(targets)}
+            if is_editing:
+                preview = {}
+                try:
+                    ui_scale = float(getattr(self.overlay_win, "ui_scale", 1.0) or 1.0)
+                except Exception:
+                    ui_scale = 1.0
+
+                if "event" in targets:
+                    evt_name = ""
+                    try:
+                        evt_name = self.ovl_config_win.lbl_editing.text().replace("EDITING: ", "").strip()
+                    except Exception:
+                        evt_name = ""
+                    ev_cfg = self.config.get("events", {}).get(evt_name, {}) if evt_name else {}
+                    ev_img = clean_path(ev_cfg.get("img", "kill.png"))
+                    ev_scale = float(ev_cfg.get("scale", 1.0) or 1.0) * ui_scale
+                    ev_w = 220
+                    ev_h = 220
+                    ev_path = get_asset_path(ev_img)
+                    try:
+                        if os.path.exists(ev_path):
+                            pm = QPixmap(ev_path)
+                            if not pm.isNull():
+                                ev_w = max(24, int(pm.width() * ev_scale))
+                                ev_h = max(24, int(pm.height() * ev_scale))
+                    except Exception:
+                        pass
+                    preview["event"] = {
+                        "filename": ev_img,
+                        "x": int(float(ev_cfg.get("x", 100)) * ui_scale),
+                        "y": int(float(ev_cfg.get("y", 100)) * ui_scale),
+                        "width": int(ev_w),
+                        "height": int(ev_h),
+                        "scale": 1.0,
+                    }
+
+                if "stats" in targets:
+                    # Use the same runtime stats pipeline as debug/regular overlay
+                    # so Move UI preview is not a separate placeholder renderer.
+                    try:
+                        if self.overlay_win:
+                            stats_obj, is_dummy = self._resolve_overlay_stats_payload()
+                            self.overlay_win.update_stats_display(stats_obj, is_dummy=is_dummy)
+                            sp = copy.deepcopy(getattr(self.overlay_win, "_last_stats_payload", None))
+                            if isinstance(sp, dict) and sp.get("html"):
+                                preview["stats"] = sp
+                    except Exception:
+                        pass
+
+                if "streak" in targets:
+                    st_cfg_raw = self.config.get("streak", {})
+                    st_cfg = st_cfg_raw if isinstance(st_cfg_raw, dict) else {}
+                    st_img = clean_path(st_cfg.get("img", "KS_Counter.png"))
+                    st_scale = float(st_cfg.get("scale", 1.0) or 1.0) * ui_scale
+                    st_w = int(220 * st_scale)
+                    st_h = int(220 * st_scale)
+                    st_path = get_asset_path(st_img)
+                    try:
+                        if os.path.exists(st_path):
+                            pm = QPixmap(st_path)
+                            if not pm.isNull():
+                                st_w = max(48, int(pm.width() * st_scale))
+                                st_h = max(48, int(pm.height() * st_scale))
+                    except Exception:
+                        pass
+                    preview["streak"] = {
+                        "bg_filename": st_img,
+                        "bg_width": int(st_w),
+                        "bg_height": int(st_h),
+                        "x": int(float(st_cfg.get("x", 100)) * ui_scale),
+                        "y": int(float(st_cfg.get("y", 100)) * ui_scale),
+                        "count": 10,
+                        "tx": int(float(st_cfg.get("tx", 0)) * ui_scale),
+                        "ty": int(float(st_cfg.get("ty", 0)) * ui_scale),
+                        "font_size": int(float(st_cfg.get("size", 26)) * st_scale),
+                        "color": str(st_cfg.get("color", "#ffffff")),
+                    }
+
+                if preview:
+                    payload["preview"] = preview
+
+            try:
+                if hasattr(self.overlay_win, "_broadcast_overlay"):
+                    self.overlay_win._broadcast_overlay(
+                        "layout_edit_mode",
+                        payload,
+                    )
+            except Exception:
+                pass
+
+            self.current_edit_targets = targets if is_editing else []
+            if is_editing:
+                self.add_log(f"INFO: Tauri MOVE UI enabled for {', '.join(targets)}.")
+            else:
+                self.add_log("INFO: Tauri MOVE UI disabled.")
+
+            ui = self.ovl_config_win
+            for btn in [ui.btn_edit_hud, ui.btn_edit_cross, ui.btn_edit_streak, ui.btn_edit_hud_stats, ui.btn_edit_hud_feed, ui.btn_edit_twitch]:
+                if is_editing:
+                    btn.setText("STOP EDIT (SAVE)")
+                    btn.setStyleSheet(
+                        "background-color: #ff0000; color: white; border: 1px solid #cc0000; font-weight: bold;"
+                    )
+                else:
+                    btn.setText("MOVE UI")
+                    btn.setStyleSheet("")
             return
 
         # Buttons for coloring

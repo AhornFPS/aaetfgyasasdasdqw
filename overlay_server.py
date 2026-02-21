@@ -197,6 +197,55 @@ class AssetHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 return
 
+            if req_path == '/dev/item-moved':
+                item = str((query.get("item", [""])[0] or "")).strip().lower()
+                try:
+                    x = int(float((query.get("x", ["0"])[0] or "0")))
+                    y = int(float((query.get("y", ["0"])[0] or "0")))
+                except Exception:
+                    x = 0
+                    y = 0
+                ok = False
+                overlay_server = getattr(self.server, "overlay_server", None)
+                callback = getattr(overlay_server, "_item_moved_callback", None)
+                if callable(callback) and item:
+                    try:
+                        callback(item, x, y)
+                        ok = True
+                    except Exception as cb_err:
+                        server_log(f"HTTP item-moved callback error: {cb_err}")
+                payload = json.dumps({"ok": ok, "item": item, "x": x, "y": y}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            if req_path == '/dev/layout-edit-mode':
+                raw = str((query.get("enabled", ["0"])[0] or "0")).strip().lower()
+                enabled = raw in {"1", "true", "yes", "on"}
+                ok = False
+                overlay_server = getattr(self.server, "overlay_server", None)
+                callback = getattr(overlay_server, "_layout_edit_mode_callback", None)
+                if callable(callback):
+                    try:
+                        callback(enabled)
+                        ok = True
+                    except Exception as cb_err:
+                        server_log(f"HTTP layout-edit callback error: {cb_err}")
+                payload = json.dumps({"ok": ok, "enabled": enabled}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
             if req_path.startswith('/web/'):
                 return self._serve_web_file(req_path)
 
@@ -275,6 +324,14 @@ class OverlayServer:
             "last_emit_payload_ms": 0,
         }
         self._dev_overlay_visibility_mode = "auto"  # auto | hide | show
+        self._item_moved_callback = None
+        self._layout_edit_mode_callback = None
+
+    def set_item_moved_callback(self, callback):
+        self._item_moved_callback = callback
+
+    def set_layout_edit_mode_callback(self, callback):
+        self._layout_edit_mode_callback = callback
 
     def set_perf_debug(self, enabled):
         self.perf_debug = bool(enabled)

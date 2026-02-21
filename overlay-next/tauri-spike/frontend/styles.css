@@ -42,6 +42,79 @@ html, body {
   z-index: 5;
 }
 
+.layout-edit-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.layout-edit-hint {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 28;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 242, 255, 0.9);
+  background: rgba(0, 0, 0, 0.72);
+  color: #00f2ff;
+  font: 700 12px/1.2 "Segoe UI", Tahoma, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+body.layout-edit-mode .layout-edit-hint {
+  display: block;
+}
+
+.layout-handle {
+  position: absolute;
+  border: 2px dashed rgba(0, 242, 255, 0.9);
+  background: rgba(0, 242, 255, 0.08);
+  box-shadow: 0 0 8px rgba(0, 242, 255, 0.28);
+  pointer-events: auto;
+  cursor: move;
+}
+
+.layout-snap-guide {
+  position: absolute;
+  background: rgba(0, 242, 255, 0.82);
+  box-shadow: 0 0 8px rgba(0, 242, 255, 0.55);
+  pointer-events: none;
+}
+
+.layout-snap-guide.v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.layout-snap-guide.h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.layout-snap-guide.edge {
+  background: rgba(255, 210, 64, 0.92);
+  box-shadow: 0 0 8px rgba(255, 210, 64, 0.65);
+}
+
+.layout-handle-label {
+  position: absolute;
+  top: -22px;
+  left: 0;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(0, 242, 255, 0.9);
+  color: #00f2ff;
+  font: 700 11px/1.2 "Segoe UI", Tahoma, sans-serif;
+  padding: 2px 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
 .native-layer {
   position: absolute;
   inset: 0;

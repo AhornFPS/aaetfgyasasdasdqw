@@ -14,6 +14,10 @@ const observedAssetOrder = [];
 let assetCacheHits = 0;
 let assetCacheMisses = 0;
 let overlayMode = false;
+let layoutEditMode = false;
+let layoutEditTargets = [];
+let activeDrag = null;
+let lastLayoutExitMs = 0;
 const LAT_WINDOW = 200;
 const srcSamples = [];
 const rxSamples = [];
@@ -37,6 +41,7 @@ const feedLayerEl = document.getElementById("feed-layer");
 const statsLayerEl = document.getElementById("stats-layer");
 const streakLayerEl = document.getElementById("streak-layer");
 const twitchLayerEl = document.getElementById("twitch-layer");
+const layoutEditLayerEl = document.getElementById("layout-edit-layer");
 const eventsLayerEl = document.getElementById("events-layer");
 const hitmarkerLayerEl = document.getElementById("hitmarker-layer");
 const crosshairLayerEl = document.getElementById("crosshair-layer");
@@ -51,6 +56,7 @@ const assetCacheStatsEl = document.getElementById("asset-cache-stats");
 const nativeOverlayEl = document.getElementById("native-overlay");
 
 const MAX_ASSET_CACHE = 50;
+const LAYOUT_SNAP_THRESHOLD = 12;
 
 let overlayVisible = false;
 let scifiEnabled = true;
@@ -69,6 +75,10 @@ const STARTUP_QUIET_MS = 1300;
 let feedConfig = { x: 0, y: 0, width: 600, height: 550, max_items: 6 };
 let twitchConfig = { x: 50, y: 300, width: 350, height: 400, opacity: 30, font_size: 12 };
 let twitchVisible = false;
+let lastStatsPayload = null;
+let lastCrosshairPayload = null;
+let lastStreakPayload = null;
+let layoutPreview = { event: false, streak: false, stats: false };
 const activeTransientByKey = new Map();
 const systemPips = {};
 document.querySelectorAll(".sys-pip").forEach((el) => {
@@ -142,6 +152,7 @@ function applyOverlayVisibility(visible) {
   if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = overlayVisible ? "block" : "none";
   if (crosshairLayerEl) crosshairLayerEl.style.display = overlayVisible ? "block" : "none";
   if (nativeOverlayEl) nativeOverlayEl.style.visibility = overlayVisible ? "visible" : "hidden";
+  updateLayoutEditTargets();
 }
 
 function applyTwitchConfig(data) {
@@ -160,6 +171,7 @@ function applyTwitchConfig(data) {
   twitchLayerEl.style.height = `${twitchConfig.height}px`;
   const alpha = Math.max(0, Math.min(1, twitchConfig.opacity / 100));
   twitchLayerEl.style.backgroundColor = `rgba(0, 0, 0, ${alpha})`;
+  updateLayoutEditTargets();
 }
 
 function setTwitchVisibility(data) {
@@ -446,6 +458,7 @@ function setPos(el, data, centered, applyScale = true) {
   if (centered) {
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
+    el.style.transformOrigin = "center center";
     el.style.transform = applyScale
       ? `translate(-50%, -50%) scale(${scale})`
       : "translate(-50%, -50%)";
@@ -453,6 +466,8 @@ function setPos(el, data, centered, applyScale = true) {
   }
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
+  // Keep top-left anchoring stable even when scaling is applied.
+  el.style.transformOrigin = "top left";
   el.style.transform = applyScale ? `scale(${scale})` : "none";
 }
 
@@ -463,6 +478,7 @@ function clearEventsLayer() {
   activeTransientByKey.clear();
   if (eventsLayerEl) eventsLayerEl.innerHTML = "";
   if (hitmarkerLayerEl) hitmarkerLayerEl.innerHTML = "";
+  updateLayoutEditTargets();
 }
 
 function applyFeedConfig(data) {
@@ -478,6 +494,7 @@ function applyFeedConfig(data) {
   feedLayerEl.style.top = `${feedConfig.y}px`;
   feedLayerEl.style.width = `${feedConfig.width}px`;
   feedLayerEl.style.maxHeight = `${feedConfig.height}px`;
+  updateLayoutEditTargets();
 }
 
 function appendFeed(data) {
@@ -525,9 +542,12 @@ function appendFeed(data) {
 function updateStats(data) {
   if (!statsLayerEl) return;
   if (!data || !data.html) {
+    lastStatsPayload = null;
     statsLayerEl.innerHTML = "";
+    updateLayoutEditTargets();
     return;
   }
+  lastStatsPayload = { ...data };
   const card = document.createElement("div");
   card.className = "overlay-stats-card";
   card.innerHTML = data.html;
@@ -544,6 +564,7 @@ function updateStats(data) {
     scale: 1
   }, true, false);
   statsLayerEl.replaceChildren(card);
+  updateLayoutEditTargets();
   activateSystem("stats");
   setTelemetry("COMBAT METRICS SYNCHRONIZED");
 }
@@ -551,7 +572,12 @@ function updateStats(data) {
 function updateCrosshair(data) {
   if (!crosshairLayerEl) return;
   crosshairLayerEl.innerHTML = "";
-  if (!data || !data.enabled || !data.filename) return;
+  if (!data || !data.enabled || !data.filename) {
+    lastCrosshairPayload = null;
+    updateLayoutEditTargets();
+    return;
+  }
+  lastCrosshairPayload = { ...data };
 
   if (data.shadow) {
     const core = document.createElement("div");
@@ -571,13 +597,19 @@ function updateCrosshair(data) {
   img.style.height = `${Number(data.size || 64)}px`;
   setPos(img, data, true);
   crosshairLayerEl.appendChild(img);
+  updateLayoutEditTargets();
   activateSystem("crosshair");
 }
 
 function renderStreak(data) {
   if (!streakLayerEl) return;
   streakLayerEl.innerHTML = "";
-  if (!data || !data.visible) return;
+  if (!data || !data.visible) {
+    lastStreakPayload = null;
+    updateLayoutEditTargets();
+    return;
+  }
+  lastStreakPayload = { ...data };
 
   const wrap = document.createElement("div");
   wrap.className = "overlay-streak";
@@ -639,6 +671,7 @@ function renderStreak(data) {
   count.style.transform = `translate(-50%, -50%) translate(${Number(data.tx || 0)}px, ${Number(data.ty || 0)}px)`;
   wrap.appendChild(count);
   streakLayerEl.appendChild(wrap);
+  updateLayoutEditTargets();
   activateSystem("streak");
   setTelemetry(`KILLSTREAK LOCKED: x${Number(data.count || 0)}`);
 }
@@ -730,6 +763,7 @@ function pushTransientEvent(layerEl, data, fallbackType) {
     spawnBurst(cx, cy, warn);
   }
   activateSystem(evType.includes("hitmarker") ? "event" : "event", warn);
+  updateLayoutEditTargets();
 }
 
 function applyEventGlow(target, evType, glowEnabled, glowColor, glitchEnabled) {
@@ -857,6 +891,7 @@ function dispatchNativeEvent(evt) {
   const stateWhileHidden = new Set([
     "overlay_visibility",
     "scifi_mode",
+    "layout_edit_mode",
     "feed_config",
     "twitch_config",
     "twitch_visibility",
@@ -889,6 +924,9 @@ function dispatchNativeEvent(evt) {
       return;
     }
     applyOverlayVisibility(!(data && data.visible === false));
+  }
+  else if (category === "layout_edit_mode") {
+    applyLayoutEditMode(data);
   }
 }
 
@@ -937,6 +975,364 @@ async function setLegacyOverlaySuppressed(enabled) {
   if (!ok) {
     appendLog(`[overlay] legacy toggle failed (no control endpoint found for mode=${mode})`, "bad");
   }
+}
+
+async function notifyItemMoved(item, x, y) {
+  const name = String(item || "").trim().toLowerCase();
+  if (!name) return false;
+  const ports = overlayControlPortCandidates();
+  for (const p of ports) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(
+        `http://127.0.0.1:${p}/dev/item-moved?item=${encodeURIComponent(name)}&x=${encodeURIComponent(String(x))}&y=${encodeURIComponent(String(y))}`,
+        { cache: "no-store" },
+      );
+      if (res && res.ok) return true;
+    } catch {
+      // keep trying
+    }
+  }
+  return false;
+}
+
+async function notifyLayoutEditMode(enabled) {
+  const ports = overlayControlPortCandidates();
+  for (const p of ports) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(
+        `http://127.0.0.1:${p}/dev/layout-edit-mode?enabled=${enabled ? "1" : "0"}`,
+        { cache: "no-store" },
+      );
+      if (res && res.ok) return true;
+    } catch {
+      // keep trying
+    }
+  }
+  return false;
+}
+
+function ensureSnapGuide(key, cls) {
+  if (!layoutEditLayerEl) return null;
+  let el = layoutEditLayerEl.querySelector(`.layout-snap-guide[data-guide="${key}"]`);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = `layout-snap-guide ${cls}`;
+    el.dataset.guide = key;
+    el.style.display = "none";
+    layoutEditLayerEl.appendChild(el);
+  }
+  return el;
+}
+
+function updateSnapGuides(flags) {
+  const f = flags || {};
+  const gVCenter = ensureSnapGuide("center-v", "v");
+  const gHCenter = ensureSnapGuide("center-h", "h");
+  const gVLeft = ensureSnapGuide("edge-left", "v edge");
+  const gVRight = ensureSnapGuide("edge-right", "v edge");
+  const gHTop = ensureSnapGuide("edge-top", "h edge");
+  const gHBottom = ensureSnapGuide("edge-bottom", "h edge");
+
+  if (gVCenter) {
+    gVCenter.style.display = f.centerX ? "block" : "none";
+    gVCenter.style.left = `${Math.round(window.innerWidth / 2)}px`;
+  }
+  if (gHCenter) {
+    gHCenter.style.display = f.centerY ? "block" : "none";
+    gHCenter.style.top = `${Math.round(window.innerHeight / 2)}px`;
+  }
+  if (gVLeft) {
+    gVLeft.style.display = f.left ? "block" : "none";
+    gVLeft.style.left = "0px";
+  }
+  if (gVRight) {
+    gVRight.style.display = f.right ? "block" : "none";
+    gVRight.style.left = `${Math.max(0, Math.round(window.innerWidth - 1))}px`;
+  }
+  if (gHTop) {
+    gHTop.style.display = f.top ? "block" : "none";
+    gHTop.style.top = "0px";
+  }
+  if (gHBottom) {
+    gHBottom.style.display = f.bottom ? "block" : "none";
+    gHBottom.style.top = `${Math.max(0, Math.round(window.innerHeight - 1))}px`;
+  }
+}
+
+function clearLayoutEditMarkers() {
+  if (!layoutEditLayerEl) return;
+  const handles = layoutEditLayerEl.querySelectorAll(".layout-handle");
+  handles.forEach((h) => h.remove());
+  updateSnapGuides({});
+}
+
+function getMoveTargetElement(target) {
+  const t = String(target || "").toLowerCase();
+  if (t === "feed") return feedLayerEl;
+  if (t === "twitch") return twitchLayerEl;
+  if (t === "stats") return statsLayerEl ? (statsLayerEl.querySelector(".layout-preview.overlay-stats-card") || statsLayerEl.firstElementChild) : null;
+  if (t === "streak") return streakLayerEl ? (streakLayerEl.querySelector(".overlay-streak.layout-preview") || streakLayerEl.querySelector(".overlay-streak")) : null;
+  if (t === "crosshair") return crosshairLayerEl ? crosshairLayerEl.querySelector("img.overlay-transient") : null;
+  if (t === "event") {
+    const preview = eventsLayerEl && eventsLayerEl.querySelector(".layout-preview.event-item");
+    if (preview) return preview;
+    return (eventsLayerEl && eventsLayerEl.lastElementChild) || (hitmarkerLayerEl && hitmarkerLayerEl.lastElementChild);
+  }
+  return null;
+}
+
+function clearLayoutPreviews() {
+  if (eventsLayerEl) {
+    const ev = eventsLayerEl.querySelectorAll(".layout-preview");
+    ev.forEach((n) => n.remove());
+  }
+  if (streakLayerEl) {
+    const st = streakLayerEl.querySelectorAll(".layout-preview");
+    st.forEach((n) => n.remove());
+  }
+  layoutPreview.event = false;
+  layoutPreview.streak = false;
+  if (statsLayerEl) {
+    const st = statsLayerEl.querySelectorAll(".layout-preview");
+    st.forEach((n) => n.remove());
+  }
+  layoutPreview.stats = false;
+}
+
+function ensureLayoutEventPreview(previewData) {
+  if (!eventsLayerEl) return;
+  const existing = eventsLayerEl.querySelector(".layout-preview.event-item");
+  if (existing) return;
+  const data = previewData && typeof previewData === "object" ? previewData : {};
+  const filename = String(data.filename || "").trim();
+  if (!filename) return;
+  const img = document.createElement("img");
+  img.className = "overlay-transient event-item event-generic layout-preview";
+  img.src = assetUrl(filename);
+  img.style.width = `${Number(data.width || 220)}px`;
+  img.style.height = `${Number(data.height || 220)}px`;
+  const payload = {
+    x: Number(data.x || 200),
+    y: Number(data.y || 200),
+    scale: Number(data.scale || 1),
+  };
+  setPos(img, payload, false);
+  eventsLayerEl.appendChild(img);
+  layoutPreview.event = true;
+}
+
+function ensureLayoutStreakPreview(previewData) {
+  if (!streakLayerEl) return;
+  if (lastStreakPayload && lastStreakPayload.visible) return;
+  const existing = streakLayerEl.querySelector(".layout-preview.overlay-streak");
+  if (existing) return;
+  const data = previewData && typeof previewData === "object" ? previewData : {};
+  const bg = String(data.bg_filename || "").trim();
+  if (!bg) return;
+  const wrap = document.createElement("div");
+  wrap.className = "overlay-streak layout-preview";
+  wrap.style.left = `${Number(data.x || 300)}px`;
+  wrap.style.top = `${Number(data.y || 300)}px`;
+  wrap.style.transform = "none";
+  const bgImg = document.createElement("img");
+  bgImg.className = "overlay-streak-bg";
+  bgImg.src = assetUrl(bg);
+  bgImg.style.width = `${Number(data.bg_width || 220)}px`;
+  bgImg.style.height = `${Number(data.bg_height || 220)}px`;
+  wrap.appendChild(bgImg);
+  const count = document.createElement("div");
+  count.className = "overlay-streak-count";
+  count.textContent = String(data.count || 10);
+  count.style.fontSize = `${Number(data.font_size || 26)}px`;
+  count.style.color = String(data.color || "#fff");
+  count.style.transform = `translate(-50%, -50%) translate(${Number(data.tx || 0)}px, ${Number(data.ty || 0)}px)`;
+  wrap.appendChild(count);
+  streakLayerEl.appendChild(wrap);
+  layoutPreview.streak = true;
+}
+
+function ensureLayoutStatsPreview(previewData) {
+  if (!statsLayerEl) return;
+  if (statsLayerEl.firstElementChild && !statsLayerEl.firstElementChild.classList.contains("layout-preview")) return;
+  const existing = statsLayerEl.querySelector(".layout-preview.overlay-stats-card");
+  if (existing) return;
+  const data = previewData && typeof previewData === "object" ? previewData : {};
+  if (!data || !data.html) return;
+  const card = document.createElement("div");
+  card.className = "overlay-stats-card layout-preview";
+  card.innerHTML = String(data.html || "");
+  lastStatsPayload = { ...data };
+  const payload = {
+    x: Number(data.x || 50) + Number((data.box_width || 450) / 2) + Number(data.tx || 0),
+    y: Number(data.y || 500) + Number((data.box_height || 60) / 2) + Number(data.ty || 0),
+    scale: 1,
+  };
+  setPos(card, payload, true, false);
+  statsLayerEl.appendChild(card);
+  layoutPreview.stats = true;
+}
+
+function appendLayoutHandle(target, rect) {
+  if (!layoutEditLayerEl || !rect) return;
+  const h = document.createElement("div");
+  h.className = "layout-handle";
+  h.dataset.moveTarget = String(target);
+  h.style.left = `${Math.round(rect.left)}px`;
+  h.style.top = `${Math.round(rect.top)}px`;
+  h.style.width = `${Math.max(14, Math.round(rect.width))}px`;
+  h.style.height = `${Math.max(14, Math.round(rect.height))}px`;
+  const lbl = document.createElement("div");
+  lbl.className = "layout-handle-label";
+  lbl.textContent = String(target).toUpperCase();
+  h.appendChild(lbl);
+  layoutEditLayerEl.appendChild(h);
+}
+
+function updateLayoutEditTargets() {
+  if (activeDrag) return;
+  clearLayoutEditMarkers();
+  if (!layoutEditMode || !layoutEditLayerEl) return;
+  const targets = new Set((Array.isArray(layoutEditTargets) ? layoutEditTargets : []).map((v) => String(v).toLowerCase()));
+  targets.forEach((target) => {
+    const el = getMoveTargetElement(target);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    appendLayoutHandle(target, rect);
+  });
+}
+
+function startLayoutDrag(ev, targetEl, moveTarget) {
+  if (!layoutEditMode || !targetEl) return;
+  const rect = targetEl.getBoundingClientRect();
+  const left = Number.isFinite(parseFloat(targetEl.style.left)) ? parseFloat(targetEl.style.left) : rect.left;
+  const top = Number.isFinite(parseFloat(targetEl.style.top)) ? parseFloat(targetEl.style.top) : rect.top;
+  activeDrag = {
+    item: String(moveTarget || ""),
+    el: targetEl,
+    startMouseX: Number(ev.clientX || 0),
+    startMouseY: Number(ev.clientY || 0),
+    startLeft: left,
+    startTop: top,
+    width: rect.width,
+    height: rect.height,
+  };
+  try {
+    targetEl.setPointerCapture(ev.pointerId);
+  } catch {}
+  ev.preventDefault();
+  ev.stopPropagation();
+}
+
+function updateLayoutDrag(ev) {
+  if (!activeDrag) return;
+  const dx = Number(ev.clientX || 0) - activeDrag.startMouseX;
+  const dy = Number(ev.clientY || 0) - activeDrag.startMouseY;
+  let x = Math.round(activeDrag.startLeft + dx);
+  let y = Math.round(activeDrag.startTop + dy);
+  const centerX = x + (activeDrag.width / 2);
+  const centerY = y + (activeDrag.height / 2);
+  const midX = window.innerWidth / 2;
+  const midY = window.innerHeight / 2;
+  const snapCenterX = Math.abs(centerX - midX) <= LAYOUT_SNAP_THRESHOLD;
+  const snapCenterY = Math.abs(centerY - midY) <= LAYOUT_SNAP_THRESHOLD;
+  const snapLeft = Math.abs(x - 0) <= LAYOUT_SNAP_THRESHOLD;
+  const snapRight = Math.abs((x + activeDrag.width) - window.innerWidth) <= LAYOUT_SNAP_THRESHOLD;
+  const snapTop = Math.abs(y - 0) <= LAYOUT_SNAP_THRESHOLD;
+  const snapBottom = Math.abs((y + activeDrag.height) - window.innerHeight) <= LAYOUT_SNAP_THRESHOLD;
+
+  if (snapCenterX) x = Math.round(midX - (activeDrag.width / 2));
+  else if (snapLeft) x = 0;
+  else if (snapRight) x = Math.round(window.innerWidth - activeDrag.width);
+
+  if (snapCenterY) y = Math.round(midY - (activeDrag.height / 2));
+  else if (snapTop) y = 0;
+  else if (snapBottom) y = Math.round(window.innerHeight - activeDrag.height);
+
+  updateSnapGuides({
+    centerX: snapCenterX,
+    centerY: snapCenterY,
+    left: !snapCenterX && snapLeft,
+    right: !snapCenterX && snapRight,
+    top: !snapCenterY && snapTop,
+    bottom: !snapCenterY && snapBottom,
+  });
+  activeDrag.el.style.left = `${x}px`;
+  activeDrag.el.style.top = `${y}px`;
+  const item = String(activeDrag.item || "").toLowerCase();
+  const targetEl = getMoveTargetElement(item);
+  if (targetEl) {
+    if (item === "stats" || item === "crosshair") {
+      const cx = Math.round(x + (activeDrag.width / 2));
+      const cy = Math.round(y + (activeDrag.height / 2));
+      targetEl.style.left = `${cx}px`;
+      targetEl.style.top = `${cy}px`;
+      targetEl.style.transform = "translate(-50%, -50%)";
+      targetEl.style.transformOrigin = "center center";
+    } else {
+      targetEl.style.left = `${x}px`;
+      targetEl.style.top = `${y}px`;
+      // Keep existing scale transform for events and default style for others.
+    }
+  }
+}
+
+async function endLayoutDrag(ev) {
+  if (!activeDrag) return;
+  const d = activeDrag;
+  activeDrag = null;
+  updateSnapGuides({});
+  try {
+    d.el.releasePointerCapture(ev.pointerId);
+  } catch {}
+  const left = Number.isFinite(parseFloat(d.el.style.left)) ? parseFloat(d.el.style.left) : d.startLeft;
+  const top = Number.isFinite(parseFloat(d.el.style.top)) ? parseFloat(d.el.style.top) : d.startTop;
+  let sx = Math.round(left);
+  let sy = Math.round(top);
+  if (d.item === "crosshair") {
+    sx = Math.round(left + (d.width / 2));
+    sy = Math.round(top + (d.height / 2));
+  } else if (d.item === "stats" && lastStatsPayload) {
+    const centerX = left + (d.width / 2);
+    const centerY = top + (d.height / 2);
+    const bw = Number(lastStatsPayload.box_width || 450);
+    const bh = Number(lastStatsPayload.box_height || 60);
+    const tx = Number(lastStatsPayload.tx || 0);
+    const ty = Number(lastStatsPayload.ty || 0);
+    sx = Math.round(centerX - (bw / 2) - tx);
+    sy = Math.round(centerY - (bh / 2) - ty);
+  }
+  const ok = await notifyItemMoved(d.item, sx, sy);
+  if (!ok) appendLog(`[layout] failed to persist ${d.item} (${sx},${sy})`, "bad");
+  updateLayoutEditTargets();
+}
+
+async function applyLayoutEditMode(data) {
+  const enabled = !!(data && data.enabled);
+  const targets = Array.isArray(data && data.targets) ? data.targets : [];
+  const preview = (data && data.preview && typeof data.preview === "object") ? data.preview : {};
+  layoutEditMode = enabled;
+  layoutEditTargets = targets.map((v) => String(v).toLowerCase());
+  document.body.classList.toggle("layout-edit-mode", layoutEditMode);
+  if (layoutEditMode) {
+    await setClickthrough(false);
+    if (layoutEditTargets.includes("stats")) {
+      ensureLayoutStatsPreview(preview.stats);
+    }
+    if (layoutEditTargets.includes("event")) {
+      ensureLayoutEventPreview(preview.event);
+    }
+    if (layoutEditTargets.includes("streak")) {
+      ensureLayoutStreakPreview(preview.streak);
+    }
+  } else if (overlayMode) {
+    await setClickthrough(true);
+    lastLayoutExitMs = Date.now();
+    clearLayoutPreviews();
+  }
+  updateLayoutEditTargets();
+  appendLog(`[layout] edit mode ${layoutEditMode ? "ON" : "OFF"} ${layoutEditTargets.join(",")}`, layoutEditMode ? "ok" : "");
 }
 
 function eventTypeOf(evt, data) {
@@ -1211,6 +1607,27 @@ if (copySnapshotPathBtn) {
   });
 }
 
+window.addEventListener("pointerdown", (ev) => {
+  if (!layoutEditMode) return;
+  const targetEl = ev.target && ev.target.closest ? ev.target.closest("[data-move-target]") : null;
+  if (!targetEl) return;
+  const moveTarget = String(targetEl.dataset.moveTarget || "");
+  if (!moveTarget) return;
+  startLayoutDrag(ev, targetEl, moveTarget);
+});
+
+window.addEventListener("pointermove", (ev) => {
+  updateLayoutDrag(ev);
+});
+
+window.addEventListener("pointerup", (ev) => {
+  endLayoutDrag(ev).catch(() => {});
+});
+
+window.addEventListener("pointercancel", (ev) => {
+  endLayoutDrag(ev).catch(() => {});
+});
+
 if (clearBtn) {
   clearBtn.addEventListener("click", () => {
   logEl.innerHTML = "";
@@ -1267,6 +1684,14 @@ setTimeout(() => {
 }, 350);
 
 window.addEventListener("keydown", async (ev) => {
+  if (ev.key === "Escape" && layoutEditMode) {
+    await notifyLayoutEditMode(false);
+    await applyLayoutEditMode({ enabled: false, targets: [] });
+    return;
+  }
+  if (ev.key === "Escape" && (Date.now() - lastLayoutExitMs) < 700) {
+    return;
+  }
   if (ev.key === "Escape" && overlayMode) {
     await setOverlayMode(false);
   }
