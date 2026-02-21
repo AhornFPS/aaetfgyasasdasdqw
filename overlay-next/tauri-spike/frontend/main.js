@@ -151,7 +151,12 @@ function applyOverlayVisibility(visible) {
   if (eventsLayerEl) eventsLayerEl.style.display = overlayVisible ? "block" : "none";
   if (hitmarkerLayerEl) hitmarkerLayerEl.style.display = overlayVisible ? "block" : "none";
   if (crosshairLayerEl) crosshairLayerEl.style.display = overlayVisible ? "block" : "none";
-  if (nativeOverlayEl) nativeOverlayEl.style.visibility = overlayVisible ? "visible" : "hidden";
+  if (nativeOverlayEl) {
+    nativeOverlayEl.style.visibility = overlayVisible ? "visible" : "hidden";
+  }
+  if (twitchLayerEl) {
+    twitchLayerEl.style.visibility = twitchVisible ? "visible" : "";
+  }
   updateLayoutEditTargets();
 }
 
@@ -176,7 +181,10 @@ function applyTwitchConfig(data) {
 
 function setTwitchVisibility(data) {
   twitchVisible = !(data && data.visible === false);
-  if (twitchLayerEl) twitchLayerEl.style.display = twitchVisible ? "block" : "none";
+  if (twitchLayerEl) {
+    twitchLayerEl.style.display = twitchVisible ? "block" : "none";
+    twitchLayerEl.style.visibility = twitchVisible ? "visible" : "";
+  }
 }
 
 function appendTwitchMessage(data) {

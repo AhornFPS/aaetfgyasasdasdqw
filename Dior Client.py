@@ -185,6 +185,15 @@ class DiorMainHub(QMainWindow):
         # Set start page
         self.nav_list.setCurrentRow(0)
 
+    def keyPressEvent(self, event):
+        """Handle global key presses for the main GUI Window."""
+        if event.key() == Qt.Key.Key_Escape:
+            if getattr(self.controller, "is_hud_editing", False):
+                self.controller.add_log("INFO: MOVE UI cancelled via ESC key in main window.")
+                self.controller.toggle_hud_edit_mode()
+        else:
+            super().keyPressEvent(event)
+
     def closeEvent(self, event):
         """Save window size on close."""
         try:

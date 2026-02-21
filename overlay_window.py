@@ -2451,9 +2451,9 @@ class QtOverlay(QWidget):
                 self.server.set_layout_edit_mode_callback(self._handle_tauri_layout_edit_mode)
                 if not use_tauri_backend:
                     self.load_web_overlay(h_port)
+                    self.set_web_overlay_visibility(True)
                 if self.gui_ref:
                     self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
-                self.set_web_overlay_visibility(not use_tauri_backend)
                 return
             self.stop_server()
 
@@ -2481,9 +2481,9 @@ class QtOverlay(QWidget):
             print(f"OBS SERVICE: Started on port {actual_h_port} (WS: {actual_w_port})")
             if not use_tauri_backend:
                 self.load_web_overlay(actual_h_port)
+                self.set_web_overlay_visibility(True)
             if self.gui_ref:
                 self.set_scifi_mode_enabled(self.gui_ref.config.get("scifi_overlay_active", True))
-            self.set_web_overlay_visibility(not use_tauri_backend)
         except Exception as e:
             print(f"OBS SERVICE ERROR: Could not start server: {e}")
 
