@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QFrame, QTabWidget,
                              QCheckBox, QComboBox, QSlider, QScrollArea, QGridLayout,
-                             QSizePolicy,QSpinBox)
+                             QSizePolicy,QSpinBox, QRadioButton, QButtonGroup)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSize
 from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtGui import QClipboard
@@ -1612,6 +1612,24 @@ class OverlayConfigWindow(QWidget):
             "QPushButton:focus { border: 1px solid #00ff00; }"
         )
         st_layout.addWidget(self.btn_toggle_stats)
+
+        # --- SESSION MODE TOGGLE ---
+        self.radio_session_character = QRadioButton("Character Session")
+        self.radio_session_character.setStyleSheet("color: #00f2ff; font-weight:bold;")
+        self.radio_session_account = QRadioButton("Account Session")
+        self.radio_session_account.setStyleSheet("color: #00f2ff; font-weight:bold;")
+        self.radio_session_character.setChecked(True)
+        
+        self.session_mode_group = QButtonGroup()
+        self.session_mode_group.addButton(self.radio_session_character, 0)
+        self.session_mode_group.addButton(self.radio_session_account, 1)
+
+        sm_layout = QHBoxLayout()
+        sm_layout.addWidget(QLabel("Session Mode:", styleSheet="color: #ffcc00; font-weight:bold;"))
+        sm_layout.addWidget(self.radio_session_character)
+        sm_layout.addWidget(self.radio_session_account)
+        sm_layout.addStretch()
+        st_layout.addLayout(sm_layout)
 
         # Text Adjustments
         lbl_adj = QLabel("Text Adjust Number:")

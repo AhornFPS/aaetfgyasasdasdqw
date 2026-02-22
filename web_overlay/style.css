@@ -125,13 +125,11 @@ body.overlay-hidden #hud-root {
 
 .fx-scanlines {
   opacity: 0.12;
-  background: repeating-linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.1) 0px,
-    rgba(255, 255, 255, 0.1) 1px,
-    transparent 2px,
-    transparent 4px
-  );
+  background: repeating-linear-gradient(180deg,
+      rgba(255, 255, 255, 0.1) 0px,
+      rgba(255, 255, 255, 0.1) 1px,
+      transparent 2px,
+      transparent 4px);
 }
 
 .fx-vignette {
@@ -249,13 +247,11 @@ body.overlay-hidden #hud-root {
   transform: translate(-50%, -50%) rotate(var(--glitch-rot, 0deg));
   border-left: 2px solid rgba(0, 242, 255, 0.92);
   border-right: 1px solid rgba(0, 242, 255, 0.8);
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(0, 242, 255, 0.42) 0px,
-    rgba(0, 242, 255, 0.42) 3px,
-    rgba(8, 25, 32, 0.0) 3px,
-    rgba(8, 25, 32, 0.0) 6px
-  );
+  background: repeating-linear-gradient(90deg,
+      rgba(0, 242, 255, 0.42) 0px,
+      rgba(0, 242, 255, 0.42) 3px,
+      rgba(8, 25, 32, 0.0) 3px,
+      rgba(8, 25, 32, 0.0) 6px);
   box-shadow: 0 0 10px rgba(0, 242, 255, 0.56);
   mix-blend-mode: screen;
   animation: glitchPop 280ms steps(2, end) forwards;
@@ -281,13 +277,11 @@ body.overlay-hidden #hud-root {
 .fx-glitch.warn {
   border-left-color: rgba(255, 96, 96, 0.94);
   border-right-color: rgba(255, 96, 96, 0.82);
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(255, 77, 77, 0.42) 0px,
-    rgba(255, 77, 77, 0.42) 3px,
-    rgba(32, 8, 8, 0.0) 3px,
-    rgba(32, 8, 8, 0.0) 6px
-  );
+  background: repeating-linear-gradient(90deg,
+      rgba(255, 77, 77, 0.42) 0px,
+      rgba(255, 77, 77, 0.42) 3px,
+      rgba(32, 8, 8, 0.0) 3px,
+      rgba(32, 8, 8, 0.0) 6px);
   box-shadow: 0 0 10px rgba(255, 77, 77, 0.62);
 }
 
@@ -306,6 +300,7 @@ body.overlay-hidden #hud-root {
   background: linear-gradient(90deg, rgba(0, 242, 255, 0.14), rgba(0, 0, 0, 0));
   animation: feedIn 180ms ease-out forwards;
   filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.7));
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .feed-item.fade-out {
@@ -483,6 +478,7 @@ body.perf-debug #perf-hud {
     opacity: 0;
     transform: translateX(22px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -490,8 +486,13 @@ body.perf-debug #perf-hud {
 }
 
 @keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes eventIn {
@@ -499,6 +500,7 @@ body.perf-debug #perf-hud {
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -510,19 +512,38 @@ body.perf-debug #perf-hud {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.4);
   }
-  to { opacity: 1; }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes streakPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes crosshairBreathe {
-  0% { filter: brightness(0.95); }
-  50% { filter: brightness(1.12); }
-  100% { filter: brightness(0.95); }
+  0% {
+    filter: brightness(0.95);
+  }
+
+  50% {
+    filter: brightness(1.12);
+  }
+
+  100% {
+    filter: brightness(0.95);
+  }
 }
 
 @keyframes crosshairRingPulse {
@@ -530,6 +551,7 @@ body.perf-debug #perf-hud {
     transform: translate(-50%, -50%) scale(0.92);
     opacity: 0.85;
   }
+
   100% {
     transform: translate(-50%, -50%) scale(1.6);
     opacity: 0;
@@ -541,18 +563,22 @@ body.perf-debug #perf-hud {
     transform: translateX(0);
     filter: hue-rotate(0deg);
   }
+
   20% {
     transform: translateX(2px);
     filter: hue-rotate(8deg);
   }
+
   40% {
     transform: translateX(-3px);
     filter: hue-rotate(-8deg);
   }
+
   60% {
     transform: translateX(1px);
     filter: hue-rotate(5deg);
   }
+
   100% {
     transform: translateX(0);
     filter: hue-rotate(0deg);
@@ -560,9 +586,17 @@ body.perf-debug #perf-hud {
 }
 
 @keyframes pipFlash {
-  from { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-1px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes burstPop {
@@ -570,6 +604,7 @@ body.perf-debug #perf-hud {
     opacity: 1;
     transform: translate(-50%, -50%) scale(0.8);
   }
+
   to {
     opacity: 0;
     transform: translate(-50%, -50%) scale(9);
@@ -582,15 +617,18 @@ body.perf-debug #perf-hud {
     transform: translate(-50%, -50%) scale(0.82) rotate(var(--glitch-rot, 0deg));
     filter: saturate(1.2);
   }
+
   40% {
     opacity: 0.9;
     transform: translate(-48%, -52%) scale(1.02) rotate(var(--glitch-rot, 0deg)) skewX(8deg);
     filter: saturate(1.35);
   }
+
   70% {
     opacity: 0.7;
     transform: translate(-52%, -49%) scale(1.06) rotate(var(--glitch-rot, 0deg)) skewX(-10deg);
   }
+
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.15) rotate(var(--glitch-rot, 0deg));
@@ -598,13 +636,23 @@ body.perf-debug #perf-hud {
 }
 
 @keyframes nebulaDrift {
-  from { transform: translateX(-1.2%) translateY(-0.8%) scale(1.02); }
-  to { transform: translateX(1.2%) translateY(0.8%) scale(1.05); }
+  from {
+    transform: translateX(-1.2%) translateY(-0.8%) scale(1.02);
+  }
+
+  to {
+    transform: translateX(1.2%) translateY(0.8%) scale(1.05);
+  }
 }
 
 @keyframes gridPan {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(70px, 70px, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(70px, 70px, 0);
+  }
 }
 
 @keyframes impactWave {
@@ -612,6 +660,7 @@ body.perf-debug #perf-hud {
     opacity: 0.55;
     background: radial-gradient(circle at center, rgba(0, 242, 255, 0.42), rgba(0, 242, 255, 0.08) 35%, transparent 62%);
   }
+
   to {
     opacity: 0;
     background: radial-gradient(circle at center, rgba(0, 242, 255, 0.0), transparent 70%);

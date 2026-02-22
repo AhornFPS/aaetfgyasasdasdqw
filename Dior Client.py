@@ -724,7 +724,65 @@ class DiorClientGUI:
         if force_placeholder:
             return {}, True
 
+        session_mode = self.config.get("stats_widget", {}).get("session_mode", "character")
         my_id = str(getattr(self, "current_character_id", "") or "").strip()
+
+        if session_mode == "account" and my_id:
+            agg_stats = {
+                "id": "account_session",
+                "name": "Account Session",
+                "faction": "NSO",
+                "k": 0, "d": 0, "a": 0, "hs": 0, "hsrkill": 0,
+                "dhs": 0, "dhs_eligible": 0,
+                "revives_received": 0,
+                "start": time.time(),
+                "acc_t": 0,
+                "last_kill_time": 0,
+                "world_id": "0",
+                "last_seen_base": ""
+            }
+            if my_id in self.session_stats:
+                current_stats = self.session_stats.get(my_id, {})
+                agg_stats["faction"] = current_stats.get("faction", "NSO")
+                agg_stats["name"] = "Account Session"
+                agg_stats["world_id"] = current_stats.get("world_id", "0")
+                agg_stats["last_seen_base"] = current_stats.get("last_seen_base", "")
+
+            owned_ids = set()
+            for n, saved_id in getattr(self, "char_data", {}).items():
+                owned_ids.add(str(saved_id))
+            
+            found_any = False
+            latest_kill = 0
+            
+            now = time.time()
+            total_acc_t = 0
+
+            for cid, s_obj in self.session_stats.items():
+                if cid in owned_ids:
+                    found_any = True
+                    for k in ["k", "d", "a", "hs", "hsrkill", "dhs", "dhs_eligible", "revives_received"]:
+                        agg_stats[k] += s_obj.get(k, 0)
+                    
+                    # Add accumulated time. If this is the currently active character, add the time since their start.
+                    char_acc_t = s_obj.get("acc_t", 0)
+                    char_start = s_obj.get("start", 0)
+                    
+                    if cid == my_id and char_start > 0:
+                        char_acc_t += (now - char_start)
+                    
+                    total_acc_t += char_acc_t
+                        
+                    if s_obj.get("last_kill_time", 0) > latest_kill:
+                        latest_kill = s_obj.get("last_kill_time", 0)
+            
+            if found_any:
+                agg_stats["acc_t"] = total_acc_t
+                agg_stats["start"] = now # Set start to now so overlay_window.py only adds (now - now) = 0 to acc_t
+                agg_stats["last_kill_time"] = latest_kill
+                return agg_stats, False
+
+        # Fallback to character session
         if my_id:
             stats_obj = self.session_stats.get(my_id)
             if isinstance(stats_obj, dict) and len(stats_obj) > 0:
@@ -1709,6 +1767,10 @@ class DiorClientGUI:
             self.safe_connect(ui.check_stats_glow.toggled, self.save_stats_config_from_qt)
 
         # STATS TOGGLES
+        if hasattr(ui, 'radio_session_character'):
+            self.safe_connect(ui.radio_session_character.toggled, self.save_stats_config_from_qt)
+            self.safe_connect(ui.radio_session_account.toggled, self.save_stats_config_from_qt)
+
         if hasattr(ui, "check_show_k"):
              self.safe_connect(ui.check_show_k.toggled, self.save_stats_config_from_qt)
              self.safe_connect(ui.check_show_d.toggled, self.save_stats_config_from_qt)
@@ -3444,6 +3506,7 @@ class DiorClientGUI:
         
         st_data = {
             "active": saved_active_state,
+            "session_mode": "account" if s_ui.radio_session_account.isChecked() else "character",
             "tx": s_ui.slider_st_tx.value(),
             "ty": s_ui.slider_st_ty.value(),
             
@@ -3886,6 +3949,17 @@ class DiorClientGUI:
                 "QPushButton:hover { background-color: #550000; border: 1px solid #ff4444; }"
                 "QPushButton:focus { border: 1px solid #660000; }"
             )
+
+        # SESSION MODE
+        if hasattr(ui, "radio_session_account"):
+            ui.radio_session_character.blockSignals(True)
+            ui.radio_session_account.blockSignals(True)
+            if st_conf.get("session_mode", "character") == "account":
+                ui.radio_session_account.setChecked(True)
+            else:
+                ui.radio_session_character.setChecked(True)
+            ui.radio_session_character.blockSignals(False)
+            ui.radio_session_account.blockSignals(False)
 
         # Sliders (as before)
         ui.slider_st_tx.blockSignals(True)
@@ -7113,8 +7187,8 @@ log "DONE"
         if not self.current_character_id: return
         
         # We need the session object
-        s_obj = self.session_stats.get(self.current_character_id)
-        if not s_obj: return
+        s_obj, is_dummy = self._resolve_overlay_stats_payload()
+        if is_dummy or not s_obj: return
 
         # If overlay is running, update display
         if self.overlay_win and hasattr(self.overlay_win, "update_stats_display"):
