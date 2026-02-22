@@ -576,9 +576,34 @@ class CharacterWidget(QWidget):
         title = QLabel(f"<span style='font-size: 18px; color: #00f2ff; font-weight: bold;'>{tree_name}</span>")
         self.dir_details_layout.addWidget(title)
         
-        # Load Faction Filter Data once
+        # Load Faction Filter Data once (name-based matching is more stable than item IDs)
         faction_map_size = 0
-        faction_map = {}
+        faction_name_map = {}
+        
+        def normalize_filter_name(name):
+            if not name:
+                return ""
+            # Keep alnum chars, normalize separators/casing for loose CSV matches
+            cleaned = "".join(ch if ch.isalnum() else " " for ch in str(name).upper())
+            return " ".join(cleaned.split())
+        
+        def lookup_factions_by_name(name):
+            norm = normalize_filter_name(name)
+            if not norm:
+                return set()
+            
+            exact = faction_name_map.get(norm)
+            if exact:
+                return set(exact)
+            
+            # Fallback: allow substring matches for minor naming format differences
+            for csv_name_norm, factions in faction_name_map.items():
+                if len(csv_name_norm) < 4:
+                    continue
+                if csv_name_norm in norm or norm in csv_name_norm:
+                    return set(factions)
+            return set()
+
         try:
             from dior_utils import get_asset_path
             import csv
@@ -590,27 +615,25 @@ class CharacterWidget(QWidget):
                     fields = [fn.strip() for fn in (reader.fieldnames or [])]
                     
                     # Robust key matching (ignore case/spaces)
-                    id_key = next((f for f in fields if f.lower().replace(" ", "") == "itemid"), "Item ID")
                     fac_key = next((f for f in fields if f.lower().replace(" ", "") == "factionid"), "Faction ID")
                     name_key = next((f for f in fields if f.lower().replace(" ", "") == "itemname"), "Item Name")
                     
                     for row in reader:
                         # Clean the row keys and values
                         clean_row = {str(k).strip(): str(v).strip() for k, v in row.items() if k}
-                        i_id = clean_row.get(id_key, "")
                         f_id = clean_row.get(fac_key, "")
                         i_name = clean_row.get(name_key, "")
                         
-                        if i_id and f_id:
-                            # Faction ID must be a single digit usually (1,2,3)
-                            # But NSO align might be tracked differently in some lists.
-                            faction_map[i_id] = (f_id, i_name)
+                        if i_name and f_id:
+                            norm_name = normalize_filter_name(i_name)
+                            if norm_name:
+                                faction_name_map.setdefault(norm_name, set()).add(f_id)
                     
-                    faction_map_size = len(faction_map)
+                    faction_map_size = len(faction_name_map)
                     if faction_map_size == 0:
-                         self.add_log(f"WRN: CSV loaded but 0 items mapped. Keys searched: {id_key}, {fac_key}. Found: {fields}")
+                         self.add_log(f"WRN: CSV loaded but 0 items mapped. Keys searched: {name_key}, {fac_key}. Found: {fields}")
                     else:
-                        print(f"DEBUG: Found keys - ID:{id_key}, Fac:{fac_key}, Name:{name_key}. Sample: {list(faction_map.keys())[:3]}")
+                        print(f"DEBUG: Found keys - Name:{name_key}, Fac:{fac_key}. Sample: {list(faction_name_map.keys())[:3]}")
             else:
                 self.add_log(f"WRN: sanction-list.csv not found at {csv_path}")
         except Exception as e:
@@ -712,6 +735,7 @@ class CharacterWidget(QWidget):
             
             valid_directives = 0
             seen_directive_ids = set()
+            seen_directive_names = set()
             for dir_data in directives:
                 d_id = dir_data.get("directive_id")
                 if not d_id: continue
@@ -754,20 +778,20 @@ class CharacterWidget(QWidget):
                 
                 o_max = 1
                 o_curr = 0
-                item_ids = [] # Collect all item IDs from all objectives in this directive
+                match_names = [d_name]  # Use subgoal/directive names for CSV matching (IDs can differ)
                 
                 for obj in flat_objectives:
                     o_id = obj.get("objective_id")
                     o_type = str(obj.get("objective_type_id")) # Ensure string for comparison
+                    obj_name = obj.get("name", {}).get("en") if isinstance(obj.get("name"), dict) else obj.get("name")
+                    if obj_name:
+                        match_names.append(str(obj_name))
                     
                     current_item_id = ""
                     if o_type == "12": # Kill Count
                         current_item_id = str(obj.get("param5", ""))
                     elif o_type == "66": # Medal/Ribbon Count
                         current_item_id = str(obj.get("param1", ""))
-                    
-                    if current_item_id:
-                        item_ids.append(current_item_id)
                     
                     # Trace for debugging
                     print(f"TRACE: Directive {d_name} | Obj {o_id} | Type {o_type} | Found IID: {current_item_id}")
@@ -801,43 +825,54 @@ class CharacterWidget(QWidget):
                             skip_faction = True
                             print(f"TRACE: Hiding {d_name} (Inferred {inferred} != Char {char_faction})")
                     
-                    # 2. Secondary Check: Map-based (if name was neutral or unknown)
+                    # 2. Secondary Check: CSV map-based by name (subgoal names are more stable than IDs)
                     if not skip_faction and not inferred:
-                        # For multi-item directives (rare), we skip only if ALL items are off-faction.
-                        # But for now, if any single item ID confirms a faction match or NS, we retain.
+                        # For multi-name directives (rare), skip only if ALL matched names are off-faction.
                         faction_confirmed = False
                         off_faction_found = False
+                        matched_csv_name = None
                         
-                        for iid in item_ids:
-                            if iid in faction_map:
-                                wep_f, _ = faction_map[iid]
-                                # Faction 0 or Empty or "None" = Universal/Common Pool
-                                if wep_f in ["0", "", "None"]:
+                        for subgoal_name in dict.fromkeys(match_names):
+                            matched_factions = lookup_factions_by_name(subgoal_name)
+                            if not matched_factions:
+                                continue
+                            
+                            matched_csv_name = subgoal_name
+                            # Faction 0 or empty/None = Universal/Common Pool
+                            if any(f in ["0", "", "None"] for f in matched_factions):
+                                faction_confirmed = True
+                                break
+                            if char_faction in matched_factions:
+                                faction_confirmed = True
+                                break
+                            if matched_factions == {"4"}:  # NSO specific only
+                                if char_faction == "4":
                                     faction_confirmed = True
                                     break
-                                elif wep_f == "4": # NSO Specific
-                                    if char_faction == "4":
-                                        faction_confirmed = True
-                                        break
-                                    else:
-                                        off_faction_found = True
-                                elif wep_f == char_faction:
-                                    faction_confirmed = True
-                                    break
-                                elif wep_f in ["1", "2", "3"]:
-                                    if wep_f != char_faction:
-                                        off_faction_found = True
+                                off_faction_found = True
+                            elif matched_factions.intersection({"1", "2", "3", "4"}):
+                                off_faction_found = True
                         
                         if off_faction_found and not faction_confirmed:
                             skip_faction = True
-                            print(f"TRACE: Hiding {d_name} (Map ID confirms off-faction)")
+                            print(f"TRACE: Hiding {d_name} (CSV name match confirms off-faction via '{matched_csv_name}')")
                     
                     if not skip_faction:
                          if valid_directives < 20:
-                              print(f"DIAGNOSTIC: RETAINED {d_name} (IDs: {item_ids}) Inferred: {inferred}")
+                              print(f"DIAGNOSTIC: RETAINED {d_name} (Names: {match_names}) Inferred: {inferred}")
                                     
                 if skip_faction:
                     continue
+
+                # Census can return multiple faction-qualified variants with different directive_ids
+                # but identical visible names (e.g., Exceptional weapon entries). Collapse by name.
+                d_name_key = normalize_filter_name(d_name)
+                if d_name_key and d_name_key in seen_directive_names:
+                    if valid_directives < 20:
+                        print(f"TRACE: Skipping duplicate directive name '{d_name}' in tier {tier_id}")
+                    continue
+                if d_name_key:
+                    seen_directive_names.add(d_name_key)
                     
                 valid_directives += 1
                 
