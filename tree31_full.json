@@ -1,0 +1,567 @@
+{
+  "directive_tree_list": [
+    {
+      "directive_tree_id": "31",
+      "directive_tree_category_id": "3",
+      "name": {
+        "en": "Force Recon"
+      },
+      "image_set_id": "13588",
+      "image_id": "77992",
+      "image_path": "/files/ps2/images/static/77992.png",
+      "tiers": [
+        {
+          "directive_tree_id": "31",
+          "directive_tier_id": "1",
+          "directive_points": "5",
+          "completion_count": "2",
+          "name": {
+            "en": "Novice"
+          },
+          "image_set_id": "13753",
+          "image_id": "78584",
+          "image_path": "/files/ps2/images/static/78584.png",
+          "directives": [
+            {
+              "directive_id": "1729",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5730",
+              "name": {
+                "en": "Headshot Kills"
+              },
+              "description": {
+                "en": "Get a killing blow with a headshot."
+              },
+              "image_set_id": "13518",
+              "image_id": "77759",
+              "image_path": "/files/ps2/images/static/77759.png"
+            },
+            {
+              "directive_id": "1897",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5898",
+              "name": {
+                "en": "Deployable Destruction"
+              },
+              "description": {
+                "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields."
+              },
+              "image_set_id": "13517",
+              "image_id": "77758",
+              "image_path": "/files/ps2/images/static/77758.png"
+            },
+            {
+              "directive_id": "1713",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5714",
+              "qualify_requirement_id": "3310",
+              "name": {
+                "en": "Mag-Cutter"
+              },
+              "description": {
+                "en": "10 Enemies Killed"
+              },
+              "image_set_id": "1564",
+              "image_id": "3072",
+              "image_path": "/files/ps2/images/static/3072.png"
+            },
+            {
+              "directive_id": "1717",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5718",
+              "qualify_requirement_id": "3311",
+              "name": {
+                "en": "Chainblade"
+              },
+              "description": {
+                "en": "10 Enemies Killed"
+              },
+              "image_set_id": "1564",
+              "image_id": "3072",
+              "image_path": "/files/ps2/images/static/3072.png"
+            },
+            {
+              "directive_id": "1721",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5722",
+              "qualify_requirement_id": "3312",
+              "name": {
+                "en": "Force-Blade"
+              },
+              "description": {
+                "en": "10 Enemies Killed"
+              },
+              "image_set_id": "1564",
+              "image_id": "3072",
+              "image_path": "/files/ps2/images/static/3072.png"
+            },
+            {
+              "directive_id": "1753",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5754",
+              "name": {
+                "en": "Spotter"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning spot assists."
+              },
+              "image_set_id": "13452",
+              "image_id": "9985",
+              "image_path": "/files/ps2/images/static/9985.png"
+            },
+            {
+              "directive_id": "1741",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5742",
+              "name": {
+                "en": "Marksman"
+              },
+              "description": {
+                "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            },
+            {
+              "directive_id": "1745",
+              "directive_tree_id": "31",
+              "directive_tier_id": "1",
+              "objective_set_id": "5746",
+              "name": {
+                "en": "Kill Streak"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning Kill Streaks as Infantry"
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            }
+          ]
+        },
+        {
+          "directive_tree_id": "31",
+          "directive_tier_id": "2",
+          "directive_points": "10",
+          "completion_count": "3",
+          "name": {
+            "en": "Adept"
+          },
+          "image_set_id": "13973",
+          "image_id": "79244",
+          "image_path": "/files/ps2/images/static/79244.png",
+          "directives": [
+            {
+              "directive_id": "1730",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5731",
+              "name": {
+                "en": "Headshot Kills"
+              },
+              "description": {
+                "en": "Get a killing blow with a headshot."
+              },
+              "image_set_id": "13518",
+              "image_id": "77759",
+              "image_path": "/files/ps2/images/static/77759.png"
+            },
+            {
+              "directive_id": "1898",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5899",
+              "name": {
+                "en": "Deployable Destruction"
+              },
+              "description": {
+                "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields."
+              },
+              "image_set_id": "13517",
+              "image_id": "77758",
+              "image_path": "/files/ps2/images/static/77758.png"
+            },
+            {
+              "directive_id": "1714",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5715",
+              "qualify_requirement_id": "3310",
+              "name": {
+                "en": "Mag-Cutter"
+              },
+              "description": {
+                "en": "60 Enemies Killed"
+              },
+              "image_set_id": "1565",
+              "image_id": "3079",
+              "image_path": "/files/ps2/images/static/3079.png"
+            },
+            {
+              "directive_id": "1718",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5719",
+              "qualify_requirement_id": "3311",
+              "name": {
+                "en": "Chainblade"
+              },
+              "description": {
+                "en": "60 Enemies Killed"
+              },
+              "image_set_id": "1565",
+              "image_id": "3079",
+              "image_path": "/files/ps2/images/static/3079.png"
+            },
+            {
+              "directive_id": "1722",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5723",
+              "qualify_requirement_id": "3312",
+              "name": {
+                "en": "Force-Blade"
+              },
+              "description": {
+                "en": "60 Enemies Killed"
+              },
+              "image_set_id": "1565",
+              "image_id": "3079",
+              "image_path": "/files/ps2/images/static/3079.png"
+            },
+            {
+              "directive_id": "1754",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5755",
+              "name": {
+                "en": "Spotter"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning spot assists."
+              },
+              "image_set_id": "13452",
+              "image_id": "9985",
+              "image_path": "/files/ps2/images/static/9985.png"
+            },
+            {
+              "directive_id": "1742",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5743",
+              "name": {
+                "en": "Marksman"
+              },
+              "description": {
+                "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            },
+            {
+              "directive_id": "1746",
+              "directive_tree_id": "31",
+              "directive_tier_id": "2",
+              "objective_set_id": "5747",
+              "name": {
+                "en": "Kill Streak"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning Kill Streaks as Infantry"
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            }
+          ]
+        },
+        {
+          "directive_tree_id": "31",
+          "directive_tier_id": "3",
+          "reward_set_id": "4975",
+          "directive_points": "25",
+          "completion_count": "4",
+          "name": {
+            "en": "Expert"
+          },
+          "image_set_id": "13863",
+          "image_id": "78914",
+          "image_path": "/files/ps2/images/static/78914.png",
+          "directives": [
+            {
+              "directive_id": "1731",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5732",
+              "name": {
+                "en": "Headshot Kills"
+              },
+              "description": {
+                "en": "Get a killing blow with a headshot."
+              },
+              "image_set_id": "13518",
+              "image_id": "77759",
+              "image_path": "/files/ps2/images/static/77759.png"
+            },
+            {
+              "directive_id": "1899",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5900",
+              "name": {
+                "en": "Deployable Destruction"
+              },
+              "description": {
+                "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields."
+              },
+              "image_set_id": "13517",
+              "image_id": "77758",
+              "image_path": "/files/ps2/images/static/77758.png"
+            },
+            {
+              "directive_id": "1715",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5716",
+              "qualify_requirement_id": "3310",
+              "name": {
+                "en": "Mag-Cutter"
+              },
+              "description": {
+                "en": "160 Enemies Killed"
+              },
+              "image_set_id": "1566",
+              "image_id": "3075",
+              "image_path": "/files/ps2/images/static/3075.png"
+            },
+            {
+              "directive_id": "1719",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5720",
+              "qualify_requirement_id": "3311",
+              "name": {
+                "en": "Chainblade"
+              },
+              "description": {
+                "en": "160 Enemies Killed"
+              },
+              "image_set_id": "1566",
+              "image_id": "3075",
+              "image_path": "/files/ps2/images/static/3075.png"
+            },
+            {
+              "directive_id": "1723",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5724",
+              "qualify_requirement_id": "3312",
+              "name": {
+                "en": "Force-Blade"
+              },
+              "description": {
+                "en": "160 Enemies Killed"
+              },
+              "image_set_id": "1566",
+              "image_id": "3075",
+              "image_path": "/files/ps2/images/static/3075.png"
+            },
+            {
+              "directive_id": "1755",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5756",
+              "name": {
+                "en": "Spotter"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning spot assists."
+              },
+              "image_set_id": "13452",
+              "image_id": "9985",
+              "image_path": "/files/ps2/images/static/9985.png"
+            },
+            {
+              "directive_id": "1743",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5744",
+              "name": {
+                "en": "Marksman"
+              },
+              "description": {
+                "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            },
+            {
+              "directive_id": "1747",
+              "directive_tree_id": "31",
+              "directive_tier_id": "3",
+              "objective_set_id": "5748",
+              "name": {
+                "en": "Kill Streak"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning Kill Streaks as Infantry"
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            }
+          ]
+        },
+        {
+          "directive_tree_id": "31",
+          "directive_tier_id": "4",
+          "reward_set_id": "4477",
+          "directive_points": "100",
+          "completion_count": "5",
+          "name": {
+            "en": "Master"
+          },
+          "image_set_id": "13643",
+          "image_id": "78254",
+          "image_path": "/files/ps2/images/static/78254.png",
+          "directives": [
+            {
+              "directive_id": "1732",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5733",
+              "name": {
+                "en": "Headshot Kills"
+              },
+              "description": {
+                "en": "Get a killing blow with a headshot."
+              },
+              "image_set_id": "13518",
+              "image_id": "77759",
+              "image_path": "/files/ps2/images/static/77759.png"
+            },
+            {
+              "directive_id": "1900",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5901",
+              "name": {
+                "en": "Deployable Destruction"
+              },
+              "description": {
+                "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields."
+              },
+              "image_set_id": "13517",
+              "image_id": "77758",
+              "image_path": "/files/ps2/images/static/77758.png"
+            },
+            {
+              "directive_id": "1716",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5717",
+              "qualify_requirement_id": "3310",
+              "name": {
+                "en": "Mag-Cutter"
+              },
+              "description": {
+                "en": "1160 Enemies Killed"
+              },
+              "image_set_id": "1567",
+              "image_id": "3068",
+              "image_path": "/files/ps2/images/static/3068.png"
+            },
+            {
+              "directive_id": "1720",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5721",
+              "qualify_requirement_id": "3311",
+              "name": {
+                "en": "Chainblade"
+              },
+              "description": {
+                "en": "1160 Enemies Killed"
+              },
+              "image_set_id": "1567",
+              "image_id": "3068",
+              "image_path": "/files/ps2/images/static/3068.png"
+            },
+            {
+              "directive_id": "1724",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5725",
+              "qualify_requirement_id": "3312",
+              "name": {
+                "en": "Force-Blade"
+              },
+              "description": {
+                "en": "1160 Enemies Killed"
+              },
+              "image_set_id": "1567",
+              "image_id": "3068",
+              "image_path": "/files/ps2/images/static/3068.png"
+            },
+            {
+              "directive_id": "1756",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5757",
+              "name": {
+                "en": "Spotter"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning spot assists."
+              },
+              "image_set_id": "13452",
+              "image_id": "9985",
+              "image_path": "/files/ps2/images/static/9985.png"
+            },
+            {
+              "directive_id": "1744",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5745",
+              "name": {
+                "en": "Marksman"
+              },
+              "description": {
+                "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            },
+            {
+              "directive_id": "1748",
+              "directive_tree_id": "31",
+              "directive_tier_id": "4",
+              "objective_set_id": "5749",
+              "name": {
+                "en": "Kill Streak"
+              },
+              "description": {
+                "en": "Earn this ribbon by earning Kill Streaks as Infantry"
+              },
+              "image_set_id": "13493",
+              "image_id": "9991",
+              "image_path": "/files/ps2/images/static/9991.png"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "returned": 1
+}

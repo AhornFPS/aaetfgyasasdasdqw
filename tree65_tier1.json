@@ -1,0 +1,1272 @@
+{
+  "directive_list": [
+    {
+      "directive_id": "3047",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7072",
+      "name": {
+        "de": "NSX-P Tanto",
+        "en": "NSX-P Tanto",
+        "es": "NSX-P Tanto ",
+        "fr": "NSX-P Tanto",
+        "it": "NSX-P Tanto"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7072",
+          "objective_group_id": "15951",
+          "objs": [
+            {
+              "objective_id": "15975",
+              "objective_type_id": "66",
+              "objective_group_id": "15951",
+              "param1": "91348",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3035",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7060",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Lasher X2-P",
+        "en": "Lasher X2-P",
+        "es": "Lasher X2-P",
+        "fr": "Fouettard X2-P",
+        "it": "Lasher X2-P"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7060",
+          "objective_group_id": "16047",
+          "objs": [
+            {
+              "objective_id": "16077",
+              "objective_type_id": "66",
+              "objective_group_id": "16047",
+              "param1": "91389",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3031",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7056",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "T7-P Mini-Chaingun",
+        "en": "T7-P Mini-Chaingun",
+        "es": "T7-P Mini-Chaingun",
+        "fr": "Mini-chaingun T7-P",
+        "it": "Mini mitragliatrice a catena T7-P"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7056",
+          "objective_group_id": "16056",
+          "objs": [
+            {
+              "objective_id": "16086",
+              "objective_type_id": "66",
+              "objective_group_id": "16056",
+              "param1": "91394",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3027",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7052",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "NC05-P Jackhammer",
+        "en": "NC05-P Jackhammer",
+        "es": "NC05-P Jackhammer",
+        "fr": "Marteau-piqueur NC05-P",
+        "it": "NC05-P Jackhammer"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7052",
+          "objective_group_id": "16066",
+          "objs": [
+            {
+              "objective_id": "16096",
+              "objective_type_id": "66",
+              "objective_group_id": "16066",
+              "param1": "91399",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3039",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7064",
+      "name": {
+        "de": "AM7-XOXO",
+        "en": "AM7-XOXO",
+        "es": "AM7-XOXO",
+        "fr": "AM7-XOXO",
+        "it": "AM7-XOXO"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7064",
+          "objective_group_id": "16075",
+          "objs": [
+            {
+              "objective_id": "16105",
+              "objective_type_id": "66",
+              "objective_group_id": "16075",
+              "param1": "91405",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3043",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7068",
+      "name": {
+        "de": "NSX-P Naginata",
+        "en": "NSX-P Naginata",
+        "es": "NSX-P Naginata",
+        "fr": "NSX-P Naginata",
+        "it": "NSX-P Naginata"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7068",
+          "objective_group_id": "16083",
+          "objs": [
+            {
+              "objective_id": "16113",
+              "objective_type_id": "66",
+              "objective_group_id": "16083",
+              "param1": "91410",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3095",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7120",
+      "name": {
+        "de": "NS \"Jackpot\" Decimator",
+        "en": "NS \"Jackpot\" Decimator",
+        "es": "NS Decimator \"Jackpot\"",
+        "fr": "D\u00e9cimateur NS \"Jackpot\"",
+        "it": "NS \"Jackpot\" Decimator"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7120",
+          "objective_group_id": "16179",
+          "objs": [
+            {
+              "objective_id": "16209",
+              "objective_type_id": "66",
+              "objective_group_id": "16179",
+              "param1": "91453",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3118",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7143",
+      "name": {
+        "de": "PS1-AV Suppressor",
+        "en": "PS1-AV Suppressor",
+        "es": "Silenciador PS1-AV",
+        "fr": "Sulfateuse PS1-AV",
+        "it": "Soppressore PS1-AV"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7143",
+          "objective_group_id": "16196",
+          "objs": [
+            {
+              "objective_id": "16227",
+              "objective_type_id": "66",
+              "objective_group_id": "16196",
+              "param1": "91457",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3245",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7266",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "LB00 Python AP",
+        "en": "LB00 Python AP",
+        "es": "LB00 Python AP",
+        "fr": "Python LB00 AP",
+        "it": "LB00 Python AP"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7266",
+          "objective_group_id": "16408",
+          "objs": [
+            {
+              "objective_id": "16439",
+              "objective_type_id": "66",
+              "objective_group_id": "16408",
+              "param1": "91522",
+              "param2": "1",
+              "param8": "-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3249",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7270",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "LB00 Python AP",
+        "en": "LB00 Python AP",
+        "es": "LB00 Python AP",
+        "fr": "Python LB00 AP",
+        "it": "LB00 Python AP"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7270",
+          "objective_group_id": "16414",
+          "objs": [
+            {
+              "objective_id": "16445",
+              "objective_type_id": "66",
+              "objective_group_id": "16414",
+              "param1": "91528",
+              "param2": "1",
+              "param8": "-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3253",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7274",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "LB00 Python AP",
+        "en": "LB00 Python AP",
+        "es": "LB00 Python AP",
+        "fr": "Python LB00 AP",
+        "it": "LB00 Python AP"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7274",
+          "objective_group_id": "16418",
+          "objs": [
+            {
+              "objective_id": "16449",
+              "objective_type_id": "66",
+              "objective_group_id": "16418",
+              "param1": "91533",
+              "param2": "1",
+              "param8": "-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3385",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7406",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "MGR-L1 Promise AE",
+        "en": "MGR-L1 Promise AE",
+        "es": "MGR-L1 Promise AE",
+        "fr": "MGR-L1 Promesse AE",
+        "it": "MGR-L1 Promise AE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7406",
+          "objective_group_id": "16730",
+          "objs": [
+            {
+              "objective_id": "16761",
+              "objective_type_id": "66",
+              "objective_group_id": "16730",
+              "param1": "91720",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3389",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7410",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "MG-H1 Watchman AE",
+        "en": "MG-H1 Watchman AE",
+        "es": "MG-H1 Watchman AE",
+        "fr": "M-H1 Vigie AE",
+        "it": "MG-H1 Watchman AE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7410",
+          "objective_group_id": "16739",
+          "objs": [
+            {
+              "objective_id": "16770",
+              "objective_type_id": "66",
+              "objective_group_id": "16739",
+              "param1": "91723",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3393",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7414",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "VE-H Maw AE",
+        "en": "VE-H Maw AE",
+        "es": "VE-H Maw AE",
+        "fr": "VE-H Maw AE",
+        "it": "VE-H Maw AE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7414",
+          "objective_group_id": "16748",
+          "objs": [
+            {
+              "objective_id": "16779",
+              "objective_type_id": "66",
+              "objective_group_id": "16748",
+              "param1": "91729",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3401",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7422",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Ripper WB",
+        "en": "Ripper AE",
+        "es": "Destripador AE",
+        "fr": "\u00c9ventreur AE",
+        "it": "Ripper AE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7422",
+          "objective_group_id": "16776",
+          "objs": [
+            {
+              "objective_id": "16807",
+              "objective_type_id": "66",
+              "objective_group_id": "16776",
+              "param1": "91733",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3405",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7426",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Lumine Edge WB",
+        "en": "Lumine Edge AE",
+        "es": "Lumine Edge AE",
+        "fr": "Tranchant lumineux AE",
+        "it": "Lumine Edge AE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7426",
+          "objective_group_id": "16780",
+          "objs": [
+            {
+              "objective_id": "16811",
+              "objective_type_id": "66",
+              "objective_group_id": "16780",
+              "param1": "91738",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3397",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7418",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Carver AE: Kupfermedaille",
+        "en": "Carver AE: Copper Medal",
+        "es": "Carver AE: Medalla de cobre",
+        "fr": "Tailleur AE : M\u00e9daille de cuivre",
+        "it": "Medaglia di rame Carver AE"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7418",
+          "objective_group_id": "16772",
+          "objs": [
+            {
+              "objective_id": "16803",
+              "objective_type_id": "66",
+              "objective_group_id": "16772",
+              "param1": "91743",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3429",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7450",
+      "name": {
+        "de": "Der kleine Helfer",
+        "en": "The Little Helper",
+        "es": "El peque\u00f1o ayudante",
+        "fr": "Le Petit Lutin",
+        "it": "Il piccolo Aiutante"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7450",
+          "objective_group_id": "16825",
+          "objs": [
+            {
+              "objective_id": "16857",
+              "objective_type_id": "66",
+              "objective_group_id": "16825",
+              "param1": "91769",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3704",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7518",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "\"Jackpot\" Cerberus",
+        "en": "\"Jackpot\" Cerberus",
+        "es": "Cerberus \"Premio\"",
+        "fr": "Cerb\u00e8re \"Jackpot\"",
+        "it": "\"Jackpot\" Cerberus"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7518",
+          "objective_group_id": "17095",
+          "objs": [
+            {
+              "objective_id": "17213",
+              "objective_type_id": "66",
+              "objective_group_id": "17095",
+              "param1": "91978",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3700",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7514",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "TX2 \"Jackpot\" Emperor",
+        "en": "TX2 \"Jackpot\" Emperor",
+        "es": "TX2 Emperor \"Premio\"",
+        "fr": "Empereur TX2 \"Jackpot\"",
+        "it": "TX2 \"Jackpot\" Emperor"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7514",
+          "objective_group_id": "17104",
+          "objs": [
+            {
+              "objective_id": "17222",
+              "objective_type_id": "66",
+              "objective_group_id": "17104",
+              "param1": "91983",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3696",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7510",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "LA3 \"Jackpot\" Desperado",
+        "en": "LA3 \"Jackpot\" Desperado",
+        "es": "LA3 Desperado \"Premio\"",
+        "fr": "Desperado LA3 \"Jackpot\"",
+        "it": "LA3 \"Jackpot\" Desperado"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7510",
+          "objective_group_id": "17113",
+          "objs": [
+            {
+              "objective_id": "17231",
+              "objective_type_id": "66",
+              "objective_group_id": "17113",
+              "param1": "91988",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3732",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7546",
+      "name": {
+        "de": "NSX-P Tengu",
+        "en": "NSX-P Tengu",
+        "es": "NSX-P Tengu",
+        "fr": "NSX-P Tengu",
+        "it": "NSX-P Tengu"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7546",
+          "objective_group_id": "17183",
+          "objs": [
+            {
+              "objective_id": "17301",
+              "objective_type_id": "66",
+              "objective_group_id": "17183",
+              "param1": "92033",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3752",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7562",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Halberd SE",
+        "en": "Halberd SE",
+        "es": "Halberd SE",
+        "fr": "Halberd SE",
+        "it": "Halberd SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7562",
+          "objective_group_id": "17241",
+          "objs": [
+            {
+              "objective_id": "17359",
+              "objective_type_id": "66",
+              "objective_group_id": "17241",
+              "param1": "92041",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3760",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7570",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Halberd SE",
+        "en": "Halberd SE",
+        "es": "Halberd SE",
+        "fr": "Halberd SE",
+        "it": "Halberd SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7570",
+          "objective_group_id": "17237",
+          "objs": [
+            {
+              "objective_id": "17355",
+              "objective_type_id": "66",
+              "objective_group_id": "17237",
+              "param1": "92045",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3744",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7554",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Halberd SE",
+        "en": "Halberd SE",
+        "es": "Halberd SE",
+        "fr": "Halberd SE",
+        "it": "Halberd SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7554",
+          "objective_group_id": "17233",
+          "objs": [
+            {
+              "objective_id": "17351",
+              "objective_type_id": "66",
+              "objective_group_id": "17233",
+              "param1": "92050",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3748",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7558",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Halberd-H SE",
+        "en": "Halberd-H SE",
+        "es": "Halberd-H SE",
+        "fr": "Halberd-H SE",
+        "it": "Halberd-H SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7558",
+          "objective_group_id": "17223",
+          "objs": [
+            {
+              "objective_id": "17341",
+              "objective_type_id": "66",
+              "objective_group_id": "17223",
+              "param1": "92057",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3756",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7566",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Halberd-H SE",
+        "en": "Halberd-H SE",
+        "es": "Halberd-H SE",
+        "fr": "Halberd-H SE",
+        "it": "Halberd-H SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7566",
+          "objective_group_id": "17225",
+          "objs": [
+            {
+              "objective_id": "17343",
+              "objective_type_id": "66",
+              "objective_group_id": "17225",
+              "param1": "92062",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3740",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7551",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Halberd-H SE",
+        "en": "Halberd-H SE",
+        "es": "Halberd-H SE",
+        "fr": "Halberd-H SE",
+        "it": "Halberd-H SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7551",
+          "objective_group_id": "17219",
+          "objs": [
+            {
+              "objective_id": "17337",
+              "objective_type_id": "66",
+              "objective_group_id": "17219",
+              "param1": "92067",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3764",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7574",
+      "qualify_requirement_id": "45208",
+      "name": {
+        "de": "Halberd-H SE",
+        "en": "Halberd-H SE",
+        "es": "Halberd-H SE",
+        "fr": "Halberd-H SE",
+        "it": "Halberd-H SE"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7574",
+          "objective_group_id": "17229",
+          "objs": [
+            {
+              "objective_id": "17347",
+              "objective_type_id": "66",
+              "objective_group_id": "17229",
+              "param1": "92070",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3828",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7632",
+      "name": {
+        "de": "PSA-02 Diamondback",
+        "en": "PSA-02 Diamondback",
+        "es": "PSA-02 Diamondback",
+        "fr": "PSA-02 Diamondback",
+        "it": "PSA-02 Diamondback"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7632",
+          "objective_group_id": "17352",
+          "objs": [
+            {
+              "objective_id": "17476",
+              "objective_type_id": "66",
+              "objective_group_id": "17352",
+              "param1": "92126",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3824",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7628",
+      "name": {
+        "de": "PSA-01 Hammerhead AMR",
+        "en": "PSA-01 Hammerhead AMR",
+        "es": "PSA-01 Hammerhead AMR",
+        "fr": "PSA-01 Hammerhead AMR",
+        "it": "PSA-01 Hammerhead AMR"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7628",
+          "objective_group_id": "17348",
+          "objs": [
+            {
+              "objective_id": "17472",
+              "objective_type_id": "66",
+              "objective_group_id": "17348",
+              "param1": "92129",
+              "param2": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "directive_id": "3949",
+      "directive_tree_id": "65",
+      "directive_tier_id": "1",
+      "objective_set_id": "7777",
+      "qualify_requirement_id": "45208",
+      "name": {
+        "de": "LB00 Python AP",
+        "en": "LB00 Python AP",
+        "es": "LB00 Python AP",
+        "fr": "Python LB00 AP",
+        "it": "LB00 Python AP"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png",
+      "mappings": [
+        {
+          "objective_set_id": "7777",
+          "objective_group_id": "17535",
+          "objs": [
+            {
+              "objective_id": "17663",
+              "objective_type_id": "66",
+              "objective_group_id": "17535",
+              "param1": "92199",
+              "param2": "1",
+              "param8": "-1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "returned": 32
+}

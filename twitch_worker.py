@@ -19,7 +19,7 @@ CACHE_DIR = os.path.join(BASE_DATA_DIR, "_emote_cache")
 
 def fetch_json(url):
     try:
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, timeout=15)
         if r.status_code == 200:
             return r.json()
     except:
@@ -166,7 +166,7 @@ class EmoteManager:
         # 3. Download: If not present at all
         url = self.emote_urls[code]
         try:
-            r = requests.get(url, timeout=3)
+            r = requests.get(url, timeout=15)
             if r.status_code == 200:
                 ctype = r.headers.get('Content-Type', '').lower()
                 ext = "png"

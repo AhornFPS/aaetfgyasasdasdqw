@@ -5,6 +5,10 @@ import ctypes
 import copy
 import atexit
 from version import VERSION
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 
 # 2. Path logic for PyInstaller 6+ (_internal Support)
@@ -1450,6 +1454,15 @@ class DiorClientGUI:
             self.add_log("DASHBOARD: Rendering Character Data...")
             self.char_win.update_overview(stats)
             self.char_win.update_weapons(weapons)
+            
+            # Fetch directive tree (spawns its own thread)
+            char_id = stats.get('character_id')
+            if char_id:
+                import threading
+                t = threading.Thread(target=self.char_win._fetch_thread, args=(char_id,))
+                t.daemon = True
+                t.start()
+                self.char_win.add_log("UPLINK: Requesting Directive Trees...")
 
             self.char_win.btn_search.setEnabled(True)
             self.char_win.btn_search.setText("SEARCH")
@@ -2252,7 +2265,7 @@ class DiorClientGUI:
 
         try:
             url = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?name.first_lower={name.lower()}"
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=15)
             r = response.json()
 
             if r.get('returned', 0) > 0:
@@ -7330,7 +7343,7 @@ log "DONE"
                            f"&c:resolve=outfit")
 
                     # First check if response is valid
-                    response = requests.get(url, timeout=5)
+                    response = requests.get(url, timeout=15)
                     if response.status_code == 200:
                         try:
                             r = response.json()
@@ -7547,6 +7560,8 @@ log "DONE"
 
                 char_data = r['character_list'][0]
                 char_id = char_data['character_id']
+                raw_f_id = char_data.get('faction_id', '0')
+                print(f"DEBUG: run_search found character {name} (ID: {char_id}) with Faction: {raw_f_id}")
                 all_stats_container = char_data.get('stats', {})
 
                 # --- STEP 2: STATS EXTRACTION ---
@@ -7572,6 +7587,8 @@ log "DONE"
 
                 # IMPORTANT: Name keys exactly as your UI expects them!
                 custom_stats = {
+                    'character_id': char_id,
+                    'faction_id': raw_f_id,
                     'name': char_data.get('name', {}).get('first', '-'),
                     'fac_short': {"1": "VS", "2": "NC", "3": "TR"}.get(str(char_data.get('faction_id')), "NSO"),
                     'server': self.get_server_name_by_id(char_data.get('world_id', '0')),

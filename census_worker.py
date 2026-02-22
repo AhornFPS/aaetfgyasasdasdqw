@@ -363,7 +363,7 @@ class CensusWorker:
                                 def trigger_login_event(cid_val):
                                     try:
                                         u = f"https://census.daybreakgames.com/{self.s_id}/get/ps2:v2/character/?character_id={cid_val}&c:show=faction_id"
-                                        r = requests.get(u, timeout=3).json()
+                                        r = requests.get(u, timeout=15).json()
                                         f_id = "0"
                                         if r.get("returned", 0) > 0:
                                             f_id = r["character_list"][0].get("faction_id", "0")

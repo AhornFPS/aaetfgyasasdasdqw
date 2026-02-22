@@ -1,8 +1,10 @@
 import sys
 import time
+import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
-                             QHeaderView, QPushButton, QFrame, QTabWidget, QTextEdit)
+                             QHeaderView, QPushButton, QFrame, QTabWidget, QTextEdit,
+                             QSplitter, QTreeWidget, QTreeWidgetItem, QScrollArea, QProgressBar)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, pyqtSlot
 
 
@@ -278,18 +280,32 @@ class CharacterWidget(QWidget):
 
     def setup_directive_tab(self):
         layout = QVBoxLayout(self.directive_tab)
-        # Configure table
-        self.directive_table.setHorizontalHeaderLabels(["DIRECTIVE LINE", "CURRENT TIER", "STATUS"])
         
-        h = self.directive_table.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.dir_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        self.directive_table.verticalHeader().setVisible(False)
-        self.directive_table.setAlternatingRowColors(True)
-        self.directive_table.setStyleSheet("alternate-background-color: #161616;")
-        layout.addWidget(self.directive_table)
+        # Left: Tree Widget
+        self.dir_tree = QTreeWidget()
+        self.dir_tree.setHeaderLabel("Directive Trees")
+        self.dir_tree.setStyleSheet("QTreeWidget { background-color: #121212; color: #eee; border: 1px solid #333; }"
+                                    "QTreeWidget::item:selected { background-color: #2a2a2a; color: #00f2ff; font-weight: bold; }")
+        self.dir_splitter.addWidget(self.dir_tree)
+        self.dir_tree.itemClicked.connect(self.on_directive_tree_clicked)
+        
+        # Right: Details Scroll Area
+        self.dir_scroll = QScrollArea()
+        self.dir_scroll.setWidgetResizable(True)
+        self.dir_scroll.setStyleSheet("QScrollArea { background-color: #1a1a1a; border: 1px solid #333; }")
+        
+        self.dir_details_widget = QWidget()
+        self.dir_details_widget.setStyleSheet("background-color: transparent;")
+        self.dir_details_layout = QVBoxLayout(self.dir_details_widget)
+        self.dir_details_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        self.dir_scroll.setWidget(self.dir_details_widget)
+        self.dir_splitter.addWidget(self.dir_scroll)
+        
+        self.dir_splitter.setSizes([300, 700])
+        layout.addWidget(self.dir_splitter)
 
     # --- LOGIK ---
 
@@ -310,6 +326,10 @@ class CharacterWidget(QWidget):
         self.signals.search_requested.emit(name)
 
     def update_overview(self, c_stats):
+        self.current_faction_id = str(c_stats.get('faction_id', "0"))
+        self.add_log(f"SYS: Character Data Loaded. Faction: {self.current_faction_id}")
+        print(f"DEBUG: update_overview set current_faction_id to {self.current_faction_id}")
+        
         # Master Data
         for label_name, key in [("Name:", 'name'), ("Faction:", 'fac_short'), ("Server:", 'server'),
                                 ("Outfit:", 'outfit'), ("Rank:", 'rank'), ("Time Played:", 'time_played')]:
@@ -403,74 +423,471 @@ class CharacterWidget(QWidget):
     # --- DIRECTIVE LOGIC ---
 
     def _fetch_thread(self, char_id):
-        url = f"https://census.daybreakgames.com/s:ahornstream/get/ps2:v2/characters_directive_tier?character_id={char_id}&c:limit=500&c:join=type:directive%5Eon:directive_tree_id%5Eto:directive_tree_id&c:lang=en"
+        self.current_char_id = char_id
+        # Use dynamic s_id from controller if available, fallback to env or example
+        s_id = getattr(self.controller, "s_id", None) or os.getenv("CENSUS_S_ID", "s:example")
+        url = f"https://census.daybreakgames.com/{s_id}/get/ps2:v2/characters_directive_tree?character_id={char_id}&c:limit=500&c:join=directive_tree^on:directive_tree_id^to:directive_tree_id^inject_at:tree(directive_tree_category^on:directive_tree_category_id^to:directive_tree_category_id^inject_at:category)"
         try:
-            r = requests.get(url, timeout=10)
+            import requests
+            r = requests.get(url, timeout=30)
             data = r.json()
             
             # Update on main thread
             from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
             QMetaObject.invokeMethod(self, "update_directive_table", 
                                      Qt.ConnectionType.QueuedConnection,
-                                     Q_ARG(list, data.get("characters_directive_tier_list", [])))
+                                     Q_ARG(list, data.get("characters_directive_tree_list", [])))
             
         except Exception as e:
             print(f"Directive API Error: {e}")
+            self.add_log(f"ERR: Tree API failed: {e}")
 
-   # @pyqtSignal(list)
+    @pyqtSlot(list)
     def update_directive_table(self, data_list):
-        """Called by the thread when data is available."""
-        self.directive_table.setRowCount(0)
-        self.directive_table.setSortingEnabled(False)
-
+        """Called by the thread when tree data is available. Populates the left pane tree."""
+        self.dir_tree.clear()
+        
+        categories = {}
         for item in data_list:
+            tree_data = item.get("tree", {})
+            cat_data = tree_data.get("category", {})
+            
+            cat_name = cat_data.get("name", {}).get("en", "Unknown Category")
+            tree_name = tree_data.get("name", {}).get("en", "Unknown Tree")
             tree_id = item.get("directive_tree_id")
-            tier_id = item.get("directive_tier_id", "0")
             
-            # 1. Resolve names (Local)
-            dir_info = self.directives_db.get(tree_id, {})
-            name = dir_info.get("name", f"Unknown ({tree_id})")
+            # Store completion status
+            # 'current_directive_tier_id' usually indicates the tier they are currently on, so completed is that - 1 usually, 
+            # or just show the tier ID they are currently working on as 'Level'.
+            status = item.get("current_directive_tier_id", "0")
+            completion_time = item.get("completion_time", "0")
             
-            # 2. Tier Name via Join (API Payload)
-            # Since we use c:join, 'directive_tree_id_join_directive' is in the payload
-            # BUT: characters_directive_tier only returns TIER ID.
-            # The join in the URL 'type:directive^on:directive_tree_id^to:directive_tree_id'
-            # is a bit tricky, as it joins on 'directive', not 'directive_tier'.
-            # Let's see what we get.
-            # Fallback: Show Tier ID
+            if cat_name not in categories:
+                categories[cat_name] = []
+                
+            categories[cat_name].append({
+                "name": tree_name,
+                "id": tree_id,
+                "level": status,
+                "completed": completion_time != "0"
+            })
             
-            tier_val = int(tier_id)
-            # Simple mapping logic for standard directives (1=Bronze, 2=Silver, 3=Gold, 4=Aurax)
-            # Some have different IDs. We simply use the ID as indicator.
+        for cat_name, trees in sorted(categories.items()):
+            cat_item = QTreeWidgetItem(self.dir_tree, [cat_name])
+            cat_item.setFlags(cat_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            cat_item.setExpanded(True)
             
-            # Calculate Status (Progress)
-            # The API often returns 'current_directive_tier' as well.
-            
-            row = self.directive_table.rowCount()
-            self.directive_table.insertRow(row)
-            
-            # Name
-            self.directive_table.setItem(row, 0, QTableWidgetItem(name))
-            
-            # Tier
-            tier_item = QTableWidgetItem(str(tier_val))
-            tier_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.directive_table.setItem(row, 1, tier_item)
-            
-            # Status (API often provides completion date)
-            ts = item.get("completion_time", "0")
-            status = "Completed" if ts != "0" else "In Progress"
-            
-            status_item = QTableWidgetItem(status)
-            if status == "Completed":
-                status_item.setForeground(Qt.GlobalColor.green)
-            else:
-                status_item.setForeground(Qt.GlobalColor.yellow)
-            
-            self.directive_table.setItem(row, 2, status_item)
+            for tree in sorted(trees, key=lambda x: x["name"]):
+                tree_str = f"{tree['name']} (Level {tree['level']})"
+                if tree['completed']:
+                    tree_str = f"{tree['name']} (Completed)"
+                tree_item = QTreeWidgetItem(cat_item, [tree_str])
+                tree_item.setData(0, Qt.ItemDataRole.UserRole, tree["id"])
+                if tree["completed"]:
+                    tree_item.setForeground(0, Qt.GlobalColor.green)
+                else:
+                    tree_item.setForeground(0, Qt.GlobalColor.yellow)
+                    
+        self.add_log(f"Fetch: {len(data_list)} Directive Trees loaded.")
 
-        self.directive_table.setSortingEnabled(True)
-        self.add_log(f"Fetch: {len(data_list)} Directives loaded.")
+    def on_directive_tree_clicked(self, item, column):
+        tree_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if not tree_id:
+            return  # Category clicked
+            
+        self.add_log(f"Fetching details for Tree {tree_id}...")
+        
+        # Clear existing details
+        for i in reversed(range(self.dir_details_layout.count())):
+            widget_to_remove = self.dir_details_layout.itemAt(i).widget()
+            if widget_to_remove:
+                widget_to_remove.setParent(None)
+                
+        lbl = QLabel("Loading tree details...")
+        lbl.setStyleSheet("color: #00f2ff;")
+        self.dir_details_layout.addWidget(lbl)
+        
+        # Start detail fetch thread
+        import threading
+        t = threading.Thread(target=self._fetch_tree_details_thread, args=(self.current_char_id, tree_id))
+        t.daemon = True
+        t.start()
+
+    def _fetch_tree_details_thread(self, char_id, tree_id):
+        # Use dynamic s_id from controller if available, fallback to env or example
+        s_id = getattr(self.controller, "s_id", None) or os.getenv("CENSUS_S_ID", "s:example")
+
+        # 1. Fetch static tree structure
+        # FIXED: Routed the objectives join through objective_set_to_objective so we actually receive param1 and param5.
+        url_tree = f"https://census.daybreakgames.com/{s_id}/get/ps2:v2/directive_tree?directive_tree_id={tree_id}&c:lang=en&c:join=directive_tier^on:directive_tree_id^to:directive_tree_id^list:1^inject_at:tiers(directive^on:directive_tier_id^to:directive_tier_id^terms:directive_tree_id={tree_id}^list:1^inject_at:directives(objective_set_to_objective^on:objective_set_id^to:objective_set_id^list:1^inject_at:objective_set_to_objective(objective^on:objective_group_id^to:objective_group_id^list:1^inject_at:objectives)))"
+        
+        # 2. Fetch character progress for this tree
+        url_char = f"https://census.daybreakgames.com/{s_id}/get/ps2:v2/characters_directive?character_id={char_id}&directive_tree_id={tree_id}&c:limit=500"
+        url_char_obj = f"https://census.daybreakgames.com/{s_id}/get/ps2:v2/characters_directive_objective?character_id={char_id}&directive_tree_id={tree_id}&c:limit=500"
+        
+        try:
+            import requests
+            r_tree = requests.get(url_tree, timeout=30).json()
+            r_char = requests.get(url_char, timeout=30).json()
+            r_char_obj = requests.get(url_char_obj, timeout=30).json()
+            
+            tree_data = r_tree.get("directive_tree_list", [{}])[0]
+            char_directives = {d["directive_id"]: d for d in r_char.get("characters_directive_list", [])}
+            char_objectives = {d["objective_id"]: d for d in r_char_obj.get("characters_directive_objective_list", [])}
+            
+            # Get character faction from the loaded char_data or from a previously stored variable
+            char_faction = getattr(self, "current_faction_id", "0")
+            
+            payload = {
+                "tree": tree_data,
+                "char_dir": char_directives,
+                "char_obj": char_objectives,
+                "char_faction": char_faction
+            }
+            
+            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
+            QMetaObject.invokeMethod(self, "update_tree_details_ui", 
+                                     Qt.ConnectionType.QueuedConnection,
+                                     Q_ARG(dict, payload))
+                                     
+        except Exception as e:
+            print(f"Details API Error: {e}")
+            self.add_log(f"ERR: Details API failed: {e}")
+
+    @pyqtSlot(dict)
+    def update_tree_details_ui(self, payload):
+        # Clear existing details
+        for i in reversed(range(self.dir_details_layout.count())):
+            widget_to_remove = self.dir_details_layout.itemAt(i).widget()
+            if widget_to_remove:
+                widget_to_remove.setParent(None)
+                
+        tree = payload.get("tree", {})
+        char_dir = payload.get("char_dir", {})
+        char_obj = payload.get("char_obj", {})
+        
+        if not tree:
+            lbl = QLabel("Failed to load tree data.")
+            lbl.setStyleSheet("color: red;")
+            self.dir_details_layout.addWidget(lbl)
+            return
+            
+        tree_name = tree.get("name", {}).get("en", "Unknown Tree")
+        title = QLabel(f"<span style='font-size: 18px; color: #00f2ff; font-weight: bold;'>{tree_name}</span>")
+        self.dir_details_layout.addWidget(title)
+        
+        # Load Faction Filter Data once
+        faction_map_size = 0
+        faction_map = {}
+        try:
+            from dior_utils import get_asset_path
+            import csv
+            csv_path = get_asset_path("sanction-list.csv")
+            if os.path.exists(csv_path):
+                # Use utf-8-sig to handle potential BOM
+                with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                    reader = csv.DictReader(f)
+                    fields = [fn.strip() for fn in (reader.fieldnames or [])]
+                    
+                    # Robust key matching (ignore case/spaces)
+                    id_key = next((f for f in fields if f.lower().replace(" ", "") == "itemid"), "Item ID")
+                    fac_key = next((f for f in fields if f.lower().replace(" ", "") == "factionid"), "Faction ID")
+                    name_key = next((f for f in fields if f.lower().replace(" ", "") == "itemname"), "Item Name")
+                    
+                    for row in reader:
+                        # Clean the row keys and values
+                        clean_row = {str(k).strip(): str(v).strip() for k, v in row.items() if k}
+                        i_id = clean_row.get(id_key, "")
+                        f_id = clean_row.get(fac_key, "")
+                        i_name = clean_row.get(name_key, "")
+                        
+                        if i_id and f_id:
+                            # Faction ID must be a single digit usually (1,2,3)
+                            # But NSO align might be tracked differently in some lists.
+                            faction_map[i_id] = (f_id, i_name)
+                    
+                    faction_map_size = len(faction_map)
+                    if faction_map_size == 0:
+                         self.add_log(f"WRN: CSV loaded but 0 items mapped. Keys searched: {id_key}, {fac_key}. Found: {fields}")
+                    else:
+                        print(f"DEBUG: Found keys - ID:{id_key}, Fac:{fac_key}, Name:{name_key}. Sample: {list(faction_map.keys())[:3]}")
+            else:
+                self.add_log(f"WRN: sanction-list.csv not found at {csv_path}")
+        except Exception as e:
+            print(f"Failed to load sanction-list.csv for faction filtering: {e}")
+            self.add_log(f"ERR: Faction list load error: {e}")
+            
+        char_faction = str(payload.get("char_faction", "0"))
+        print(f"DEBUG: update_tree_details_ui using Char Faction: {char_faction}")
+        
+        def infer_faction_from_name(name):
+            """Primary filter for directives since names are reliable"""
+            n = name.upper()
+            
+            # Special variants (Survivor/Networked/Unique Empire Picks)
+            if "NS-W" in n or "NSX-W" in n or "XOXO" in n: return "1" # VS
+            if "NS-G" in n or "NSX-G" in n or "NS-C" in n: return "2" # NC
+            if "NS-M" in n or "NSX-M" in n or "NS-B" in n: return "3" # TR
+
+            nso_terms = [
+                "AR-", "SR-", "CB-", "XMG-", "PMG-", "BAR-", "SG-", "XGG-", "NP-"
+            ]
+            vs_terms = [
+                "PULSAR", "ORION", "SOLSTICE", "BEAMER", "LASHER", "SCYTHE", "MAGRIDER", "SIRIUS", "ZENITH", "PHASESHIFT", 
+                "VX", "VA", "VE", "SPYKER", "CERBERUS", "HV-45", "H-V45", "TERMINUS", "CORVUS", "ERIDANI", "SKORPIOS", "CANIS", "HORIZON", "LACERTA", 
+                "PPA", "SARON", "PROTON", "APHELION", "STARFALL", "EQUINOX", "SVA-88", "FLARE", "URSA", "COBALT", "OBELISK",
+                "GHOST", "PARALLAX", "XM98", "PHANTOM", "SPECTRE", "NYX", "NEMESIS", "HADES", "POLARIS", "QUASAR", "COSMOS", "NEBULA", "BLUESHIFT", "MANTIS",
+                "SERPENT", "PROMINENCE", "NOVA", "THANATOS", "DEIMOS", "SPIKER", "MANTICORE", "V10", "LANCER", "VS-", " VS ", "EIDOLON", "ECLIPSE", "SUPERNOVA"
+            ]
+            nc_terms = [
+                "GAUSS", "MERCENARY", "MAG-SHOT", "VANGUARD", "REAVER", "NC6", "GD-", "AF-", "LA-", "AC-", " AC ", "EM1", "EM6", "ANCHOR", "JACKHAMMER",
+                "REBEL", "DESPERADO", "GR-22", "CARNAGE", "REAPER", "BANDIT", "CYCLONE", "TEMPEST", "GLADIUS", "PROMISE", "BISHOP",
+                "ENFORCER", "CANISTER", "MJOLNIR", "PHOENIX", "SPARROW", "RAVEN", "CYLINDER", "RAILJACK", "SAW", "BLUEPRINT", "COVENANT",
+                "WARDEN", "VANDAL", "LONGSHOT", "BOLT DRIVER", "SAS-R", "GLADIATOR", "MERC", "MAULER", "TRAWLER", "TITAN", "ENFORCER", "FALCON",
+                "A-TROSS", "SHRIKE", "SWEEPER", "BRUISER", "MAG-SCATTER", "IMPETUS", "LA80", "NC-", " NC ", "TESSERACT"
+            ]
+            tr_terms = [
+                "CYCLER", "CARV", "REPEATER", "PROWLER", "MOSQUITO", "T1", "T9", "TX", "SABR", "TRAC", "JAGUAR", "LYNX", "TMG",
+                "INQUISITOR", "EMPEROR", "T1B", "TAR", "TORQ-9", "ARMISTICE", "SHURIKEN", "JACKAL", "DRAGOON",
+                "VULCAN", "MARAUDER", "GATEKEEPER", "STRIKER", "POUNDERS", "FRACTURES", "MSW-R", "BULL", "RHINO", "ARBALEST", "MINIGUN",
+                "99SV", "M77-B", "RAMS .50M", "TSAR-42", "TRAP-M1", "CLAYMORE", "VULCAN", "GATEKEEPER", "POUNDERS", "STRIKER", "ONAGER",
+                "NIGHTHAWK", "HAYMAKER", "BARRAGE", "BLACKJACK", "SKEP", "HAILSTORM", "M77-B", "TR-", " TR ", "LC", "HC"
+            ]
+            
+            # Check for exact faction tags first
+            if "(VS)" in n: return "1"
+            if "(NC)" in n: return "2"
+            if "(TR)" in n: return "3"
+            
+            # Prefix/Term scan
+            for t in nso_terms:
+                if t in n: return "4"
+            for t in vs_terms:
+                if t in n: return "1"
+            for t in nc_terms:
+                if t in n: return "2"
+            for t in tr_terms:
+                if t in n: return "3"
+            return None
+
+        if faction_map_size > 0:
+            self.add_log(f"LOG: Loaded {faction_map_size} weapons for faction filtering. Char Faction: {char_faction}")
+        else:
+            self.add_log("WRN: Faction filter inactive (Map empty).")
+            
+        tiers = tree.get("tiers", [])
+        if isinstance(tiers, dict):
+            tiers = [tiers]
+            
+        tiers.sort(key=lambda x: int(x.get("directive_tier_id", 0)))
+        
+        # Color mapping for tiers
+        tier_colors = {
+            1: "#cd7f32", # Bronze
+            2: "#c0c0c0", # Silver
+            3: "#ffd700", # Gold
+            4: "#b900ff"  # Auraxium (purple)
+        }
+        
+        for tier in tiers:
+            tier_id = int(tier.get("directive_tier_id", 0))
+            tier_name = tier.get("name", {}).get("en", f"Tier {tier_id}")
+            comp_count = tier.get("completion_count", "0")
+            
+            tier_frame = QFrame()
+            tier_frame.setObjectName("StatCard")
+            tier_layout = QVBoxLayout(tier_frame)
+            
+            t_color = tier_colors.get(tier_id, "#ffffff")
+            tier_title = QLabel(f"<b>{tier_name}</b> (Needs {comp_count} Directives)")
+            tier_title.setStyleSheet(f"color: {t_color}; font-size: 14px;")
+            tier_layout.addWidget(tier_title)
+            
+            directives = tier.get("directives", [])
+            if isinstance(directives, dict):
+                directives = [directives]
+            
+            if not directives:
+                tier_layout.addWidget(QLabel("No directives found (or API load failure)."))
+            
+            valid_directives = 0
+            seen_directive_ids = set()
+            for dir_data in directives:
+                d_id = dir_data.get("directive_id")
+                if not d_id: continue
+                
+                # De-duplication: Skip if we've already rendered this specific directive in this tier
+                if d_id in seen_directive_ids:
+                    continue
+                seen_directive_ids.add(d_id)
+                
+                # CENSUS API BUG FIX: Sometimes Census injects directives from OTHER trees/tiers
+                # We strictly enforce that the directive belongs to this specific tree and tier.
+                if dir_data.get("directive_tree_id") != str(tree.get("directive_tree_id")) or \
+                   dir_data.get("directive_tier_id") != str(tier_id):
+                    continue
+                    
+                d_name = dir_data.get("name", {}).get("en", "Unknown Directive")
+                
+                # Check character progress on this directive
+                c_dir = char_dir.get(d_id, {})
+                dir_completed = c_dir.get("completion_time", "0") != "0"
+                has_progress = False
+                
+                # Define kill requirements per tier for Medal objectives (Type 66)
+                # These are industry standard PS2 values
+                tier_kills = {1: 10, 2: 60, 3: 250, 4: 1160}
+                
+                # Extract flat objectives from the join mappings
+                flat_objectives = []
+                os2o = dir_data.get("objective_set_to_objective", [])
+                if isinstance(os2o, dict): os2o = [os2o]
+                for mapping in os2o:
+                    objs = mapping.get("objectives", [])
+                    if isinstance(objs, dict): objs = [objs]
+                    flat_objectives.extend(objs)
+                
+                # Identify weapon ID / requirements
+                # PS2 has two main objective types for weapons:
+                # 12: Kill count (param1=requirement, param5=weapon_id)
+                # 66: Ribbon/Medal count (param1=weapon_id, requirement usually 1 ribbon/medal)
+                
+                o_max = 1
+                o_curr = 0
+                item_ids = [] # Collect all item IDs from all objectives in this directive
+                
+                for obj in flat_objectives:
+                    o_id = obj.get("objective_id")
+                    o_type = str(obj.get("objective_type_id")) # Ensure string for comparison
+                    
+                    current_item_id = ""
+                    if o_type == "12": # Kill Count
+                        current_item_id = str(obj.get("param5", ""))
+                    elif o_type == "66": # Medal/Ribbon Count
+                        current_item_id = str(obj.get("param1", ""))
+                    
+                    if current_item_id:
+                        item_ids.append(current_item_id)
+                    
+                    # Trace for debugging
+                    print(f"TRACE: Directive {d_name} | Obj {o_id} | Type {o_type} | Found IID: {current_item_id}")
+                        
+                    # State tracking (usually use the first objective for progress bar)
+                    if o_id in char_obj:
+                        o_curr = int(char_obj.get(o_id).get("state_data", "0"))
+                    
+                    # Requirement extraction (use first objective)
+                    if o_type == "12":
+                        o_max = int(obj.get("param1", "1"))
+                    elif o_type == "66":
+                        o_max = tier_kills.get(tier_id, 1160)
+                              
+                # Find if user has any progress on objectives for the HAS_PROGRESS check used in filtering
+                has_progress = o_curr > 0
+                
+                # INCLUSIVE FACTION FILTERING
+                # A directive should ONLY be skipped if we are CERTAIN it is off-faction.
+                # If name inference or mapping suggests it belongs to our character's faction or is NS, RETAIN.
+                skip_faction = False
+                
+                if not dir_completed and not has_progress:
+                    # 1. Primary Check: Name-based inference
+                    inferred = infer_faction_from_name(d_name)
+                    
+                    # We skip if the name EXPLICITLY points to another faction (1,2,3,4)
+                    # and that faction does not match the character
+                    if inferred and inferred in ["1", "2", "3", "4"]:
+                        if inferred != char_faction:
+                            skip_faction = True
+                            print(f"TRACE: Hiding {d_name} (Inferred {inferred} != Char {char_faction})")
+                    
+                    # 2. Secondary Check: Map-based (if name was neutral or unknown)
+                    if not skip_faction and not inferred:
+                        # For multi-item directives (rare), we skip only if ALL items are off-faction.
+                        # But for now, if any single item ID confirms a faction match or NS, we retain.
+                        faction_confirmed = False
+                        off_faction_found = False
+                        
+                        for iid in item_ids:
+                            if iid in faction_map:
+                                wep_f, _ = faction_map[iid]
+                                # Faction 0 or Empty or "None" = Universal/Common Pool
+                                if wep_f in ["0", "", "None"]:
+                                    faction_confirmed = True
+                                    break
+                                elif wep_f == "4": # NSO Specific
+                                    if char_faction == "4":
+                                        faction_confirmed = True
+                                        break
+                                    else:
+                                        off_faction_found = True
+                                elif wep_f == char_faction:
+                                    faction_confirmed = True
+                                    break
+                                elif wep_f in ["1", "2", "3"]:
+                                    if wep_f != char_faction:
+                                        off_faction_found = True
+                        
+                        if off_faction_found and not faction_confirmed:
+                            skip_faction = True
+                            print(f"TRACE: Hiding {d_name} (Map ID confirms off-faction)")
+                    
+                    if not skip_faction:
+                         if valid_directives < 20:
+                              print(f"DIAGNOSTIC: RETAINED {d_name} (IDs: {item_ids}) Inferred: {inferred}")
+                                    
+                if skip_faction:
+                    continue
+                    
+                valid_directives += 1
+                
+                completion_date_str = ""
+                if dir_completed:
+                    c_time = int(c_dir.get("completion_time", "0"))
+                    import datetime
+                    completion_date_str = datetime.datetime.fromtimestamp(c_time).strftime('%Y-%m-%d')
+                
+                display_name = d_name
+                if dir_completed and completion_date_str:
+                    display_name += f" ({completion_date_str})"
+                    
+                lbl_name = QLabel(display_name)
+                lbl_name.setFixedWidth(240)
+                if dir_completed:
+                    lbl_name.setStyleSheet("color: #00cc00;")
+                else:
+                    lbl_name.setStyleSheet("color: #ccc;")
+                
+                # Overrides for display
+                if dir_completed:
+                    o_curr = o_max
+                if o_curr > o_max:  
+                    o_curr = o_max
+                    
+                if dir_completed:
+                    bar = QLabel("Completed")
+                    bar.setStyleSheet("background-color: #00cc00; color: white; padding: 2px; font-weight: bold;")
+                    bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                else:
+                    bar = QLabel(f"{o_curr} / {o_max}")
+                    bar.setStyleSheet("background-color: #111; color: white; border: 1px solid #333; padding: 2px;")
+                    bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    
+                row_layout = QHBoxLayout()
+                row_layout.addWidget(lbl_name)
+                row_layout.addWidget(bar)
+                
+                tier_layout.addLayout(row_layout)
+                
+            if valid_directives == 0:
+                # If we skipped all because of faction filter
+                lbl_empty = QLabel("No Faction-Aligned directives found for this tier.")
+                lbl_empty.setStyleSheet("color: #888; font-style: italic;")
+                tier_layout.addWidget(lbl_empty)
+                
+            self.dir_details_layout.addWidget(tier_frame)
+            
+        self.dir_details_layout.addStretch()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,725 @@
+{
+  "characters_directive_objective_list": [
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1513",
+      "objective_id": "13181",
+      "objective_group_id": "13181",
+      "status": "1",
+      "state_data": "1"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1527",
+      "objective_id": "13195",
+      "objective_group_id": "13195",
+      "status": "1",
+      "state_data": "24"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1567",
+      "objective_id": "13236",
+      "objective_group_id": "13236",
+      "status": "1",
+      "state_data": "494"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1571",
+      "objective_id": "13240",
+      "objective_group_id": "13240",
+      "status": "1",
+      "state_data": "12"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1575",
+      "objective_id": "13244",
+      "objective_group_id": "13244",
+      "status": "1",
+      "state_data": "521"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1579",
+      "objective_id": "13248",
+      "objective_group_id": "13248",
+      "status": "1",
+      "state_data": "159"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1583",
+      "objective_id": "13252",
+      "objective_group_id": "13252",
+      "status": "1",
+      "state_data": "68"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1595",
+      "objective_id": "13264",
+      "objective_group_id": "13264",
+      "status": "1",
+      "state_data": "189"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1610",
+      "objective_id": "13279",
+      "objective_group_id": "13279",
+      "status": "1",
+      "state_data": "381"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1618",
+      "objective_id": "13287",
+      "objective_group_id": "13287",
+      "status": "1",
+      "state_data": "143"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1622",
+      "objective_id": "13291",
+      "objective_group_id": "13291",
+      "status": "1",
+      "state_data": "74"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1635",
+      "objective_id": "13304",
+      "objective_group_id": "13304",
+      "status": "1",
+      "state_data": "22"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1639",
+      "objective_id": "13308",
+      "objective_group_id": "13308",
+      "status": "1",
+      "state_data": "28"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1668",
+      "objective_id": "13337",
+      "objective_group_id": "13337",
+      "status": "1",
+      "state_data": "1077"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1864",
+      "objective_id": "13534",
+      "objective_group_id": "13534",
+      "status": "1",
+      "state_data": "93"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "1872",
+      "objective_id": "13542",
+      "objective_group_id": "13542",
+      "status": "1",
+      "state_data": "56"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2016",
+      "objective_id": "13706",
+      "objective_group_id": "13706",
+      "status": "1",
+      "state_data": "74"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2031",
+      "objective_id": "13722",
+      "objective_group_id": "13722",
+      "status": "1",
+      "state_data": "50"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2039",
+      "objective_id": "13730",
+      "objective_group_id": "13730",
+      "status": "1",
+      "state_data": "212"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2051",
+      "objective_id": "13742",
+      "objective_group_id": "13742",
+      "status": "1",
+      "state_data": "1"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2059",
+      "objective_id": "13750",
+      "objective_group_id": "13750",
+      "status": "1",
+      "state_data": "32"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2741",
+      "objective_id": "15309",
+      "objective_group_id": "15298",
+      "status": "1",
+      "state_data": "39"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "2745",
+      "objective_id": "15317",
+      "objective_group_id": "15306",
+      "status": "1",
+      "state_data": "1"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "3124",
+      "objective_id": "16260",
+      "objective_group_id": "16229",
+      "status": "1",
+      "state_data": "7"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "3187",
+      "objective_id": "16350",
+      "objective_group_id": "16319",
+      "status": "1",
+      "state_data": "89"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "3191",
+      "objective_id": "16354",
+      "objective_group_id": "16323",
+      "status": "1",
+      "state_data": "78"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "4639",
+      "objective_id": "20608",
+      "objective_group_id": "19646",
+      "status": "1",
+      "state_data": "42"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "4640",
+      "objective_id": "20607",
+      "objective_group_id": "19645",
+      "status": "1",
+      "state_data": "7"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "4641",
+      "objective_id": "20609",
+      "objective_group_id": "19647",
+      "status": "1",
+      "state_data": "12528"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5804",
+      "objective_id": "22892",
+      "objective_group_id": "21803",
+      "status": "1",
+      "state_data": "46137438"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5919",
+      "objective_id": "22736",
+      "objective_group_id": "21648",
+      "status": "1",
+      "state_data": "8"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5920",
+      "objective_id": "22737",
+      "objective_group_id": "21649",
+      "status": "1",
+      "state_data": "7"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5922",
+      "objective_id": "22739",
+      "objective_group_id": "21651",
+      "status": "1",
+      "state_data": "7"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5937",
+      "objective_id": "22755",
+      "objective_group_id": "21667",
+      "status": "1",
+      "state_data": "4"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5938",
+      "objective_id": "22756",
+      "objective_group_id": "21668",
+      "status": "1",
+      "state_data": "2"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5940",
+      "objective_id": "22758",
+      "objective_group_id": "21670",
+      "status": "1",
+      "state_data": "22"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5959",
+      "objective_id": "22777",
+      "objective_group_id": "21689",
+      "status": "1",
+      "state_data": "4"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5960",
+      "objective_id": "22778",
+      "objective_group_id": "21690",
+      "status": "1",
+      "state_data": "6"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5961",
+      "objective_id": "22779",
+      "objective_group_id": "21691",
+      "status": "1",
+      "state_data": "2"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5962",
+      "objective_id": "22780",
+      "objective_group_id": "21692",
+      "status": "1",
+      "state_data": "4"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5978",
+      "objective_id": "22796",
+      "objective_group_id": "21708",
+      "status": "1",
+      "state_data": "3"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "5999",
+      "objective_id": "22817",
+      "objective_group_id": "21729",
+      "status": "1",
+      "state_data": "5"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6000",
+      "objective_id": "22818",
+      "objective_group_id": "21730",
+      "status": "1",
+      "state_data": "1"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6001",
+      "objective_id": "22819",
+      "objective_group_id": "21731",
+      "status": "1",
+      "state_data": "4"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6002",
+      "objective_id": "22820",
+      "objective_group_id": "21732",
+      "status": "1",
+      "state_data": "20"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6018",
+      "objective_id": "22837",
+      "objective_group_id": "21749",
+      "status": "1",
+      "state_data": "16"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6020",
+      "objective_id": "22839",
+      "objective_group_id": "21751",
+      "status": "1",
+      "state_data": "21"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6039",
+      "objective_id": "22858",
+      "objective_group_id": "21770",
+      "status": "1",
+      "state_data": "8"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6040",
+      "objective_id": "22859",
+      "objective_group_id": "21771",
+      "status": "1",
+      "state_data": "6"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6041",
+      "objective_id": "22860",
+      "objective_group_id": "21772",
+      "status": "1",
+      "state_data": "1"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6042",
+      "objective_id": "22861",
+      "objective_group_id": "21773",
+      "status": "1",
+      "state_data": "6"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6062",
+      "objective_id": "22893",
+      "objective_group_id": "21804",
+      "status": "1",
+      "state_data": "46137434"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6063",
+      "objective_id": "22895",
+      "objective_group_id": "21806",
+      "status": "1",
+      "state_data": "61866072"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6064",
+      "objective_id": "22896",
+      "objective_group_id": "21807",
+      "status": "1",
+      "state_data": "61866059"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6065",
+      "objective_id": "22897",
+      "objective_group_id": "21808",
+      "status": "1",
+      "state_data": "61866012"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6066",
+      "objective_id": "22898",
+      "objective_group_id": "21809",
+      "status": "1",
+      "state_data": "45088769"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6067",
+      "objective_id": "22899",
+      "objective_group_id": "21810",
+      "status": "1",
+      "state_data": "61865988"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6068",
+      "objective_id": "22900",
+      "objective_group_id": "21811",
+      "status": "1",
+      "state_data": "56623105"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6071",
+      "objective_id": "22903",
+      "objective_group_id": "21814",
+      "status": "1",
+      "state_data": "61866012"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6072",
+      "objective_id": "22904",
+      "objective_group_id": "21815",
+      "status": "1",
+      "state_data": "61866013"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6073",
+      "objective_id": "22905",
+      "objective_group_id": "21816",
+      "status": "1",
+      "state_data": "60817439"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6319",
+      "objective_id": "23299",
+      "objective_group_id": "22159",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6320",
+      "objective_id": "23300",
+      "objective_group_id": "22160",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6321",
+      "objective_id": "23301",
+      "objective_group_id": "22161",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6322",
+      "objective_id": "23302",
+      "objective_group_id": "22162",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6323",
+      "objective_id": "23303",
+      "objective_group_id": "22163",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6324",
+      "objective_id": "23304",
+      "objective_group_id": "22164",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6325",
+      "objective_id": "23305",
+      "objective_group_id": "22165",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6326",
+      "objective_id": "23306",
+      "objective_group_id": "22166",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6327",
+      "objective_id": "23307",
+      "objective_group_id": "22167",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6328",
+      "objective_id": "23308",
+      "objective_group_id": "22168",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6330",
+      "objective_id": "23310",
+      "objective_group_id": "22170",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6331",
+      "objective_id": "23311",
+      "objective_group_id": "22171",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6332",
+      "objective_id": "23312",
+      "objective_group_id": "22172",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6333",
+      "objective_id": "23313",
+      "objective_group_id": "22173",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6334",
+      "objective_id": "23314",
+      "objective_group_id": "22174",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6335",
+      "objective_id": "23315",
+      "objective_group_id": "22175",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6336",
+      "objective_id": "23316",
+      "objective_group_id": "22176",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6337",
+      "objective_id": "23317",
+      "objective_group_id": "22177",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6338",
+      "objective_id": "23318",
+      "objective_group_id": "22178",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6339",
+      "objective_id": "23319",
+      "objective_group_id": "22179",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6340",
+      "objective_id": "23320",
+      "objective_group_id": "22180",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6341",
+      "objective_id": "23321",
+      "objective_group_id": "22181",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6342",
+      "objective_id": "23322",
+      "objective_group_id": "22182",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6343",
+      "objective_id": "23323",
+      "objective_group_id": "22183",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6344",
+      "objective_id": "23324",
+      "objective_group_id": "22184",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6345",
+      "objective_id": "23325",
+      "objective_group_id": "22185",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6346",
+      "objective_id": "23326",
+      "objective_group_id": "22186",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6347",
+      "objective_id": "23327",
+      "objective_group_id": "22187",
+      "status": "1",
+      "state_data": "10"
+    },
+    {
+      "character_id": "5428010618038407873",
+      "directive_id": "6348",
+      "objective_id": "23328",
+      "objective_group_id": "22188",
+      "status": "1",
+      "state_data": "10"
+    }
+  ],
+  "returned": 90
+}

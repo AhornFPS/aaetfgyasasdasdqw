@@ -1,0 +1,49 @@
+{
+  "characters_directive_tree_list": [
+    {
+      "character_id": "5428011263335537297",
+      "directive_tree_id": "4",
+      "current_directive_tier_id": "5",
+      "current_level": "0",
+      "completion_time": "1486189564",
+      "completion_time_date": "2017-02-04 06:26:04.0",
+      "tree": {
+        "directive_tree_id": "4",
+        "directive_tree_category_id": "7",
+        "name": {
+          "de": "Karabiner",
+          "en": "Carbines",
+          "es": "Carabinas",
+          "fr": "Carabines",
+          "it": "Carabine"
+        },
+        "image_set_id": "14164",
+        "image_id": "79587",
+        "image_path": "/files/ps2/images/static/79587.png"
+      }
+    },
+    {
+      "character_id": "5428011263335537297",
+      "directive_tree_id": "6",
+      "current_directive_tier_id": "3",
+      "current_level": "0",
+      "completion_time": "0",
+      "completion_time_date": "1970-01-01 00:00:00.0",
+      "tree": {
+        "directive_tree_id": "6",
+        "directive_tree_category_id": "7",
+        "name": {
+          "de": "Scharfsch\u00fctzengewehre",
+          "en": "Sniper Rifles",
+          "es": "Rifles de francotirador",
+          "fr": "Fusils de pr\u00e9cision",
+          "it": "Fucili di precisione"
+        },
+        "image_set_id": "14222",
+        "image_id": "79645",
+        "image_path": "/files/ps2/images/static/79645.png"
+      }
+    }
+  ],
+  "returned": 2
+}

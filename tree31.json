@@ -1,0 +1,793 @@
+{
+  "directive_list": [
+    {
+      "directive_id": "1729",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5730",
+      "name": {
+        "de": "Kopfschuss-Kills",
+        "en": "Headshot Kills",
+        "es": "V\u00edctimas con disparo en la cabeza",
+        "fr": "Victimes en pleine t\u00eate",
+        "it": "Uccisioni con colpo alla testa"
+      },
+      "description": {
+        "de": "Bekomme einen Todesschlag mit einem Kopfschuss.",
+        "en": "Get a killing blow with a headshot.",
+        "es": "Acaba con un enemigo de un disparo en la cabeza.",
+        "fr": "Obtenez un coup mortel avec un tir en pleine t\u00eate.",
+        "it": "Ottieni un'uccisione con un colpo alla testa."
+      },
+      "image_set_id": "13518",
+      "image_id": "77759",
+      "image_path": "/files/ps2/images/static/77759.png"
+    },
+    {
+      "directive_id": "1730",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5731",
+      "name": {
+        "de": "Kopfschuss-Kills",
+        "en": "Headshot Kills",
+        "es": "V\u00edctimas con disparo en la cabeza",
+        "fr": "Victimes en pleine t\u00eate",
+        "it": "Uccisioni con colpo alla testa"
+      },
+      "description": {
+        "de": "Bekomme einen Todesschlag mit einem Kopfschuss.",
+        "en": "Get a killing blow with a headshot.",
+        "es": "Acaba con un enemigo de un disparo en la cabeza.",
+        "fr": "Obtenez un coup mortel avec un tir en pleine t\u00eate.",
+        "it": "Ottieni un'uccisione con un colpo alla testa."
+      },
+      "image_set_id": "13518",
+      "image_id": "77759",
+      "image_path": "/files/ps2/images/static/77759.png"
+    },
+    {
+      "directive_id": "1731",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5732",
+      "name": {
+        "de": "Kopfschuss-Kills",
+        "en": "Headshot Kills",
+        "es": "V\u00edctimas con disparo en la cabeza",
+        "fr": "Victimes en pleine t\u00eate",
+        "it": "Uccisioni con colpo alla testa"
+      },
+      "description": {
+        "de": "Bekomme einen Todesschlag mit einem Kopfschuss.",
+        "en": "Get a killing blow with a headshot.",
+        "es": "Acaba con un enemigo de un disparo en la cabeza.",
+        "fr": "Obtenez un coup mortel avec un tir en pleine t\u00eate.",
+        "it": "Ottieni un'uccisione con un colpo alla testa."
+      },
+      "image_set_id": "13518",
+      "image_id": "77759",
+      "image_path": "/files/ps2/images/static/77759.png"
+    },
+    {
+      "directive_id": "1732",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5733",
+      "name": {
+        "de": "Kopfschuss-Kills",
+        "en": "Headshot Kills",
+        "es": "V\u00edctimas con disparo en la cabeza",
+        "fr": "Victimes en pleine t\u00eate",
+        "it": "Uccisioni con colpo alla testa"
+      },
+      "description": {
+        "de": "Bekomme einen Todesschlag mit einem Kopfschuss.",
+        "en": "Get a killing blow with a headshot.",
+        "es": "Acaba con un enemigo de un disparo en la cabeza.",
+        "fr": "Obtenez un coup mortel avec un tir en pleine t\u00eate.",
+        "it": "Ottieni un'uccisione con un colpo alla testa."
+      },
+      "image_set_id": "13518",
+      "image_id": "77759",
+      "image_path": "/files/ps2/images/static/77759.png"
+    },
+    {
+      "directive_id": "1897",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5898",
+      "name": {
+        "de": "Verteilbare Vernichtung",
+        "en": "Deployable Destruction",
+        "es": "Destrucci\u00f3n desplegable",
+        "fr": "Destruction de d\u00e9ployable",
+        "it": "Distruzione schierabile"
+      },
+      "description": {
+        "de": "Zerst\u00f6re feindliche Sprengstoffe, MANA-Gesch\u00fctze, Leuchten, Bewegungsscanner und Regenerationsfelder.",
+        "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields.",
+        "es": "Destruye explosivos enemigos, balizas, torretas MANA, detectores de movimiento y campos regeneradores.",
+        "fr": "D\u00e9truisez les explosifs ennemis, les tourelles ANAH, les balises, les scanners de mouvement et les champs de r\u00e9g\u00e9n\u00e9ration.",
+        "it": "Distruggi gli esplosivi nemici, le torrette MANA, i fari, i sensori di movimento e i campi di rigenerazione."
+      },
+      "image_set_id": "13517",
+      "image_id": "77758",
+      "image_path": "/files/ps2/images/static/77758.png"
+    },
+    {
+      "directive_id": "1898",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5899",
+      "name": {
+        "de": "Verteilbare Vernichtung",
+        "en": "Deployable Destruction",
+        "es": "Destrucci\u00f3n desplegable",
+        "fr": "Destruction de d\u00e9ployable",
+        "it": "Distruzione schierabile"
+      },
+      "description": {
+        "de": "Zerst\u00f6re feindliche Sprengstoffe, MANA-Gesch\u00fctze, Leuchten, Bewegungsscanner und Regenerationsfelder.",
+        "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields.",
+        "es": "Destruye explosivos enemigos, balizas, torretas MANA, detectores de movimiento y campos regeneradores.",
+        "fr": "D\u00e9truisez les explosifs ennemis, les tourelles ANAH, les balises, les scanners de mouvement et les champs de r\u00e9g\u00e9n\u00e9ration.",
+        "it": "Distruggi gli esplosivi nemici, le torrette MANA, i fari, i sensori di movimento e i campi di rigenerazione."
+      },
+      "image_set_id": "13517",
+      "image_id": "77758",
+      "image_path": "/files/ps2/images/static/77758.png"
+    },
+    {
+      "directive_id": "1899",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5900",
+      "name": {
+        "de": "Verteilbare Vernichtung",
+        "en": "Deployable Destruction",
+        "es": "Destrucci\u00f3n desplegable",
+        "fr": "Destruction de d\u00e9ployable",
+        "it": "Distruzione schierabile"
+      },
+      "description": {
+        "de": "Zerst\u00f6re feindliche Sprengstoffe, MANA-Gesch\u00fctze, Leuchten, Bewegungsscanner und Regenerationsfelder.",
+        "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields.",
+        "es": "Destruye explosivos enemigos, balizas, torretas MANA, detectores de movimiento y campos regeneradores.",
+        "fr": "D\u00e9truisez les explosifs ennemis, les tourelles ANAH, les balises, les scanners de mouvement et les champs de r\u00e9g\u00e9n\u00e9ration.",
+        "it": "Distruggi gli esplosivi nemici, le torrette MANA, i fari, i sensori di movimento e i campi di rigenerazione."
+      },
+      "image_set_id": "13517",
+      "image_id": "77758",
+      "image_path": "/files/ps2/images/static/77758.png"
+    },
+    {
+      "directive_id": "1900",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5901",
+      "name": {
+        "de": "Verteilbare Vernichtung",
+        "en": "Deployable Destruction",
+        "es": "Destrucci\u00f3n desplegable",
+        "fr": "Destruction de d\u00e9ployable",
+        "it": "Distruzione schierabile"
+      },
+      "description": {
+        "de": "Zerst\u00f6re feindliche Sprengstoffe, MANA-Gesch\u00fctze, Leuchten, Bewegungsscanner und Regenerationsfelder.",
+        "en": "Destroy enemy explosives, MANA turrets, beacons, motion scanners, and regeneration fields.",
+        "es": "Destruye explosivos enemigos, balizas, torretas MANA, detectores de movimiento y campos regeneradores.",
+        "fr": "D\u00e9truisez les explosifs ennemis, les tourelles ANAH, les balises, les scanners de mouvement et les champs de r\u00e9g\u00e9n\u00e9ration.",
+        "it": "Distruggi gli esplosivi nemici, le torrette MANA, i fari, i sensori di movimento e i campi di rigenerazione."
+      },
+      "image_set_id": "13517",
+      "image_id": "77758",
+      "image_path": "/files/ps2/images/static/77758.png"
+    },
+    {
+      "directive_id": "1713",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5714",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Mag-Cutter",
+        "en": "Mag-Cutter",
+        "es": "Mag-Cutter",
+        "fr": "Mag-Cutter",
+        "it": "Mag-Cutter",
+        "tr": "Mag-Kesici"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png"
+    },
+    {
+      "directive_id": "1717",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5718",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Kettenmesser",
+        "en": "Chainblade",
+        "es": "Chainblade",
+        "fr": "Lame-tron\u00e7onneuse",
+        "it": "Chainblade",
+        "tr": "Testerek\u0131l\u0131\u00e7"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png"
+    },
+    {
+      "directive_id": "1721",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5722",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Energieklinge",
+        "en": "Force-Blade",
+        "es": "Cuchillo Force-Blade",
+        "fr": "Lame de force",
+        "it": "Force-blade",
+        "tr": "G\u00fc\u00e7 B\u0131\u00e7a\u011f\u0131"
+      },
+      "description": {
+        "de": "10 Feinde get\u00f6tet",
+        "en": "10 Enemies Killed",
+        "es": "10 enemigos muertos",
+        "fr": "10 ennemis tu\u00e9s",
+        "it": "10 nemici uccisi",
+        "tr": "10 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1564",
+      "image_id": "3072",
+      "image_path": "/files/ps2/images/static/3072.png"
+    },
+    {
+      "directive_id": "1714",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5715",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Mag-Cutter",
+        "en": "Mag-Cutter",
+        "es": "Mag-Cutter",
+        "fr": "Mag-Cutter",
+        "it": "Mag-Cutter",
+        "tr": "Mag-Kesici"
+      },
+      "description": {
+        "de": "60 Feinde get\u00f6tet",
+        "en": "60 Enemies Killed",
+        "es": "60 enemigos muertos",
+        "fr": "60 ennemis tu\u00e9s",
+        "it": "60 nemici uccisi",
+        "tr": "50 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1565",
+      "image_id": "3079",
+      "image_path": "/files/ps2/images/static/3079.png"
+    },
+    {
+      "directive_id": "1718",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5719",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Kettenmesser",
+        "en": "Chainblade",
+        "es": "Chainblade",
+        "fr": "Lame-tron\u00e7onneuse",
+        "it": "Chainblade",
+        "tr": "Testerek\u0131l\u0131\u00e7"
+      },
+      "description": {
+        "de": "60 Feinde get\u00f6tet",
+        "en": "60 Enemies Killed",
+        "es": "60 enemigos muertos",
+        "fr": "60 ennemis tu\u00e9s",
+        "it": "60 nemici uccisi",
+        "tr": "50 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1565",
+      "image_id": "3079",
+      "image_path": "/files/ps2/images/static/3079.png"
+    },
+    {
+      "directive_id": "1722",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5723",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Energieklinge",
+        "en": "Force-Blade",
+        "es": "Cuchillo Force-Blade",
+        "fr": "Lame de force",
+        "it": "Force-blade",
+        "tr": "G\u00fc\u00e7 B\u0131\u00e7a\u011f\u0131"
+      },
+      "description": {
+        "de": "60 Feinde get\u00f6tet",
+        "en": "60 Enemies Killed",
+        "es": "60 enemigos muertos",
+        "fr": "60 ennemis tu\u00e9s",
+        "it": "60 nemici uccisi",
+        "tr": "50 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1565",
+      "image_id": "3079",
+      "image_path": "/files/ps2/images/static/3079.png"
+    },
+    {
+      "directive_id": "1715",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5716",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Mag-Cutter",
+        "en": "Mag-Cutter",
+        "es": "Mag-Cutter",
+        "fr": "Mag-Cutter",
+        "it": "Mag-Cutter",
+        "tr": "Mag-Kesici"
+      },
+      "description": {
+        "de": "160 Feinde get\u00f6tet",
+        "en": "160 Enemies Killed",
+        "es": "160 enemigos muertos",
+        "fr": "160 ennemis tu\u00e9s",
+        "it": "160 nemici uccisi",
+        "tr": "100 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1566",
+      "image_id": "3075",
+      "image_path": "/files/ps2/images/static/3075.png"
+    },
+    {
+      "directive_id": "1719",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5720",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Kettenmesser",
+        "en": "Chainblade",
+        "es": "Chainblade",
+        "fr": "Lame-tron\u00e7onneuse",
+        "it": "Chainblade",
+        "tr": "Testerek\u0131l\u0131\u00e7"
+      },
+      "description": {
+        "de": "160 Feinde get\u00f6tet",
+        "en": "160 Enemies Killed",
+        "es": "160 enemigos muertos",
+        "fr": "160 ennemis tu\u00e9s",
+        "it": "160 nemici uccisi",
+        "tr": "100 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1566",
+      "image_id": "3075",
+      "image_path": "/files/ps2/images/static/3075.png"
+    },
+    {
+      "directive_id": "1723",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5724",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Energieklinge",
+        "en": "Force-Blade",
+        "es": "Cuchillo Force-Blade",
+        "fr": "Lame de force",
+        "it": "Force-blade",
+        "tr": "G\u00fc\u00e7 B\u0131\u00e7a\u011f\u0131"
+      },
+      "description": {
+        "de": "160 Feinde get\u00f6tet",
+        "en": "160 Enemies Killed",
+        "es": "160 enemigos muertos",
+        "fr": "160 ennemis tu\u00e9s",
+        "it": "160 nemici uccisi",
+        "tr": "100 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1566",
+      "image_id": "3075",
+      "image_path": "/files/ps2/images/static/3075.png"
+    },
+    {
+      "directive_id": "1716",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5717",
+      "qualify_requirement_id": "3310",
+      "name": {
+        "de": "Mag-Cutter",
+        "en": "Mag-Cutter",
+        "es": "Mag-Cutter",
+        "fr": "Mag-Cutter",
+        "it": "Mag-Cutter",
+        "tr": "Mag-Kesici"
+      },
+      "description": {
+        "de": "1160 Feinde get\u00f6tet",
+        "en": "1160 Enemies Killed",
+        "es": "1160 enemigos muertos",
+        "fr": "1\u00a0160 ennemis tu\u00e9s",
+        "it": "1160 nemici uccisi",
+        "tr": "1000 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1567",
+      "image_id": "3068",
+      "image_path": "/files/ps2/images/static/3068.png"
+    },
+    {
+      "directive_id": "1720",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5721",
+      "qualify_requirement_id": "3311",
+      "name": {
+        "de": "Kettenmesser",
+        "en": "Chainblade",
+        "es": "Chainblade",
+        "fr": "Lame-tron\u00e7onneuse",
+        "it": "Chainblade",
+        "tr": "Testerek\u0131l\u0131\u00e7"
+      },
+      "description": {
+        "de": "1160 Feinde get\u00f6tet",
+        "en": "1160 Enemies Killed",
+        "es": "1160 enemigos muertos",
+        "fr": "1\u00a0160 ennemis tu\u00e9s",
+        "it": "1160 nemici uccisi",
+        "tr": "1000 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1567",
+      "image_id": "3068",
+      "image_path": "/files/ps2/images/static/3068.png"
+    },
+    {
+      "directive_id": "1724",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5725",
+      "qualify_requirement_id": "3312",
+      "name": {
+        "de": "Energieklinge",
+        "en": "Force-Blade",
+        "es": "Cuchillo Force-Blade",
+        "fr": "Lame de force",
+        "it": "Force-blade",
+        "tr": "G\u00fc\u00e7 B\u0131\u00e7a\u011f\u0131"
+      },
+      "description": {
+        "de": "1160 Feinde get\u00f6tet",
+        "en": "1160 Enemies Killed",
+        "es": "1160 enemigos muertos",
+        "fr": "1\u00a0160 ennemis tu\u00e9s",
+        "it": "1160 nemici uccisi",
+        "tr": "1000 D\u00fc\u015fman \u00d6ld\u00fcr\u00fcld\u00fc"
+      },
+      "image_set_id": "1567",
+      "image_id": "3068",
+      "image_path": "/files/ps2/images/static/3068.png"
+    },
+    {
+      "directive_id": "1756",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5757",
+      "name": {
+        "de": "Sensor",
+        "en": "Spotter",
+        "es": "Detector",
+        "fr": "Spotter",
+        "it": "Avvistatore",
+        "tr": "Spotter"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch die Hilfe beim Aufkl\u00e4ren.",
+        "en": "Earn this ribbon by earning spot assists.",
+        "es": "Consigue este gal\u00f3n con asistencias de detecci\u00f3n.",
+        "fr": "Gagnez cette d\u00e9coration en r\u00e9ussissant des assistances de rep\u00e9rage.",
+        "it": "Se fai delle assistenze avvistamento guadagni questa coccarda.",
+        "tr": "Earn this ribbon by earning spot assists."
+      },
+      "image_set_id": "13452",
+      "image_id": "9985",
+      "image_path": "/files/ps2/images/static/9985.png"
+    },
+    {
+      "directive_id": "1755",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5756",
+      "name": {
+        "de": "Sensor",
+        "en": "Spotter",
+        "es": "Detector",
+        "fr": "Spotter",
+        "it": "Avvistatore",
+        "tr": "Spotter"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch die Hilfe beim Aufkl\u00e4ren.",
+        "en": "Earn this ribbon by earning spot assists.",
+        "es": "Consigue este gal\u00f3n con asistencias de detecci\u00f3n.",
+        "fr": "Gagnez cette d\u00e9coration en r\u00e9ussissant des assistances de rep\u00e9rage.",
+        "it": "Se fai delle assistenze avvistamento guadagni questa coccarda.",
+        "tr": "Earn this ribbon by earning spot assists."
+      },
+      "image_set_id": "13452",
+      "image_id": "9985",
+      "image_path": "/files/ps2/images/static/9985.png"
+    },
+    {
+      "directive_id": "1754",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5755",
+      "name": {
+        "de": "Sensor",
+        "en": "Spotter",
+        "es": "Detector",
+        "fr": "Spotter",
+        "it": "Avvistatore",
+        "tr": "Spotter"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch die Hilfe beim Aufkl\u00e4ren.",
+        "en": "Earn this ribbon by earning spot assists.",
+        "es": "Consigue este gal\u00f3n con asistencias de detecci\u00f3n.",
+        "fr": "Gagnez cette d\u00e9coration en r\u00e9ussissant des assistances de rep\u00e9rage.",
+        "it": "Se fai delle assistenze avvistamento guadagni questa coccarda.",
+        "tr": "Earn this ribbon by earning spot assists."
+      },
+      "image_set_id": "13452",
+      "image_id": "9985",
+      "image_path": "/files/ps2/images/static/9985.png"
+    },
+    {
+      "directive_id": "1753",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5754",
+      "name": {
+        "de": "Sensor",
+        "en": "Spotter",
+        "es": "Detector",
+        "fr": "Spotter",
+        "it": "Avvistatore",
+        "tr": "Spotter"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch die Hilfe beim Aufkl\u00e4ren.",
+        "en": "Earn this ribbon by earning spot assists.",
+        "es": "Consigue este gal\u00f3n con asistencias de detecci\u00f3n.",
+        "fr": "Gagnez cette d\u00e9coration en r\u00e9ussissant des assistances de rep\u00e9rage.",
+        "it": "Se fai delle assistenze avvistamento guadagni questa coccarda.",
+        "tr": "Earn this ribbon by earning spot assists."
+      },
+      "image_set_id": "13452",
+      "image_id": "9985",
+      "image_path": "/files/ps2/images/static/9985.png"
+    },
+    {
+      "directive_id": "1744",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5745",
+      "name": {
+        "de": "Marksman",
+        "en": "Marksman",
+        "es": "Tirador",
+        "fr": "Tireur d'\u00e9lite",
+        "it": "Cecchino",
+        "tr": "Marksman"
+      },
+      "description": {
+        "de": "Erhalte diese Auszeichnung durch das T\u00f6ten anderer Infanterien aus Distanzen von 70 Metern oder mehr.",
+        "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m.",
+        "es": "Consigue este gal\u00f3n matando a otro soldado de infanter\u00eda a un alcance de 70 m o m\u00e1s.",
+        "fr": "Gagnez cette d\u00e9coration en tuant une autre unit\u00e9 d'infanterie \u00e0 une distance \u00e9gale ou plus grande que 70m.",
+        "it": "Se uccidi altri soldati di fanteria a una distanza pari o superiore a 70 metri, otterrai questa coccarda.",
+        "tr": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1743",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5744",
+      "name": {
+        "de": "Marksman",
+        "en": "Marksman",
+        "es": "Tirador",
+        "fr": "Tireur d'\u00e9lite",
+        "it": "Cecchino",
+        "tr": "Marksman"
+      },
+      "description": {
+        "de": "Erhalte diese Auszeichnung durch das T\u00f6ten anderer Infanterien aus Distanzen von 70 Metern oder mehr.",
+        "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m.",
+        "es": "Consigue este gal\u00f3n matando a otro soldado de infanter\u00eda a un alcance de 70 m o m\u00e1s.",
+        "fr": "Gagnez cette d\u00e9coration en tuant une autre unit\u00e9 d'infanterie \u00e0 une distance \u00e9gale ou plus grande que 70m.",
+        "it": "Se uccidi altri soldati di fanteria a una distanza pari o superiore a 70 metri, otterrai questa coccarda.",
+        "tr": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1742",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5743",
+      "name": {
+        "de": "Marksman",
+        "en": "Marksman",
+        "es": "Tirador",
+        "fr": "Tireur d'\u00e9lite",
+        "it": "Cecchino",
+        "tr": "Marksman"
+      },
+      "description": {
+        "de": "Erhalte diese Auszeichnung durch das T\u00f6ten anderer Infanterien aus Distanzen von 70 Metern oder mehr.",
+        "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m.",
+        "es": "Consigue este gal\u00f3n matando a otro soldado de infanter\u00eda a un alcance de 70 m o m\u00e1s.",
+        "fr": "Gagnez cette d\u00e9coration en tuant une autre unit\u00e9 d'infanterie \u00e0 une distance \u00e9gale ou plus grande que 70m.",
+        "it": "Se uccidi altri soldati di fanteria a una distanza pari o superiore a 70 metri, otterrai questa coccarda.",
+        "tr": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1741",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5742",
+      "name": {
+        "de": "Marksman",
+        "en": "Marksman",
+        "es": "Tirador",
+        "fr": "Tireur d'\u00e9lite",
+        "it": "Cecchino",
+        "tr": "Marksman"
+      },
+      "description": {
+        "de": "Erhalte diese Auszeichnung durch das T\u00f6ten anderer Infanterien aus Distanzen von 70 Metern oder mehr.",
+        "en": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m.",
+        "es": "Consigue este gal\u00f3n matando a otro soldado de infanter\u00eda a un alcance de 70 m o m\u00e1s.",
+        "fr": "Gagnez cette d\u00e9coration en tuant une autre unit\u00e9 d'infanterie \u00e0 une distance \u00e9gale ou plus grande que 70m.",
+        "it": "Se uccidi altri soldati di fanteria a una distanza pari o superiore a 70 metri, otterrai questa coccarda.",
+        "tr": "Earn this ribbon by killing other infantry at ranges equal or greater than 70m."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1748",
+      "directive_tree_id": "31",
+      "directive_tier_id": "4",
+      "objective_set_id": "5749",
+      "name": {
+        "de": "Kill-Serie",
+        "en": "Kill Streak",
+        "es": "V\u00edctimas seguidas",
+        "fr": "S\u00e9rie de victimes",
+        "it": "Sequenza omicida"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch eine Kill-Serie in der Rolle der Infanterie.",
+        "en": "Earn this ribbon by earning Kill Streaks as Infantry",
+        "es": "Consigue este gal\u00f3n acumulando v\u00edctimas seguidas como soldado de infanter\u00eda",
+        "fr": "Gagnez cette d\u00e9coration en obtenant des s\u00e9ries de victimes en tant qu'infanterie",
+        "it": "Se esegui delle sequenze omicide come fanteria guadagni questa coccarda."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1747",
+      "directive_tree_id": "31",
+      "directive_tier_id": "3",
+      "objective_set_id": "5748",
+      "name": {
+        "de": "Kill-Serie",
+        "en": "Kill Streak",
+        "es": "V\u00edctimas seguidas",
+        "fr": "S\u00e9rie de victimes",
+        "it": "Sequenza omicida"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch eine Kill-Serie in der Rolle der Infanterie.",
+        "en": "Earn this ribbon by earning Kill Streaks as Infantry",
+        "es": "Consigue este gal\u00f3n acumulando v\u00edctimas seguidas como soldado de infanter\u00eda",
+        "fr": "Gagnez cette d\u00e9coration en obtenant des s\u00e9ries de victimes en tant qu'infanterie",
+        "it": "Se esegui delle sequenze omicide come fanteria guadagni questa coccarda."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1746",
+      "directive_tree_id": "31",
+      "directive_tier_id": "2",
+      "objective_set_id": "5747",
+      "name": {
+        "de": "Kill-Serie",
+        "en": "Kill Streak",
+        "es": "V\u00edctimas seguidas",
+        "fr": "S\u00e9rie de victimes",
+        "it": "Sequenza omicida"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch eine Kill-Serie in der Rolle der Infanterie.",
+        "en": "Earn this ribbon by earning Kill Streaks as Infantry",
+        "es": "Consigue este gal\u00f3n acumulando v\u00edctimas seguidas como soldado de infanter\u00eda",
+        "fr": "Gagnez cette d\u00e9coration en obtenant des s\u00e9ries de victimes en tant qu'infanterie",
+        "it": "Se esegui delle sequenze omicide come fanteria guadagni questa coccarda."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    },
+    {
+      "directive_id": "1745",
+      "directive_tree_id": "31",
+      "directive_tier_id": "1",
+      "objective_set_id": "5746",
+      "name": {
+        "de": "Kill-Serie",
+        "en": "Kill Streak",
+        "es": "V\u00edctimas seguidas",
+        "fr": "S\u00e9rie de victimes",
+        "it": "Sequenza omicida"
+      },
+      "description": {
+        "de": "Verdiene diese Auszeichnung durch eine Kill-Serie in der Rolle der Infanterie.",
+        "en": "Earn this ribbon by earning Kill Streaks as Infantry",
+        "es": "Consigue este gal\u00f3n acumulando v\u00edctimas seguidas como soldado de infanter\u00eda",
+        "fr": "Gagnez cette d\u00e9coration en obtenant des s\u00e9ries de victimes en tant qu'infanterie",
+        "it": "Se esegui delle sequenze omicide come fanteria guadagni questa coccarda."
+      },
+      "image_set_id": "13493",
+      "image_id": "9991",
+      "image_path": "/files/ps2/images/static/9991.png"
+    }
+  ],
+  "returned": 32
+}
